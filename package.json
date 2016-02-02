@@ -1,0 +1,36 @@
+{
+  "name": "slim",
+  "version": "1.0.0",
+  "description": "large scale SCM made easy",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "directories": {
+  },
+  "bin": {
+    "slim": "./lib/slim.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twosigma/slim.git"
+  },
+  "keywords": [
+    "git",
+    "vcs",
+    "dvcs"
+  ],
+  "author": "Brock Peabody",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/twosigma/slim/issues"
+  },
+  "preferGlobal": true,
+  "homepage": "https://github.com/twosigma/slim#readme",
+  "dependencies": {
+      "argparse": "",
+      "nodegit": "",
+      "co": "",
+      "fs-promise": "",
+      "rimraf": ""
+  }
+}

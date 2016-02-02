@@ -33,6 +33,12 @@
 
 Efficiently manage a set of repositories as if they were a single repository.
 
+## Installation
+
+$ git clone https://github.com/twosigma/slim.git
+$ cd slim
+$ npm install -g
+
 ## Motivation
 
 Large software systems are often decomposed into many repositories for a
