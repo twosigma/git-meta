@@ -1,0 +1,18 @@
+{
+    "curly"    : true,
+    "eqeqeq"   : true,
+    "es5"      : true,
+    "latedef"  : true,
+    "maxlen"   : 79,
+    "multistr" : true,
+    "newcap"   : true,
+    "noarg"    : true,
+    "nonew"    : true,
+    "quotmark" : "double",
+    "trailing" : true,
+    "undef"    : true,
+    "node"     : true,
+    "unused"   : true,
+    "esnext"   : true,
+    "varstmt"  : true
+}
