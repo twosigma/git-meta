@@ -169,3 +169,7 @@ Work with branches in all visible sub-repositories.
 #### `commit`
 
 Commit outstanding changes in repos with modifications and meta-repo.
+
+#### `push`
+
+Push commits from visible sub-repos and meta-repo.
