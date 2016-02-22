@@ -32,6 +32,7 @@
       "co": "",
       "fs-promise": "",
       "rimraf": "",
-      "ini": ""
+      "ini": "",
+      "colors": ""
   }
 }
