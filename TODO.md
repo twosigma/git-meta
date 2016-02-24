@@ -12,3 +12,16 @@
 - use rebase status of meta-repo to track rebases
 - add `slim rebase` continue, abort, etc.
 - progress meters for remote operations (fetch, include, open, pull, etc.)
+
+# Open Issues to Watch
+
+## Progress on fetches
+
+https://github.com/nodegit/nodegit/issues/919
+
+Currently, nodegit calls back on each object that is downloaded; this causes an
+amount of overhead that is prohibitive.
+
+## Nodegit keeps process running
+
+https://github.com/nodegit/nodegit/issues/920
