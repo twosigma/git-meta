@@ -1,8 +1,8 @@
-echo "Setting up 'slim branch' demo"
+echo "Setting up 'slim commit' demo"
 {
-    rm -rf branch-demo
-    mkdir branch-demo
-    cd branch-demo
+    rm -rf commit-demo
+    mkdir commit-demo
+    cd commit-demo
     sl init meta
     git init x
     cd x

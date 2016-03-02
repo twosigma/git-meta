@@ -6,7 +6,7 @@ name: big-slide
 
 template: big-slide
 
-# Slim Internals
+# Slim Internals and Demo
 
 How does slim work, and how does it compare to VATS?
 
@@ -289,6 +289,8 @@ true peers in the DVCS sense:
   operate on the meta-repository.
 - Each (local) repository contains its own definitive history of the world;
   pushing changes is a non-mutating operation.
+- Operations on the meta-repo are cheap, e.g., no need to do a temporary clone
+  to perform pushes.
 ]
 
 ---
@@ -318,3 +320,35 @@ sl branch foo
 
 Then inspect the meta-repo and sub-repos to see that there is a branch named
 `foo`.  Offer to pull up code if requested.
+
+---
+
+## The `commit` Operation
+
+The `commit` operation creates a commit in all repositories *and the
+meta-repository*.
+
+???
+
+Run the setup
+
+```bash
+commit/commit.sh
+```
+
+Show that commit at this point doesn't do anything useful:
+
+```bash
+sl commit -m "a new commit"
+```
+
+Touch a couple of files, then show that still nothing to commit.  Show
+`sl status`
+
+Then run `commit` with the `-a` parameter and make an actual commit.
+
+```bash
+sl commit -a -m "a new commit"
+```
+
+Go into the repos and run `tig`.
