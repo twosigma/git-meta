@@ -293,24 +293,28 @@ true peers in the DVCS sense:
 
 ---
 
-## Other Differences
-
-- 
-
----
-
 ## The `branch` Operation
 
-The `branch` operation in slim creates a branch in the meta repo and in all
-visible sub-repos in the local repository in which it is run.
+The `branch` operation creates a branch in the meta repo and in all visible
+sub-repos in the local repository in which it is run.
 
 ???
-Run the branch demo here:
+Run the branch demo setup here:
 
-``` branch/branch.sh
---
+```bash
+branch/branch.sh
+```
+This command sets up, in a directory named `branch-demo`:
 
-When a new sub-repository is *included*, slim checks out a branch having the
-same name as the current branch in the meta-repository pointing to that 
+- `meta` -- the meta-repo
+- `meta/x`
+- `meta/y`
 
+Then run the branch command:
 
+```bash
+sl branch foo
+```
+
+Then inspect the meta-repo and sub-repos to see that there is a branch named
+`foo`.  Offer to pull up code if requested.
