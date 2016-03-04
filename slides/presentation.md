@@ -288,14 +288,79 @@ true peers in the DVCS sense:
 - Cross-repository operations, e.g. `commit`, `rebase`, etc. explicitly
   operate on the meta-repository.
 - Each (local) repository contains its own definitive history of the world;
-  pushing changes is a non-mutating operation.
+  pushing changes is a non-mutating operation.  E.g., what happens if you try
+  to switch branches in VATS with local, un-pushed changes?
 - Operations on the meta-repo are cheap, e.g., no need to do a temporary clone
   to perform pushes.
 ]
 
 ---
 
-## The `branch` Operation
+## The `include` Command
+
+The `include` command adds a new reference to a repository to a Slim
+meta-repository.
+
+Slim cannot create new upstream repositories.  The process to create an
+upstream repository is not an inherent feature of Git and is coupled to
+specific Git hosting technology, e.g.: Github (Enterprise or public), Gitosis,
+Gitolite, Gitlab, etc.
+
+???
+
+Run the setup script:
+```bash
+include/include.sh
+cd include-demo/meta
+```
+
+Then include a couple of repos:
+
+```bash
+sl include ../x x
+sl include ../y y
+```
+
+Show them there...  Maybe see if anyone is interested in seeing how the
+submodules are set up.  Show the `git` status and maybe then commit the
+changes.
+
+```bash
+sl commit -m "added x and y"
+```
+
+Show that `x` and `y` are on the branch `my-branch`.
+
+---
+
+## Setup: the `clone`, `open`, and `close` Commands.
+
+The `clone` command does what you would expect: it creates a copy of a
+repository, locally.
+
+The `open` and `close` commands hide and show sub-repositories.  `open` makes a
+sub-repository visible, locally; `close` removes a sub-repository so that it is
+not locally visible.
+
+???
+
+Run the setup script:
+
+```bash
+setup/setup.sh
+```
+
+Clone `meta`:
+```bash
+sl clone meta my-clone
+```
+
+Run `ls` to see that `x` and `y` are present but empty.  Run `open` and `close`
+on `x` to show it appear and disappear.
+
+---
+
+## The `branch` Command
 
 The `branch` operation creates a branch in the meta repo and in all visible
 sub-repos in the local repository in which it is run.
@@ -323,10 +388,35 @@ Then inspect the meta-repo and sub-repos to see that there is a branch named
 
 ---
 
-## The `commit` Operation
+## The `status` Command
 
-The `commit` operation creates a commit in all repositories *and the
-meta-repository*.
+The `status` command displays information about the state of the
+meta-repository and visible sub-repositories.
+
+???
+
+Run the setup:
+
+```bash
+status/status.sh
+```
+
+Then run `sl status` to see no changes.  Be sure to show a few things:
+
+- new file
+- modified file
+- staged file
+- wrong branch
+
+---
+
+## The `commit` Command
+
+The `commit` operation creates a commit in all visible repositories with
+modification *and the meta-repository*.
+
+By default, `commit` operates only on changes staged to the index; with the
+`-a` option it will automatically stage changes for modified files.
 
 ???
 
@@ -352,3 +442,29 @@ sl commit -a -m "a new commit"
 ```
 
 Go into the repos and run `tig`.
+
+---
+
+## The `checkout` Command
+
+The `checkout` command switches the meta-repository and all visible
+repositories to a branch specified to the command; it will optionally allow,
+require, or disallow the creation of branches as controlled with the `-c`
+parameter.
+
+After a successful `checkout`, the meta-repository and all sub-repositories are
+on the specified branch.
+
+???
+
+Run the setup
+
+```bash
+checkout/checkout.sh
+```
+
+Show that we're on `master` then run
+
+```bash
+sl checkout my-feature
+```
