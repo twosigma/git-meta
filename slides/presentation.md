@@ -468,3 +468,210 @@ Show that we're on `master` then run
 ```bash
 sl checkout my-feature
 ```
+
+---
+
+## The `push` Command
+
+The Git `push` command uploads commits to a remote repository, adjusting a
+*target* branch in that repository to point to the same commit as a *source*
+branch in the local repository.
+
+--
+
+Slim `push` performs the same operation across repositories; it validates the
+consistency of your local repositories and performs a Git `push`
+on each visible sub-repository.  When the sub-repository pushes have finished
+it executes a `push` on the meta-repository.
+
+--
+
+Recall that Git does not have the concept of multiple heads: each branch points
+to exactly one commit.
+
+--
+
+A `push` that would create multiple heads in Hg --
+the commit being pushed does not contain as an ancestor the current HEAD of the
+target branch -- is considered to be a history-rewriting operation.
+
+--
+
+Git clients (including Slim) will not attempt such a `push` unless the
+`--force` option is provided, and even then it is common for Git servers to
+disallow "force pushes" on collaborative branches (especially `master`).
+
+---
+
+## The `pull` Command Considered Harmful
+
+In theory, the `pull` command in Git is the moral inverse of of `push`: remote
+commits are downloaded and a local branch is adjusted to reference them.  In
+practice, it's quite a bit different.  By default, the Git `pull` operation,
+e.g:
+
+```bash
+$ git pull origin master
+```
+
+Is the equivalent of two more primitive operations used together:
+
+```bash
+# fetch commits from the remote named 'origin'
+$ git fetch origin
+
+# merge the 'master' branch from 'origin' into the current branch
+$ git merge origin/master
+```
+--
+
+In practice, this is almost always the wrong behavior.  The above `merge`
+command will (except in certain circumstances) create a *merge commit*
+indicating that the upstream changes were merged into your local changes.
+
+--
+
+It is considered un-hygienic to have a history in which the main-line of
+development is merged into a user's local branch.  Such a history begins to
+have the look of spaghetti, confusing users and tools that rely on the "left"
+line being the "main" line.  The system used by my previous team would reject
+attempts to push this type of history.
+
+---
+
+## Pull Example
+
+Given the following histories on the upstream and local `master` branches (top
+commits are more recent):
+
+    orgin/master      master
+        C               D
+        |               |
+        B               B
+        |               |
+        A               A
+`git pull origin master` will leave the local `master` branch with this
+history:
+
+    M
+    |\
+    D C
+    | |
+    B B
+    | |
+    A A
+Where `M` is a merge commit.
+
+In real life, there might be a substantial amount of upstream work where `C`
+is.  This history is like saying: "Hey world, you're good to go now; I finally
+integrated your work into my branch."
+
+---
+
+## Enter the `rebase` Command
+
+Experienced users will invoke `pull` with the `--rebase` option, which is the
+equivalent of:
+
+```bash
+$ git fetch origin
+$ git rebase origin/master
+```
+
+A full discussion of the `rebase` command is beyond the scope of this
+presentation (and maybe beyond my skills to explain).  In this specific case,
+it instructs Git to rewrite local changes onto the head of `origin/master`,
+yielding:
+
+    D
+    |
+    C
+    |
+    B
+    |
+    A
+This history is highly preferable.  Not only does it avoid creating a
+misleading history, it omits the merge commit completely.  In general, merge
+commits created when pulling remote changes are pure noise: the world doesn't
+care when or how often you integrate upstream commits onto your local branch.
+
+---
+
+## Slim `pull`
+
+The Slim `pull` command is implemented in terms of `git rebase`, but it's more
+complicated than what you could easily implement running the commands by hand.
+Basically, the algorithm is roughly:
+
+1. If the local meta-repository is unchanged (i.e., its head is an ancestor of
+   the head of the remote meta-repository), do nothing.
+2. Otherwise, rebase the meta-repository.
+3. If a conflict is encountered for a sub-repository, i.e., both the remote
+   repository and the local repository have commits in that sub-repository,
+   rebase the sub-repository on top of the commit made in the remote.
+
+The result is that the local meta-repository and visible sub-repositories have
+the same commits with the same mappings between them (there doesn't need to be
+a one-to-one mapping), but the commits have been rewritten on top of any
+upstream changes.
+
+???
+
+if that doesn't make sense, volunteer to draw a diagram
+
+---
+
+## Slum `push` and `pull` Demo
+
+Let's say you have a repository with some commits ready to be pushed.
+
+???
+
+Run the demo:
+```bash
+push-pull/push-pull.sh
+cd push-pull-demo
+```
+
+show that there are changes in `x`; make a commit:
+
+```bash
+$ sl commit -am "added stuff to 'foo'"
+```
+
+--
+
+You attempt to push some changes, but get an error because there are other
+upstream changes.
+
+```bash
+$ sl push
+```
+
+???
+Should see an error about non-fastforwardable changes.  You can show
+`origin/master` in the meta repo and x
+
+--
+
+So you have to first pull:
+
+```bash
+$ sl pull
+```
+
+???
+
+Show that we now have our change rewritten on top of the upstream changes
+
+--
+
+Then you can push.
+
+```bash
+$ sl push
+```
+
+???
+
+Show result of subsequent pushes and pulls.
