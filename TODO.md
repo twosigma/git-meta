@@ -6,7 +6,6 @@
 - elmininate dependencies on static information (e.g., CWD) from utility
   components
 - write unit tests
-- turn this into a proper NPM module and doc dependencies
 - generally, check for state of repositories (merging, etc.) before doing
   operations... also bare repos, "unborn" repos, etc.
 - use rebase status of meta-repo to track rebases
