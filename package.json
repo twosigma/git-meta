@@ -33,6 +33,7 @@
       "fs-promise": "",
       "rimraf": "",
       "ini": "",
-      "colors": ""
+      "colors": "",
+      "multimeter": ""
   }
 }
