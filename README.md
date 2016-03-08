@@ -137,39 +137,3 @@ of a repository is changed through the `open` and `close` commands.
 *sub-repository* -- one of the repositories included in a slim repository.
 *meta-repository* -- the containing repository managed by slim consisting of a
 submodule for each sub-repository
-
-### Sub-Commands
-
-#### `init`
-
-Directly maps to `git init`.
-
-#### `clone`
-
-Directly maps to `git clone`.
-
-#### `include`
-
-Add a sub-repository.
-
-#### `open`
-
-Make a sub-repository visible locally.  Check out a branch having the same name
-as the current branch in the meta-repository pointing to the commit id
-currently indicated for that sub-repository in the meta-repository's HEAD.
-
-#### `close`
-
-Hide a sub-repository so that it is not visible locally.
-
-#### `branch`
-
-Work with branches in all visible sub-repositories.
-
-#### `commit`
-
-Commit outstanding changes in repos with modifications and meta-repo.
-
-#### `push`
-
-Push commits from visible sub-repos and meta-repo.
