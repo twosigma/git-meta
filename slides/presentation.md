@@ -270,7 +270,7 @@ structure in the two models differs:
 .left-column[
 ## Meta-Repo
 ### Structure
-### Commits
+### Commits in VATS
 ]
 .right-column[
 In VATS, commits to the meta-repository are an implementation detail created
@@ -280,17 +280,31 @@ implicitly immediately prior to a push.  This behavior has implications:
 - History of the meta-repository is not generally useful to users.
 - The local repository is not a peer: history does not exist except when being
   packaged to deliver to "the" remote.
+]
 
+---
+
+.left-column[
+## Meta-Repo
+### Structure
+### Commits in VATS
+### Commits in SLIM
+]
+.right-column[
 In Slim, the meta-repository is a first-class citizen; local repositories are
 true peers in the DVCS sense:
 
 - History in the meta-repository is created and manipulated by users.
+  The meta-repository history is *meaningful*.
+- History in the meta-repository is *addressable*.  How can you perform
+  operations, e.g., `cherry-pick` on past history without being able to address
+  the commits?
 - Cross-repository operations, e.g. `commit`, `rebase`, etc. explicitly
   operate on the meta-repository.
 - Each (local) repository contains its own definitive history of the world;
   pushing changes is a non-mutating operation.  E.g., what happens if you try
   to switch branches in VATS with local, un-pushed changes?
-- Operations on the meta-repo are cheap, e.g., no need to do a temporary clone
+- Operations on the meta-repo are cheap, i.e., no need to do a temporary clone
   to perform pushes.
 ]
 
@@ -675,3 +689,42 @@ $ sl push
 ???
 
 Show result of subsequent pushes and pulls.
+
+---
+
+## The `cherry-pick` Command
+
+The `cherry-pick` command is used to take a rewrite a specific commit on the
+head of the current branch.  It is different from a merge in that:
+
+- The history of the cherry-picked commit is not added to the current branch.
+- The resulting commit has a new id -- it must since it may have a different
+  history.
+
+--
+
+This command is especially useful, for example, when a fix that has been
+applied to a development branch (usually, `master`) needs to be applied to a
+more stable branch without pulling in its history (that may contain unstable
+changes).
+
+???
+
+Run the setup command:
+
+```bash
+cherry/cherry.sh
+```
+
+We're doing to do this a few times:
+
+- cherry-pick from a branch: `sl cherry-pick other`
+- cherry-pick from a commit (look at SHA of other's head)
+- auto-open:
+
+```bash
+sl close x
+sl cherry-pick other
+```
+
+then show `x` existing
