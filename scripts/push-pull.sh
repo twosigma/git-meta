@@ -1,8 +1,8 @@
 echo "Setting up 'slim push-pull' demo"
 {
-    rm -rf push-pull-demo
-    mkdir push-pull-demo
-    cd push-pull-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     git init --bare meta-bare
     git init --bare x-bare
     git init --bare y-bare

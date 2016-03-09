@@ -330,8 +330,8 @@ Gitolite, Gitlab, etc.
 
 Run the setup script:
 ```bash
-include/include.sh
-cd include-demo/meta
+include.sh
+cd demo/meta
 ```
 
 Then include a couple of repos:
@@ -367,7 +367,7 @@ not locally visible.
 Run the setup script:
 
 ```bash
-setup/setup.sh
+setup.sh
 ```
 
 Clone `meta`:
@@ -389,7 +389,7 @@ sub-repos in the local repository in which it is run.
 Run the branch demo setup here:
 
 ```bash
-branch/branch.sh
+branch.sh
 ```
 This command sets up, in a directory named `branch-demo`:
 
@@ -418,7 +418,7 @@ meta-repository and visible sub-repositories.
 Run the setup:
 
 ```bash
-status/status.sh
+status.sh
 ```
 
 Then run `sl status` to see no changes.  Be sure to show a few things:
@@ -443,7 +443,7 @@ By default, `commit` operates only on changes staged to the index; with the
 Run the setup
 
 ```bash
-commit/commit.sh
+commit.sh
 ```
 
 Show that commit at this point doesn't do anything useful:
@@ -480,7 +480,7 @@ on the specified branch.
 Run the setup
 
 ```bash
-checkout/checkout.sh
+checkout.sh
 ```
 
 Show that we're on `master` then run
@@ -649,8 +649,8 @@ Let's say you have a repository with some commits ready to be pushed.
 
 Run the demo:
 ```bash
-push-pull/push-pull.sh
-cd push-pull-demo
+push-pull.sh
+cd demo
 ```
 
 show that there are changes in `x`; make a commit:
@@ -719,7 +719,7 @@ changes).
 Run the setup command:
 
 ```bash
-cherry/cherry.sh
+cherry.sh
 ```
 
 We're doing to do this a few times:
@@ -750,7 +750,7 @@ The `merge` command merges changes as described by the commit specified in the
 Demo:
 
 ```bash
-merge/merge.sh
+merge.sh
 ```
 
 then the command:

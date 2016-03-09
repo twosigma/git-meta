@@ -1,8 +1,8 @@
 echo "Setting up 'slim merge' demo"
 {
-    rm -rf merge-demo
-    mkdir merge-demo
-    cd merge-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     git init --bare meta-bare
     git clone meta-bare meta
     cd meta

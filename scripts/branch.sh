@@ -1,8 +1,8 @@
 echo "Setting up 'slim branch' demo"
 {
-    rm -rf branch-demo
-    mkdir branch-demo
-    cd branch-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     sl init meta
     git init x
     cd x

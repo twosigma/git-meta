@@ -1,8 +1,8 @@
 echo "Setting up include demo"
 {
-    rm -rf include-demo
-    mkdir include-demo
-    cd include-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     sl init meta
     git init x
     cd x

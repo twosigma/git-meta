@@ -1,8 +1,8 @@
 echo "Setting up 'slim status' demo"
 {
-    rm -rf status-demo
-    mkdir status-demo
-    cd status-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     sl init meta
     git init x
     cd x

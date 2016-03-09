@@ -1,8 +1,8 @@
 echo "Setting up 'slim checkout' demo"
 {
-    rm -rf checkout-demo
-    mkdir checkout-demo
-    cd checkout-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     sl init meta
     git init x
     cd x

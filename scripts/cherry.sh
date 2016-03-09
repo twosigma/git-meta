@@ -1,8 +1,8 @@
 echo "Setting up 'slim cherry-pick' demo"
 {
-    rm -rf cherry-pick-demo
-    mkdir cherry-pick-demo
-    cd cherry-pick-demo
+    rm -rf demo
+    mkdir demo
+    cd demo
     git init --bare meta-bare
     git clone meta-bare meta
     cd meta
