@@ -137,3 +137,12 @@ of a repository is changed through the `open` and `close` commands.
 *sub-repository* -- one of the repositories included in a slim repository.
 *meta-repository* -- the containing repository managed by slim consisting of a
 submodule for each sub-repository
+
+## Goal -- Reintegration With Git
+
+While starting out as a tool written in terms of Git submodules, in the long
+term I would like to see Slim become either a new Git command (like `subtree`),
+or direct enhancement/extension of the existing `submodule` command.  I'd like
+to see how effective it is as a standalone tool first before proposing any such
+thing to the owners of Git, at which point I would like to get their feedback
+on the best way to proceed.
