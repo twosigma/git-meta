@@ -11,6 +11,10 @@
 - use rebase status of meta-repo to track rebases
 - add `slim rebase` continue, abort, etc.
 - progress meters for remote operations (fetch, include, open, pull, etc.)
+  - I've done a lot of this work on the 'working-on-progress-bars' branch, but
+    it's dependent on the nodegit issues listed below
+- I believe it may be possible to factor out some of the logic between rebase,
+  cherry-pick, and merge.
 
 # Open Issues to Watch
 
