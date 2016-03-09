@@ -310,6 +310,12 @@ true peers in the DVCS sense:
 
 ---
 
+template: big-slide
+
+## Slim Commands
+
+---
+
 ## The `include` Command
 
 The `include` command adds a new reference to a repository to a Slim
@@ -558,7 +564,7 @@ attempts to push this type of history.
 Given the following histories on the upstream and local `master` branches (top
 commits are more recent):
 
-    orgin/master      master
+    origin/master     master
         C               D
         |               |
         B               B
