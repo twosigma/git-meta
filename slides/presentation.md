@@ -728,3 +728,32 @@ sl cherry-pick other
 ```
 
 then show `x` existing
+
+---
+
+## The `merge` Command
+
+The `merge` command merges changes as described by the commit specified in the
+*meta-repository*:
+
+- changed files in the meta-repo are merged
+- changes detected in sub-repos are merged in the respective sub-repos
+
+???
+
+Demo:
+
+```bash
+merge/merge.sh
+```
+
+then the command:
+
+```bash
+sl merge other
+```
+
+show a couple of things:
+
+- merging a change that adds a new repo
+- merging when one of the targets isn't visible
