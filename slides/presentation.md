@@ -757,3 +757,43 @@ show a couple of things:
 
 - merging a change that adds a new repo
 - merging when one of the targets isn't visible
+
+---
+
+.left-column[
+## About this Presentation
+### Remark.js
+]
+.right-column[
+I wrote this presentation using [remark.js](http://remarkjs.com/#1)
+
+Remark.js makes it easy to create presentations using html and markdown.
+
+Html and markdown are a great combo for developers as they are:
+- amenable to diff tools
+- you can edit them with your favorite editor (which should be Vim, of course)
+- making them very compatible with version control systems.... like Git
+]
+
+---
+
+.left-column[
+## About this Presentation
+### Remark.js
+### Github Pages
+]
+.right-column[
+"People don't want Git, they want Github" -- Elina
+
+I think there is a lot of merit to this statement.
+
+One of the many nice features of Github is pages.  Any repo may have them
+enabled such that the html content located in the branch named `gh-pages` is
+automatically served by Github.
+
+Unfortunately, Slim is still a private repository pending resolution of some
+internal IP issues and it is not possible to properly gate `gh-pages` for such
+repos.  You can see a template presentation here: [slim
+pages](http://twosigma.github.io/slim/#1), that will eventually contain my
+earlier, public presentation.
+]
