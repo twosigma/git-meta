@@ -106,7 +106,7 @@ Branches and tags in the meta-repository facilitate cross-repository branching
 and tagging.
 
 The user may choose which sub-repositories to edit; we refer to repositories
-that are locally available as being *visible*.
+that are locally available as being *open*.
 
 ### Git Is Still There
 
@@ -126,14 +126,16 @@ streamlined set of slim-compatible options and slim-specific documentation.
 
 Slim, attempts to maintain the following invariants:
 
-- Every visible sub-repository is set to the same local branch as the
+- Every open sub-repository is set to the same local branch as the
   meta-repository.
 
 ### Vocabulary
 
-*visibility* -- a visible repository is one that has been cloned locally, and
-to which slim operations (such as `branch`) will be applied.  The visibility
-of a repository is changed through the `open` and `close` commands.
+*open* -- an open repository is one that has been cloned locally, and
+to which slim operations (such as `branch`) will be applied.  A repository is
+opened with the `open` command.
+*closed* -- a closed repository is not available locally.  A repository is
+closed with the `close` command.
 *sub-repository* -- one of the repositories included in a slim repository.
 *meta-repository* -- the containing repository managed by slim consisting of a
 submodule for each sub-repository
