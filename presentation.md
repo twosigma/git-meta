@@ -5,7 +5,7 @@ name: big-slide
 ---
 
 template: big-slide
-# slim
+# Slim
 large-scale distributed source control made easy
 
 .footnote[Go directly to [project site](https://github.com/twosigma/slim)]
@@ -85,7 +85,7 @@ layout: false
 ]
 .right-column[
 
-Before starting on slim, I investigated several existing tools:
+Before starting on Slim, I investigated several existing tools:
 
 - [Gitslave](http://gitslave.sourceforge.net)
 
@@ -110,7 +110,7 @@ Before starting on slim, I investigated several existing tools:
 ]
 .right-column[
 
-All of these tools overlap with the problems slim is trying to solve, but none
+All of these tools overlap with the problems Slim is trying to solve, but none
 of them are sufficient:
 
 - most don't provide a way to reference the state of all repositories
@@ -198,16 +198,19 @@ layout: false
 .right-column[
 - Each sub-repository is a submodule in the meta-repository.
 
-- The submodule for a sub-repository indicates its URL and the SHA of the
-  commit recorded in the HEAD of the current branch for that repository.
+- Each commit in the meta-repository indicates, for each sub-repository:
+    - a URL
+    - a commit
 
-- A sub-repository may be *visible* or *hidden*.
+- A sub-repository may be *open* or *closed*.
 
-- Visible sub-repositories have been cloned locally and will be operated on by
+- Open sub-repositories have been cloned locally and will be operated on by
   many Slim operations.
 
-- Hidden sub-repositories have not been cloned locally and are ignored by most
+- Closed sub-repositories have not been cloned locally and are ignored by most
   Slim commands.
+
+- A newly cloned meta-repository has no open sub-repositories.
 ]
 
 ---
@@ -223,7 +226,7 @@ layout: false
 - generally implement same commands as Git but across sub-repositories, e.g.:
   `branch`, `merge`, `rebase`, `commit`, etc.
 
-- cross-repository commands apply only to visible repositories
+- most cross-repository commands apply to only open repositories
 
 - additional commands for adding and removing sub-repositories
 
