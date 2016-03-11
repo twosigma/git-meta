@@ -8,7 +8,7 @@ template: big-slide
 
 # Slim Internals and Demo
 
-How does slim work, and how does it compare to VATS?
+How does Slim work, and how does it compare to VATS?
 
 ---
 
@@ -36,7 +36,7 @@ template: big-slide
 
 # Implementation
 
-language and technology behind slim
+language and technology behind Slim
 
 ---
 
@@ -123,10 +123,55 @@ const results = yield [ server.sendRequest({ operation: result.foo}),
 ```
 
 ---
+template: big-slide
+# Slim and VATS
+
+differences in mission and architecture.
+
+---
+
+.left-column[
+## Mission
+### VATS
+]
+.right-column[
+VATS addresses the many aspects of the software development life-cycle:
+
+- build
+- test
+- deploy
+- review
+- large-scale source control
+- etc.
+
+Unfortunately, the implementations of these concerns are coupled together;
+they're "bundled".
+]
+
+---
+
+.left-column[
+## Mission
+### VATS
+### Slim
+]
+.right-column[
+
+Slim addresses only the source-control part of the software development
+life-cycle.
+
+We would move most other aspects to the back-end and provide build through a
+separate tool.
+
+In the rest of this presentation, when I use "VATS" to refer to the
+source-control-related parts of the VATS client.
+]
+
+---
 
 template: big-slide
 
-# Architectural Differences with VATS
+## Architectural Differences with VATS
 
 Differences between Hg and Git, plus the desire to model a truly distributed
 version control system, create some differences in the semantics of similar
@@ -225,6 +270,12 @@ Slim needs to support the concept of staging, including an `add` command and a
 ### History
 ]
 .right-column[
+Hg supports operations to rewrite history, but has been slow to adopt them
+culturally.  For example,  `rebase` is an extension that has been officially
+documented for only about three years.  VATS has limited support for rewriting
+history: it has a `rebase` option on pull but no other built-in support for
+cross-repository rewriting of history.
+
 Rewriting local history is a common, accepted (expected) practice in Git.  Slim
 will need to directly support:
 
@@ -248,13 +299,13 @@ will need to directly support:
 .right-column[
 Fundamentally, Slim and VATS have the same model: a meta-repository tracks
 commits in sub-repositories.  Due to different implementations, the resulting
-structure in the two models differs:
+directory structure in the two models differs:
 
 - Rather than living in an, e.g., `.vats` directory, the Slim meta-repository
   appears to "contain" the sub-repositories.
 
 - The sub-repository information lives with other Git meta-information in the
-  `.git` directory.
+  `.git` directory and in the `.gitmodules` file.
 
 - The Slim meta-repository does not contain other meta-information such as
   `pending_reviews`.
@@ -359,8 +410,8 @@ The `clone` command does what you would expect: it creates a copy of a
 repository, locally.
 
 The `open` and `close` commands hide and show sub-repositories.  `open` makes a
-sub-repository visible, locally; `close` removes a sub-repository so that it is
-not locally visible.
+sub-repository available, locally; `close` removes a sub-repository so that it
+is not locally available.
 
 ???
 
@@ -382,7 +433,7 @@ on `x` to show it appear and disappear.
 
 ## The `branch` Command
 
-The `branch` operation creates a branch in the meta repo and in all visible
+The `branch` operation creates a branch in the meta repo and in all open
 sub-repos in the local repository in which it is run.
 
 ???
@@ -406,12 +457,16 @@ sl branch foo
 Then inspect the meta-repo and sub-repos to see that there is a branch named
 `foo`.  Offer to pull up code if requested.
 
+Also show:
+- the `-d` option to delete a branch
+- the no-args version that lists branches
+
 ---
 
 ## The `status` Command
 
 The `status` command displays information about the state of the
-meta-repository and visible sub-repositories.
+meta-repository and open sub-repositories.
 
 ???
 
@@ -432,7 +487,7 @@ Then run `sl status` to see no changes.  Be sure to show a few things:
 
 ## The `commit` Command
 
-The `commit` operation creates a commit in all visible repositories with
+The `commit` operation creates a commit in all open repositories with
 modification *and the meta-repository*.
 
 By default, `commit` operates only on changes staged to the index; with the
@@ -467,7 +522,7 @@ Go into the repos and run `tig`.
 
 ## The `checkout` Command
 
-The `checkout` command switches the meta-repository and all visible
+The `checkout` command switches the meta-repository and all open
 repositories to a branch specified to the command; it will optionally allow,
 require, or disallow the creation of branches as controlled with the `-c`
 parameter.
@@ -501,7 +556,7 @@ branch in the local repository.
 
 Slim `push` performs the same operation across repositories; it validates the
 consistency of your local repositories and performs a Git `push`
-on each visible sub-repository.  When the sub-repository pushes have finished
+on each open sub-repository.  When the sub-repository pushes have finished
 it executes a `push` on the meta-repository.
 
 --
@@ -576,10 +631,10 @@ history:
     M
     |\
     D C
-    | |
-    B B
-    | |
-    A A
+    |/
+    B
+    |
+    A
 Where `M` is a merge commit.
 
 In real life, there might be a substantial amount of upstream work where `C`
@@ -630,7 +685,7 @@ Basically, the algorithm is roughly:
    repository and the local repository have commits in that sub-repository,
    rebase the sub-repository on top of the commit made in the remote.
 
-The result is that the local meta-repository and visible sub-repositories have
+The result is that the local meta-repository and open sub-repositories have
 the same commits with the same mappings between them (there doesn't need to be
 a one-to-one mapping), but the commits have been rewritten on top of any
 upstream changes.
@@ -762,7 +817,7 @@ sl merge other
 show a couple of things:
 
 - merging a change that adds a new repo
-- merging when one of the targets isn't visible
+- merging when one of the targets isn't open
 
 ---
 
@@ -799,7 +854,7 @@ automatically served by Github.
 
 Unfortunately, Slim is still a private repository pending resolution of some
 internal IP issues and it is not possible to properly gate `gh-pages` for such
-repos.  You can see a template presentation here: [slim
+repos.  You can see a template presentation here: [Slim
 pages](http://twosigma.github.io/slim/#1), that will eventually contain my
 earlier, public presentation.
 ]
