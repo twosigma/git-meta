@@ -33,6 +33,9 @@
 
 Efficiently manage a set of repositories as if they were a single repository.
 
+The goal of the Slim project is to enhance Git's submodule support to be more
+powerful and easier to use.
+
 ## Installation
 
     $ git clone https://github.com/twosigma/slim.git

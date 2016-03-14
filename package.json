@@ -8,7 +8,7 @@
   "directories": {
   },
   "bin": {
-    "slim": "./lib/slim.js"
+    "git-meta": "./lib/git-meta.js"
   },
   "repository": {
     "type": "git",
