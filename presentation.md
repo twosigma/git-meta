@@ -137,6 +137,15 @@ Git submodules provide minimal functionality; what they do offer is difficult
 to use.  However, they do give sufficient, core operations from which we can
 achieve our goals.
 
+I will package the Slim project as the `git-meta` command, e.g.:
+
+```bash
+$ git meta merge my-branch
+```
+
+With the intention of contributing it to Git, possibly folded into the existing
+`submodule` command.
+
 ---
 
 template: big-slide
@@ -232,11 +241,3 @@ layout: false
 
 - additional commands to control visibility of sub-repositories
 ]
-
----
-template: big-slide
-## Part of Git?
-
-If Slim is successful -- providing real-world benefit to many users -- I would
-like to eventually contribute it back to Git as a new command or as
-enhancements/extensions to the `submodule` command.
