@@ -388,8 +388,8 @@ cd demo/meta
 Then include a couple of repos:
 
 ```bash
-sl include ../x x
-sl include ../y y
+git meta include ../x x
+git meta include ../y y
 ```
 
 Show them there...  Maybe see if anyone is interested in seeing how the
@@ -397,7 +397,7 @@ submodules are set up.  Show the `git` status and maybe then commit the
 changes.
 
 ```bash
-sl commit -m "added x and y"
+git meta commit -m "added x and y"
 ```
 
 Show that `x` and `y` are on the branch `my-branch`.
@@ -406,8 +406,8 @@ Show that `x` and `y` are on the branch `my-branch`.
 
 ## Setup: the `clone`, `open`, and `close` Commands.
 
-The `clone` command does what you would expect: it creates a copy of a
-repository, locally.
+Slim does not provide its own `clone` command; regular `git clone` is used as
+is.
 
 The `open` and `close` commands hide and show sub-repositories.  `open` makes a
 sub-repository available, locally; `close` removes a sub-repository so that it
@@ -423,7 +423,7 @@ setup.sh
 
 Clone `meta`:
 ```bash
-sl clone meta my-clone
+git clone meta my-clone
 ```
 
 Run `ls` to see that `x` and `y` are present but empty.  Run `open` and `close`
@@ -451,7 +451,7 @@ This command sets up, in a directory named `branch-demo`:
 Then run the branch command:
 
 ```bash
-sl branch foo
+git meta branch foo
 ```
 
 Then inspect the meta-repo and sub-repos to see that there is a branch named
@@ -476,7 +476,7 @@ Run the setup:
 status.sh
 ```
 
-Then run `sl status` to see no changes.  Be sure to show a few things:
+Then run `git meta status` to see no changes.  Be sure to show a few things:
 
 - new file
 - modified file
@@ -504,16 +504,16 @@ commit.sh
 Show that commit at this point doesn't do anything useful:
 
 ```bash
-sl commit -m "a new commit"
+git meta commit -m "a new commit"
 ```
 
 Touch a couple of files, then show that still nothing to commit.  Show
-`sl status`
+`git meta status`
 
 Then run `commit` with the `-a` parameter and make an actual commit.
 
 ```bash
-sl commit -a -m "a new commit"
+git meta commit -a -m "a new commit"
 ```
 
 Go into the repos and run `tig`.
@@ -541,7 +541,7 @@ checkout.sh
 Show that we're on `master` then run
 
 ```bash
-sl checkout my-feature
+git meta checkout my-feature
 ```
 
 ---
@@ -711,7 +711,7 @@ cd demo
 show that there are changes in `x`; make a commit:
 
 ```bash
-$ sl commit -am "added stuff to 'foo'"
+$ git meta commit -am "added stuff to 'foo'"
 ```
 
 --
@@ -720,7 +720,7 @@ You attempt to push some changes, but get an error because there are other
 upstream changes.
 
 ```bash
-$ sl push
+$ git meta push
 ```
 
 ???
@@ -732,7 +732,7 @@ Should see an error about non-fastforwardable changes.  You can show
 So you have to first pull:
 
 ```bash
-$ sl pull
+$ git meta pull
 ```
 
 ???
@@ -744,7 +744,7 @@ Show that we now have our change rewritten on top of the upstream changes
 Then you can push.
 
 ```bash
-$ sl push
+$ git meta push
 ```
 
 ???
@@ -779,13 +779,13 @@ cherry.sh
 
 We're doing to do this a few times:
 
-- cherry-pick from a branch: `sl cherry-pick other`
+- cherry-pick from a branch: `git meta cherry-pick other`
 - cherry-pick from a commit (look at SHA of other's head)
 - auto-open:
 
 ```bash
-sl close x
-sl cherry-pick other
+git meta close x
+git meta cherry-pick other
 ```
 
 then show `x` existing
@@ -811,7 +811,7 @@ merge.sh
 then the command:
 
 ```bash
-sl merge other
+git meta merge other
 ```
 
 show a couple of things:

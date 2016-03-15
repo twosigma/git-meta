@@ -3,7 +3,7 @@ echo "Setting up include demo"
     rm -rf demo
     mkdir demo
     cd demo
-    sl init meta
+    git init meta
     git init x
     cd x
     touch foo

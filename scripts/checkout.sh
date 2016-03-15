@@ -1,9 +1,14 @@
-echo "Setting up 'slim checkout' demo"
+echo "Setting up 'checkout' demo"
 {
     rm -rf demo
     mkdir demo
     cd demo
-    sl init meta
+    git init meta
+    cd meta
+    touch README.md
+    git add README.md
+    git com -m "first"
+    cd ..
     git init x
     cd x
     touch foo
@@ -17,15 +22,15 @@ echo "Setting up 'slim checkout' demo"
     git com -m "first y"
     cd ..
     cd meta
-    sl include ../x x
-    sl include ../y y
-    sl commit -m "added subs"
-    sl checkout my-feature
+    git meta include ../x x
+    git meta include ../y y
+    git meta commit -m "added subs"
+    git meta checkout my-feature
     cd x
     echo foofoo >> foo
     cd ../y
     echo barbar >> bar
     cd ..
-    sl commit -am changes
-    sl checkout master
+    git meta commit -am changes
+    git meta checkout master
 } &> /dev/null

@@ -3,7 +3,12 @@ echo "Setting up 'slim status' demo"
     rm -rf demo
     mkdir demo
     cd demo
-    sl init meta
+    git init meta
+    cd meta
+    touch README.md
+    git add README.md
+    git com -m "first"
+    cd ..
     git init x
     cd x
     touch foo
@@ -17,7 +22,7 @@ echo "Setting up 'slim status' demo"
     git com -m "first y"
     cd ..
     cd meta
-    sl include ../x x
-    sl include ../y y
-    sl commit -m "added subs"
+    git meta include ../x x
+    git meta include ../y y
+    git meta commit -m "added subs"
 } &> /dev/null

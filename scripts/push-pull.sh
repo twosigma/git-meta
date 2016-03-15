@@ -1,4 +1,4 @@
-echo "Setting up 'slim push-pull' demo"
+echo "Setting up push-pull demo"
 {
     rm -rf demo
     mkdir demo
@@ -25,20 +25,20 @@ echo "Setting up 'slim push-pull' demo"
     git com -m "first y"
     git push origin master
     cd ../meta
-    sl include ../x-bare x
-    sl include ../y-bare y
-    sl commit -m "added subs"
-    sl push
+    git meta include ../x-bare x
+    git meta include ../y-bare y
+    git meta commit -m "added subs"
+    git meta push
     cd ..
-    sl clone meta-bare other-meta
+    git clone meta-bare other-meta
     cd other-meta
-    sl open x
+    git meta open x
     cd x
     touch moo
     git add moo
     cd ..
-    sl commit -m "moooo"
-    sl push
+    git meta commit -m "moooo"
+    git meta push
     cd ..
     cd meta
     cd x

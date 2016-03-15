@@ -1,4 +1,4 @@
-echo "Setting up 'slim merge' demo"
+echo "Setting up 'merge' demo"
 {
     rm -rf demo
     mkdir demo
@@ -36,11 +36,11 @@ echo "Setting up 'slim merge' demo"
     git push origin master
     cd ..
     cd meta
-    sl include ../x-bare x
-    sl include ../y-bare y
-    sl commit -m "added subs"
-    sl push
-    sl checkout other
+    git meta include ../x-bare x
+    git meta include ../y-bare y
+    git meta commit -m "added subs"
+    git meta push
+    git meta checkout other
     cd x
     touch baz
     git add baz
@@ -48,8 +48,8 @@ echo "Setting up 'slim merge' demo"
     touch howz
     git add howz
     cd ..
-    sl commit -am "added things"
-    sl push
+    git meta commit -am "added things"
+    git meta push
     cd x
     touch zab
     git add zab
@@ -57,18 +57,18 @@ echo "Setting up 'slim merge' demo"
     touch zwoh
     git add zwoh
     cd ..
-    sl commit -am "added other things"
-    sl push
-    sl include ../z-bare z
-    sl commit -am "added z"
-    sl push
-    sl checkout master
+    git meta commit -am "added other things"
+    git meta push
+    git meta include ../z-bare z
+    git meta commit -am "added z"
+    git meta push
+    git meta checkout master
     cd x
     echo asdfas >> foo
     cd ../y
     echo aaaaaaaa >> bar
     cd ..
-    sl commit -am "changed things"
-    sl push
-    sl close x
+    git meta commit -am "changed things"
+    git meta push
+    git meta close x
 } &> /dev/null
