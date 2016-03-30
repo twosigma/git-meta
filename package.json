@@ -28,6 +28,7 @@
   "homepage": "https://github.com/twosigma/slim#readme",
   "dependencies": {
       "argparse": "",
+      "child-process-promise": "",
       "nodegit": "",
       "co": "",
       "fs-promise": "",
