@@ -792,6 +792,36 @@ then show `x` existing
 
 ---
 
+## The `rebase` Command
+
+The `rebase` command rebases changes as described by the commit specified in
+the *meta-repository*:
+
+- changed files in the meta-repo are merged
+- changes detected in sub-repos are rebased in the respective sub-repos
+
+???
+
+Demo:
+
+```bash
+rebase.sh
+```
+
+then the command:
+
+```bash
+git meta rebase other
+```
+
+show a couple of things:
+
+- merging a change that adds a new repo
+- merging when one of the targets isn't open
+
+
+---
+
 ## The `merge` Command
 
 The `merge` command merges changes as described by the commit specified in the
