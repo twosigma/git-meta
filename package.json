@@ -28,6 +28,7 @@
   "homepage": "https://github.com/twosigma/slim#readme",
   "dependencies": {
       "argparse": "",
+      "chai": "",
       "child-process-promise": "",
       "nodegit": "",
       "co": "",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
       "mocha": "",
-      "mocha-jshint": ""
+      "mocha-jshint": "",
+      "temp": ""
   }
 }

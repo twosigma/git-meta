@@ -1,0 +1,25 @@
+{
+    "curly"    : true,
+    "eqeqeq"   : true,
+    "latedef"  : true,
+    "maxlen"   : 79,
+    "multistr" : true,
+    "newcap"   : true,
+    "noarg"    : true,
+    "nonew"    : true,
+    "quotmark" : "double",
+    "trailing" : true,
+    "undef"    : true,
+    "node"     : true,
+    "unused"   : true,
+    "esnext"   : true,
+    "varstmt"  : true,
+    "predef": [
+        "after",
+        "afterEach",
+        "before",
+        "beforeEach",
+        "describe",
+        "it"
+    ]
+}
