@@ -15,6 +15,7 @@
     it's dependent on the nodegit issues listed below
 - I believe it may be possible to factor out some of the logic between rebase,
   cherry-pick, and merge.
+- status doesn't show new submodules, or when new submodules have new info
 
 # Open Issues to Watch
 
