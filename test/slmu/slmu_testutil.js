@@ -32,24 +32,18 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
-const rimraf  = require("rimraf");
+const path    = require("path");
 
 const TestUtil = require("../../lib/slmu/slmu_testutil");
 
 describe("createSimpleRepository", function () {
-    let repo;
     after(function () {
-        if (repo) {
-            return new Promise(callback => {
-                return rimraf(repo.workdir(), {}, callback);
-            });
-        }
+        TestUtil.cleanup();
     });
 
     it("createSimpleRepository", co.wrap(function *() {
-        repo = yield TestUtil.createSimpleRepository();
+        const repo = yield TestUtil.createSimpleRepository();
         assert.instanceOf(repo, NodeGit.Repository);
 
         // Check repo is not in merging, rebase, etc. state
@@ -70,17 +64,27 @@ describe("createSimpleRepository", function () {
     }));
 });
 
-describe("removeRepository", function () {
-    it("removeRepository", co.wrap(function *() {
+describe("pathExists", function () {
+    after(function () {
+        TestUtil.cleanup();
+    });
+    it("pathExists", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const repoDir = repo.workdir();
+        const repoPathExists = yield TestUtil.pathExists(repoDir);
+        assert(repoPathExists);
+        const fakePath = path.join(repoDir, "not-a-path-in-the-repo");
+        const fakeExists = yield TestUtil.pathExists(fakePath);
+        assert.isFalse(fakeExists);
+    }));
+});
+
+describe("cleanup", function () {
+    it("cleanup", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const repoPath = repo.workdir();
-        yield TestUtil.removeRepository(repo);
-        try {
-            yield fs.stat(repoPath);
-        }
-        catch (e) {
-            return;
-        }
-        assert(false, "file was not removed");
+        yield TestUtil.cleanup();
+        const exists = yield TestUtil.pathExists(repoPath);
+        assert.isFalse(exists, "repo not removed");
     }));
 });
