@@ -32,18 +32,56 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
 const TestUtil = require("../../lib/slmu/slmu_testutil");
 
+describe("makeTempDir", function () {
+    after(TestUtil.cleanup);
+
+    // I don't know if we can verify that the returned directories are
+    // "temporary", but we can verify that they subsequent calls return
+    // different paths that are directories.
+
+    it("breathing test", co.wrap(function *() {
+        const first = yield TestUtil.makeTempDir();
+        const stat = yield fs.stat(first);
+        assert(stat.isDirectory());
+        const second = yield TestUtil.makeTempDir();
+        assert.notEqual(first, second);
+    }));
+});
+
+describe("isSameRealPath", function () {
+    after(TestUtil.cleanup);
+
+    // We're going to make some symlinks in a temp directory and check them,
+    // and also check for proper failure.
+
+    it("breathing test", co.wrap(function *() {
+        const dir = yield TestUtil.makeTempDir();
+        const subdirPath = path.join(dir, "sub");
+        yield fs.mkdir(subdirPath);
+
+        assert(yield TestUtil.isSameRealPath(dir, dir), "trivial");
+        assert(!(yield TestUtil.isSameRealPath(dir, subdirPath)), "not same");
+
+        const sublinkPath = path.join(dir, "sublink");
+        yield fs.symlink(subdirPath, sublinkPath);
+
+        assert(yield TestUtil.isSameRealPath(subdirPath, sublinkPath),
+               "links same");
+    }));
+});
+
 describe("createSimpleRepository", function () {
-    after(function () {
-        TestUtil.cleanup();
-    });
+    after(TestUtil.cleanup);
 
     it("createSimpleRepository", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
+
         assert.instanceOf(repo, NodeGit.Repository);
 
         // Check repo is not in merging, rebase, etc. state
@@ -65,9 +103,8 @@ describe("createSimpleRepository", function () {
 });
 
 describe("pathExists", function () {
-    after(function () {
-        TestUtil.cleanup();
-    });
+    after(TestUtil.cleanup);
+
     it("pathExists", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const repoDir = repo.workdir();
@@ -86,5 +123,54 @@ describe("cleanup", function () {
         yield TestUtil.cleanup();
         const exists = yield TestUtil.pathExists(repoPath);
         assert.isFalse(exists, "repo not removed");
+    }));
+});
+
+describe("createRepoAndRemote", function () {
+    after(TestUtil.cleanup);
+
+    it("createRepoAndRemote", co.wrap(function *() {
+        const rr = yield TestUtil.createRepoAndRemote();
+        const bare = rr.bare;
+        const clone = rr.clone;
+
+        // Through white box testing, we know that this method is implemented
+        // in terms of the already tested 'createSimpleRepository'; we need to
+        // verify that:
+        //   - the clone is a non-bare repo
+        //   - check to see that the expected 'README.md' file is in it
+        //   - verify that the bare repo is bare
+        //   - and that it is actually the remote of the clone
+
+        assert(!clone.isBare(), "clone is not bare");
+        const readmePath = path.join(clone.workdir(), "README.md");
+        assert(yield TestUtil.pathExists(readmePath), "clone has readme");
+        assert(bare.isBare(), "bare repo is bare");
+        const remote = yield clone.getRemote("origin");
+
+        // Interestingly, the 'path' returned by 'NodeGit.Repository' -- at
+        // least on my mac -- is different from what it was created with; it is
+        // the "real" path, e.g.: "/private/var/..." instead of "/var/...".
+
+        assert(TestUtil.isSameRealPath(remote.url(), bare.path()),
+               "remote is right url");
+    }));
+});
+
+describe("makeCommit", function () {
+    after(TestUtil.cleanup);
+
+    it("breathing test", co.wrap(function *() {
+        // Check that it makes a new commit that is:
+        //   - the new head
+        //   - different from the last head
+
+        const repo = yield TestUtil.createSimpleRepository();
+        const currentHead = yield repo.getHeadCommit();
+        const newCommitId = yield TestUtil.makeCommit(repo);
+        const newHead     = yield repo.getHeadCommit();
+
+        assert(!currentHead.id().equal(newCommitId));
+        assert(newHead.id().equal(newCommitId));
     }));
 });
