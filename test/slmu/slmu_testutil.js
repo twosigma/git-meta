@@ -38,139 +38,142 @@ const path    = require("path");
 
 const TestUtil = require("../../lib/slmu/slmu_testutil");
 
-describe("makeTempDir", function () {
+describe("slmu_testutil", function () {
     after(TestUtil.cleanup);
 
-    // I don't know if we can verify that the returned directories are
-    // "temporary", but we can verify that they subsequent calls return
-    // different paths that are directories.
+    describe("makeTempDir", function () {
 
-    it("breathing test", co.wrap(function *() {
-        const first = yield TestUtil.makeTempDir();
-        const stat = yield fs.stat(first);
-        assert(stat.isDirectory());
-        const second = yield TestUtil.makeTempDir();
-        assert.notEqual(first, second);
-    }));
-});
+        // I don't know if we can verify that the returned directories are
+        // "temporary", but we can verify that they subsequent calls return
+        // different paths that are directories.
 
-describe("isSameRealPath", function () {
-    after(TestUtil.cleanup);
+        it("breathing test", co.wrap(function *() {
+            const first = yield TestUtil.makeTempDir();
+            const stat = yield fs.stat(first);
+            assert(stat.isDirectory());
+            const second = yield TestUtil.makeTempDir();
+            assert.notEqual(first, second);
+        }));
+    });
 
-    // We're going to make some symlinks in a temp directory and check them,
-    // and also check for proper failure.
 
-    it("breathing test", co.wrap(function *() {
-        const dir = yield TestUtil.makeTempDir();
-        const subdirPath = path.join(dir, "sub");
-        yield fs.mkdir(subdirPath);
+    describe("isSameRealPath", function () {
 
-        assert(yield TestUtil.isSameRealPath(dir, dir), "trivial");
-        assert(!(yield TestUtil.isSameRealPath(dir, subdirPath)), "not same");
+        // We're going to make some symlinks in a temp directory and check
+        // them, and also check for proper failure.
 
-        const sublinkPath = path.join(dir, "sublink");
-        yield fs.symlink(subdirPath, sublinkPath);
+        it("breathing test", co.wrap(function *() {
+            const dir = yield TestUtil.makeTempDir();
+            const subdirPath = path.join(dir, "sub");
+            yield fs.mkdir(subdirPath);
 
-        assert(yield TestUtil.isSameRealPath(subdirPath, sublinkPath),
-               "links same");
-    }));
-});
+            assert(yield TestUtil.isSameRealPath(dir, dir), "trivial");
+            assert(!(yield TestUtil.isSameRealPath(dir, subdirPath)),
+                   "not same");
 
-describe("createSimpleRepository", function () {
-    after(TestUtil.cleanup);
+            const sublinkPath = path.join(dir, "sublink");
+            yield fs.symlink(subdirPath, sublinkPath);
 
-    it("createSimpleRepository", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
+            assert(yield TestUtil.isSameRealPath(subdirPath, sublinkPath),
+                   "links same");
+        }));
+    });
 
-        assert.instanceOf(repo, NodeGit.Repository);
+    describe("createSimpleRepository", function () {
 
-        // Check repo is not in merging, rebase, etc. state
+        it("createSimpleRepository", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
 
-        assert(repo.isDefaultState());
+            assert.instanceOf(repo, NodeGit.Repository);
 
-        // Check that the index has an entry in it for "README.md"
+            // Check repo is not in merging, rebase, etc. state
 
-        const index = yield repo.index();
-        assert.equal(1, index.entryCount());
-        const entry = index.getByPath("README.md");
-        assert(entry);
+            assert(repo.isDefaultState());
 
-        // Check that the repo has clean index and workdir
+            // Check that the index has an entry in it for "README.md"
 
-        const status = yield repo.getStatus();
-        assert(0 === status.length);
-    }));
-});
+            const index = yield repo.index();
+            assert.equal(1, index.entryCount());
+            const entry = index.getByPath("README.md");
+            assert(entry);
 
-describe("pathExists", function () {
-    after(TestUtil.cleanup);
+            // Check that the repo has clean index and workdir
 
-    it("pathExists", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const repoDir = repo.workdir();
-        const repoPathExists = yield TestUtil.pathExists(repoDir);
-        assert(repoPathExists);
-        const fakePath = path.join(repoDir, "not-a-path-in-the-repo");
-        const fakeExists = yield TestUtil.pathExists(fakePath);
-        assert.isFalse(fakeExists);
-    }));
-});
+            const status = yield repo.getStatus();
+            assert(0 === status.length);
+        }));
+    });
 
-describe("cleanup", function () {
-    it("cleanup", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const repoPath = repo.workdir();
-        yield TestUtil.cleanup();
-        const exists = yield TestUtil.pathExists(repoPath);
-        assert.isFalse(exists, "repo not removed");
-    }));
-});
+    describe("pathExists", function () {
 
-describe("createRepoAndRemote", function () {
-    after(TestUtil.cleanup);
+        it("pathExists", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const repoDir = repo.workdir();
+            const repoPathExists = yield TestUtil.pathExists(repoDir);
+            assert(repoPathExists);
+            const fakePath = path.join(repoDir, "not-a-path-in-the-repo");
+            const fakeExists = yield TestUtil.pathExists(fakePath);
+            assert.isFalse(fakeExists);
+        }));
+    });
 
-    it("createRepoAndRemote", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const bare = rr.bare;
-        const clone = rr.clone;
+    describe("cleanup", function () {
+        it("cleanup", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const repoPath = repo.workdir();
+            yield TestUtil.cleanup();
+            const exists = yield TestUtil.pathExists(repoPath);
+            assert.isFalse(exists, "repo not removed");
+        }));
+    });
 
-        // Through white box testing, we know that this method is implemented
-        // in terms of the already tested 'createSimpleRepository'; we need to
-        // verify that:
-        //   - the clone is a non-bare repo
-        //   - check to see that the expected 'README.md' file is in it
-        //   - verify that the bare repo is bare
-        //   - and that it is actually the remote of the clone
+    describe("createRepoAndRemote", function () {
 
-        assert(!clone.isBare(), "clone is not bare");
-        const readmePath = path.join(clone.workdir(), "README.md");
-        assert(yield TestUtil.pathExists(readmePath), "clone has readme");
-        assert(bare.isBare(), "bare repo is bare");
-        const remote = yield clone.getRemote("origin");
+        it("createRepoAndRemote", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const bare = rr.bare;
+            const clone = rr.clone;
 
-        // Interestingly, the 'path' returned by 'NodeGit.Repository' -- at
-        // least on my mac -- is different from what it was created with; it is
-        // the "real" path, e.g.: "/private/var/..." instead of "/var/...".
+            // Through white box testing, we know that this method is
+            // implemented in terms of the already tested
+            // 'createSimpleRepository'; we need to
 
-        assert(TestUtil.isSameRealPath(remote.url(), bare.path()),
-               "remote is right url");
-    }));
-});
+            // verify that:
+            //   - the clone is a non-bare repo
+            //   - check to see that the expected 'README.md' file is in it
+            //   - verify that the bare repo is bare
+            //   - and that it is actually the remote of the clone
 
-describe("makeCommit", function () {
-    after(TestUtil.cleanup);
+            assert(!clone.isBare(), "clone is not bare");
+            const readmePath = path.join(clone.workdir(), "README.md");
+            assert(yield TestUtil.pathExists(readmePath), "clone has readme");
+            assert(bare.isBare(), "bare repo is bare");
+            const remote = yield clone.getRemote("origin");
 
-    it("breathing test", co.wrap(function *() {
-        // Check that it makes a new commit that is:
-        //   - the new head
-        //   - different from the last head
+            // Interestingly, the 'path' returned by 'NodeGit.Repository' -- at
+            // least on my mac -- is different from what it was created with;
+            // it is the "real" path, e.g.: "/private/var/..." instead of
+            // "/var/...".
 
-        const repo = yield TestUtil.createSimpleRepository();
-        const currentHead = yield repo.getHeadCommit();
-        const newCommitId = yield TestUtil.makeCommit(repo);
-        const newHead     = yield repo.getHeadCommit();
+            assert(TestUtil.isSameRealPath(remote.url(), bare.path()),
+                   "remote is right url");
+        }));
+    });
 
-        assert(!currentHead.id().equal(newCommitId));
-        assert(newHead.id().equal(newCommitId));
-    }));
+    describe("makeCommit", function () {
+
+        it("breathing test", co.wrap(function *() {
+            // Check that it makes a new commit that is:
+            //   - the new head
+            //   - different from the last head
+
+            const repo = yield TestUtil.createSimpleRepository();
+            const currentHead = yield repo.getHeadCommit();
+            const newCommitId = yield TestUtil.makeCommit(repo);
+            const newHead     = yield repo.getHeadCommit();
+
+            assert(!currentHead.id().equal(newCommitId));
+            assert(newHead.id().equal(newCommitId));
+        }));
+    });
 });

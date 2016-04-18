@@ -41,318 +41,331 @@ const TestUtil  = require("../../lib/slmu/slmu_testutil");
 const NodeGit   = require("nodegit");
 const UserError = require("../../lib/slmu/slmu_usererror");
 
-describe("createBranchFromHead", function () {
+describe("slmu_gitutil", function () {
     after(TestUtil.cleanup);
 
-    it("from master", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const commit = yield repo.getHeadCommit();
-        const newBranch = yield GitUtil.createBranchFromHead(repo, "foo");
-        assert.instanceOf(newBranch, NodeGit.Reference);
-        assert(newBranch.isBranch());
-        assert.equal("foo", newBranch.shorthand());
-        const branchCommitId = newBranch.target();
-        assert(commit.id().equal(branchCommitId), "commits are equal");
+    describe("createBranchFromHead", function () {
 
-        // Verify we didn't change branch.
+        it("from master", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = yield repo.getHeadCommit();
+            const newBranch = yield GitUtil.createBranchFromHead(repo, "foo");
+            assert.instanceOf(newBranch, NodeGit.Reference);
+            assert(newBranch.isBranch());
+            assert.equal("foo", newBranch.shorthand());
+            const branchCommitId = newBranch.target();
+            assert(commit.id().equal(branchCommitId), "commits are equal");
 
-        const current = yield repo.getCurrentBranch();
-        assert.equal("master", current.shorthand());
-    }));
+            // Verify we didn't change branch.
 
-    it("detached head", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const commit = yield repo.getHeadCommit();
-        repo.detachHead();
-        const newBranch = yield GitUtil.createBranchFromHead(repo, "foo");
-        assert.instanceOf(newBranch, NodeGit.Reference);
-        assert(newBranch.isBranch());
-        assert.equal("foo", newBranch.shorthand());
-        const branchCommitId = newBranch.target();
-        assert(commit.id().equal(branchCommitId), "commits are equal");
-    }));
-});
+            const current = yield repo.getCurrentBranch();
+            assert.equal("master", current.shorthand());
+        }));
 
-describe("findBranch", function () {
-    after(TestUtil.cleanup);
+        it("detached head", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = yield repo.getHeadCommit();
+            repo.detachHead();
+            const newBranch = yield GitUtil.createBranchFromHead(repo, "foo");
+            assert.instanceOf(newBranch, NodeGit.Reference);
+            assert(newBranch.isBranch());
+            assert.equal("foo", newBranch.shorthand());
+            const branchCommitId = newBranch.target();
+            assert(commit.id().equal(branchCommitId), "commits are equal");
+        }));
+    });
 
-    it("breathingTest", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        yield GitUtil.createBranchFromHead(repo, "foo");
+    describe("findBranch", function () {
 
-        // Find the master branch.
+        it("breathingTest", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            yield GitUtil.createBranchFromHead(repo, "foo");
 
-        const master = yield GitUtil.findBranch(repo, "master");
-        assert.instanceOf(master, NodeGit.Reference);
-        assert.equal("master", master.shorthand());
+            // Find the master branch.
 
-        // Find another branch.
+            const master = yield GitUtil.findBranch(repo, "master");
+            assert.instanceOf(master, NodeGit.Reference);
+            assert.equal("master", master.shorthand());
 
-        const foundNew = yield GitUtil.findBranch(repo, "foo");
-        assert.instanceOf(foundNew, NodeGit.Reference);
-        assert.equal("foo", foundNew.shorthand());
+            // Find another branch.
 
-        // Verify failure.
-        const result = yield GitUtil.findBranch(repo, "bar");
-        assert.isNull(result);
-    }));
-});
+            const foundNew = yield GitUtil.findBranch(repo, "foo");
+            assert.instanceOf(foundNew, NodeGit.Reference);
+            assert.equal("foo", foundNew.shorthand());
 
-describe("isValidRemoteName", function () {
-    after(TestUtil.cleanup);
+            // Verify failure.
 
-    it("breathing test", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        assert(yield GitUtil.isValidRemoteName(rr.clone, "origin"),
-               "origin good");
-        assert(!(yield GitUtil.isValidRemoteName(rr.clone, "foo")),
-               "foo not good");
-    }));
-});
+            const result = yield GitUtil.findBranch(repo, "bar");
+            assert.isNull(result);
+        }));
+    });
 
-describe("findRemoteBranch", function () {
-    after(TestUtil.cleanup);
+    describe("isValidRemoteName", function () {
+        after(TestUtil.cleanup);
 
-    it("breathingTest", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const branch =
+        it("breathing test", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            assert(yield GitUtil.isValidRemoteName(rr.clone, "origin"),
+                   "origin good");
+            assert(!(yield GitUtil.isValidRemoteName(rr.clone, "foo")),
+                   "foo not good");
+        }));
+    });
+
+    describe("findRemoteBranch", function () {
+        after(TestUtil.cleanup);
+
+        it("breathingTest", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const branch =
                   yield GitUtil.findRemoteBranch(rr.clone, "origin", "master");
-        assert.isNotNull(branch);
-        assert.instanceOf(branch, NodeGit.Reference);
-        assert.equal("origin/master", branch.shorthand());
-        assert(branch.isRemote());
+            assert.isNotNull(branch);
+            assert.instanceOf(branch, NodeGit.Reference);
+            assert.equal("origin/master", branch.shorthand());
+            assert(branch.isRemote());
 
-        const bad = yield GitUtil.findRemoteBranch(rr.clone, "origin", "foo");
-        assert.isNull(bad, "bad branch name");
-    }));
-});
-
-describe("getRootGitDirectory", function () {
-    let cwd;
-    before(function () {
-        cwd = process.cwd();
-    });
-    after(co.wrap(function *() {
-        process.chdir(cwd);
-        yield TestUtil.cleanup();
-    }));
-
-    // This method is recursive, so we will check just three cases:
-    // - failure case
-    // - simple case
-    // - one deep
-
-    it("failure", function () {
-        const tempdir = os.tmpdir();
-        process.chdir(tempdir);
-        const result = GitUtil.getRootGitDirectory();
-        assert.isNull(result);
+            const bad =
+                     yield GitUtil.findRemoteBranch(rr.clone, "origin", "foo");
+            assert.isNull(bad, "bad branch name");
+        }));
     });
 
-    it("successes", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const workdir = repo.workdir();
-        process.chdir(workdir);
-        const repoRoot = GitUtil.getRootGitDirectory(workdir);
-        assert(yield TestUtil.isSameRealPath(workdir, repoRoot), "trivial");
-        const subdir = path.join(workdir, "sub");
-        yield fs.mkdir(subdir);
-        process.chdir(subdir);
-        const subRoot = GitUtil.getRootGitDirectory(workdir);
-        assert(yield TestUtil.isSameRealPath(workdir, subRoot), "trivial");
-    }));
-});
+    describe("getRootGitDirectory", function () {
+        let cwd;
+        before(function () {
+            cwd = process.cwd();
+        });
+        after(co.wrap(function *() {
+            process.chdir(cwd);
+            yield TestUtil.cleanup();
+        }));
 
-describe("getCurrentRepo", function () {
+        // This method is recursive, so we will check just three cases:
+        // - failure case
+        // - simple case
+        // - one deep
 
-    let cwd;
-    before(function () {
-        cwd = process.cwd();
+        it("failure", function () {
+            const tempdir = os.tmpdir();
+            process.chdir(tempdir);
+            const result = GitUtil.getRootGitDirectory();
+            assert.isNull(result);
+        });
+
+        it("successes", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const workdir = repo.workdir();
+            process.chdir(workdir);
+            const repoRoot = GitUtil.getRootGitDirectory(workdir);
+            assert(yield TestUtil.isSameRealPath(workdir, repoRoot),
+                   "trivial");
+            const subdir = path.join(workdir, "sub");
+            yield fs.mkdir(subdir);
+            process.chdir(subdir);
+            const subRoot = GitUtil.getRootGitDirectory(workdir);
+            assert(yield TestUtil.isSameRealPath(workdir, subRoot), "trivial");
+        }));
     });
-    after(co.wrap(function *() {
-        process.chdir(cwd);
-        yield TestUtil.cleanup();
-    }));
 
-    it("breathing test", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        process.chdir(repo.workdir());
-        const current = yield GitUtil.getCurrentRepo();
-        assert.instanceOf(current, NodeGit.Repository);
-        assert(TestUtil.isSameRealPath(repo.workdir(), current.workdir()));
-    }));
+    describe("getCurrentRepo", function () {
 
-    it("failure", co.wrap(function *() {
-        // Making an assumption here that the temp dir is not in a git repo;
-        // otherwise, not sure how I could test this.
+        let cwd;
+        before(function () {
+            cwd = process.cwd();
+        });
+        after(co.wrap(function *() {
+            process.chdir(cwd);
+            yield TestUtil.cleanup();
+        }));
 
-        const emptyDir = yield TestUtil.makeTempDir();
-        process.chdir(emptyDir);
+        it("breathing test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            process.chdir(repo.workdir());
+            const current = yield GitUtil.getCurrentRepo();
+            assert.instanceOf(current, NodeGit.Repository);
+            assert(TestUtil.isSameRealPath(repo.workdir(), current.workdir()));
+        }));
 
-        try {
-            yield GitUtil.getCurrentRepo();
-            assert(false, "didn't throw error");
-        }
-        catch (e) {
-            assert.instanceOf(e, UserError);
-        }
-    }));
-});
+        it("failure", co.wrap(function *() {
+            // Making an assumption here that the temp dir is not in a git
+            // repo; otherwise, not sure how I could test this.
 
-describe("push", function () {
-    after(TestUtil.cleanup);
+            const emptyDir = yield TestUtil.makeTempDir();
+            process.chdir(emptyDir);
 
-    // We know that we're not actually implementing push ourselves; it's done
-    // in terms of `git push`, though eventually it will be through NodeGit.
+            try {
+                yield GitUtil.getCurrentRepo();
+                assert(false, "didn't throw error");
+            }
+            catch (e) {
+                assert.instanceOf(e, UserError);
+            }
+        }));
+    });
 
-    it("breathing test", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const goodResult =
+    describe("push", function () {
+        after(TestUtil.cleanup);
+
+        // We know that we're not actually implementing push ourselves; it's
+        // done in terms of `git push`, though eventually it will be through
+        // NodeGit.
+
+        it("breathing test", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const goodResult =
                        yield GitUtil.push(rr.clone, "origin", "master", "foo");
-        assert.isNull(goodResult);
-        const newBranch = yield GitUtil.findBranch(rr.bare, "foo");
-        assert.isNotNull(newBranch);
-        const masterHead = yield rr.clone.getHeadCommit();
-        const fooHead    = yield rr.bare.getHeadCommit();
-        assert(masterHead.id().equal(fooHead.id()));
+            assert.isNull(goodResult);
+            const newBranch = yield GitUtil.findBranch(rr.bare, "foo");
+            assert.isNotNull(newBranch);
+            const masterHead = yield rr.clone.getHeadCommit();
+            const fooHead    = yield rr.bare.getHeadCommit();
+            assert(masterHead.id().equal(fooHead.id()));
 
-        const badResult = yield GitUtil.push(rr.clone, "xx", "master", "bar");
-        assert.isString(badResult);
-    }));
-});
-
-describe("getCurrentBranchName", function () {
-    after(TestUtil.cleanup);
-
-    it("breathing test", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-
-        assert.equal("master", yield GitUtil.getCurrentBranchName(repo));
-
-        repo.detachHead();
-
-        assert.isNull(yield GitUtil.getCurrentBranchName(repo));
-    }));
-});
-
-describe("resolveCommitish", function () {
-    after(TestUtil.cleanup);
-
-    // We know the actual resolution is handled by 'NodeGit', so just do some
-    // simple tests to prove to ourselves that we are forwarding the arguments
-    // correctly.
-
-    it("breathing test", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-
-        const headCommit = yield repo.getHeadCommit();
-        const headCommitId = headCommit.id();
-
-        const masterResolve = yield GitUtil.resolveCommitish(repo, "master");
-
-        assert(headCommitId.equal(masterResolve.id()));
-
-        const partialSha = headCommitId.tostrS();
-        const shaResolve = yield GitUtil.resolveCommitish(repo, partialSha);
-
-        assert(headCommitId.equal(shaResolve.id()));
-
-        assert.isNull(yield GitUtil.resolveCommitish(repo, "foo"));
-    }));
-});
-
-describe("shortSha", function () {
-    it("breahingTest", function () {
-        const input = "e76a1dda3a42ba1f20b6f35297ee5eda6f9cc017";
-        assert.equal("e76a1d", GitUtil.shortSha(input));
+            const badResult =
+                           yield GitUtil.push(rr.clone, "xx", "master", "bar");
+            assert.isString(badResult);
+        }));
     });
-});
 
-describe("fetch", function () {
-    after(TestUtil.cleanup);
+    describe("getCurrentBranchName", function () {
+        after(TestUtil.cleanup);
 
-    // We aren't doing the actual work, so just test that we pass things
-    // through for now.
+        it("breathing test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
 
-    it("breathingTest", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const repo = rr.clone;
-        const newCommit = yield TestUtil.makeCommit(repo);
-        const newDir = yield TestUtil.makeTempDir();
-        const newRepo = yield NodeGit.Clone.clone(rr.bare.path(), newDir);
+            assert.equal("master", yield GitUtil.getCurrentBranchName(repo));
 
-        yield GitUtil.push(repo, "origin", "master", "master");
-        yield GitUtil.fetch(newRepo, "origin");
+            repo.detachHead();
 
-        const master =
+            assert.isNull(yield GitUtil.getCurrentBranchName(repo));
+        }));
+    });
+
+    describe("resolveCommitish", function () {
+        after(TestUtil.cleanup);
+
+        // We know the actual resolution is handled by 'NodeGit', so just do
+        // some simple tests to prove to ourselves that we are forwarding the
+        // arguments correctly.
+
+        it("breathing test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+
+            const headCommit = yield repo.getHeadCommit();
+            const headCommitId = headCommit.id();
+
+            const masterResolve =
+                                yield GitUtil.resolveCommitish(repo, "master");
+
+            assert(headCommitId.equal(masterResolve.id()));
+
+            const partialSha = headCommitId.tostrS();
+            const shaResolve =
+                              yield GitUtil.resolveCommitish(repo, partialSha);
+
+            assert(headCommitId.equal(shaResolve.id()));
+
+            assert.isNull(yield GitUtil.resolveCommitish(repo, "foo"));
+        }));
+    });
+
+    describe("shortSha", function () {
+        it("breahingTest", function () {
+            const input = "e76a1dda3a42ba1f20b6f35297ee5eda6f9cc017";
+            assert.equal("e76a1d", GitUtil.shortSha(input));
+        });
+    });
+
+    describe("fetch", function () {
+        after(TestUtil.cleanup);
+
+        // We aren't doing the actual work, so just test that we pass things
+        // through for now.
+
+        it("breathingTest", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const repo = rr.clone;
+            const newCommit = yield TestUtil.makeCommit(repo);
+            const newDir = yield TestUtil.makeTempDir();
+            const newRepo = yield NodeGit.Clone.clone(rr.bare.path(), newDir);
+
+            yield GitUtil.push(repo, "origin", "master", "master");
+            yield GitUtil.fetch(newRepo, "origin");
+
+            const master =
                    yield GitUtil.findRemoteBranch(newRepo, "origin", "master");
-        const masterCommit = master.target();
-        assert(masterCommit.equal(newCommit));
+            const masterCommit = master.target();
+            assert(masterCommit.equal(newCommit));
 
-        // Now fetch and fail.
+            // Now fetch and fail.
 
-        try {
-            yield GitUtil.fetch(newRepo, "garbage");
-            assert(false, "didn't fail");
-        }
-        catch (e) {
-            assert.instanceOf(e, UserError);
-        }
-    }));
-});
+            try {
+                yield GitUtil.fetch(newRepo, "garbage");
+                assert(false, "didn't fail");
+            }
+            catch (e) {
+                assert.instanceOf(e, UserError);
+            }
+        }));
+    });
 
-describe("listUnpushedCommits", function () {
-    after(TestUtil.cleanup);
+    describe("listUnpushedCommits", function () {
+        after(TestUtil.cleanup);
 
-    // This one is a bit complicated to test, to catch all the edge cases.  A
-    // few things we want to check:
-    // - nothing unpushed
-    // - all commits unpushed
-    // - simple case
-    // TODO
-    // - multiple remote branches to exercise the logic that chooses the best
-    //   one
+        // This one is a bit complicated to test, to catch all the edge cases.
+        // A few things we want to check:
+        // - nothing unpushed
+        // - all commits unpushed
+        // - simple case
+        // TODO
+        // - multiple remote branches to exercise the logic that chooses the
+        //   best one
 
-    it("all already pushed", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const repo = rr.clone;
-        const head = yield repo.getHeadCommit();
-        const unpushed = yield GitUtil.listUnpushedCommits(repo,
+        it("all already pushed", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const repo = rr.clone;
+            const head = yield repo.getHeadCommit();
+            const unpushed = yield GitUtil.listUnpushedCommits(
+                                                           repo,
                                                            "origin",
                                                            head.id().tostrS());
-        assert.equal(0, unpushed.length);
-    }));
+            assert.equal(0, unpushed.length);
+        }));
 
-    it("one not pushed", co.wrap(function *() {
-        const rr = yield TestUtil.createRepoAndRemote();
-        const repo = rr.clone;
-        const head = yield repo.getHeadCommit();
-        const newCommit = yield TestUtil.makeCommit(repo);
-        const fromHead = yield GitUtil.listUnpushedCommits(repo,
+        it("one not pushed", co.wrap(function *() {
+            const rr = yield TestUtil.createRepoAndRemote();
+            const repo = rr.clone;
+            const head = yield repo.getHeadCommit();
+            const newCommit = yield TestUtil.makeCommit(repo);
+            const fromHead = yield GitUtil.listUnpushedCommits(
+                                                           repo,
                                                            "origin",
                                                            head.id().tostrS());
-        assert.equal(0, fromHead.length);
-        const fromNew = yield GitUtil.listUnpushedCommits(repo,
-                                                          "origin",
-                                                          newCommit.tostrS());
-        assert.equal(1, fromNew.length);
-        assert(fromNew[0].equal(newCommit));
-    }));
+            assert.equal(0, fromHead.length);
+            const fromNew = yield GitUtil.listUnpushedCommits(
+                                                           repo,
+                                                           "origin",
+                                                           newCommit.tostrS());
+            assert.equal(1, fromNew.length);
+            assert(fromNew[0].equal(newCommit));
+        }));
 
-    it("all unpushed", co.wrap(function *() {
-        // This hits the special case where no remote branch has history in
-        // common with the commit.
+        it("all unpushed", co.wrap(function *() {
+            // This hits the special case where no remote branch has history in
+            // common with the commit.
 
-        const rr = yield TestUtil.createRepoAndRemote();
-        const repo = rr.clone;
-        const newDir = yield TestUtil.makeTempDir();
-        const newRepo = yield NodeGit.Repository.init(newDir, 1);
-        NodeGit.Remote.create(repo, "foo", newRepo.path());
-        const head = yield repo.getHeadCommit();
-        const unpushed = yield GitUtil.listUnpushedCommits(repo,
+            const rr = yield TestUtil.createRepoAndRemote();
+            const repo = rr.clone;
+            const newDir = yield TestUtil.makeTempDir();
+            const newRepo = yield NodeGit.Repository.init(newDir, 1);
+            NodeGit.Remote.create(repo, "foo", newRepo.path());
+            const head = yield repo.getHeadCommit();
+            const unpushed = yield GitUtil.listUnpushedCommits(
+                                                           repo,
                                                            "foo",
                                                            head.id().tostrS());
-        assert.equal(1, unpushed.length);
-        assert(unpushed[0].equal(head.id()));
-    }));
+            assert.equal(1, unpushed.length);
+            assert(unpushed[0].equal(head.id()));
+        }));
+    });
 });
