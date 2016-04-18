@@ -350,6 +350,22 @@ describe("slmu_gitutil", function () {
             assert(fromNew[0].equal(newCommit));
         }));
 
+        it("a descendant is pushed", co.wrap(function *() {
+            // Check the case where the head of a remote branch points to a
+            // descendant of the commit we're checking from.
+
+            const rr = yield TestUtil.createRepoAndRemote();
+            const repo = rr.clone;
+            const newCommit = yield TestUtil.makeCommit(repo);
+            yield TestUtil.makeCommit(repo);
+            yield GitUtil.push(rr.clone, "origin", "master", "foo");
+            const result  = yield GitUtil.listUnpushedCommits(
+                                                           repo,
+                                                           "origin",
+                                                           newCommit.tostrS());
+            assert.equal(0, result.length);
+        }));
+
         it("all unpushed", co.wrap(function *() {
             // This hits the special case where no remote branch has history in
             // common with the commit.
