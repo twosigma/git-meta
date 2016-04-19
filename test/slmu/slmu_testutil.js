@@ -160,6 +160,39 @@ describe("slmu_testutil", function () {
         }));
     });
 
+    describe("makeCommit", function () {
+        // This method passes through to 'repo.createCommitOnHead'; we'll do a
+        // simple breathing test to verify that things are passed through
+        // correctly.
+
+        it("breathing test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const currentHead = yield repo.getHeadCommit();
+
+            const fileName = "my-file.txt";
+            const filePath = path.join(repo.workdir(), fileName);
+            yield fs.appendFile(filePath, "text");
+            const commit  = yield TestUtil.makeCommit(repo, [fileName]);
+
+            // Check that the commit has the expected change.
+
+            const diffs = yield commit.getDiff();
+            assert.equal(1, diffs.length);
+            const diff = diffs[0];
+            assert.equal(1, diff.numDeltas());
+            assert.equal(fileName, diff.getDelta(0).newFile().path());
+
+            // See that it's a new commit.
+
+            assert(!currentHead.id().equal(commit.id()));
+
+            // See that it's head.
+
+            const newHead = yield repo.getHeadCommit();
+            assert(newHead.id().equal(commit.id()));
+        }));
+    });
+
     describe("generateCommit", function () {
 
         it("breathing test", co.wrap(function *() {
@@ -169,7 +202,7 @@ describe("slmu_testutil", function () {
 
             const repo = yield TestUtil.createSimpleRepository();
             const currentHead = yield repo.getHeadCommit();
-            const newCommitId = yield TestUtil.generateCommit(repo);
+            const newCommitId = (yield TestUtil.generateCommit(repo)).id();
             const newHead     = yield repo.getHeadCommit();
 
             assert(!currentHead.id().equal(newCommitId));
