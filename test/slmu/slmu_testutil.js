@@ -160,7 +160,7 @@ describe("slmu_testutil", function () {
         }));
     });
 
-    describe("makeCommit", function () {
+    describe("generateCommit", function () {
 
         it("breathing test", co.wrap(function *() {
             // Check that it makes a new commit that is:
@@ -169,7 +169,7 @@ describe("slmu_testutil", function () {
 
             const repo = yield TestUtil.createSimpleRepository();
             const currentHead = yield repo.getHeadCommit();
-            const newCommitId = yield TestUtil.makeCommit(repo);
+            const newCommitId = yield TestUtil.generateCommit(repo);
             const newHead     = yield repo.getHeadCommit();
 
             assert(!currentHead.id().equal(newCommitId));
