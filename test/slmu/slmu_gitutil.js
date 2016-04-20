@@ -285,7 +285,7 @@ describe("slmu_gitutil", function () {
         it("breathingTest", co.wrap(function *() {
             const rr = yield TestUtil.createRepoAndRemote();
             const repo = rr.clone;
-            const newCommit = yield TestUtil.generateCommit(repo);
+            const newCommit = (yield TestUtil.generateCommit(repo)).id();
             const newDir = yield TestUtil.makeTempDir();
             const newRepo = yield NodeGit.Clone.clone(rr.bare.path(), newDir);
 
@@ -336,7 +336,7 @@ describe("slmu_gitutil", function () {
             const rr = yield TestUtil.createRepoAndRemote();
             const repo = rr.clone;
             const head = yield repo.getHeadCommit();
-            const newCommit = yield TestUtil.generateCommit(repo);
+            const newCommit = (yield TestUtil.generateCommit(repo)).id();
             const fromHead = yield GitUtil.listUnpushedCommits(
                                                            repo,
                                                            "origin",
@@ -356,7 +356,7 @@ describe("slmu_gitutil", function () {
 
             const rr = yield TestUtil.createRepoAndRemote();
             const repo = rr.clone;
-            const newCommit = yield TestUtil.generateCommit(repo);
+            const newCommit = (yield TestUtil.generateCommit(repo)).id();
             yield TestUtil.generateCommit(repo);
             yield GitUtil.push(rr.clone, "origin", "master", "foo");
             const result  = yield GitUtil.listUnpushedCommits(
