@@ -12,7 +12,7 @@
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
  *
- * * Neither the name of slim nor the names of its
+ * * Neither the name of git-meta nor the names of its
  *   contributors may be used to endorse or promote products derived from
  *   this software without specific prior written permission.
  *
@@ -33,13 +33,12 @@
 const assert = require("chai").assert;
 const co 	 = require("co");
 
-const Include  		= require("../../lib/slmu/slmu_include");
+const Include  		= require("../../lib/metau/metau_include");
 const NodeGit  		= require("nodegit");
-const TestUtil 		= require("../../lib/slmu/slmu_testutil");
-const SubmoduleUtil = require("../../lib/slmu/slmu_submoduleutil");
-const UserError 	= require("../../lib/slmu/slmu_usererror");
+const TestUtil 		= require("../../lib/metau/metau_testutil");
+const UserError 	= require("../../lib/metau/metau_usererror");
 
-describe("slmu_include", function () {
+describe("metau_include", function () {
 	describe("includeNonExistingRepo", function () {
 		after(TestUtil.cleanup);
 
@@ -76,9 +75,9 @@ describe("slmu_include", function () {
 	describe("includeExistingRepo", function () {
 		after(TestUtil.cleanup);
 
-		// for these tests, "externalRepo" represents the repository to be included
-		// and "submoduleRepo" represents the submodule once it has been included
-		// inside "repo"	
+		// for these tests, "externalRepo" represents the repository to be 
+		// included and "submoduleRepo" represents the submodule once it 
+		// has been included inside "repo"	
 
 		let repo, externalRepo, path;
 		before(co.wrap(function *() {
@@ -89,52 +88,63 @@ describe("slmu_include", function () {
 		}));
 
 		it("should include in the correct path", co.wrap(function *() {
-			const pathExists = yield TestUtil.pathExists(repo.workdir() + path);
+			const pathExists = 
+				yield TestUtil.pathExists(repo.workdir() + path);
 			assert(pathExists, "path should exist");
 
-			const submoduleRepo = yield NodeGit.Repository.open(repo.workdir() + path);
+			const submoduleRepo = 
+				yield NodeGit.Repository.open(repo.workdir() + path);
 			assert(submoduleRepo.workdir(), "repository should be created");
 		}));
 
 		it("should point to the correct commit", co.wrap(function *() {
 			const externalHead = yield externalRepo.getHeadCommit();
-			const submoduleRepo = yield NodeGit.Repository.open(repo.workdir() + path);
+			const submoduleRepo = 
+				yield NodeGit.Repository.open(repo.workdir() + path);
 			const submoduleHead = yield submoduleRepo.getHeadCommit();
 			
-			assert(externalHead.id().equal(submoduleHead.id()), "head commits should be equal");
+			assert(externalHead.id().equal(submoduleHead.id()), 
+				"head commits should be equal");
 		}));
 
 		it("should create the branch", co.wrap(function *() {
 			const externalBranch = yield externalRepo.getCurrentBranch();
-			const submoduleRepo = yield NodeGit.Repository.open(repo.workdir() + path);
+			const submoduleRepo = 
+				yield NodeGit.Repository.open(repo.workdir() + path);
 			const submoduleBranch = yield submoduleRepo.getCurrentBranch();
 			
-			assert.equal(submoduleBranch.shorthand(), externalBranch.shorthand());
+			assert.equal(submoduleBranch.shorthand(), 
+				externalBranch.shorthand());
 		}));
 
-		it("should create the branch when it is not master", co.wrap(function *() {
+		it("should create the branch if not on master", co.wrap(function *() {
 
-			// create a new repo on the branch "public" and include the externalRepo
+			// create a new repo on the branch "public" and 
+			// include the externalRepo
 
 			const branchName = "public";
-			const newRepo = yield TestUtil.createSimpleRepositoryOnBranch(branchName);
+			const newRepo = 
+				yield TestUtil.createSimpleRepositoryOnBranch(branchName);
 			const newPath = "bar";
 			yield Include.include(newRepo, externalRepo.workdir(), newPath);
 
 			const repoBranch = yield newRepo.getCurrentBranch();
-			const submoduleRepo = yield NodeGit.Repository.open(newRepo.workdir() + newPath);
+			const submoduleRepo = 
+				yield NodeGit.Repository.open(newRepo.workdir() + newPath);
 			const submoduleBranch = yield submoduleRepo.getCurrentBranch();
 			
 			assert.equal(repoBranch.shorthand(), submoduleBranch.shorthand());
 			assert.equal(submoduleBranch.shorthand(), branchName);
 		}));
 
-		it("should have the signature of the current repo", co.wrap(function *() {
+		it("should have signature of the current repo", co.wrap(function *() {
 			const repoSignature = repo.defaultSignature();
-			const submoduleRepo = yield NodeGit.Repository.open(repo.workdir() + path);
+			const submoduleRepo = 
+				yield NodeGit.Repository.open(repo.workdir() + path);
 			const submoduleSignature = submoduleRepo.defaultSignature();
 
-			assert.equal(repoSignature.toString(), submoduleSignature.toString());
+			assert.equal(repoSignature.toString(), 
+				submoduleSignature.toString());
 		}));
 	});
 });

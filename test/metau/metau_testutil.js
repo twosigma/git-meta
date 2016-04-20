@@ -108,7 +108,8 @@ describe("metau_testutil", function () {
 
         it("createSimpleRepositoryOnBranch", co.wrap(function *() {
             const branchName = "public";
-            const repo = yield TestUtil.createSimpleRepositoryOnBranch(branchName);
+            const repo = 
+                yield TestUtil.createSimpleRepositoryOnBranch(branchName);
             const repoBranch = yield repo.getCurrentBranch();
 
             assert.instanceOf(repo, NodeGit.Repository);
