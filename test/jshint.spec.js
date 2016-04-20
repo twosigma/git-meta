@@ -1,5 +1,6 @@
 require("mocha-jshint")({
     paths: [
-        "./lib"
+        "./lib",
+        "./test"
     ]
 });
