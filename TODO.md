@@ -9,7 +9,7 @@
 - generally, check for state of repositories (merging, etc.) before doing
   operations... also bare repos, "unborn" repos, etc.
 - use rebase status of meta-repo to track rebases
-- add `slim rebase` continue, abort, etc.
+- add `git-meta rebase` continue, abort, etc.
 - progress meters for remote operations (fetch, include, open, pull, etc.)
   - I've done a lot of this work on the 'working-on-progress-bars' branch, but
     it's dependent on the nodegit issues listed below
@@ -23,7 +23,6 @@
 - Add assertions for preconditions to methods, particularly argument types.
 - Eliminate calls to `exit` except for in the main modules.  Change calls
   to `exit` into `UserError` exceptions; document this in method contracts.
-- get mocha to show stack traces on failures
 
 # Open Issues to Watch
 

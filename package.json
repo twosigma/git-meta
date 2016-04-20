@@ -1,5 +1,5 @@
 {
-  "name": "slim",
+  "name": "git-meta",
   "version": "0.2.0",
   "description": "large scale SCM made easy",
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/twosigma/slim.git"
+    "url": "git+https://github.com/twosigma/git-meta.git"
   },
   "keywords": [
     "git",
@@ -22,10 +22,10 @@
   "author": "Brock Peabody",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/twosigma/slim/issues"
+    "url": "https://github.com/twosigma/git-meta/issues"
   },
   "preferGlobal": true,
-  "homepage": "https://github.com/twosigma/slim#readme",
+  "homepage": "https://github.com/twosigma/git-meta#readme",
   "dependencies": {
       "argparse": "",
       "chai": "",
