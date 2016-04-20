@@ -12,7 +12,7 @@
       this list of conditions and the following disclaimer in the documentation
       and/or other materials provided with the distribution.
 
-    * Neither the name of slim nor the names of its
+    * Neither the name of git-meta nor the names of its
       contributors may be used to endorse or promote products derived from
       this software without specific prior written permission.
 
@@ -29,17 +29,17 @@
     POSSIBILITY OF SUCH DAMAGE.
 -->
 
-# Slim
+# Git-meta
 
 Efficiently manage a set of repositories as if they were a single repository.
 
-The goal of the Slim project is to enhance Git's submodule support to be more
+The goal of the git-meta project is to enhance Git's submodule support to be more
 powerful and easier to use.
 
 ## Installation
 
-    $ git clone https://github.com/twosigma/slim.git
-    $ cd slim
+    $ git clone https://github.com/twosigma/git-meta.git
+    $ cd git-meta
     $ npm install -g
 
 ## Motivation
@@ -73,7 +73,7 @@ custom servers.
 
 ## What's Out There?
 
-Before starting on slim, I investigated several existing tools:
+Before starting on git-meta, I investigated several existing tools:
 
 [Gitslave](http://gitslave.sourceforge.net)
 [myrepos](https://myrepos.branchable.com)
@@ -82,7 +82,7 @@ Before starting on slim, I investigated several existing tools:
 [Git subtrees](https://git-scm.com/book/en/v1/Git-Tools-Subtree-Merging)
 [Git submodules](https://git-scm.com/docs/git-submodule)
 
-All of these tools overlap with the problems slim is trying to solve, but none
+All of these tools overlap with the problems git-meta is trying to solve, but none
 of them are sufficient:
 
 - most don't provide a way to reference the state of all repositories
@@ -95,14 +95,14 @@ of them are sufficient:
 
 Git submodules come the closest: they do provide the technical ability to solve
 the problem, but are very difficult to use and lack some of the desired
-features.  With slim, we will build on top of Git submodules to provide the
+features.  With git-meta, we will build on top of Git submodules to provide the
 desired functionality leveraging existing Git commands.
 
 ## Model
 
 Our goal is to allow a related set of *sub-repositories* to be treated as a
-single *meta-repository*.  Slim provides this functionality using Git
-submodules.  The meta-repository is managed by slim; it is a Git repository
+single *meta-repository*.  Git-meta provides this functionality using Git
+submodules.  The meta-repository is managed by git-meta; it is a Git repository
 containing a submodule for each sub-repository (and possibly other meta-data).
 Each commit in the meta-repository describes an exact state of the world.
 Branches and tags in the meta-repository facilitate cross-repository branching
@@ -113,21 +113,21 @@ that are locally available as being *open*.
 
 ### Git Is Still There
 
-Slim is a tool that facilitates the use of Git submodules to manage a set of
-repositories as if they were a single repository.  Slim strives to be as
+Git-meta is a tool that facilitates the use of Git submodules to manage a set of
+repositories as if they were a single repository.  Git-meta strives to be as
 easy-to-use as possible, but hiding Git is not a goal.  We understand that many
 times you will want to work directly with Git commands.  We will document our
 model, invariants, and sub-command implementations so that you will be able to
-understand how slim interacts with Git.  Furthermore, slim will provide clear
-diagnostics and automatic recovery when it encounters a non-canonical state.
+understand how git-meta interacts with Git.  Furthermore, git-meta will provide 
+clear diagnostics and automatic recovery when it encounters a non-canonical state.
 
-In many cases, slim does provide sub-commands that map directly to Git
+In many cases, git-meta does provide sub-commands that map directly to Git
 sub-commands.  We do this not to hide Git, but to provide the command with a
-streamlined set of slim-compatible options and slim-specific documentation.
+streamlined set of git-meta-compatible options and git-meta-specific documentation.
 
 ### Invariants
 
-Slim, attempts to maintain the following invariants:
+Git-meta, attempts to maintain the following invariants:
 
 - Every open sub-repository is set to the same local branch as the
   meta-repository.
@@ -135,18 +135,18 @@ Slim, attempts to maintain the following invariants:
 ### Vocabulary
 
 *open* -- an open repository is one that has been cloned locally, and
-to which slim operations (such as `branch`) will be applied.  A repository is
+to which git-meta operations (such as `branch`) will be applied.  A repository is
 opened with the `open` command.
 *closed* -- a closed repository is not available locally.  A repository is
 closed with the `close` command.
-*sub-repository* -- one of the repositories included in a slim repository.
-*meta-repository* -- the containing repository managed by slim consisting of a
+*sub-repository* -- one of the repositories included in a git-meta repository.
+*meta-repository* -- the containing repository managed by git-meta consisting of a
 submodule for each sub-repository
 
 ## Goal -- Reintegration With Git
 
 While starting out as a tool written in terms of Git submodules, in the long
-term I would like to see Slim become either a new Git command (like `subtree`),
+term I would like to see git-meta become either a new Git command (like `subtree`),
 or direct enhancement/extension of the existing `submodule` command.  I'd like
 to see how effective it is as a standalone tool first before proposing any such
 thing to the owners of Git, at which point I would like to get their feedback
