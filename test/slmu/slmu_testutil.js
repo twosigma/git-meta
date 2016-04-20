@@ -104,6 +104,25 @@ describe("slmu_testutil", function () {
         }));
     });
 
+    describe("createSimpleRepositoryOnBranch", function () {
+
+        it("createSimpleRepositoryOnBranch", co.wrap(function *() {
+            const branchName = "public";
+            const repo = yield TestUtil.createSimpleRepositoryOnBranch(branchName);
+            const repoBranch = yield repo.getCurrentBranch();
+
+            assert.instanceOf(repo, NodeGit.Repository);
+
+            // Check repo is not in merging, rebase, etc. state
+
+            assert(repo.isDefaultState());
+
+            // Check that the repo in the "public" branch
+            
+            assert.equal(repoBranch.shorthand(), branchName);
+        }));
+    });
+
     describe("pathExists", function () {
 
         it("pathExists", co.wrap(function *() {
