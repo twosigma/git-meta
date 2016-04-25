@@ -5,8 +5,7 @@
   "scripts": {
     "test": "mocha test"
   },
-  "directories": {
-  },
+  "directories": {},
   "bin": {
     "git-meta": "./lib/git-meta.js"
   },
@@ -27,18 +26,19 @@
   "preferGlobal": true,
   "homepage": "https://github.com/twosigma/git-meta#readme",
   "dependencies": {
-      "argparse": "",
-      "chai": "",
-      "child-process-promise": "",
-      "nodegit": "",
-      "co": "",
-      "fs-promise": "",
-      "rimraf": "",
-      "colors": ""
+    "argparse": "",
+    "chai": "",
+    "child-process-promise": "",
+    "co": "",
+    "colors": "",
+    "fs-promise": "",
+    "nodegit": "",
+    "omelette": "^0.3.1",
+    "rimraf": ""
   },
   "devDependencies": {
-      "mocha": "",
-      "mocha-jshint": "",
-      "temp": ""
+    "mocha": "",
+    "mocha-jshint": "",
+    "temp": ""
   }
 }
