@@ -31,120 +31,120 @@
 "use strict";
 
 const assert = require("chai").assert;
-const co 	 = require("co");
+const co     = require("co");
 
-const Include  		= require("../../lib/metau/metau_include");
-const NodeGit  		= require("nodegit");
-const TestUtil 		= require("../../lib/metau/metau_testutil");
-const UserError 	= require("../../lib/metau/metau_usererror");
+const Include       = require("../../lib/metau/metau_include");
+const NodeGit       = require("nodegit");
+const TestUtil      = require("../../lib/metau/metau_testutil");
+const UserError     = require("../../lib/metau/metau_usererror");
 
 describe("metau_include", function () {
-	describe("includeNonExistingRepo", function () {
-		after(TestUtil.cleanup);
+    describe("includeNonExistingRepo", function () {
+        after(TestUtil.cleanup);
 
-		let repo;
-		beforeEach(co.wrap(function *() {
-			repo = yield TestUtil.createSimpleRepository();
-		}));
+        let repo;
+        beforeEach(co.wrap(function *() {
+            repo = yield TestUtil.createSimpleRepository();
+        }));
 
-		it("fails with an invalid path", co.wrap(function *() {
-			const url = repo.workdir();
-			const path = "";
-			try {
-				yield Include.include(repo, url, path);
-				assert(false, "didn't throw error");
-			} 
-			catch (e) {
-				assert.instanceOf(e, UserError);
-			}
-		}));
+        it("fails with an invalid path", co.wrap(function *() {
+            const url = repo.workdir();
+            const path = "";
+            try {
+                yield Include.include(repo, url, path);
+                assert(false, "didn't throw error");
+            } 
+            catch (e) {
+                assert.instanceOf(e, UserError);
+            }
+        }));
 
-		it("fails with an invalid url", co.wrap(function *() {
-			const url = "non/existing/path";
-			const path = "foo";
-			try {
-				yield Include.include(repo, url, path);
-				assert(false, "didn't throw error");
-			} 
-			catch (e) {
-				assert.instanceOf(e, UserError);
-			}
-		}));
-	});
+        it("fails with an invalid url", co.wrap(function *() {
+            const url = "non/existing/path";
+            const path = "foo";
+            try {
+                yield Include.include(repo, url, path);
+                assert(false, "didn't throw error");
+            } 
+            catch (e) {
+                assert.instanceOf(e, UserError);
+            }
+        }));
+    });
 
-	describe("includeExistingRepo", function () {
-		after(TestUtil.cleanup);
+    describe("includeExistingRepo", function () {
+        after(TestUtil.cleanup);
 
-		// for these tests, "externalRepo" represents the repository to be 
-		// included and "submoduleRepo" represents the submodule once it 
-		// has been included inside "repo"	
+        // for these tests, "externalRepo" represents the repository to be 
+        // included and "submoduleRepo" represents the submodule once it 
+        // has been included inside "repo"  
 
-		let repo, externalRepo, path;
-		before(co.wrap(function *() {
-			repo = yield TestUtil.createSimpleRepository();
-			externalRepo = yield TestUtil.createSimpleRepository();
-			path = "foo";
-			yield Include.include(repo, externalRepo.workdir(), path);
-		}));
+        let repo, externalRepo, path;
+        before(co.wrap(function *() {
+            repo = yield TestUtil.createSimpleRepository();
+            externalRepo = yield TestUtil.createSimpleRepository();
+            path = "foo";
+            yield Include.include(repo, externalRepo.workdir(), path);
+        }));
 
-		it("should include in the correct path", co.wrap(function *() {
-			const pathExists = 
-				yield TestUtil.pathExists(repo.workdir() + path);
-			assert(pathExists, "path should exist");
+        it("should include in the correct path", co.wrap(function *() {
+            const pathExists = 
+                yield TestUtil.pathExists(repo.workdir() + path);
+            assert(pathExists, "path should exist");
 
-			const submoduleRepo = 
-				yield NodeGit.Repository.open(repo.workdir() + path);
-			assert(submoduleRepo.workdir(), "repository should be created");
-		}));
+            const submoduleRepo = 
+                yield NodeGit.Repository.open(repo.workdir() + path);
+            assert(submoduleRepo.workdir(), "repository should be created");
+        }));
 
-		it("should point to the correct commit", co.wrap(function *() {
-			const externalHead = yield externalRepo.getHeadCommit();
-			const submoduleRepo = 
-				yield NodeGit.Repository.open(repo.workdir() + path);
-			const submoduleHead = yield submoduleRepo.getHeadCommit();
-			
-			assert(externalHead.id().equal(submoduleHead.id()), 
-				"head commits should be equal");
-		}));
+        it("should point to the correct commit", co.wrap(function *() {
+            const externalHead = yield externalRepo.getHeadCommit();
+            const submoduleRepo = 
+                yield NodeGit.Repository.open(repo.workdir() + path);
+            const submoduleHead = yield submoduleRepo.getHeadCommit();
+            
+            assert(externalHead.id().equal(submoduleHead.id()), 
+                "head commits should be equal");
+        }));
 
-		it("should create the branch", co.wrap(function *() {
-			const externalBranch = yield externalRepo.getCurrentBranch();
-			const submoduleRepo = 
-				yield NodeGit.Repository.open(repo.workdir() + path);
-			const submoduleBranch = yield submoduleRepo.getCurrentBranch();
-			
-			assert.equal(submoduleBranch.shorthand(), 
-				externalBranch.shorthand());
-		}));
+        it("should create the branch", co.wrap(function *() {
+            const externalBranch = yield externalRepo.getCurrentBranch();
+            const submoduleRepo = 
+                yield NodeGit.Repository.open(repo.workdir() + path);
+            const submoduleBranch = yield submoduleRepo.getCurrentBranch();
+            
+            assert.equal(submoduleBranch.shorthand(), 
+                externalBranch.shorthand());
+        }));
 
-		it("should create the branch if not on master", co.wrap(function *() {
+        it("should create the branch if not on master", co.wrap(function *() {
 
-			// create a new repo on the branch "public" and 
-			// include the externalRepo
+            // create a new repo on the branch "public" and 
+            // include the externalRepo
 
-			const branchName = "public";
-			const newRepo = 
-				yield TestUtil.createSimpleRepositoryOnBranch(branchName);
-			const newPath = "bar";
-			yield Include.include(newRepo, externalRepo.workdir(), newPath);
+            const branchName = "public";
+            const newRepo = 
+                yield TestUtil.createSimpleRepositoryOnBranch(branchName);
+            const newPath = "bar";
+            yield Include.include(newRepo, externalRepo.workdir(), newPath);
 
-			const repoBranch = yield newRepo.getCurrentBranch();
-			const submoduleRepo = 
-				yield NodeGit.Repository.open(newRepo.workdir() + newPath);
-			const submoduleBranch = yield submoduleRepo.getCurrentBranch();
-			
-			assert.equal(repoBranch.shorthand(), submoduleBranch.shorthand());
-			assert.equal(submoduleBranch.shorthand(), branchName);
-		}));
+            const repoBranch = yield newRepo.getCurrentBranch();
+            const submoduleRepo = 
+                yield NodeGit.Repository.open(newRepo.workdir() + newPath);
+            const submoduleBranch = yield submoduleRepo.getCurrentBranch();
+            
+            assert.equal(repoBranch.shorthand(), submoduleBranch.shorthand());
+            assert.equal(submoduleBranch.shorthand(), branchName);
+        }));
 
-		it("should have signature of the current repo", co.wrap(function *() {
-			const repoSignature = repo.defaultSignature();
-			const submoduleRepo = 
-				yield NodeGit.Repository.open(repo.workdir() + path);
-			const submoduleSignature = submoduleRepo.defaultSignature();
+        it("should have signature of the current repo", co.wrap(function *() {
+            const repoSignature = repo.defaultSignature();
+            const submoduleRepo = 
+                yield NodeGit.Repository.open(repo.workdir() + path);
+            const submoduleSignature = submoduleRepo.defaultSignature();
 
-			assert.equal(repoSignature.toString(), 
-				submoduleSignature.toString());
-		}));
-	});
+            assert.equal(repoSignature.toString(), 
+                submoduleSignature.toString());
+        }));
+    });
 });
