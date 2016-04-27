@@ -31,385 +31,385 @@
 "use strict";
 
 const assert  = require("chai").assert;
-const co 	  = require("co");
+const co      = require("co");
 
-const Branch  		= require("../../lib/metau/metau_branch");
-const GitUtil 		= require("../../lib/metau/metau_gitutil");
-const Include 		= require("../../lib/metau/metau_include");
-const SubmoduleUtil	= require("../../lib/metau/metau_submoduleutil");
-const TestUtil 		= require("../../lib/metau/metau_testutil");
-const UserError 	= require("../../lib/metau/metau_usererror");
+const Branch        = require("../../lib/metau/metau_branch");
+const GitUtil       = require("../../lib/metau/metau_gitutil");
+const Include       = require("../../lib/metau/metau_include");
+const SubmoduleUtil = require("../../lib/metau/metau_submoduleutil");
+const TestUtil      = require("../../lib/metau/metau_testutil");
+const UserError     = require("../../lib/metau/metau_usererror");
 
 describe("metau_branch", function () {
 
-	describe("createBranch", function () {
+    describe("createBranch", function () {
 
-		describe("when the branch does not exist in meta or sub-repos", 
-			function () {
-			
-			after(TestUtil.cleanup);
+        describe("when the branch does not exist in meta or sub-repos", 
+            function () {
+            
+            after(TestUtil.cleanup);
 
-			it("should pass", co.wrap(function *() {
+            it("should pass", co.wrap(function *() {
 
-				const repo = yield TestUtil.createSimpleRepository();
+                const repo = yield TestUtil.createSimpleRepository();
 
-				const subrepo = yield TestUtil.createSimpleRepository();
-				const path = "subrepo";
-				yield Include.include(repo, subrepo.workdir(), path);
+                const subrepo = yield TestUtil.createSimpleRepository();
+                const path = "subrepo";
+                yield Include.include(repo, subrepo.workdir(), path);
 
-				// Create the branches
+                // Create the branches
 
-				const branchName = "branch";
-				yield Branch.createBranch(repo, branchName, false);
+                const branchName = "branch";
+                yield Branch.createBranch(repo, branchName, false);
 
-				// Confirm meta repo has the new branch
+                // Confirm meta repo has the new branch
 
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(branchName, metaBranch.shorthand());
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(branchName, metaBranch.shorthand());
 
-				// Confirm the sub repo has the new branch
+                // Confirm the sub repo has the new branch
 
-				const subBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(branchName, subBranch.shorthand());
-			}));
-		});
+                const subBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(branchName, subBranch.shorthand());
+            }));
+        });
 
-		describe("when the branch does exist in a meta-repo", function () {
-			after(TestUtil.cleanup);
+        describe("when the branch does exist in a meta-repo", function () {
+            after(TestUtil.cleanup);
 
-			let repo, branchName;
-			beforeEach(co.wrap(function *() {
+            let repo, branchName;
+            beforeEach(co.wrap(function *() {
 
-				// Create a repository with a sub-repo
+                // Create a repository with a sub-repo
 
-				repo = yield TestUtil.createSimpleRepository();
-				const subrepo = yield TestUtil.createSimpleRepository();
-				const path = "subrepo";
-				yield Include.include(repo, subrepo.workdir(), path);
+                repo = yield TestUtil.createSimpleRepository();
+                const subrepo = yield TestUtil.createSimpleRepository();
+                const path = "subrepo";
+                yield Include.include(repo, subrepo.workdir(), path);
 
-				// Create a branch in meta-repo
+                // Create a branch in meta-repo
 
-				branchName = "branch";
-				yield GitUtil.createBranchFromHead(repo, branchName);
-			}));
+                branchName = "branch";
+                yield GitUtil.createBranchFromHead(repo, branchName);
+            }));
 
-			it("should fail", co.wrap(function *() {
+            it("should fail", co.wrap(function *() {
 
-				// Attempt to create branch and ensure error was thrown
+                // Attempt to create branch and ensure error was thrown
 
-				try {
-					yield Branch.createBranch(repo, branchName, false);
-					assert(false, "didn't throw error");
-				}
-				catch (e) {
-					assert.instanceOf(e, UserError);
-				}
+                try {
+                    yield Branch.createBranch(repo, branchName, false);
+                    assert(false, "didn't throw error");
+                }
+                catch (e) {
+                    assert.instanceOf(e, UserError);
+                }
 
-				// Confirm the sub-repo does not have the branch
+                // Confirm the sub-repo does not have the branch
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranch = 
-					yield GitUtil.findBranch(submodules[0].repo, branchName);
-				assert.equal(null, subBranch);
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranch = 
+                    yield GitUtil.findBranch(submodules[0].repo, branchName);
+                assert.equal(null, subBranch);
 
-			}));
+            }));
 
-			it("should create the branch in sub-repos with --any", 
-				co.wrap(function *() {
+            it("should create the branch in sub-repos with --any", 
+                co.wrap(function *() {
 
-				// Attempt to create branch using git-meta and ensure
-				// error was thrown
+                // Attempt to create branch using git-meta and ensure
+                // error was thrown
 
-				yield Branch.createBranch(repo, branchName, true);
+                yield Branch.createBranch(repo, branchName, true);
 
-				// Confirm the sub-repo has the branch
+                // Confirm the sub-repo has the branch
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranch = 
-					yield GitUtil.findBranch(submodules[0].repo, branchName);
-				assert.equal(branchName, subBranch.shorthand());
-			}));
-		});
-		
-		describe("when the branch does exist in a sub-repo", function () {
-			after(TestUtil.cleanup);
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranch = 
+                    yield GitUtil.findBranch(submodules[0].repo, branchName);
+                assert.equal(branchName, subBranch.shorthand());
+            }));
+        });
+        
+        describe("when the branch does exist in a sub-repo", function () {
+            after(TestUtil.cleanup);
 
-			let repo, branchName;
-			beforeEach(co.wrap(function *() {
+            let repo, branchName;
+            beforeEach(co.wrap(function *() {
 
-				// Create a repository with two sub-repos
+                // Create a repository with two sub-repos
 
-				repo = yield TestUtil.createSimpleRepository();
-				const subrepo = yield TestUtil.createSimpleRepository(),
-					  subrepo2 = yield TestUtil.createSimpleRepository();
-				const path = "subrepo",
-					  path2 = "subrepo2";
-				yield Include.include(repo, subrepo.workdir(), path);
-				yield Include.include(repo, subrepo2.workdir(), path2);
+                repo = yield TestUtil.createSimpleRepository();
+                const subrepo = yield TestUtil.createSimpleRepository(),
+                      subrepo2 = yield TestUtil.createSimpleRepository();
+                const path = "subrepo",
+                      path2 = "subrepo2";
+                yield Include.include(repo, subrepo.workdir(), path);
+                yield Include.include(repo, subrepo2.workdir(), path2);
 
-				// Create a branch in the first sub-repo
+                // Create a branch in the first sub-repo
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const firstSubRepo = submodules[0].repo;
-				branchName = "branch";
-				yield GitUtil.createBranchFromHead(firstSubRepo, branchName);
-			}));
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const firstSubRepo = submodules[0].repo;
+                branchName = "branch";
+                yield GitUtil.createBranchFromHead(firstSubRepo, branchName);
+            }));
 
-			it("should fail", co.wrap(function *() {
+            it("should fail", co.wrap(function *() {
 
-				// Attempt to create branch and ensure error was thrown
+                // Attempt to create branch and ensure error was thrown
 
-				try {
-					yield Branch.createBranch(repo, branchName, false);
-					assert(false, "didn't throw error");
-				}
-				catch (e) {
-					assert.instanceOf(e, UserError);
-				}
+                try {
+                    yield Branch.createBranch(repo, branchName, false);
+                    assert(false, "didn't throw error");
+                }
+                catch (e) {
+                    assert.instanceOf(e, UserError);
+                }
 
-				// Confirm meta-repo does not have the new branch
+                // Confirm meta-repo does not have the new branch
 
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(null, metaBranch);
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(null, metaBranch);
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const firstSubRepo = submodules[0].repo;
-				const secondSubRepo = submodules[1].repo;
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const firstSubRepo = submodules[0].repo;
+                const secondSubRepo = submodules[1].repo;
 
-				// Confirm the first sub-repo still has the new branch
+                // Confirm the first sub-repo still has the new branch
 
-				const subBranch = 
-					yield GitUtil.findBranch(firstSubRepo, branchName);
-				assert.equal(branchName, subBranch.shorthand());
+                const subBranch = 
+                    yield GitUtil.findBranch(firstSubRepo, branchName);
+                assert.equal(branchName, subBranch.shorthand());
 
-				// Confirm the second sub-repo does not have the new branch
+                // Confirm the second sub-repo does not have the new branch
 
-				const subBranch2 = 
-					yield GitUtil.findBranch(secondSubRepo, branchName);
-				assert.equal(null, subBranch2);
+                const subBranch2 = 
+                    yield GitUtil.findBranch(secondSubRepo, branchName);
+                assert.equal(null, subBranch2);
 
-			}));
+            }));
 
-			it("should create the branches in each repository with --any", 
-				co.wrap(function *() {
+            it("should create the branches in each repository with --any", 
+                co.wrap(function *() {
 
-				yield Branch.createBranch(repo, branchName, true);
+                yield Branch.createBranch(repo, branchName, true);
 
-				// Confirm meta-repo has the new branch
+                // Confirm meta-repo has the new branch
 
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(branchName, metaBranch.shorthand());
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(branchName, metaBranch.shorthand());
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const firstSubRepo = submodules[0].repo;
-				const secondSubRepo = submodules[1].repo;
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const firstSubRepo = submodules[0].repo;
+                const secondSubRepo = submodules[1].repo;
 
-				// Confirm the first sub-repo still has the new branch
+                // Confirm the first sub-repo still has the new branch
 
-				const subBranch = 
-					yield GitUtil.findBranch(firstSubRepo, branchName);
-				assert.equal(branchName, subBranch.shorthand());
+                const subBranch = 
+                    yield GitUtil.findBranch(firstSubRepo, branchName);
+                assert.equal(branchName, subBranch.shorthand());
 
-				// Confirm the second sub-repo has the new branch
+                // Confirm the second sub-repo has the new branch
 
-				const subBranch2 = 
-					yield GitUtil.findBranch(secondSubRepo, branchName);
-				assert.equal(branchName, subBranch2.shorthand());
-			}));
-		});
-	});
+                const subBranch2 = 
+                    yield GitUtil.findBranch(secondSubRepo, branchName);
+                assert.equal(branchName, subBranch2.shorthand());
+            }));
+        });
+    });
 
-	describe("deleteBranch", function () {
+    describe("deleteBranch", function () {
 
-		describe("when the branch exists in meta-repo and all sub-repos", 
-			function () {
-			
-			after(TestUtil.cleanup);
+        describe("when the branch exists in meta-repo and all sub-repos", 
+            function () {
+            
+            after(TestUtil.cleanup);
 
-			let repo, branchName;
-			beforeEach(co.wrap(function *() {
-				// Create a repository with two sub-repos
+            let repo, branchName;
+            beforeEach(co.wrap(function *() {
+                // Create a repository with two sub-repos
 
-				repo = yield TestUtil.createSimpleRepository();
-				const subrepo = yield TestUtil.createSimpleRepository(),
-					  subrepo2 = yield TestUtil.createSimpleRepository();
-				const path = "subrepo",
-					  path2 = "subrepo2";
-				yield Include.include(repo, subrepo.workdir(), path);
-				yield Include.include(repo, subrepo2.workdir(), path2);
+                repo = yield TestUtil.createSimpleRepository();
+                const subrepo = yield TestUtil.createSimpleRepository(),
+                      subrepo2 = yield TestUtil.createSimpleRepository();
+                const path = "subrepo",
+                      path2 = "subrepo2";
+                yield Include.include(repo, subrepo.workdir(), path);
+                yield Include.include(repo, subrepo2.workdir(), path2);
 
-				// Create a branch in the meta-repo
+                // Create a branch in the meta-repo
 
-				branchName = "branch";
-				yield GitUtil.createBranchFromHead(repo, branchName);
+                branchName = "branch";
+                yield GitUtil.createBranchFromHead(repo, branchName);
 
-				// Create the branch in each of the sub-repos
+                // Create the branch in each of the sub-repos
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				yield submodules.map(
-					sub => GitUtil.createBranchFromHead(sub.repo, branchName)
-				);
-			}));
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                yield submodules.map(
+                    sub => GitUtil.createBranchFromHead(sub.repo, branchName)
+                );
+            }));
 
-			it("should pass", co.wrap(function *() {
+            it("should pass", co.wrap(function *() {
 
-				yield Branch.deleteBranch(repo, branchName, false);
+                yield Branch.deleteBranch(repo, branchName, false);
 
-				// Confirm meta-repo does not have the branch
+                // Confirm meta-repo does not have the branch
 
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(null, metaBranch);
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(null, metaBranch);
 
-				// Confirm each sub-repo does not have the branch
+                // Confirm each sub-repo does not have the branch
 
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranches = yield submodules.map(
-					sub => GitUtil.findBranch(sub.repo, branchName)
-				);
-				for (const i in subBranches) {
-					assert.equal(null, subBranches[i]);
-				}
-			}));
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranches = yield submodules.map(
+                    sub => GitUtil.findBranch(sub.repo, branchName)
+                );
+                for (const i in subBranches) {
+                    assert.equal(null, subBranches[i]);
+                }
+            }));
 
-			it("should fail if it is the active branch", co.wrap(function *() {
-				// Set branch as active branch
+            it("should fail if it is the active branch", co.wrap(function *() {
+                // Set branch as active branch
 
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				yield repo.setHead(metaBranch.name());
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                yield repo.setHead(metaBranch.name());
 
-				// Attempt to delete the branch
+                // Attempt to delete the branch
 
-				try {
-					yield Branch.deleteBranch(repo, branchName, false);
-					assert(false, "didn't throw error");
-				}
-				catch (e) {
-					assert.instanceOf(e, UserError);
-				}
+                try {
+                    yield Branch.deleteBranch(repo, branchName, false);
+                    assert(false, "didn't throw error");
+                }
+                catch (e) {
+                    assert.instanceOf(e, UserError);
+                }
 
-				// Confirm meta-repo still has the branch
+                // Confirm meta-repo still has the branch
 
-				assert.equal(branchName, metaBranch.shorthand());
+                assert.equal(branchName, metaBranch.shorthand());
 
-				// Confirm each sub-repo has the branch
-
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranches = yield submodules.map(
-					sub => GitUtil.findBranch(sub.repo, branchName)
-				);
-				for (const i in subBranches) {
-					assert.equal(branchName, subBranches[i].shorthand());
-				}
-			}));
-		});
+                // Confirm each sub-repo has the branch
+
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranches = yield submodules.map(
+                    sub => GitUtil.findBranch(sub.repo, branchName)
+                );
+                for (const i in subBranches) {
+                    assert.equal(branchName, subBranches[i].shorthand());
+                }
+            }));
+        });
 
-		describe("when the branch does not exist in meta-repo", function () {
-			after(TestUtil.cleanup);
+        describe("when the branch does not exist in meta-repo", function () {
+            after(TestUtil.cleanup);
 
-			let repo, branchName;
-			beforeEach(co.wrap(function *() {
-				// Create a repository with two sub-repos
+            let repo, branchName;
+            beforeEach(co.wrap(function *() {
+                // Create a repository with two sub-repos
 
-				repo = yield TestUtil.createSimpleRepository();
-				const subrepo = yield TestUtil.createSimpleRepository(),
-					  subrepo2 = yield TestUtil.createSimpleRepository();
-				const path = "subrepo",
-					  path2 = "subrepo2";
-				yield Include.include(repo, subrepo.workdir(), path);
-				yield Include.include(repo, subrepo2.workdir(), path2);
-
-				// Create the branch in each of the sub-repos
-
-				branchName = "branch";
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				yield submodules.map(
-					sub => GitUtil.createBranchFromHead(sub.repo, branchName)
-				);
-			}));
-
-			it("should fail", co.wrap(function *() {
-				try {
-					yield Branch.deleteBranch(repo, branchName, false);
-					assert(false, "didn't throw error");
-				}
-				catch (e) {
-					assert.instanceOf(e, UserError);
-				}
-
-				// Confirm each sub-repo still has the branch
-
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranches = yield submodules.map(
-					sub => GitUtil.findBranch(sub.repo, branchName)
-				);
-				for (const i in subBranches) {
-					assert.equal(branchName, subBranches[i].shorthand());
-				}
-			}));
-
-			it("should delete the sub-repo branches with --any", 
-				co.wrap(function *() {
-
-				yield Branch.deleteBranch(repo, branchName, true);
-
-				// Confirm each sub-repo does not have the branch
-
-				const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
-				const subBranches = yield submodules.map(
-					sub => GitUtil.findBranch(sub.repo, branchName)
-				);
-				for (const i in subBranches) {
-					assert.equal(null, subBranches[i]);
-				}
-			}));
-		});
-
-		describe("when the branch does not exist in sub-repo", function () {
-			after(TestUtil.cleanup);
-
-			let repo, branchName;
-			beforeEach(co.wrap(function *() {
-				// Create a repository with two sub-repos
-
-				repo = yield TestUtil.createSimpleRepository();
-				const subrepo = yield TestUtil.createSimpleRepository(),
-					  subrepo2 = yield TestUtil.createSimpleRepository();
-				const path = "subrepo",
-					  path2 = "subrepo2";
-				yield Include.include(repo, subrepo.workdir(), path);
-				yield Include.include(repo, subrepo2.workdir(), path2);
-
-				// Create a branch in the meta-repo
-
-				branchName = "branch";
-				yield GitUtil.createBranchFromHead(repo, branchName);
-			}));
-
-			it("should fail", co.wrap(function *() {
-				try {
-					yield Branch.deleteBranch(repo, branchName, false);
-					assert(false, "didn't throw error");
-				}
-				catch (e) {
-					assert.instanceOf(e, UserError);
-				}
-
-				// Confirm meta-repo still does have the branch
-
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(branchName, metaBranch.shorthand());
-			}));
-
-			it("should delete the meta-repo branch with --any", 
-				co.wrap(function *() {
-					
-				yield Branch.deleteBranch(repo, branchName, true);
-
-				// Confirm meta-repo does not have the branch
-
-				const metaBranch = yield GitUtil.findBranch(repo, branchName);
-				assert.equal(null, metaBranch);
-			}));
-		});
-	});
+                repo = yield TestUtil.createSimpleRepository();
+                const subrepo = yield TestUtil.createSimpleRepository(),
+                      subrepo2 = yield TestUtil.createSimpleRepository();
+                const path = "subrepo",
+                      path2 = "subrepo2";
+                yield Include.include(repo, subrepo.workdir(), path);
+                yield Include.include(repo, subrepo2.workdir(), path2);
+
+                // Create the branch in each of the sub-repos
+
+                branchName = "branch";
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                yield submodules.map(
+                    sub => GitUtil.createBranchFromHead(sub.repo, branchName)
+                );
+            }));
+
+            it("should fail", co.wrap(function *() {
+                try {
+                    yield Branch.deleteBranch(repo, branchName, false);
+                    assert(false, "didn't throw error");
+                }
+                catch (e) {
+                    assert.instanceOf(e, UserError);
+                }
+
+                // Confirm each sub-repo still has the branch
+
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranches = yield submodules.map(
+                    sub => GitUtil.findBranch(sub.repo, branchName)
+                );
+                for (const i in subBranches) {
+                    assert.equal(branchName, subBranches[i].shorthand());
+                }
+            }));
+
+            it("should delete the sub-repo branches with --any", 
+                co.wrap(function *() {
+
+                yield Branch.deleteBranch(repo, branchName, true);
+
+                // Confirm each sub-repo does not have the branch
+
+                const submodules = yield SubmoduleUtil.getSubmoduleRepos(repo);
+                const subBranches = yield submodules.map(
+                    sub => GitUtil.findBranch(sub.repo, branchName)
+                );
+                for (const i in subBranches) {
+                    assert.equal(null, subBranches[i]);
+                }
+            }));
+        });
+
+        describe("when the branch does not exist in sub-repo", function () {
+            after(TestUtil.cleanup);
+
+            let repo, branchName;
+            beforeEach(co.wrap(function *() {
+                // Create a repository with two sub-repos
+
+                repo = yield TestUtil.createSimpleRepository();
+                const subrepo = yield TestUtil.createSimpleRepository(),
+                      subrepo2 = yield TestUtil.createSimpleRepository();
+                const path = "subrepo",
+                      path2 = "subrepo2";
+                yield Include.include(repo, subrepo.workdir(), path);
+                yield Include.include(repo, subrepo2.workdir(), path2);
+
+                // Create a branch in the meta-repo
+
+                branchName = "branch";
+                yield GitUtil.createBranchFromHead(repo, branchName);
+            }));
+
+            it("should fail", co.wrap(function *() {
+                try {
+                    yield Branch.deleteBranch(repo, branchName, false);
+                    assert(false, "didn't throw error");
+                }
+                catch (e) {
+                    assert.instanceOf(e, UserError);
+                }
+
+                // Confirm meta-repo still does have the branch
+
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(branchName, metaBranch.shorthand());
+            }));
+
+            it("should delete the meta-repo branch with --any", 
+                co.wrap(function *() {
+                    
+                yield Branch.deleteBranch(repo, branchName, true);
+
+                // Confirm meta-repo does not have the branch
+
+                const metaBranch = yield GitUtil.findBranch(repo, branchName);
+                assert.equal(null, metaBranch);
+            }));
+        });
+    });
 });
