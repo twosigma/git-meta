@@ -5,10 +5,10 @@ name: big-slide
 ---
 
 template: big-slide
-# Slim
+# Git-meta
 large-scale distributed source control made easy
 
-.footnote[Go directly to [project site](https://github.com/twosigma/slim)]
+.footnote[Go directly to [project site](https://github.com/twosigma/git-meta)]
 
 ---
 
@@ -85,7 +85,7 @@ layout: false
 ]
 .right-column[
 
-Before starting on Slim, I investigated several existing tools:
+Before starting on Git-meta, I investigated several existing tools:
 
 - [Gitslave](http://gitslave.sourceforge.net)
 
@@ -110,8 +110,8 @@ Before starting on Slim, I investigated several existing tools:
 ]
 .right-column[
 
-All of these tools overlap with the problems Slim is trying to solve, but none
-of them are sufficient:
+All of these tools overlap with the problems Git-meta is trying to solve, but
+none of them are sufficient:
 
 - most don't provide a way to reference the state of all repositories
   (Gitslave, Android Repo, Myrepos)
@@ -131,13 +131,13 @@ of them are sufficient:
 
 template: big-slide
 
-## Conclusion: build Slim using Git submodules
+## Conclusion: build Git-meta using Git submodules
 
 Git submodules provide minimal functionality; what they do offer is difficult
 to use.  However, they do give sufficient, core operations from which we can
 achieve our goals.
 
-I will package the Slim project as the `git-meta` command, e.g.:
+I will package the Git-meta project as the `git-meta` command, e.g.:
 
 ```bash
 $ git meta merge my-branch
@@ -161,22 +161,22 @@ layout: false
 ### Principles
 ]
 .right-column[
-- A Slim repository (or *meta-repository*) contains pointers to
+- A Git-meta repository (or *meta-repository*) contains pointers to
   *sub-repositories*.
 
 - Each pointer indicates a repository URL and commit.
 
 - The pointers are implemented using Git submodules.
 
-- Slim does not need any meta-information not provided directly by Git.
+- Git-meta does not need any meta-information not provided directly by Git.
 
-- All Slim operations can be implemented in terms of basic Git operations.
+- All Git-meta operations can be implemented in terms of basic Git operations.
 
-- Slim is a *distributed* version control system.  State changes happen
+- Git-meta is a *distributed* version control system.  State changes happen
   locally.  Repositories -- including meta-repositories -- are equals.
 
-- Slim requires no server-side technology; it is implemented entirely in terms
-  of Git operations.
+- Git-meta requires no server-side technology; it is implemented entirely in
+  terms of Git operations.
 ]
 
 ---
@@ -184,16 +184,17 @@ layout: false
 .left-column[
 ## Architecture
 ### Principles
-### The Slim meta-repository
+### The Git-meta meta-repository
 ]
 .right-column[
-- Slim requires a meta-repository to hold submodules.
+- Git-meta requires a meta-repository to hold submodules.
 
-- Slim does not require any specific files or structure for the
-  meta-repository; any repository is a valid Slim repository.
+- Git-meta does not require any specific files or structure for the
+  meta-repository; any repository is a valid Git-meta repository.
 
-- The user may add arbitrary files to a Slim meta-repository.  A team may want
-  to place system-wide configuration files in the meta-repository, for example.
+- The user may add arbitrary files to a Git-meta meta-repository.  A team may
+  want to place system-wide configuration files in the meta-repository, for
+  example.
 ]
 
 ---
@@ -201,7 +202,7 @@ layout: false
 .left-column[
 ## Architecture
 ### Principles
-### The Slim meta-repository
+### The Git-meta meta-repository
 ### Sub-repositories
 ]
 .right-column[
@@ -214,10 +215,10 @@ layout: false
 - A sub-repository may be *open* or *closed*.
 
 - Open sub-repositories have been cloned locally and will be operated on by
-  many Slim operations.
+  many Git-meta operations.
 
 - Closed sub-repositories have not been cloned locally and are ignored by most
-  Slim commands.
+  Git-meta commands.
 
 - A newly cloned meta-repository has no open sub-repositories.
 ]
@@ -227,7 +228,7 @@ layout: false
 .left-column[
 ## Architecture
 ### Principles
-### The Slim meta-repository
+### The Git-meta meta-repository
 ### Sub-repositories
 ### Commands
 ]
