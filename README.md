@@ -31,9 +31,10 @@
 
 # Git-meta
 
-**NOTE Git-meta is BETA software**: Git-meta is currently in a very early phase
-of development.  We will be adding features and addressing shortcomings as we
-can, but Git-meta is not officially supported by Two Sigma at this time.
+**NOTE Git-meta is BETA software**: Git-meta is open for collaboration, but
+currently in a very early phase of development.  We will be adding features and
+addressing shortcomings as we can, but Git-meta is not officially supported by
+Two Sigma at this time.
 
 Efficiently manage a set of repositories as if they were a single repository.
 
