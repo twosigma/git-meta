@@ -141,11 +141,14 @@ Git-meta, attempts to maintain the following invariants:
 *open* -- an open repository is one that has been cloned locally, and
 to which git-meta operations (such as `branch`) will be applied.  A repository is
 opened with the `open` command.
+
 *closed* -- a closed repository is not available locally.  A repository is
 closed with the `close` command.
+
 *sub-repository* -- one of the repositories included in a git-meta repository.
-*meta-repository* -- the containing repository managed by git-meta consisting of a
-submodule for each sub-repository
+
+*meta-repository* -- the containing repository managed by git-meta consisting
+of a submodule for each sub-repository
 
 ## Goal -- Reintegration With Git
 
