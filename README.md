@@ -31,10 +31,14 @@
 
 # Git-meta
 
+**NOTE Git-meta is BETA software**: Git-meta is currently in a very early phase
+of development.  We will be adding features and addressing shortcomings as we
+can, but Git-meta is not officially supported by Two Sigma at this time.
+
 Efficiently manage a set of repositories as if they were a single repository.
 
-The goal of the git-meta project is to enhance Git's submodule support to be more
-powerful and easier to use.
+The goal of the git-meta project is to enhance Git's submodule support to be
+more powerful and easier to use.
 
 ## Installation
 
