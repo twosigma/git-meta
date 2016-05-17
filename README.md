@@ -78,7 +78,7 @@ custom servers.
 
 ## What's Out There?
 
-Before starting on git-meta, I investigated several existing tools:
+Before starting on git-meta, we investigated several existing tools:
 
 [Gitslave](http://gitslave.sourceforge.net)
 [myrepos](https://myrepos.branchable.com)
@@ -154,8 +154,8 @@ of a submodule for each sub-repository
 ## Goal -- Reintegration With Git
 
 While starting out as a tool written in terms of Git submodules, in the long
-term I would like to see git-meta become either a new Git command (like `subtree`),
-or direct enhancement/extension of the existing `submodule` command.  I'd like
+term we would like to see git-meta become either a new Git command (like `subtree`),
+or direct enhancement/extension of the existing `submodule` command.  We'd like
 to see how effective it is as a standalone tool first before proposing any such
-thing to the owners of Git, at which point I would like to get their feedback
+thing to the owners of Git, at which point we would like to get their feedback
 on the best way to proceed.
