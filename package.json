@@ -37,6 +37,7 @@
       "colors": ""
   },
   "devDependencies": {
+      "deeper": "",
       "mocha": "",
       "mocha-jshint": "",
       "temp": ""

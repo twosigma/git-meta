@@ -130,6 +130,33 @@ In many cases, git-meta does provide sub-commands that map directly to Git
 sub-commands.  We do this not to hide Git, but to provide the command with a
 streamlined set of git-meta-compatible options and git-meta-specific documentation.
 
+### Testing
+
+The most difficult part of unit testing a utility like this -- where operations
+depend on large varieties of (on-disk) state with many potential corner cases
+-- is putting the world in the necessary state to apply tests.  To make
+unit-testing better and more productive, we have created a mini language to
+describe the state of (one or more) repositories.  We can take such a
+description and synthesize a repository on disk in the specified state, and we
+can read the state from an existing repository into our language.  A brief
+example:
+
+    S:Bfoo=1
+
+The above string describes a "simple" (`S` being a template for a specific,
+simple repository) repository having the addition of a branch `foo` pointing to
+the commit `1`.  We could assert that after attempting the operation to add a
+new branch, `bar` pointing to the same commit and checking it out, we have the
+state:
+
+    S:Bfoo=1;Bbar=1;*=bar
+
+Where the `*=bar` override means that the current branch is set to `bar`.
+
+See `lib/util/shorthandparserutil.js` and the `lib/util/repoast*` files for
+more information, or one of our test drivers (initially at least
+`test/util/gitutil.js` with more to come).
+
 ### Invariants
 
 Git-meta, attempts to maintain the following invariants:

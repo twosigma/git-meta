@@ -119,7 +119,7 @@ describe("testutil", function () {
             assert(repo.isDefaultState());
 
             // Check that the repo in the "public" branch
-            
+
             assert.equal(repoBranch.shorthand(), branchName);
         }));
     });
@@ -227,6 +227,25 @@ describe("testutil", function () {
 
             assert(!currentHead.id().equal(newCommitId));
             assert(newHead.id().equal(newCommitId));
+        }));
+    });
+
+    describe("makeBareCopy", function () {
+        it("breathing test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepositoryOnBranch("foo");
+            const barePath = yield TestUtil.makeTempDir();
+            const bare = yield TestUtil.makeBareCopy(repo, barePath);
+            const samePath = yield TestUtil.isSameRealPath(barePath,
+                                                           bare.path());
+            assert(samePath);
+            assert.instanceOf(bare, NodeGit.Repository);
+            assert(bare.isBare());
+            const master = yield bare.getBranch("master");
+            assert.equal(master.shorthand(), "master");
+            const foo = yield bare.getBranch("foo");
+            assert.equal(foo.shorthand(), "foo");
+            const remotes = yield NodeGit.Remote.list(bare);
+            assert.equal(remotes.length, 0);
         }));
     });
 });
