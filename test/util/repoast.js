@@ -37,6 +37,16 @@ const RepoAST = require("../../lib/util/repoast");
 
 describe("repoast", function () {
 
+    describe("Submodule", function () {
+        it("breath", function () {
+            const s = new RepoAST.Submodule("foo", "bar");
+            assert.instanceOf(s, RepoAST.Submodule);
+            assert.isFrozen(s);
+            assert.equal(s.url, "foo");
+            assert.equal(s.sha, "bar");
+        });
+    });
+
     describe("Commit", function () {
 
         // Basically just testing that the constructor and accessors perform.
@@ -51,7 +61,22 @@ describe("repoast", function () {
                 input: { parents: ["foo"], changes: { a: "b" } },
                 eparents: ["foo"],
                 echanges: { a: "b"},
-            }
+            },
+            "delete change": {
+                input: {
+                    changes: { b: null },
+                },
+                eparents: [],
+                echanges: { b: null, },
+
+            },
+            "add a submodule": {
+                input: {
+                    changes: { b: new RepoAST.Submodule("x", "y") },
+                },
+                eparents: [],
+                echanges: { b: new RepoAST.Submodule("x", "y"), },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
@@ -110,131 +135,237 @@ describe("repoast", function () {
 
     describe("AST", function () {
 
-        // Basically just testing that the constructor and accessors perform.
+        describe("constructor", function () {
+            // Basically just testing that the constructor and accessors
+            // perform.
 
-        const Commit = RepoAST.Commit;
-        const Remote = RepoAST.Remote;
+            const Commit = RepoAST.Commit;
+            const Remote = RepoAST.Remote;
 
-        const c1       = new Commit();
-        const cWithPar = new Commit({ parents: ["1"] });
+            const c1       = new Commit();
+            const cWithPar = new Commit({ parents: ["1"] });
+            const cWithSubmodule = new Commit({
+                changes: { x: new RepoAST.Submodule("foo", "bar") }
+            });
 
-        function m(input,
-                   expected,
-                   fails) {
-            expected = expected || {};
-            return {
-                input   : input,
-                ecommits: ("commits" in expected) ? expected.commits: {},
-                ebranches: ("branches" in expected) ? expected.branches : {},
-                ehead   : ("head" in expected) ? expected.head : null,
-                ebranch : ("branch" in expected) ? expected.branch : null,
-                eremotes: ("remotes" in expected) ? expected.remotes : {},
-                fails   : fails,
-            };
-        }
+            function m(input,
+                       expected,
+                       fails) {
+                expected = expected || {};
+                return {
+                    input   : input,
+                    ecommits: ("commits" in expected) ? expected.commits: {},
+                    ebranches:
+                        ("branches" in expected) ? expected.branches : {},
+                    ehead   : ("head" in expected) ? expected.head : null,
+                    ebranch : ("branch" in expected) ? expected.branch : null,
+                    eremotes: ("remotes" in expected) ? expected.remotes : {},
+                    fails   : fails,
+                };
+            }
 
-        const cases = {
-            "trivial": m(undefined, undefined, false),
-            "simple" : m(
-                {
-                    commits: {},
-                    branches: {},
+            const cases = {
+                "trivial": m(undefined, undefined, false),
+                "simple" : m(
+                    {
+                        commits: {},
+                        branches: {},
+                        head: null,
+                        currentBranchName: null
+                    },
+                    undefined,
+                    false),
+                "branchCommit": m({
+                    commits: {"1":c1, "2": cWithPar},
+                    branches: {"master": "2"},
+                    head: "1",
+                    currentBranchName: null,
+                }, {
+                    commits: {"1":c1, "2": cWithPar},
+                    branches: {"master": "2"},
+                    head: "1",
+                }, false),
+                "with submodule": m({
+                    commits: {"1":cWithSubmodule, "2": cWithPar},
+                    branches: {"master": "2"},
+                    head: "1",
+                    currentBranchName: null,
+                }, {
+                    commits: {"1":cWithSubmodule, "2": cWithPar},
+                    branches: {"master": "2"},
+                    head: "1",
+                }, false),
+                "remotes": m({
+                    remotes: {
+                        foo: new Remote("my-url"),
+                    }
+                }, {
+                    remotes: { foo: new Remote("my-url") },
+                }, false),
+                "badParent": m({ commits: { "2": cWithPar }},
+                               undefined,
+                               true),
+                "badBranch": m({ branches: { "master": "3"}}, undefined, true),
+                "badHead": m({ head: "3"}, undefined, true),
+                "branch": m({
+                    commits: {"1": c1},
+                    branches: {"master": "1"},
+                    head: "1",
+                    currentBranchName: "master",
+                }, {
+                    commits: {"1": c1},
+                    branches: {"master": "1"},
+                    head: "1",
+                    branch: "master",
+                }, false),
+                "badBranch with good commit": m({
+                    commits: {"1": c1},
+                    branches: {"aster": "1"},
                     head: null,
-                    currentBranchName: null
+                    currentBranchName: "master",
+                }, undefined, true),
+                "unreachable": m({ commits: {"1": c1} }, undefined, true),
+                "reachedByHead": m({
+                    commits: {"1": c1},
+                    head: "1",
+                }, {
+                    commits: {"1": c1},
+                    head: "1",
+                }, false),
+                "reachedByRemote": m({
+                    commits: {"1": c1},
+                    remotes: {
+                        bar: new Remote("foo", { branches: { "bar": "1"}, }),
+                    },
+                }, {
+                    commits: {"1": c1},
+                    remotes: {
+                        bar: new Remote("foo", { branches: { "bar": "1"}, }),
+                    },
+                }, false),
+                "bare with current branch": m({
+                    commits: {"1":c1, "2": cWithPar},
+                    branches: {"master": "2"},
+                    head: null,
+                    currentBranchName: "master",
+                }, {
+                    commits: {"1":c1, "2": cWithPar},
+                    branches: {"master": "2"},
+                    branch: "master",
+                    head: null,
+                }, false),
+            };
+            Object.keys(cases).forEach(caseName => {
+                it(caseName, function () {
+                    const c = cases[caseName];
+                    if (c.fails) {
+                        // `fails` indicates that it throws due to out of
+                        // contract.  We don't document what type of error is
+                        // thrown on contract violation.
+
+                        assert.throws(() => new RepoAST(c.input), "");
+                        return;                                       // RETURN
+                    }
+                    const obj = new RepoAST(c.input);
+                    assert(deeper(obj.commits, c.ecommits));
+                    assert(deeper(obj.branches, c.ebranches));
+                    assert.equal(obj.head, c.ehead);
+                    assert.equal(obj.currentBranchName, c.ebranch);
+
+                    if (c.input) {
+                        assert.notEqual(obj.commits, c.input.commits);
+                        assert.notEqual(obj.branches, c.input.branches);
+                    }
+                });
+            });
+        });
+
+        describe("renderCommit", function () {
+            const Commit = RepoAST.Commit;
+            const c1 = new Commit({ changes: { foo: "bar" }});
+            const c2 = new Commit({ changes: { foo: "baz" }});
+            const mergeChild = new Commit({
+                parents: ["3"],
+                changes: { bam: "blast" },
+            });
+            const merge = new Commit({
+                parents: ["1", "2"],
+                changes: {}
+            });
+            const deleter = new Commit({
+                parents: ["1"],
+                changes: { foo: null }
+            });
+            const submodule = new RepoAST.Submodule("x", "y");
+            const subCommit = new Commit({
+                parents: ["1"],
+                changes: { baz: submodule },
+            });
+            const cases = {
+                "one": {
+                    commits: { "1": c1},
+                    from: "1",
+                    expected: { foo: "bar" },
+                    ecache: {
+                        "1": { foo: "bar" },
+                    },
                 },
-                undefined,
-                false),
-            "branchCommit": m({
-                commits: {"1":c1, "2": cWithPar},
-                branches: {"master": "2"},
-                head: "1",
-                currentBranchName: null,
-            }, {
-                commits: {"1":c1, "2": cWithPar},
-                branches: {"master": "2"},
-                head: "1",
-            }, false),
-            "remotes": m({
-                remotes: {
-                    foo: new Remote("my-url"),
-                }
-            }, {
-                remotes: { foo: new Remote("my-url") },
-            }, false),
-            "badParent": m({ commits: { "2": cWithPar }},
-                           undefined,
-                           true),
-            "badBranch": m({ branches: { "master": "3"}}, undefined, true),
-            "badHead": m({ head: "3"}, undefined, true),
-            "branch": m({
-                commits: {"1": c1},
-                branches: {"master": "1"},
-                head: "1",
-                currentBranchName: "master",
-            }, {
-                commits: {"1": c1},
-                branches: {"master": "1"},
-                head: "1",
-                branch: "master",
-            }, false),
-            "badBranch with good commit": m({
-                commits: {"1": c1},
-                branches: {"aster": "1"},
-                head: null,
-                currentBranchName: "master",
-            }, undefined, true),
-            "unreachable": m({ commits: {"1": c1} }, undefined, true),
-            "reachedByHead": m({
-                commits: {"1": c1},
-                head: "1",
-            }, {
-                commits: {"1": c1},
-                head: "1",
-            }, false),
-            "reachedByRemote": m({
-                commits: {"1": c1},
-                remotes: {
-                    bar: new Remote("foo", { branches: { "bar": "1"}, }),
+                "merge": {
+                    commits: { "1": c1, "2": c2, "3": merge},
+                    from: "3",
+                    expected: { foo: "bar" },
+                    ecache: {
+                        "1": c1.changes,
+                        "3": { foo: "bar" },
+                    },
                 },
-            }, {
-                commits: {"1": c1},
-                remotes: {
-                    bar: new Remote("foo", { branches: { "bar": "1"}, }),
+                "merge child": {
+                    commits: { "1": c1, "2": c2, "3": merge, "4": mergeChild},
+                    from: "4",
+                    expected: { foo: "bar", bam: "blast" },
+                    ecache: {
+                        "1": c1.changes,
+                        "3": { foo: "bar" },
+                        "4": { foo: "bar", bam: "blast" },
+                    },
                 },
-            }, false),
-            "bare with current branch": m({
-                commits: {"1":c1, "2": cWithPar},
-                branches: {"master": "2"},
-                head: null,
-                currentBranchName: "master",
-            }, {
-                commits: {"1":c1, "2": cWithPar},
-                branches: {"master": "2"},
-                branch: "master",
-                head: null,
-            }, false),
-        };
-        Object.keys(cases).forEach(caseName => {
-            it(caseName, function () {
+                "deletion": {
+                    commits: { "1": c1, "2": deleter },
+                    from: "2",
+                    expected: {},
+                    ecache: {
+                        "1": c1.changes,
+                        "2": {}
+                    },
+                },
+                "with sub": {
+                    commits: { "1": c1, "2": subCommit },
+                    from: "2",
+                    expected: { foo: "bar", baz: submodule },
+                    ecache: {
+                        "1": c1.changes,
+                        "2": { foo: "bar", baz: submodule },
+                    },
+                },
+                "use the cache": {
+                    commits: { "1": c1 },
+                    from: "1",
+                    cache: { "1": { foo: "baz" } },
+                    expected: { foo: "baz" },
+                    ecache: { "1": { foo: "baz"}, },
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
                 const c = cases[caseName];
-                if (c.fails) {
-                    // `fails` indicates that it throws due to out of contract.
-                    // We don't document what type of error is thrown on
-                    // contract violation.
-
-                    assert.throws(() => new RepoAST(c.input), "");
-                    return;                                           // RETURN
-                }
-                const obj = new RepoAST(c.input);
-                assert(deeper(obj.commits, c.ecommits));
-                assert(deeper(obj.branches, c.ebranches));
-                assert.equal(obj.head, c.ehead);
-                assert.equal(obj.currentBranchName, c.ebranch);
-
-                if (c.input) {
-                    assert.notEqual(obj.commits, c.input.commits);
-                    assert.notEqual(obj.branches, c.input.branches);
-                }
+                it(caseName, function () {
+                    let cache = c.cache || {};
+                    const result =
+                                RepoAST.renderCommit(cache, c.commits, c.from);
+                    assert.deepEqual(result,
+                                     c.expected,
+                                     JSON.stringify(result));
+                    assert.deepEqual(cache, c.ecache, JSON.stringify(cache));
+                });
             });
         });
     });

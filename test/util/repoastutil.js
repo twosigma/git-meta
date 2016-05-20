@@ -159,6 +159,84 @@ describe("repoastutil", function () {
                     }
                 }),
             },
+            "url submodule remap": {
+                i: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "y") },
+                        }),
+                    },
+                    head: "2",
+                }),
+                u: { x: "z" },
+                e: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("z", "y") },
+                        }),
+                    },
+                    head: "2",
+                }),
+            },
+            "url commit remap": {
+                i: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "3") },
+                        }),
+                    },
+                    head: "2",
+                }),
+                m: { "3": "4" },
+                e: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "4") },
+                        }),
+                    },
+                    head: "2",
+                }),
+            },
+            "url and commit submodule remap": {
+                i: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "3") },
+                        }),
+                    },
+                    head: "2",
+                }),
+                m: { "3": "4" },
+                u: { x: "z" },
+                e: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("z", "4") },
+                        }),
+                    },
+                    head: "2",
+                }),
+            },
+            "unchanged sub": {
+                i: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "3") },
+                        }),
+                    },
+                    head: "2",
+                }),
+                m: { "8": "4" },
+                u: { r: "z" },
+                e: new RepoAST({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            changes: { foo: new RepoAST.Submodule("x", "3") },
+                        }),
+                    },
+                    head: "2",
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
