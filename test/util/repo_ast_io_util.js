@@ -433,6 +433,190 @@ describe("RepoAstIOUtil", function () {
             RepoASTUtil.assertEqualASTs(actual, expected);
         }));
 
+        it("index change", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headId = yield r.getHeadCommit();
+            const commit = headId.id().tostrS();
+
+            const readmePath = path.join(r.workdir(), "README.md");
+
+            yield fs.appendFile(readmePath, "foo");
+            const index = yield r.index();
+            index.addByPath("README.md");
+            index.write();
+
+            let commits = {};
+            commits[commit] = new Commit({
+                changes: { "README.md": ""}
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { "master": commit },
+                head: commit,
+                currentBranchName: "master",
+                index: { "README.md": "foo" },
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
+
+        it("index add", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headId = yield r.getHeadCommit();
+            const commit = headId.id().tostrS();
+
+            const fooPath = path.join(r.workdir(), "foo");
+
+            yield fs.appendFile(fooPath, "foo");
+            const index = yield r.index();
+            index.addByPath("foo");
+            index.write();
+
+            let commits = {};
+            commits[commit] = new Commit({
+                changes: { "README.md": ""}
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { "master": commit },
+                head: commit,
+                currentBranchName: "master",
+                index: { "foo": "foo" },
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
+
+        it("index add but rm from workdir", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headId = yield r.getHeadCommit();
+            const commit = headId.id().tostrS();
+
+            const fooPath = path.join(r.workdir(), "foo");
+
+            yield fs.appendFile(fooPath, "foo");
+            const index = yield r.index();
+            index.addByPath("foo");
+            index.write();
+
+            fs.unlink(fooPath);
+
+            let commits = {};
+            commits[commit] = new Commit({
+                changes: { "README.md": ""}
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { "master": commit },
+                head: commit,
+                currentBranchName: "master",
+                index: { "foo": "foo" },
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
+
+        it("index deletion change", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headId = yield r.getHeadCommit();
+            const commit = headId.id().tostrS();
+
+            const readmePath = path.join(r.workdir(), "README.md");
+
+            yield fs.unlink(readmePath);
+            const index = yield r.index();
+            yield index.addAll("README.md", -1);
+            index.write();
+
+            let commits = {};
+            commits[commit] = new Commit({
+                changes: { "README.md": ""}
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { "master": commit },
+                head: commit,
+                currentBranchName: "master",
+                index: { "README.md": null },
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
+
+        it("submodule in index", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const headCommit = yield repo.getHeadCommit();
+            const baseSubRepo = yield TestUtil.createSimpleRepository();
+            const baseSubPath = baseSubRepo.workdir();
+            const subHead = yield baseSubRepo.getHeadCommit();
+            yield addSubmodule(repo,
+                               baseSubPath,
+                               "x/y",
+                               subHead.id().tostrS());
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: headCommit.id().tostrS() },
+                currentBranchName: "master",
+                head: headCommit.id().tostrS(),
+                index: {
+                    "x/y": new RepoAST.Submodule(baseSubPath,
+                                                 subHead.id().tostrS()),
+                },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(repo);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
+
+        it("change submodule in index", co.wrap(function *() {
+
+            // This is just like the previous test: we make a commit that adds
+            // a submodule, but we're also going to have a subsequent change
+            // that updates that submodule to point to a different sha.
+
+            const repo = yield TestUtil.createSimpleRepository();
+            const headCommit = yield repo.getHeadCommit();
+            const baseSubRepo = yield TestUtil.createSimpleRepository();
+            const baseSubPath = baseSubRepo.workdir();
+            const subHead = yield baseSubRepo.getHeadCommit();
+            const submodule = yield addSubmodule(repo,
+                                                 baseSubPath,
+                                                 "x/y",
+                                                 subHead.id().tostrS());
+            const commit = yield TestUtil.makeCommit(repo,
+                                                     ["x/y", ".gitmodules"]);
+
+            const subRepo = yield submodule.open();
+            const nextSubCommit = yield TestUtil.generateCommit(subRepo);
+            const index = yield repo.index();
+            yield index.addAll("x/y", -1);
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            commits[commit.id().tostrS()] = new Commit({
+                parents: [headCommit.id().tostrS()],
+                changes: {
+                    "x/y": new RepoAST.Submodule(baseSubPath,
+                                                 subHead.id().tostrS()),
+                },
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: commit.id().tostrS() },
+                currentBranchName: "master",
+                head: commit.id().tostrS(),
+                index: {
+                    "x/y": new RepoAST.Submodule(baseSubPath,
+                                                 nextSubCommit.id().tostrS()),
+                },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(repo);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
     });
 
     describe("writeRAST", function () {
@@ -476,6 +660,9 @@ describe("RepoAstIOUtil", function () {
             "update submodule": "S:C2-1 foo=S/x:1;C3-2 foo=S/x:2;Bmaster=3",
             "update submodule twice":
                     "S:C2-1 foo=S/y:1;C3-2 foo=S/y:2;C4-3 foo=S/y:3;Bmaster=4",
+            "index add": "S:I foo=bar",
+            "index change": "S:I README.md=bar",
+            "index rm": "S:I README.md",
         };
 
         Object.keys(cases).forEach(caseName => {
@@ -496,7 +683,8 @@ describe("RepoAstIOUtil", function () {
                 "a=S:C3-2;C2-1;Bbar=3|b=S:Bbaz=3",
             "external ref'd from head": "a=S:H=2|b=S:C2-1;Bmaster=2",
             "external ref'd from remote": "a=S:Ra=b m=2|b=S:C2-1;Bmaster=2",
-            "submod": "a=S|b=S:C2-1 foo=Sa:1;Bmaster=2"
+            "submod": "a=S|b=S:C2-1 foo=Sa:1;Bmaster=2",
+            "an index change": "a=S I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];

@@ -160,6 +160,7 @@ describe("RepoAST", function () {
                     ehead   : ("head" in expected) ? expected.head : null,
                     ebranch : ("branch" in expected) ? expected.branch : null,
                     eremotes: ("remotes" in expected) ? expected.remotes : {},
+                    eindex  : ("index" in expected) ? expected.index : {},
                     fails   : fails,
                 };
             }
@@ -254,6 +255,33 @@ describe("RepoAST", function () {
                     branch: "master",
                     head: null,
                 }, false),
+                "index": m({
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: "bar"},
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: "bar"},
+                }, false),
+                "index without head": m({
+                    commits: { "1": c1},
+                    head: null,
+                    index: { foo: "bar"},
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: "bar"},
+                }, true),
+                "index with submodule": m({
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: new RepoAST.Submodule("z", "a") },
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: new RepoAST.Submodule("z", "a") },
+                }, false),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -271,13 +299,48 @@ describe("RepoAST", function () {
                     assert(deeper(obj.branches, c.ebranches));
                     assert.equal(obj.head, c.ehead);
                     assert.equal(obj.currentBranchName, c.ebranch);
+                    assert.deepEqual(obj.index, c.eindex);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
                         assert.notEqual(obj.branches, c.input.branches);
+                        assert.notEqual(obj.remotes, c.input.remotes);
+                        assert.notEqual(obj.index, c.input.index);
                     }
 
                     assert.equal(obj.isBare(), (obj.head === null));
+                });
+            });
+        });
+
+        describe("accumulateDirChanges", function () {
+            const cases = {
+                "trivial": {
+                    dest: {},
+                    changes: {},
+                    expected: {}
+                },
+                "add": {
+                    dest: {},
+                    changes: { foo: "bar" },
+                    expected: { foo: "bar" },
+                },
+                "overwrite": {
+                    dest: { foo: "bar", baz: "bam" },
+                    changes: { a: "b", foo: "3" },
+                    expected: { foo: "3", baz: "bam", a: "b" },
+                },
+                "delete": {
+                    dest: { foo: "bar", baz: "bam" },
+                    changes: { foo: null },
+                    expected: { baz: "bam" },
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                it(caseName, function () {
+                    RepoAST.accumulateDirChanges(c.dest, c.changes);
+                    assert.deepEqual(c.dest, c.expected);
                 });
             });
         });
@@ -378,6 +441,7 @@ describe("RepoAST", function () {
             branches: { "master": "1" },
             head: "1",
             currentBranchName: "master",
+            index: { foo: "bar" },
         });
         const newArgs = {
             commits: { "2": new RepoAST.Commit()},
@@ -385,6 +449,7 @@ describe("RepoAST", function () {
             head: "2",
             currentBranchName: "foo",
             remotes: { "foo": new RepoAST.Remote("meeeee") },
+            index: { foo: "bar" },
         };
         const cases = {
             "trivial": {
@@ -405,6 +470,7 @@ describe("RepoAST", function () {
                 assert(deeper(obj.remotes, c.e.remotes));
                 assert.equal(obj.head, c.e.head);
                 assert.equal(obj.currentBranchName, c.e.currentBranchName);
+                assert.deepEqual(obj.index, c.e.index);
             });
         });
     });
