@@ -276,6 +276,8 @@ describe("RepoAST", function () {
                         assert.notEqual(obj.commits, c.input.commits);
                         assert.notEqual(obj.branches, c.input.branches);
                     }
+
+                    assert.equal(obj.isBare(), (obj.head === null));
                 });
             });
         });
