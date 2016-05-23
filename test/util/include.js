@@ -30,13 +30,13 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
+const assert  = require("chai").assert;
+const co      = require("co");
+const NodeGit = require("nodegit");
 
 const Include       = require("../../lib/util/include");
-const NodeGit       = require("nodegit");
-const TestUtil      = require("../../lib/util/testutil");
-const UserError     = require("../../lib/util/usererror");
+const TestUtil      = require("../../lib/util/test_util");
+const UserError     = require("../../lib/util/user_error");
 
 describe("include", function () {
     describe("includeNonExistingRepo", function () {

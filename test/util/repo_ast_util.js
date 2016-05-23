@@ -30,10 +30,10 @@
  */
 "use strict";
 
-const RepoAST     = require("../../lib/util/repoast");
-const RepoASTUtil = require("../../lib/util/repoastutil");
+const RepoAST     = require("../../lib/util/repo_ast");
+const RepoASTUtil = require("../../lib/util/repo_ast_util");
 
-describe("repoastutil", function () {
+describe("RepoAstUtil", function () {
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
         const c1 = new Commit();

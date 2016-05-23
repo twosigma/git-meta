@@ -32,11 +32,11 @@
 
 const assert = require("chai").assert;
 
-const RepoAST             = require("../../lib/util/repoast");
-const RepoASTUtil         = require("../../lib/util/repoastutil");
-const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
+const RepoAST             = require("../../lib/util/repo_ast");
+const RepoASTUtil         = require("../../lib/util/repo_ast_util");
+const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 
-describe("shorthandparserutil", function () {
+describe("ShorthandParserUtil", function () {
     describe("parseRepoShorthandRaw", function () {
         const Commit = RepoAST.Commit;
         const Submodule = RepoAST.Submodule;

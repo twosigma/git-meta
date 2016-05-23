@@ -35,10 +35,10 @@ const fs      = require("fs-promise");
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const RepoASTIOUtil       = require("../../lib/util/repoastioutil");
-const RepoASTTestUtil     = require("../../lib/util/repoasttestutil");
-const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
-const TestUtil            = require("../../lib/util/testutil");
+const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
+const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
+const TestUtil            = require("../../lib/util/test_util");
 
 const S = ShorthandParserUtil.RepoType.S;
 
@@ -81,7 +81,7 @@ const makeClone = co.wrap(function *(repos) {
     };
 });
 
-describe("repoasttestutil", function () {
+describe("RepoASTTestUtil", function () {
     describe("testRepoManipulator", function () {
         // Most of the functionality of this method is deferred.  Check basic
         // usage and commit mapping.

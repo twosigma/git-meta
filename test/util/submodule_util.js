@@ -33,12 +33,12 @@
 const assert = require("chai").assert;
 const co     = require("co");
 
-const RepoASTIOUtil       = require("../../lib/util/repoastioutil");
-const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
-const TestUtil            = require("../../lib/util/testutil");
-const SubmoduleUtil       = require("../../lib/util/submoduleutil");
+const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
+const TestUtil            = require("../../lib/util/test_util");
+const SubmoduleUtil       = require("../../lib/util/submodule_util");
 
-describe("submoduleutil", function () {
+describe("SubmoduleUtil", function () {
     after(TestUtil.cleanup);
 
     describe("getSubmoduleNames", function () {

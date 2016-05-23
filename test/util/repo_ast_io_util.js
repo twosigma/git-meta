@@ -36,11 +36,11 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const RepoAST             = require("../../lib/util/repoast");
-const RepoASTIOUtil       = require("../../lib/util/repoastioutil");
-const RepoASTUtil         = require("../../lib/util/repoastutil");
-const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
-const TestUtil            = require("../../lib/util/testutil");
+const RepoAST             = require("../../lib/util/repo_ast");
+const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const RepoASTUtil         = require("../../lib/util/repo_ast_util");
+const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
+const TestUtil            = require("../../lib/util/test_util");
 
                                // Test utilities
 
@@ -163,7 +163,7 @@ const repoWithDeeperCommits = co.wrap(function *() {
     };
 });
 
-describe("repoastioutil", function () {
+describe("RepoAstIOUtil", function () {
     after(TestUtil.cleanup);
 
     describe("readRAST", function () {
