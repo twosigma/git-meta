@@ -34,11 +34,11 @@ const assert  = require("chai").assert;
 const co      = require("co");
 
 const Branch        = require("../../lib/util/branch");
-const GitUtil       = require("../../lib/util/gitutil");
+const GitUtil       = require("../../lib/util/git_util");
 const Include       = require("../../lib/util/include");
-const SubmoduleUtil = require("../../lib/util/submoduleutil");
-const TestUtil      = require("../../lib/util/testutil");
-const UserError     = require("../../lib/util/usererror");
+const SubmoduleUtil = require("../../lib/util/submodule_util");
+const TestUtil      = require("../../lib/util/test_util");
+const UserError     = require("../../lib/util/user_error");
 
 describe("branch", function () {
 

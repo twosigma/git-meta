@@ -37,14 +37,14 @@ const NodeGit   = require("nodegit");
 const os     = require("os");
 const path   = require("path");
 
-const GitUtil             = require("../../lib/util/gitutil");
-const RepoASTIOUtil       = require("../../lib/util/repoastioutil");
-const RepoASTTestUtil     = require("../../lib/util/repoasttestutil");
-const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
-const TestUtil            = require("../../lib/util/testutil");
-const UserError           = require("../../lib/util/usererror");
+const GitUtil             = require("../../lib/util/git_util");
+const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
+const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
+const TestUtil            = require("../../lib/util/test_util");
+const UserError           = require("../../lib/util/user_error");
 
-describe("gitutil", function () {
+describe("GitUtil", function () {
     after(TestUtil.cleanup);
 
     describe("createBranchFromHead", function () {

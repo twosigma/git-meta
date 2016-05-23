@@ -35,7 +35,7 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 
 const close    = require("../../lib/util/close");
-const TestUtil = require("../../lib/util/testutil");
+const TestUtil = require("../../lib/util/test_util");
 
 describe("close", function () {
 

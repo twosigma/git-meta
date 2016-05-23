@@ -36,9 +36,9 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const TestUtil = require("../../lib/util/testutil");
+const TestUtil = require("../../lib/util/test_util");
 
-describe("testutil", function () {
+describe("TestUtil", function () {
     after(TestUtil.cleanup);
 
     describe("makeTempDir", function () {

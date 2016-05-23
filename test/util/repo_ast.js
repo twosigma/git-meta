@@ -33,9 +33,9 @@
 const assert = require("chai").assert;
 const deeper = require("deeper");
 
-const RepoAST = require("../../lib/util/repoast");
+const RepoAST = require("../../lib/util/repo_ast");
 
-describe("repoast", function () {
+describe("RepoAST", function () {
 
     describe("Submodule", function () {
         it("breath", function () {
