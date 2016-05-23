@@ -39,6 +39,7 @@ const ShorthandParserUtil = require("../../lib/util/shorthandparserutil");
 describe("shorthandparserutil", function () {
     describe("parseRepoShorthandRaw", function () {
         const Commit = RepoAST.Commit;
+        const Submodule = RepoAST.Submodule;
         function m(args) {
             let result = {
                 type: args.type || "S",
@@ -177,6 +178,48 @@ describe("shorthandparserutil", function () {
                     branches: { baz: "1" },
                 }),
             },
+            "commit with submodule": {
+                i: "S:C2-1 baz=S/foo.git:1",
+                e: m({
+                    type: "S",
+                    commits: {
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { "baz": new Submodule("/foo.git", "1") },
+                        }),
+                    },
+                }),
+            },
+            "commit with short submodule": {
+                i: "S:C2-1 baz=So:1;Bmaster=2",
+                e: m({
+                    type: "S",
+                    commits: {
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { "baz": new Submodule("o", "1") },
+                        }),
+                    },
+                    branches: { master: "2"},
+                }),
+            },
+            "mixes with submodule": {
+                i: "S:C2-1 x=y,baz=S/foo.git:1,q=r,t=Smeh:3",
+                e: m({
+                    type: "S",
+                    commits: {
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: {
+                                "x": "y",
+                                "baz": new Submodule("/foo.git", "1"),
+                                "q": "r",
+                                "t": new Submodule("meh", "3"),
+                            },
+                        }),
+                    },
+                }),
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
