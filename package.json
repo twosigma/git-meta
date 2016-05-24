@@ -30,7 +30,7 @@
       "argparse": "",
       "chai": "",
       "child-process-promise": "",
-      "nodegit": "",
+      "nodegit": "0.12.2",
       "co": "",
       "fs-promise": "",
       "rimraf": "",
