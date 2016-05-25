@@ -46,6 +46,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {},
                 branches: {},
                 remotes: {},
+                index: {},
             };
             return Object.assign(result, args);
         }
@@ -203,21 +204,18 @@ describe("ShorthandParserUtil", function () {
                     branches: { master: "2"},
                 }),
             },
-            "mixes with submodule": {
-                i: "S:C2-1 x=y,baz=S/foo.git:1,q=r,t=Smeh:3",
+            "index change": {
+                i: "S:I x=y",
                 e: m({
                     type: "S",
-                    commits: {
-                        "2": new Commit({
-                            parents: ["1"],
-                            changes: {
-                                "x": "y",
-                                "baz": new Submodule("/foo.git", "1"),
-                                "q": "r",
-                                "t": new Submodule("meh", "3"),
-                            },
-                        }),
-                    },
+                    index: { x: "y" },
+                }),
+            },
+            "index submodule change": {
+                i: "S:I x=S/x:1",
+                e: m({
+                    type: "S",
+                    index: { x: new Submodule("/x", "1") },
                 }),
             }
         };
@@ -231,6 +229,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.commits, e.commits);
                 assert.deepEqual(r.branches, e.branches);
                 assert.deepEqual(r.remotes, e.remotes);
+                assert.deepEqual(r.index, e.index);
                 assert.equal(r.head, e.head);
                 assert.equal(r.currentBranchName, e.currentBranchName);
             });
@@ -309,6 +308,14 @@ describe("ShorthandParserUtil", function () {
                         a: new Remote("b", {
                             branches: { q: "1" },
                         }),
+                    }
+                }),
+            },
+            "index change": {
+                i: "S:I a=b",
+                e: S.copy({
+                    index: {
+                        a: "b",
                     }
                 }),
             },

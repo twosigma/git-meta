@@ -237,6 +237,77 @@ describe("RepoAstUtil", function () {
                     head: "2",
                 }),
             },
+            "index, unchanged": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: { foo: "bar" },
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: { foo: "bar" },
+                }),
+            },
+            "index unchanged submodule": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: {
+                        foo: "bar",
+                        baz: new RepoAST.Submodule("x", "y"),
+                    },
+                }),
+                m: { "1": "2"},
+                u: { "q": "z"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: {
+                        foo: "bar",
+                        baz: new RepoAST.Submodule("x", "y"),
+                    },
+                }),
+            },
+            "index changed submodule": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: {
+                        foo: "bar",
+                        baz: new RepoAST.Submodule("q", "1"),
+                    },
+                }),
+                m: { "1": "2"},
+                u: { "q": "z"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    index: {
+                        foo: "bar",
+                        baz: new RepoAST.Submodule("z", "2"),
+                    },
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
