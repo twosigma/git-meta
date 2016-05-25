@@ -161,6 +161,7 @@ describe("RepoAST", function () {
                     ebranch : ("branch" in expected) ? expected.branch : null,
                     eremotes: ("remotes" in expected) ? expected.remotes : {},
                     eindex  : ("index" in expected) ? expected.index : {},
+                    eworkdir: ("workdir" in expected) ? expected.workdir : {},
                     fails   : fails,
                 };
             }
@@ -282,6 +283,24 @@ describe("RepoAST", function () {
                     head: "1",
                     index: { foo: new RepoAST.Submodule("z", "a") },
                 }, false),
+                "workdir": m({
+                    commits: { "1": c1},
+                    head: "1",
+                    workdir: { foo: "bar"},
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    workdir: { foo: "bar"},
+                }, false),
+                "workdir without head": m({
+                    commits: { "1": c1},
+                    head: null,
+                    workdir: { foo: "bar"},
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    workdir: { foo: "bar"},
+                }, true),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -300,12 +319,13 @@ describe("RepoAST", function () {
                     assert.equal(obj.head, c.ehead);
                     assert.equal(obj.currentBranchName, c.ebranch);
                     assert.deepEqual(obj.index, c.eindex);
+                    assert.deepEqual(obj.workdir, c.eworkdir);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
                         assert.notEqual(obj.branches, c.input.branches);
                         assert.notEqual(obj.remotes, c.input.remotes);
-                        assert.notEqual(obj.index, c.input.index);
+                        assert.notEqual(obj.workdir, c.input.workdir);
                     }
 
                     assert.equal(obj.isBare(), (obj.head === null));
@@ -442,6 +462,7 @@ describe("RepoAST", function () {
             head: "1",
             currentBranchName: "master",
             index: { foo: "bar" },
+            workdir: { foo: "bar" },
         });
         const newArgs = {
             commits: { "2": new RepoAST.Commit()},
@@ -450,6 +471,7 @@ describe("RepoAST", function () {
             currentBranchName: "foo",
             remotes: { "foo": new RepoAST.Remote("meeeee") },
             index: { foo: "bar" },
+            workdir: { foo: "bar" },
         };
         const cases = {
             "trivial": {
@@ -471,6 +493,7 @@ describe("RepoAST", function () {
                 assert.equal(obj.head, c.e.head);
                 assert.equal(obj.currentBranchName, c.e.currentBranchName);
                 assert.deepEqual(obj.index, c.e.index);
+                assert.deepEqual(obj.workdir, c.e.workdir);
             });
         });
     });

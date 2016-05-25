@@ -511,6 +511,7 @@ describe("RepoAstIOUtil", function () {
                 head: commit,
                 currentBranchName: "master",
                 index: { "foo": "foo" },
+                workdir: { "foo": null },
             });
             const ast = yield RepoASTIOUtil.readRAST(r);
             RepoASTUtil.assertEqualASTs(ast, expected);
@@ -617,6 +618,87 @@ describe("RepoAstIOUtil", function () {
             const actual = yield RepoASTIOUtil.readRAST(repo);
             RepoASTUtil.assertEqualASTs(actual, expected);
         }));
+
+        it("workdir deletion", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headCommit = yield r.getHeadCommit();
+            yield fs.unlink(path.join(r.workdir(), "README.md"));
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: headCommit.id().tostrS() },
+                currentBranchName: "master",
+                head: headCommit.id().tostrS(),
+                workdir: { "README.md": null },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
+
+        it("workdir addition", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headCommit = yield r.getHeadCommit();
+            yield fs.appendFile(path.join(r.workdir(), "foo"), "x");
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: headCommit.id().tostrS() },
+                currentBranchName: "master",
+                head: headCommit.id().tostrS(),
+                workdir: { foo: "x" },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
+
+        it("workdir change", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headCommit = yield r.getHeadCommit();
+            yield fs.appendFile(path.join(r.workdir(), "README.md"), "x");
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: headCommit.id().tostrS() },
+                currentBranchName: "master",
+                head: headCommit.id().tostrS(),
+                workdir: { "README.md": "x" },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
+
+        it("workdir and index change", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const headCommit = yield r.getHeadCommit();
+            yield fs.appendFile(path.join(r.workdir(), "README.md"), "x");
+            const index = yield r.index();
+            index.addByPath("README.md");
+            index.write();
+            yield fs.appendFile(path.join(r.workdir(), "README.md"), "y");
+            let commits = {};
+            commits[headCommit.id().tostrS()] = new Commit({
+                changes: {"README.md":""},
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { master: headCommit.id().tostrS() },
+                currentBranchName: "master",
+                head: headCommit.id().tostrS(),
+                index: { "README.md": "x" },
+                workdir: { "README.md": "xy" },
+            });
+            const actual = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
     });
 
     describe("writeRAST", function () {
@@ -663,6 +745,10 @@ describe("RepoAstIOUtil", function () {
             "index add": "S:I foo=bar",
             "index change": "S:I README.md=bar",
             "index rm": "S:I README.md",
+            "workdir add file": "S:W foo=bar",
+            "workdir change file": "S:W foo=bar,README.md=meh",
+            "workdir rm file": "S:W README.md",
+            "added in index, removed in wd": "S:I foo=bar;W foo",
         };
 
         Object.keys(cases).forEach(caseName => {

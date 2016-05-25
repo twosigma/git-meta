@@ -211,12 +211,41 @@ describe("ShorthandParserUtil", function () {
                     index: { x: "y" },
                 }),
             },
+            "index deletion and changes": {
+                i: "S:I x=y,q,z=r",
+                e: m({
+                    type: "S",
+                    index: { x: "y", q: null, z: "r" },
+                }),
+            },
             "index submodule change": {
                 i: "S:I x=S/x:1",
                 e: m({
                     type: "S",
                     index: { x: new Submodule("/x", "1") },
                 }),
+            },
+            "workdir change": {
+                i: "S:W x=y",
+                e: m({
+                    type: "S",
+                    workdir: { x: "y" },
+                }),
+            },
+            "workdir  deletion and changes": {
+                i: "S:W x=y,q,z=r",
+                e: m({
+                    type: "S",
+                    workdir: { x: "y", q: null, z: "r" },
+                }),
+            },
+            "workdir submodule change": {
+                i: "S:W x=S/x:1",
+                e: m({
+                    type: "S",
+                    workdir: { x: new Submodule("/x", "1") },
+                }),
+                fails: true,
             },
         };
         Object.keys(cases).forEach(caseName => {
