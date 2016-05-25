@@ -308,6 +308,25 @@ describe("RepoAstUtil", function () {
                     },
                 }),
             },
+            "workdir, unchanged": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    workdir: { foo: "bar" },
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    remotes: {
+                        foo: new RepoAST.Remote("my-url"),
+                    },
+                    workdir: { foo: "bar" },
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
