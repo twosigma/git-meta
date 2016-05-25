@@ -217,12 +217,20 @@ describe("ShorthandParserUtil", function () {
                     type: "S",
                     index: { x: new Submodule("/x", "1") },
                 }),
-            }
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const r = ShorthandParserUtil.parseRepoShorthandRaw(c.i);
+                let r;
+                try {
+                    r = ShorthandParserUtil.parseRepoShorthandRaw(c.i);
+                }
+                catch (e) {
+                    assert(c.fails, e.stack);
+                    return;
+                }
+                assert(!c.fails);
                 const e = c.e;
                 assert.equal(r.type, e.type);
                 assert.equal(r.typeData, e.typeData);
@@ -319,11 +327,23 @@ describe("ShorthandParserUtil", function () {
                     }
                 }),
             },
+            "bad type data": {
+                i: "S I max=maz",
+                fails: true,
+            }
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
                 const c = cases[caseName];
-                const result = ShorthandParserUtil.parseRepoShorthand(c.i);
+                let result;
+                try {
+                    result = ShorthandParserUtil.parseRepoShorthand(c.i);
+                }
+                catch (e) {
+                    assert(c.fails, e.stack);
+                    return;
+                }
+                assert(!c.fails);
                 RepoASTUtil.assertEqualASTs(result, c.e);
             });
         });
@@ -393,16 +413,27 @@ describe("ShorthandParserUtil", function () {
                     b: "S:Rorigin=a",
                 },
             },
+            "bad type data": {
+                i: "a=S I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
+                fails: true,
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = 
-                              ShorthandParserUtil.parseMultiRepoShorthand(c.i);
+                let result;
+                try {
+                    result = ShorthandParserUtil.parseMultiRepoShorthand(c.i);
+                }
+                catch (e) {
+                    assert(c.fails, e.stack);
+                    return;
+                }
+                assert(!c.fails);
                 let expected = {};
                 for (let name in c.e) {
                     expected[name] =
-                             ShorthandParserUtil.parseRepoShorthand(c.e[name]);
+                        ShorthandParserUtil.parseRepoShorthand(c.e[name]);
                 }
                 RepoASTUtil.assertEqualRepoMaps(result, expected);
             });
