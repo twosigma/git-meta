@@ -684,7 +684,8 @@ describe("RepoAstIOUtil", function () {
             "external ref'd from head": "a=S:H=2|b=S:C2-1;Bmaster=2",
             "external ref'd from remote": "a=S:Ra=b m=2|b=S:C2-1;Bmaster=2",
             "submod": "a=S|b=S:C2-1 foo=Sa:1;Bmaster=2",
-            "an index change": "a=S I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
+            "an index change": "a=S:I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
+            "submodule in index": "a=S|b=S:I foo=Sa:1",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];
