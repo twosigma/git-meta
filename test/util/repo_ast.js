@@ -453,48 +453,86 @@ describe("RepoAST", function () {
                 });
             });
         });
-    });
 
-    describe("AST.copy", function () {
-        const base = new RepoAST({
-            commits: { "1": new RepoAST.Commit()},
-            branches: { "master": "1" },
-            head: "1",
-            currentBranchName: "master",
-            index: { foo: "bar" },
-            workdir: { foo: "bar" },
-        });
-        const newArgs = {
-            commits: { "2": new RepoAST.Commit()},
-            branches: { "foo": "2" },
-            head: "2",
-            currentBranchName: "foo",
-            remotes: { "foo": new RepoAST.Remote("meeeee") },
-            index: { foo: "bar" },
-            workdir: { foo: "bar" },
-        };
-        const cases = {
-            "trivial": {
-                i: undefined,
-                e: base,
-            },
-            "all": {
-                i: newArgs,
-                e: new RepoAST(newArgs),
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            it(caseName, function () {
-                const c = cases[caseName];
-                const obj = base.copy(c.i);
-                assert(deeper(obj.commits, c.e.commits));
-                assert(deeper(obj.branches, c.e.branches));
-                assert(deeper(obj.remotes, c.e.remotes));
-                assert.equal(obj.head, c.e.head);
-                assert.equal(obj.currentBranchName, c.e.currentBranchName);
-                assert.deepEqual(obj.index, c.e.index);
-                assert.deepEqual(obj.workdir, c.e.workdir);
+        describe("AST.copy", function () {
+            const base = new RepoAST({
+                commits: { "1": new RepoAST.Commit()},
+                branches: { "master": "1" },
+                head: "1",
+                currentBranchName: "master",
+                index: { foo: "bar" },
+                workdir: { foo: "bar" },
+            });
+            const newArgs = {
+                commits: { "2": new RepoAST.Commit()},
+                branches: { "foo": "2" },
+                head: "2",
+                currentBranchName: "foo",
+                remotes: { "foo": new RepoAST.Remote("meeeee") },
+                index: { foo: "bar" },
+                workdir: { foo: "bar" },
+            };
+            const cases = {
+                "trivial": {
+                    i: undefined,
+                    e: base,
+                },
+                "all": {
+                    i: newArgs,
+                    e: new RepoAST(newArgs),
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                it(caseName, function () {
+                    const c = cases[caseName];
+                    const obj = base.copy(c.i);
+                    assert(deeper(obj.commits, c.e.commits));
+                    assert(deeper(obj.branches, c.e.branches));
+                    assert(deeper(obj.remotes, c.e.remotes));
+                    assert.equal(obj.head, c.e.head);
+                    assert.equal(obj.currentBranchName, c.e.currentBranchName);
+                    assert.deepEqual(obj.index, c.e.index);
+                    assert.deepEqual(obj.workdir, c.e.workdir);
+                });
             });
         });
+
+        describe("renderIndex", function () {
+
+            // This method is implemented in terms of `renderCommit` and
+            // `accumulateChanges`.  We just need to make sure they're put
+            // together properly.
+
+            const Commit = RepoAST.Commit;
+            const c1 = new Commit({ changes: { foo: "bar" }});
+            const cases = {
+                "no index": {
+                    ast: new RepoAST({
+                        commits: { "1": c1},
+                        head: "1",
+                    }),
+                    expected: { foo: "bar" },
+                },
+                "with index": {
+                    ast: new RepoAST({
+                        commits: { "1": c1},
+                        head: "1",
+                        index: { y: "z" },
+                    }),
+                    expected: { foo: "bar", y: "z" },
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                it(caseName, function () {
+                    const ast = c.ast;
+                    const result = ast.renderIndex();
+                    assert.deepEqual(result,
+                                     c.expected,
+                                     JSON.stringify(result));
+                });
+            });
+        });
+
     });
 });
