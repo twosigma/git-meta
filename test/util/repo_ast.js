@@ -507,26 +507,23 @@ describe("RepoAST", function () {
             const c1 = new Commit({ changes: { foo: "bar" }});
             const cases = {
                 "no index": {
-                    ast: new RepoAST({
-                        commits: { "1": c1},
-                        head: "1",
-                    }),
+                    commits: { "1": c1},
+                    from: "1",
                     expected: { foo: "bar" },
                 },
                 "with index": {
-                    ast: new RepoAST({
-                        commits: { "1": c1},
-                        head: "1",
-                        index: { y: "z" },
-                    }),
+                    commits: { "1": c1},
+                    from: "1",
+                    index: { y: "z" },
                     expected: { foo: "bar", y: "z" },
                 },
             };
             Object.keys(cases).forEach(caseName => {
                 const c = cases[caseName];
                 it(caseName, function () {
-                    const ast = c.ast;
-                    const result = ast.renderIndex();
+                    const result = RepoAST.renderIndex(c.commits,
+                                                       c.from,
+                                                       c.index);
                     assert.deepEqual(result,
                                      c.expected,
                                      JSON.stringify(result));
