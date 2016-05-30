@@ -36,6 +36,7 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
+const Close               = require("../../lib/util/close");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
@@ -44,6 +45,29 @@ const TestUtil            = require("../../lib/util/test_util");
 
                                // Test utilities
 
+/**
+ * Return the AST representing the state of the specified `repo` created by
+ * `TestUtil.createSimpleRepository`.
+ *
+ * @async
+ * @private
+ * @param {NodeGit.Repository} repo
+ * @return {RepoAST}
+ */
+const astFromSimpleRepo = co.wrap(function *(repo) {
+    const headId = yield repo.getHeadCommit();
+    const commit = headId.id().tostrS();
+    let commits = {};
+    commits[commit] = new RepoAST.Commit({
+        changes: { "README.md": ""}
+    });
+    return new RepoAST({
+        commits: commits,
+        branches: { "master": commit },
+        head: commit,
+        currentBranchName: "master",
+    });
+});
 /**
  * Add a submodule to the specified `repo` that has the specified `url`
  * as the base repository for the submodule at the specified `path`.  Set the
@@ -69,6 +93,8 @@ const addSubmodule = co.wrap(function *(repo, url, path, sha) {
                          function () {});
     yield subRepo.fetch("origin", {});
     subRepo.setHeadDetached(sha);
+    const commit = yield subRepo.getCommit(sha);
+    yield NodeGit.Reset.reset(subRepo, commit, NodeGit.Reset.TYPE.HARD);
     yield submodule.addFinalize();
     return submodule;
 });
@@ -359,6 +385,8 @@ describe("RepoAstIOUtil", function () {
                                baseSubPath,
                                "x/y",
                                subHead.id().tostrS());
+
+            yield Close.close(repo, "x/y");
             const commit = yield TestUtil.makeCommit(repo,
                                                      ["x/y", ".gitmodules"]);
             let commits = {};
@@ -403,6 +431,7 @@ describe("RepoAstIOUtil", function () {
             const subRepo = yield submodule.open();
             const anotherSubCommit = yield TestUtil.generateCommit(subRepo);
             const lastCommit = yield TestUtil.makeCommit(repo, ["x/y"]);
+            yield Close.close(repo, "x/y");
 
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
@@ -554,6 +583,8 @@ describe("RepoAstIOUtil", function () {
                                baseSubPath,
                                "x/y",
                                subHead.id().tostrS());
+            yield Close.close(repo, "x/y");
+
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
                 changes: {"README.md":""},
@@ -594,6 +625,8 @@ describe("RepoAstIOUtil", function () {
             const nextSubCommit = yield TestUtil.generateCommit(subRepo);
             const index = yield repo.index();
             yield index.addAll("x/y", -1);
+            yield Close.close(repo, "x/y");
+
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
                 changes: {"README.md":""},
@@ -699,6 +732,39 @@ describe("RepoAstIOUtil", function () {
             const actual = yield RepoASTIOUtil.readRAST(r);
             RepoASTUtil.assertEqualASTs(actual, expected);
         }));
+
+        it("open submodule", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const baseSub = yield TestUtil.createSimpleRepository();
+            const baseHead = yield baseSub.getHeadCommit();
+            const baseSha = baseHead.id().tostrS();
+
+            const subAST = yield astFromSimpleRepo(baseSub);
+
+            yield addSubmodule(r, baseSub.workdir(), "foo", baseSha);
+
+            const baseExpected = yield astFromSimpleRepo(r);
+            const expected = baseExpected.copy({
+                index: {
+                    foo: new RepoAST.Submodule(baseSub.workdir(), baseSha),
+                },
+                openSubmodules: {
+                    foo: subAST.copy({
+                        branches: {},
+                        currentBranchName: null,
+                        remotes: {
+                            origin: new RepoAST.Remote(baseSub.workdir(), {
+                                branches: {
+                                    master: baseSha,
+                                }
+                            }),
+                        },
+                    }),
+                },
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
     });
 
     describe("writeRAST", function () {
@@ -706,7 +772,10 @@ describe("RepoAstIOUtil", function () {
         // this one.
 
         const testCase = co.wrap(function *(shorthand, testName) {
-            const ast = ShorthandParserUtil.parseRepoShorthand(shorthand);
+            let ast = shorthand;
+            if (!(ast instanceof RepoAST)) {
+                ast = ShorthandParserUtil.parseRepoShorthand(shorthand);
+            }
             const path = yield TestUtil.makeTempDir();
             const result = yield RepoASTIOUtil.writeRAST(ast, path);
             const repoPath = result.repo.isBare() ?
@@ -761,17 +830,18 @@ describe("RepoAstIOUtil", function () {
 
     describe("writeMultiRAST", function () {
         const cases = {
-            "simple": "a=S",
-            "bare": "a=B",
-            "multiple": "a=B|b=Ca:C2-1;Bmaster=2",
-            "external commit": "a=S:Bfoo=2|b=S:C2-1;Bmaster=2",
-            "external commit from descendant":
-                "a=S:C3-2;C2-1;Bbar=3|b=S:Bbaz=3",
-            "external ref'd from head": "a=S:H=2|b=S:C2-1;Bmaster=2",
-            "external ref'd from remote": "a=S:Ra=b m=2|b=S:C2-1;Bmaster=2",
-            "submod": "a=S|b=S:C2-1 foo=Sa:1;Bmaster=2",
-            "an index change": "a=S:I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
-            "submodule in index": "a=S|b=S:I foo=Sa:1",
+//            "simple": "a=S",
+//            "bare": "a=B",
+//            "multiple": "a=B|b=Ca:C2-1;Bmaster=2",
+//            "external commit": "a=S:Bfoo=2|b=S:C2-1;Bmaster=2",
+//            "external commit from descendant":
+//                "a=S:C3-2;C2-1;Bbar=3|b=S:Bbaz=3",
+//            "external ref'd from head": "a=S:H=2|b=S:C2-1;Bmaster=2",
+//            "external ref'd from remote": "a=S:Ra=b m=2|b=S:C2-1;Bmaster=2",
+//            "submod": "a=S|b=S:C2-1 foo=Sa:1;Bmaster=2",
+//            "an index change": "a=S:I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
+//            "submodule in index": "a=S|b=S:I foo=Sa:1",
+            "basic open submodule": "a=S|b=S:I foo=Sa:1;Ofoo",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];
@@ -793,6 +863,8 @@ describe("RepoAstIOUtil", function () {
                                                               result.urlMap);
                     resultASTs[repoName] = mapped;
                 }
+                console.log("IN:", JSON.stringify(inASTs));
+                console.log("RE:", JSON.stringify(resultASTs));
                 RepoASTUtil.assertEqualRepoMaps(resultASTs, inASTs);
             }));
         });

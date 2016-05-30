@@ -47,8 +47,18 @@ describe("ShorthandParserUtil", function () {
                 branches: {},
                 remotes: {},
                 index: {},
+                workdir: {},
+                openSubmodules: {},
             };
-            return Object.assign(result, args);
+            result = Object.assign(result, args);
+
+            // If a 'null' type was specified, remove it -- this indicates that
+            // the test case wants no type, not the default.
+
+            if (null === result.type) {
+                delete result.type;
+            }
+            return result;
         }
         const cases = {
             "just type": { i: "S", e: m({ type: "S"})},
@@ -247,6 +257,32 @@ describe("ShorthandParserUtil", function () {
                 }),
                 fails: true,
             },
+            "open submodule": {
+                i: "S:Ox",
+                e: m({
+                    openSubmodules: { "x": m({ type: null}) },
+                })
+            },
+            "open submodule one override": {
+                i: "S:Oy Bmaster=foo",
+                e: m({
+                    openSubmodules: {
+                        y: m({ type: null, branches: { master: "foo" }}),
+                    },
+                }),
+            },
+            "open submodule multiple overrides": {
+                i: "S:Oy Bmaster=foo!W x=z",
+                e: m({
+                    openSubmodules: {
+                        y: m({
+                            type: null,
+                            branches: { master: "foo" },
+                            workdir: { x: "z" },
+                        }),
+                    },
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -269,6 +305,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.index, e.index);
                 assert.equal(r.head, e.head);
                 assert.equal(r.currentBranchName, e.currentBranchName);
+                assert.deepEqual(r.openSubmodules, e.openSubmodules);
             });
         });
     });
@@ -359,7 +396,11 @@ describe("ShorthandParserUtil", function () {
             "bad type data": {
                 i: "S I max=maz",
                 fails: true,
-            }
+            },
+            "bad: open submodule": {
+                i: "S:Ox",
+                fails: true,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
@@ -379,6 +420,7 @@ describe("ShorthandParserUtil", function () {
     });
 
     describe("parseMultiRepoShorthand", function () {
+        const S = ShorthandParserUtil.RepoType.S;
         const cases = {
             "simple": { i: "a=S", e: { a: "S"} },
             "multiple": {
@@ -445,7 +487,31 @@ describe("ShorthandParserUtil", function () {
             "bad type data": {
                 i: "a=S I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
                 fails: true,
-            }
+            },
+            "simple open sub": {
+                i: "a=S|b=S:I foo=Sa:1;Ofoo",
+                e: {
+                    a: "S",
+                    b: S.copy({
+                        index: {
+                            foo: new RepoAST.Submodule("a", "1"),
+                        },
+                        openSubmodules: {
+                            foo: S.copy({
+                                branches: {},
+                                currentBranchName: null,
+                                remotes: {
+                                    origin: new RepoAST.Remote("a", {
+                                        branches: {
+                                            master: "1",
+                                        },
+                                    }),
+                                },
+                            }),
+                        },
+                    }),
+                },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -461,8 +527,11 @@ describe("ShorthandParserUtil", function () {
                 assert(!c.fails);
                 let expected = {};
                 for (let name in c.e) {
-                    expected[name] =
-                        ShorthandParserUtil.parseRepoShorthand(c.e[name]);
+                    let input = c.e[name];
+                    if (!(input instanceof RepoAST)) {
+                        input = ShorthandParserUtil.parseRepoShorthand(input);
+                    }
+                    expected[name] = input;
                 }
                 RepoASTUtil.assertEqualRepoMaps(result, expected);
             });
