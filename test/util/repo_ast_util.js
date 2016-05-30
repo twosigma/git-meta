@@ -340,4 +340,111 @@ describe("RepoAstUtil", function () {
             });
         });
     });
+
+    describe("clone", function () {
+        const AST = RepoAST;
+        const Commit = AST.Commit;
+        const Remote = AST.Remote;
+        const c1 = new Commit({ changes: { foo: "bar" } });
+        const c2 = new Commit({ changes: { baz: "bam" } });
+        const child = new Commit({ parents: ["1"] });
+        const cases = {
+            "sipmlest": {
+                original: new AST(),
+                url: "foo",
+                expected: new AST({
+                    remotes: { origin: new Remote("foo") },
+                }),
+            },
+            "with branches and commits": {
+                original: new AST({
+                    commits: { "1": c1, "2": c2 },
+                    branches: { x: "1", y: "2" },
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1, "2": c2 },
+                    remotes: {
+                        origin: new Remote("foo", {
+                            branches: {
+                                x: "1",
+                                y: "2",
+                            },
+                        }),
+                    },
+                }),
+            },
+            "lost commit": {
+                original: new AST({
+                    commits: { "1": c1 },
+                    remotes: {
+                        foo: new Remote("lala", {
+                            branches: { baz: "1" },
+                        })
+                    },
+                }),
+                url: "foo",
+                expected: new AST({
+                    remotes: { origin: new Remote("foo") },
+                }),
+            },
+            "commit from head": {
+                original: new AST({
+                    commits: { "1": c1 },
+                    head: "1",
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1 },
+                    remotes: { origin: new Remote("foo") },
+                    head: "1",
+                }),
+            },
+            "current branch setup": {
+                original: new AST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    branches: { foo: "1" },
+                    currentBranchName: "foo"
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1 },
+                    remotes: {
+                        origin: new Remote("foo", {
+                            branches: { foo: "1" },
+                        })
+                    },
+                    branches: { foo: "1" },
+                    currentBranchName: "foo",
+                    head: "1",
+                }),
+            },
+            "child commit": {
+                original: new AST({
+                    commits: {
+                        "1": c1,
+                        "2": child,
+                    },
+                    head: "2",
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: {
+                        "1": c1,
+                        "2": child,
+                    },
+                    head: "2",
+                    remotes: { origin: new Remote("foo") },
+                }),
+            },
+        };
+        Object.keys(cases).forEach((caseName) => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = RepoASTUtil.cloneRepo(c.original, c.url);
+                RepoASTUtil.assertEqualASTs(result, c.expected);
+            });
+        });
+    });
 });
