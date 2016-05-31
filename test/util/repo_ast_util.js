@@ -30,10 +30,357 @@
  */
 "use strict";
 
+const assert = require("chai").assert;
+
 const RepoAST     = require("../../lib/util/repo_ast");
 const RepoASTUtil = require("../../lib/util/repo_ast_util");
 
 describe("RepoAstUtil", function () {
+
+    describe("assertEqualCommits", function () {
+        const Commit = RepoAST.Commit;
+        const cases = {
+            "trivial": {
+                actual: new Commit(),
+                expected: new Commit(),
+            },
+            "with data": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar" },
+                }),
+                expected: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar" },
+                }),
+            },
+            "bad parents": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar" },
+                }),
+                expected: new Commit({
+                    parents: ["2"],
+                    changes: { foo: "bar" },
+                }),
+                fails: true,
+            },
+            "wrong change": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar" },
+                }),
+                expected: new Commit({
+                    parents: ["2"],
+                    changes: { foo: "z" },
+                }),
+                fails: true,
+            },
+            "extra change": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar", z: "q" },
+                }),
+                expected: new Commit({
+                    parents: ["2"],
+                    changes: { foo: "bar" },
+                }),
+                fails: true,
+            },
+            "missing change": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar" },
+                }),
+                expected: new Commit({
+                    parents: ["1"],
+                    changes: { foo: "bar", k: "z" },
+                }),
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach((caseName) => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                try {
+                    RepoASTUtil.assertEqualCommits(c.actual, c.expected);
+                    assert(!c.fails);
+                }
+                catch (e) {
+                    assert(c.fails, e.stack);
+                }
+            });
+        });
+    });
+
+    describe("assertEqualASTs", function () {
+        const AST = RepoAST;
+        const Commit = AST.Commit;
+        const Remote = AST.Remote;
+        const Submodule = AST.Submodule;
+
+        const aCommit = new Commit({ changes: { x: "y" } });
+        const aRemote = new Remote("/z");
+        const aSubmodule = new Submodule("/y", "1");
+        const anAST = new RepoAST({
+            commits: { "2": aCommit },
+            head: "2",
+        });
+
+        // We know that for comparison of maps this method uses the same
+        // underlying routine as `assertEqualCommits`.  We will do basic
+        // validation that every member is checked.
+
+        const cases = {
+            "trivial": {
+                actual: new AST(),
+                expected: new AST(),
+            },
+            "everything there": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+            },
+            "wrong commit": {
+                actual: new AST({
+                    commits: {
+                        "1": new Commit({ changes: { x: "z" } }),
+                    },
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "missing branch": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1", foo: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "wrong head": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit },
+                    branches: { master: "1", bar: "2" },
+                    head: "2",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit },
+                    branches: { master: "1", bar: "2" },
+                    head: "1",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "no current branch": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "extra remote": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote, yyyy: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "wrong index": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule, x: "xxxx" },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "bad workdir": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { oo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "missing open sub": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "different open sub": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: new AST({
+                        commits: { "4": aCommit },
+                        head: "4",
+                    })},
+                }),
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach((caseName) => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                try {
+                    RepoASTUtil.assertEqualASTs(c.actual, c.expected);
+                    assert(!c.fails);
+                }
+                catch (e) {
+                    assert(c.fails, e.stack);
+                }
+            });
+        });
+    });
+
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
         const c1 = new Commit();
@@ -325,6 +672,34 @@ describe("RepoAstUtil", function () {
                         foo: new RepoAST.Remote("my-url"),
                     },
                     workdir: { foo: "bar" },
+                }),
+            },
+            "submodule with changes": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    index: { x: new RepoAST.Submodule("x","y") },
+                    openSubmodules: { x: new RepoAST({
+                        commits: { "1": c1 },
+                        head: "1",
+                        remotes: {
+                            origin: new RepoAST.Remote("x"),
+                        }
+                    })},
+                }),
+                m: { "1": "2" },
+                u: { "x": "z" },
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    index: { x: new RepoAST.Submodule("z","y") },
+                    openSubmodules: { x: new RepoAST({
+                        commits: { "2": c1 },
+                        head: "2",
+                        remotes: {
+                            origin: new RepoAST.Remote("z"),
+                        }
+                    })},
                 }),
             },
         };

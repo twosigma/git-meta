@@ -38,6 +38,7 @@
   },
   "devDependencies": {
       "deeper": "",
+      "mkdirp": "",
       "mocha": "",
       "mocha-jshint": "",
       "temp": ""
