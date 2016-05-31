@@ -166,6 +166,56 @@ const repoWithDeeperCommits = co.wrap(function *() {
 describe("RepoAstIOUtil", function () {
     after(TestUtil.cleanup);
 
+    describe("buildDirectoryTree", function () {
+        const cases = {
+            "trivial": { input: {}, expected: {}, },
+            "simple": {
+                input: { a: "b" },
+                expected: { a: "b" },
+            },
+            "deep": {
+                input: { "a/b": "c" },
+                expected: {
+                    a: { b: "c" },
+                },
+            },
+            "overlap": {
+                input: { "a/b": "1", "a/d": "2" },
+                expected: {
+                    a: {
+                        b: "1",
+                        d: "2",
+                    },
+                },
+            },
+            "deep overlap": {
+                input: { "a/b": "1", "a/c/d": "2" },
+                expected: {
+                    a: {
+                        b: "1",
+                        c: { d: "2", }
+                    },
+                },
+            },
+            "deep overlap reversed": {
+                input: { "a/c/d": "2", "a/b": "1" },
+                expected: {
+                    a: {
+                        c: { d: "2", },
+                        b: "1",
+                    },
+                },
+            },
+        };
+        Object.keys(cases).forEach((caseName) => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = RepoASTIOUtil.buildDirectoryTree(c.input);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
     describe("readRAST", function () {
         const Commit = RepoAST.Commit;
 
@@ -188,6 +238,38 @@ describe("RepoAstIOUtil", function () {
                 head: commit,
                 currentBranchName: "master",
             });
+            RepoASTUtil.assertEqualASTs(ast, expected);
+        }));
+
+        it("nested path", co.wrap(function *() {
+            const r = yield TestUtil.createSimpleRepository();
+            const firstCommit  = yield r.getHeadCommit();
+            const firstSha = firstCommit.id().tostrS();
+
+            const repoPath = r.workdir();
+            const fooPath = path.join(repoPath, "foo");
+            yield fs.mkdir(fooPath);
+            const barPath = path.join(fooPath, "bar");
+
+            yield fs.writeFile(barPath, "meh");
+            const secondCommit = yield TestUtil.makeCommit(r, ["foo/bar"]);
+            const secondSha = secondCommit.id().tostrS();
+
+            let commits = {};
+            commits[firstSha] = new Commit({
+                changes: { "README.md": ""}
+            });
+            commits[secondSha] = new Commit({
+                parents: [firstSha],
+                changes: { "foo/bar": "meh" },
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: { "master": secondSha },
+                head: secondSha,
+                currentBranchName: "master",
+            });
+            const ast = yield RepoASTIOUtil.readRAST(r);
             RepoASTUtil.assertEqualASTs(ast, expected);
         }));
 
@@ -749,6 +831,9 @@ describe("RepoAstIOUtil", function () {
             "workdir change file": "S:W foo=bar,README.md=meh",
             "workdir rm file": "S:W README.md",
             "added in index, removed in wd": "S:I foo=bar;W foo",
+            "nested path": "S:C2-1 x/y/z=meh;Bmaster=2",
+            "multiple nested path": "S:C2-1 x/y/z=meh;I x/y/q=S/a:2;Bmaster=2",
+            "rm nesed": "S:C2-1 x/y/z=meh;I x/y/z;Bmaster=2",
         };
 
         Object.keys(cases).forEach(caseName => {
