@@ -363,6 +363,20 @@ describe("SubmoduleUtil", function () {
                 changed: [],
                 removed: [],
             },
+            "changed something else": {
+                state: "S:C2-1 README.md=foo;H=2",
+                from: "2",
+                added: [],
+                changed: [],
+                removed: [],
+            },
+            "removed something else": {
+                state: "S:C2-1 README.md;H=2",
+                from: "2",
+                added: [],
+                changed: [],
+                removed: [],
+            },
             "not on current commit": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "1",
@@ -391,6 +405,13 @@ describe("SubmoduleUtil", function () {
                 changed: ["a"],
                 removed: [],
             },
+            "changed one url": {
+                state: "S:C3-2 a=Sa:2;C2-1 a=Sb:1,x=Sa:1;H=3",
+                from: "3",
+                added: [],
+                changed: ["a"],
+                removed: [],
+            },
             "changed and added": {
                 state: "S:C3-2 a=Sa:2,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
@@ -398,14 +419,20 @@ describe("SubmoduleUtil", function () {
                 changed: ["a"],
                 removed: [],
             },
-// TODO: removal is broken
-//            "removed one": {
-//                state: "S:C3-2 a=;C2-1 a=Sa:1,x=Sa:1;H=3",
-//                from: "3",
-//                added: [],
-//                changed: [],
-//                removed: ["a"],
-//            },
+            "removed one": {
+                state: "S:C3-2 a=;C2-1 a=Sa:1,x=Sa:1;H=3",
+                from: "3",
+                added: [],
+                changed: [],
+                removed: ["a"],
+            },
+            "added and removed": {
+                state: "S:C3-2 a,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
+                from: "3",
+                added: ["c"],
+                changed: [],
+                removed: ["a"],
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
