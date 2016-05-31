@@ -36,6 +36,7 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 
 const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 const TestUtil            = require("../../lib/util/test_util");
@@ -82,6 +83,66 @@ const makeClone = co.wrap(function *(repos) {
 });
 
 describe("RepoASTTestUtil", function () {
+    after(TestUtil.cleanup);
+
+    describe("createRepo", function () {
+        // This method is pretty simple; we'll make sure it works with both
+        // shorthand and ASTs.
+
+        const S = ShorthandParserUtil.RepoType.S;
+        it("with shorthand", co.wrap(function *() {
+            const result = yield RepoASTTestUtil.createRepo("S");
+            const repo = result.repo;
+            const ast = yield RepoASTIOUtil.readRAST(repo);
+            const mappedAST = RepoASTUtil.mapCommitsAndUrls(ast,
+                                                            result.commitMap,
+                                                            {});
+            RepoASTUtil.assertEqualASTs(mappedAST,
+                                        ShorthandParserUtil.RepoType.S);
+        }));
+
+        it("with AST", co.wrap(function *() {
+            const result = yield RepoASTTestUtil.createRepo(S);
+            const repo = result.repo;
+            const ast = yield RepoASTIOUtil.readRAST(repo);
+            const mappedAST = RepoASTUtil.mapCommitsAndUrls(ast,
+                                                            result.commitMap,
+                                                            {});
+            RepoASTUtil.assertEqualASTs(mappedAST,
+                                        ShorthandParserUtil.RepoType.S);
+        }));
+    });
+
+    describe("createMultiRepos", function () {
+        // This method delegates to `createMultiRepoASTMap`; here we'll just
+        // exercise its basic functionality.
+
+        const S = ShorthandParserUtil.RepoType.S;
+
+        const cases = {
+            "both from shorthand": "a=S|b=S",
+            "one from each": { a: S, b: "S" },
+            "both ASTs": { a: S, b: S },
+        };
+
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const result = yield RepoASTTestUtil.createMultiRepos(c);
+                const readRepo = co.wrap(function *(repo) {
+                    const ast = yield RepoASTIOUtil.readRAST(repo);
+                    return RepoASTUtil.mapCommitsAndUrls(ast,
+                                                         result.commitMap,
+                                                         result.urlMap);
+                });
+                const aAST = yield readRepo(result.repos.a);
+                RepoASTUtil.assertEqualASTs(aAST, S);
+                const bAST = yield readRepo(result.repos.b);
+                RepoASTUtil.assertEqualASTs(bAST, S);
+            }));
+        });
+    });
+
     describe("testRepoManipulator", function () {
         // Most of the functionality of this method is deferred.  Check basic
         // usage and commit mapping.
