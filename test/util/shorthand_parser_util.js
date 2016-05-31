@@ -283,6 +283,45 @@ describe("ShorthandParserUtil", function () {
                     },
                 }),
             },
+            "remote override": {
+                i: "S:Rorigin=a;H=2",
+                e: m({
+                    head: "2",
+                    remotes: {
+                        origin: {
+                            url: "a",
+                            branches: {},
+                        },
+                    },
+                }),
+            },
+            "submodule with remote override": {
+                i: "S:C2-1 a=Sa:1;Oa Rorigin=a;H=2",
+                e: m({
+                    commits: {
+                        "2": new RepoAST.Commit({
+                            parents: ["1"],
+                            changes: {
+                                a: new RepoAST.Submodule("a", "1"),
+                            },
+                        }),
+                    },
+                    head: "2",
+                    openSubmodules: {
+                        a: m({
+                            type: null,
+                            remotes: {
+                                origin: {
+                                    url: "a", 
+                                    branches: {
+                                    },
+                                },
+                            },
+                        }),
+                    },
+                }),
+            },
+//"a=S|x=S:C2-1 a=Sa:1;Oa Rorigin=a;H=2"
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
