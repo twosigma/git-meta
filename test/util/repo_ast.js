@@ -162,6 +162,8 @@ describe("RepoAST", function () {
                     eremotes: ("remotes" in expected) ? expected.remotes : {},
                     eindex  : ("index" in expected) ? expected.index : {},
                     eworkdir: ("workdir" in expected) ? expected.workdir : {},
+                    eopenSubmodules: ("openSubmodules" in expected) ?
+                                                  expected.openSubmodules : {},
                     fails   : fails,
                 };
             }
@@ -301,6 +303,21 @@ describe("RepoAST", function () {
                     head: "1",
                     workdir: { foo: "bar"},
                 }, true),
+                "openSubmodules": m({
+                    commits: { "1": cWithSubmodule },
+                    head: "1",
+                    openSubmodules: { x: new RepoAST() },
+                }, {
+                    commits: { "1": cWithSubmodule },
+                    head: "1",
+                    openSubmodules: { x: new RepoAST() },
+                }, false),
+                "bad path openSubmodules": m({
+                    commits: { "1": cWithSubmodule },
+                    head: "1",
+                    openSubmodules: { y: new RepoAST() },
+                }, {
+                }, true),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -320,12 +337,15 @@ describe("RepoAST", function () {
                     assert.equal(obj.currentBranchName, c.ebranch);
                     assert.deepEqual(obj.index, c.eindex);
                     assert.deepEqual(obj.workdir, c.eworkdir);
+                    assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
                         assert.notEqual(obj.branches, c.input.branches);
                         assert.notEqual(obj.remotes, c.input.remotes);
                         assert.notEqual(obj.workdir, c.input.workdir);
+                        assert.notEqual(obj.openSubmodules,
+                                        c.input.openSubmodules);
                     }
 
                     assert.equal(obj.isBare(), (obj.head === null));
@@ -493,6 +513,7 @@ describe("RepoAST", function () {
                     assert.equal(obj.currentBranchName, c.e.currentBranchName);
                     assert.deepEqual(obj.index, c.e.index);
                     assert.deepEqual(obj.workdir, c.e.workdir);
+                    assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                 });
             });
         });
