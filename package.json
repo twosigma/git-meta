@@ -3,7 +3,8 @@
   "version": "0.2.0",
   "description": "large scale SCM made easy",
   "scripts": {
-    "test": "mocha test"
+    "test": "mocha test",
+    "coverage": "istanbul cover _mocha"
   },
   "directories": {
   },
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
       "deeper": "",
+      "istanbul": "",
       "mkdirp": "",
       "mocha": "",
       "mocha-jshint": "",
