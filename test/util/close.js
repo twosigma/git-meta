@@ -80,7 +80,7 @@ describe("close", function () {
 
         // Then close it and recheck status.
 
-        yield close.close(repo, "x/y");
+        yield close.close(repo, "x/y", true);
         const closedStatus = yield NodeGit.Submodule.status(repo, "x/y", 0);
         assert(closedStatus & WD_UNINITIALIZED);
 
