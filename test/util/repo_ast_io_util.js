@@ -468,7 +468,7 @@ describe("RepoAstIOUtil", function () {
                                "x/y",
                                subHead.id().tostrS());
 
-            yield Close.close(repo, "x/y");
+            yield Close.close(repo, "x/y", true);
             const commit = yield TestUtil.makeCommit(repo,
                                                      ["x/y", ".gitmodules"]);
             let commits = {};
@@ -513,7 +513,7 @@ describe("RepoAstIOUtil", function () {
             const subRepo = yield submodule.open();
             const anotherSubCommit = yield TestUtil.generateCommit(subRepo);
             const lastCommit = yield TestUtil.makeCommit(repo, ["x/y"]);
-            yield Close.close(repo, "x/y");
+            yield Close.close(repo, "x/y", true);
 
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
@@ -665,7 +665,7 @@ describe("RepoAstIOUtil", function () {
                                baseSubPath,
                                "x/y",
                                subHead.id().tostrS());
-            yield Close.close(repo, "x/y");
+            yield Close.close(repo, "x/y", true);
 
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
@@ -707,7 +707,7 @@ describe("RepoAstIOUtil", function () {
             const nextSubCommit = yield TestUtil.generateCommit(subRepo);
             const index = yield repo.index();
             yield index.addAll("x/y", -1);
-            yield Close.close(repo, "x/y");
+            yield Close.close(repo, "x/y", true);
 
             let commits = {};
             commits[headCommit.id().tostrS()] = new Commit({
