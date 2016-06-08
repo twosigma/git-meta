@@ -903,6 +903,8 @@ describe("RepoAstIOUtil", function () {
             "nested path": "S:C2-1 x/y/z=meh;Bmaster=2",
             "multiple nested path": "S:C2-1 x/y/z=meh;I x/y/q=S/a:2;Bmaster=2",
             "rm nesed": "S:C2-1 x/y/z=meh;I x/y/z;Bmaster=2",
+            "nested in workdir": "S:W x/y/z=foo",
+            "two nested in workdir": "S:W x/y/z=foo,x/y/k=bar",
         };
 
         Object.keys(cases).forEach(caseName => {
