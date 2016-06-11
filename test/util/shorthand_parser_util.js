@@ -321,7 +321,6 @@ describe("ShorthandParserUtil", function () {
                     },
                 }),
             },
-//"a=S|x=S:C2-1 a=Sa:1;Oa Rorigin=a;H=2"
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

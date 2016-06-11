@@ -32,6 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -72,6 +73,10 @@ describe("SubmoduleUtil", function () {
     });
 
     describe("getSubmoduleNamesForCommit", function () {
+        // This method is implemented entirely in terms of
+        // `getConfiguredSubmodulesForCommit`, so we'll just throw a couple of
+        // cases at it to see that 
+
         const cases = {
             "none": {
                 state: "S",
@@ -83,21 +88,6 @@ describe("SubmoduleUtil", function () {
                 commit: "2",
                 expected: ["foo"],
             },
-            "two": {
-                state: "S:C2-1 foo=S/a:1;C3-2 bar=S/b:2;H=3",
-                commit: "3",
-                expected: ["foo", "bar"],
-            },
-            "none from earlier commit": {
-                state: "S:C2-1 foo=S/a:1;C3-2 bar=S/b:2;H=3",
-                commit: "1",
-                expected: [],
-            },
-            "not from index": {
-                state: "S:I foo=S/a:1",
-                commit: "1",
-                expected: [],
-            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -299,10 +289,56 @@ describe("SubmoduleUtil", function () {
         }));
     });
 
+    describe("listOpenSubmodules", function () {
+        // We will always inspect the repo `x`.
+
+        const cases = {
+            "simple": {
+                input: "x=S",
+                expected: [],
+            },
+            "one open": {
+                input: "a=S|x=S:I q=Sa:1;Oq",
+                expected: ["q"],
+            },
+            "two open": {
+                input: "a=S|x=S:I q=Sa:1,s/x=Sa:1;Oq;Os/x",
+                expected: ["q", "s/x"],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.input);
+                const x = written.repos.x;
+                const result = yield SubmoduleUtil.listOpenSubmodules(x);
+                assert.deepEqual(result.sort(), c.expected.sort());
+            }));
+        });
+
+        it("listOpenSubmodules-missing", co.wrap(function *() {
+            // Verify that a module is not listed as open when it has an entry
+            // in `.git/config` but is missing the `.git` link in its
+            // directory.
+
+            const repo = yield TestUtil.createSimpleRepository();
+            const text = `\
+[submodule "z"]
+        url = /Users/peabody/repos/git-meta-demo/scripts/demo/z-bare
+`;
+            const repoPath = repo.path();
+            const configPath = path.join(repoPath, "config");
+            yield fs.appendFile(configPath, text);
+            const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
+            assert.deepEqual(openSubs, []);
+        }));
+    });
+
     describe("getSubmoduleRepos", function () {
         // The functionality of this method is delegated to
-        // `getSubmoduleNames`, `isVisible`, and `getRepo`.  We just need to
-        // test basic funtionality:
+        // `getSubmoduleNames`, `listOpenSubmodules`, and `getRepo`.  We just
+        // need to test basic funtionality:
         // - it screens hidden submodules
         // - it returns visible submods and name map is good
         // - hidden ones are screened

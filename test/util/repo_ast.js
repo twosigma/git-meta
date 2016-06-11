@@ -31,7 +31,6 @@
 "use strict";
 
 const assert = require("chai").assert;
-const deeper = require("deeper");
 
 const RepoAST = require("../../lib/util/repo_ast");
 
@@ -87,7 +86,7 @@ describe("RepoAST", function () {
                 // Check that result is expected, and not same as input object.
 
                 assert.deepEqual(obj.parents, c.eparents);
-                assert(deeper(obj.changes, c.echanges));
+                assert.deepEqual(obj.changes, c.echanges);
 
                 if (c.input) {
                     assert.notEqual(obj.parents, c.input.parent);
@@ -124,7 +123,7 @@ describe("RepoAST", function () {
 
                 assert.equal(obj.url, c.eurl);
                 assert.deepEqual(obj.branches, c.ebranches);
-                assert(deeper(obj.changes, c.echanges));
+                assert.deepEqual(obj.changes, c.echanges);
 
                 if (c.args && c.args.branches) {
                     assert.notEqual(obj.branches, c.args.branches);
@@ -331,8 +330,8 @@ describe("RepoAST", function () {
                         return;                                       // RETURN
                     }
                     const obj = new RepoAST(c.input);
-                    assert(deeper(obj.commits, c.ecommits));
-                    assert(deeper(obj.branches, c.ebranches));
+                    assert.deepEqual(obj.commits, c.ecommits);
+                    assert.deepEqual(obj.branches, c.ebranches);
                     assert.equal(obj.head, c.ehead);
                     assert.equal(obj.currentBranchName, c.ebranch);
                     assert.deepEqual(obj.index, c.eindex);
@@ -506,9 +505,9 @@ describe("RepoAST", function () {
                 it(caseName, function () {
                     const c = cases[caseName];
                     const obj = base.copy(c.i);
-                    assert(deeper(obj.commits, c.e.commits));
-                    assert(deeper(obj.branches, c.e.branches));
-                    assert(deeper(obj.remotes, c.e.remotes));
+                    assert.deepEqual(obj.commits, c.e.commits);
+                    assert.deepEqual(obj.branches, c.e.branches);
+                    assert.deepEqual(obj.remotes, c.e.remotes);
                     assert.equal(obj.head, c.e.head);
                     assert.equal(obj.currentBranchName, c.e.currentBranchName);
                     assert.deepEqual(obj.index, c.e.index);
