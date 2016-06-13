@@ -40,6 +40,7 @@ const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 const TestUtil            = require("../../lib/util/test_util");
+const UserError           = require("../../lib/util/user_error");
 
 const S = ShorthandParserUtil.RepoType.S;
 
@@ -62,6 +63,14 @@ const makeRepo = co.wrap(function *() {
         urlMap:  { a: path },
     };
 });
+
+function fail() {
+    return Promise.reject(new UserError("I failed."));
+}
+
+function failWithWrongError() {
+    return Promise.reject("I failed.");
+}
 
 const makeClone = co.wrap(function *(repos) {
     const a = repos.a;
@@ -220,14 +229,29 @@ describe("RepoASTTestUtil", function () {
                 },
                 m: makeClone,
             },
+            "failure": {
+                i: "a=S",
+                e: {},
+                m: fail,
+                userError: true,
+            },
+            "wrong failure": {
+                i: "a=S",
+                e: {},
+                m: failWithWrongError,
+                userError: true,
+                fails: true,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 try {
-                    yield RepoASTTestUtil.testMultiRepoManipulator(c.i,
-                                                                   c.e,
-                                                                   c.m);
+                    yield RepoASTTestUtil.testMultiRepoManipulator(
+                                                                  c.i,
+                                                                  c.e,
+                                                                  c.m,
+                                                                  c.userError);
                     assert(!c.fails);
                 }
                 catch (e) {
