@@ -231,13 +231,11 @@ describe("RepoASTTestUtil", function () {
             },
             "failure": {
                 i: "a=S",
-                e: {},
                 m: fail,
                 userError: true,
             },
             "wrong failure": {
                 i: "a=S",
-                e: {},
                 m: failWithWrongError,
                 userError: true,
                 fails: true,
