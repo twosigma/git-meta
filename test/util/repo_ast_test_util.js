@@ -240,6 +240,19 @@ describe("RepoASTTestUtil", function () {
                 userError: true,
                 fails: true,
             },
+            "uses original": {
+                i: "a=S:C2-1;Bmaster=2",
+                m: co.wrap(function *(repos) {
+                    const repo = repos.a;
+                    const newCommit = yield TestUtil.generateCommit(repo);
+                    let result = {};
+                    result[newCommit.id().tostrS()] = "3";
+                    return {
+                        commitMap: result
+                    };
+                }),
+                e: "a=E:C3-2 README.md=hello worlddata;Bmaster=3",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

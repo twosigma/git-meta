@@ -634,13 +634,32 @@ describe("ShorthandParserUtil", function () {
                     }),
                 },
             },
+            "keeping an existing": {
+                i: "a=S:Bfoo=1",
+                existing: { b: S },
+                e: {
+                    a: S.copy({ branches: { master: "1", foo: "1" }}),
+                    b: S,
+                },
+            },
+            "change from existing": {
+                i: "a=E:*=foo",
+                existing: {
+                    a: ShorthandParserUtil.parseRepoShorthand("S:Bfoo=1"),
+                },
+                e: {
+                    a: ShorthandParserUtil.parseRepoShorthand("S:Bfoo=1;*=foo")
+                },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
                 let result;
                 try {
-                    result = ShorthandParserUtil.parseMultiRepoShorthand(c.i);
+                    result = ShorthandParserUtil.parseMultiRepoShorthand(
+                                                                   c.i,
+                                                                   c.existing);
                 }
                 catch (e) {
                     assert(c.fails, e.stack);
