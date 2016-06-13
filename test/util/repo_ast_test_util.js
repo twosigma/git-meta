@@ -72,7 +72,10 @@ function failWithWrongError() {
     return Promise.reject("I failed.");
 }
 
-const makeClone = co.wrap(function *(repos) {
+const makeClone = co.wrap(function *(repos, maps) {
+    assert.isObject(maps);
+    assert.isObject(maps.commitMap);
+    assert.isObject(maps.urlMap);
     const a = repos.a;
     const bPath = yield TestUtil.makeTempDir();
     const aPath = yield fs.realpath(a.workdir());
@@ -83,10 +86,10 @@ const makeClone = co.wrap(function *(repos) {
     yield b.checkoutBranch("foo");
     const commit = yield TestUtil.generateCommit(b);
     yield b.checkoutBranch("master");
-    let commitMap = {};
-    commitMap[commit.id().tostrS()] = "2";
+    let returnCommitMap = {};
+    returnCommitMap[commit.id().tostrS()] = "2";
     return {
-        commitMap: commitMap,
+        commitMap: returnCommitMap,
         urlMap: { b: bPath },
     };
 });
