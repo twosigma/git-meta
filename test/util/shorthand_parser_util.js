@@ -439,6 +439,10 @@ describe("ShorthandParserUtil", function () {
                 i: "S:Ox",
                 fails: true,
             },
+            "test U": {
+                i: "S:C2-1 s=Sa:1;Bmaster=2",
+                e: ShorthandParserUtil.RepoType.U,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
