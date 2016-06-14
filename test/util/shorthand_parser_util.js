@@ -676,6 +676,30 @@ describe("ShorthandParserUtil", function () {
                     a: ShorthandParserUtil.parseRepoShorthand("S:Bfoo=1;*=foo")
                 },
             },
+            "with an A type for base of sub": {
+                i: "a=Ax|b=S:C2-1 s=Sa:x;Bmaster=2",
+                e: {
+                    a: ShorthandParserUtil.parseRepoShorthand("Ax"),
+                    b: new RepoAST({
+                        commits: {
+                            "1": new RepoAST.Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                            }),
+                            "2": new RepoAST.Commit({
+                                parents: ["1"],
+                                changes: {
+                                    s: new RepoAST.Submodule("a","x"),
+                                },
+                            }),
+                        },
+                        branches: { master: "2" },
+                        head: "2",
+                        currentBranchName: "master",
+                    }),
+                },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
