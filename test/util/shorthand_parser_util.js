@@ -631,6 +631,63 @@ describe("ShorthandParserUtil", function () {
                     }),
                 },
             },
+            "sub with new commit": {
+                i: "a=S|b=S:C2-1 s=Sa:3;Bmaster=2",
+                e: {
+                    a: "S",
+                    b: new RepoAST({
+                        currentBranchName: "master",
+                        head: "2",
+                        branches: {
+                            master: "2",
+                        },
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world",
+                                },
+                            }),
+                            "2": new Commit({
+                                parents: ["1"],
+                                changes: {
+                                    s: new Submodule("a","3"),
+                                },
+                            }),
+                        },
+                    }),
+                },
+            },
+            "open sub with new commit": {
+                i: "a=S|b=S:C2-1 s=Sa:3;Bmaster=2;Os C3-1!H=3",
+                e: {
+                    a: "S",
+                    b: new RepoAST({
+                        currentBranchName: "master",
+                        head: "2",
+                        branches: {
+                            master: "2",
+                        },
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world",
+                                },
+                            }),
+                            "2": new Commit({
+                                parents: ["1"],
+                                changes: {
+                                    s: new Submodule("a","3"),
+                                },
+                            }),
+                        },
+                        openSubmodules: {
+                            s: ShorthandParserUtil.parseRepoShorthand(
+                                "S:C3-1;H=3;Bmaster=;Rorigin=a master=1"),
+                        },
+                    }),
+                },
+            },
+
             // crazy, but should work
             "commit defined in open sub referenced elsewhere": {
                 i: "r=S:Bmax=2|a=S|b=S:I foo=Sa:1;Ofoo C2-1!Bx=2",
