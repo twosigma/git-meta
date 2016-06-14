@@ -374,6 +374,23 @@ describe("ShorthandParserUtil", function () {
                 i: "B",
                 e: B,
             },
+            "A type": {
+                i: "Axyz",
+                e: new RepoAST({
+                    commits: {
+                        xyz: new Commit({
+                            changes: {
+                                xyz: "xyz",
+                            },
+                        }),
+                    },
+                    branches: {
+                        master: "xyz",
+                    },
+                    head: "xyz",
+                    currentBranchName: "master",
+                }),
+            },
             "noHead": {
                 i: "S:H=",
                 e: S.copy({ head: null, currentBranchName: null }),
