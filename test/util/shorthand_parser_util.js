@@ -73,6 +73,14 @@ describe("ShorthandParserUtil", function () {
                     }),
                 }
             })},
+            "commit with longer names": { i: "S:Cxxx2-yy", e: m({
+                commits: {
+                    "xxx2": new Commit({
+                        parents: ["yy"],
+                        changes: { "xxx2": "xxx2"},
+                    }),
+                }
+            })},
             "commit with change": { i: "S:C1-2 foo=bar", e: m({
                 commits: {
                     "1": new Commit({
