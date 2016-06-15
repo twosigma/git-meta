@@ -32,13 +32,13 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const TestUtil            = require("../../lib/util/test_util");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
+const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 
 describe("SubmoduleUtil", function () {
     after(TestUtil.cleanup);
@@ -323,13 +323,9 @@ describe("SubmoduleUtil", function () {
             // directory.
 
             const repo = yield TestUtil.createSimpleRepository();
-            const text = `\
-[submodule "z"]
-        url = /Users/peabody/repos/git-meta-demo/scripts/demo/z-bare
-`;
-            const repoPath = repo.path();
-            const configPath = path.join(repoPath, "config");
-            yield fs.appendFile(configPath, text);
+            const url =
+                      "/Users/peabody/repos/git-meta-demo/scripts/demo/z-bare";
+            SubmoduleConfigUtil.initSubmoduleForRepo(repo, "z", url);
             const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
             assert.deepEqual(openSubs, []);
         }));

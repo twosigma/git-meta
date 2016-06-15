@@ -257,5 +257,58 @@ describe("SubmoduleConfigUtil", function () {
         }));
     });
 
+    describe("getConfigPath", function () {
+        it("breathing", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const result = SubmoduleConfigUtil.getConfigPath(repo);
+            const expectedPath = path.join(repo.path(), "config");
+            assert(TestUtil.isSameRealPath(result, expectedPath));
+        }));
+    });
+
+    describe("getConfigLines", function () {
+        it("breathing", function () {
+            const result = SubmoduleConfigUtil.getConfigLines("foo", "bar");
+            const expected = `\
+[submodule "foo"]
+\turl = bar
+`;
+            assert.equal(result, expected);
+        });
+    });
+
+    describe("initSubmodule", function () {
+        it("breathing", co.wrap(function *() {
+            const repoPath = yield TestUtil.makeTempDir();
+            const configPath = path.join(repoPath, "config");
+            yield fs.writeFile(configPath, "foo\n");
+            yield SubmoduleConfigUtil.initSubmodule(repoPath, "xxx", "yyy");
+            const data = yield fs.readFile(configPath, {
+                encoding: "utf8"
+            });
+            const expected =`\
+foo
+[submodule "xxx"]
+\turl = yyy
+`;
+            assert.equal(data, expected);
+        }));
+    });
+
+    describe("initSubmoduleForRepo", function () {
+        it("breathing", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            yield SubmoduleConfigUtil.initSubmoduleForRepo(repo, "xxx", "yyy");
+            const configPath = SubmoduleConfigUtil.getConfigPath(repo);
+            const data = yield fs.readFile(configPath, {
+                encoding: "utf8"
+            });
+            const lines = data.split("\n");
+            const len = lines.length;
+            assert(2 <= len);
+            assert.equal(lines[len - 3], "[submodule \"xxx\"]");
+            assert.equal(lines[len - 2], "\turl = yyy");
+        }));
+    });
 });
 
