@@ -55,11 +55,17 @@ describe("RepoAST", function () {
                 input: undefined,
                 eparents: [],
                 echanges: {},
+                emessage: "",
             },
             "simple": {
-                input: { parents: ["foo"], changes: { a: "b" } },
+                input: {
+                    parents: ["foo"],
+                    changes: { a: "b" },
+                    message: "bam",
+                },
                 eparents: ["foo"],
                 echanges: { a: "b"},
+                emessage: "bam",
             },
             "delete change": {
                 input: {
@@ -67,7 +73,7 @@ describe("RepoAST", function () {
                 },
                 eparents: [],
                 echanges: { b: null, },
-
+                emessage: "",
             },
             "add a submodule": {
                 input: {
@@ -75,6 +81,7 @@ describe("RepoAST", function () {
                 },
                 eparents: [],
                 echanges: { b: new RepoAST.Submodule("x", "y"), },
+                emessage: "",
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -87,6 +94,7 @@ describe("RepoAST", function () {
 
                 assert.deepEqual(obj.parents, c.eparents);
                 assert.deepEqual(obj.changes, c.echanges);
+                assert.equal(obj.message, c.emessage);
 
                 if (c.input) {
                     assert.notEqual(obj.parents, c.input.parent);
