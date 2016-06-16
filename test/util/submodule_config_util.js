@@ -30,11 +30,13 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
-const fs     = require("fs-promise");
-const path   = require("path");
+const assert  = require("chai").assert;
+const co      = require("co");
+const fs      = require("fs-promise");
+const NodeGit = require("nodegit");
+const path    = require("path");
 
+const Close               = require("../../lib/util/close");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 
@@ -280,7 +282,8 @@ describe("SubmoduleConfigUtil", function () {
     describe("initSubmodule", function () {
         it("breathing", co.wrap(function *() {
             const repoPath = yield TestUtil.makeTempDir();
-            const configPath = path.join(repoPath, "config");
+            yield fs.mkdir(path.join(repoPath, ".git"));
+            const configPath = path.join(repoPath, ".git",  "config");
             yield fs.writeFile(configPath, "foo\n");
             yield SubmoduleConfigUtil.initSubmodule(repoPath, "xxx", "yyy");
             const data = yield fs.readFile(configPath, {
@@ -295,19 +298,81 @@ foo
         }));
     });
 
-    describe("initSubmoduleForRepo", function () {
-        it("breathing", co.wrap(function *() {
-            const repo = yield TestUtil.createSimpleRepository();
-            yield SubmoduleConfigUtil.initSubmoduleForRepo(repo, "xxx", "yyy");
-            const configPath = SubmoduleConfigUtil.getConfigPath(repo);
-            const data = yield fs.readFile(configPath, {
-                encoding: "utf8"
-            });
-            const lines = data.split("\n");
-            const len = lines.length;
-            assert(2 <= len);
-            assert.equal(lines[len - 3], "[submodule \"xxx\"]");
-            assert.equal(lines[len - 2], "\turl = yyy");
+    describe("initSubmoduleAndRepo", function () {
+
+        const runTest = co.wrap(function *(repo, subRootRepo, url, subName) {
+            const subHead = yield subRootRepo.getHeadCommit();
+            const submodule   = yield NodeGit.Submodule.addSetup(repo,
+                                                                 url,
+                                                                 subName,
+                                                                 1);
+            const subRepo = yield submodule.open();
+            yield subRepo.fetchAll();
+            subRepo.setHeadDetached(subHead.id());
+            const newHead = yield subRepo.getCommit(subHead.id().tostrS());
+            yield NodeGit.Reset.reset(subRepo,
+                                      newHead,
+                                      NodeGit.Reset.TYPE.HARD);
+
+            yield submodule.addFinalize();
+            const sig = repo.defaultSignature();
+            yield repo.createCommitOnHead([".gitmodules", subName],
+                                          sig,
+                                          sig,
+                                          "my message");
+            yield Close.close(repo, subName);
+            const repoPath = repo.workdir();
+            const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
+                                                                      repoPath,
+                                                                      subName,
+                                                                      url);
+            assert.instanceOf(result, NodeGit.Repository);
+            assert(TestUtil.isSameRealPath(result.workdir(),
+                                           path.join(repoPath, subName)));
+
+            // Now verify, but re-open repo as the changes we made may not be
+            // in the cache for the existing repo.
+
+            const newRepo = yield NodeGit.Repository.open(repoPath);
+            const newSub = yield NodeGit.Submodule.lookup(newRepo, subName);
+            const newSubRepo = yield newSub.open();
+
+            // Change into the sub repo path to cath incorrect handling of
+            // relative paths.
+
+            process.chdir(path.join(repoPath, subName));
+            yield newSubRepo.fetchAll();
+            const remoteBranch = yield newSubRepo.getBranch("origin/master");
+            const id = remoteBranch.target();
+            assert.equal(id.tostrS(), subHead.id().tostrS());
+        });
+
+        it("simple", co.wrap(function *() {
+            const repo        = yield TestUtil.createSimpleRepository();
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            yield runTest(repo, subRootRepo, subRootRepo.workdir(), "foo");
+        }));
+
+        it("deep name", co.wrap(function *() {
+            const repo        = yield TestUtil.createSimpleRepository();
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            yield runTest(repo, subRootRepo, subRootRepo.workdir(), "x/y/z");
+        }));
+
+        it("relative origin", co.wrap(function *() {
+            // Make sure we normalize relative paths.  If we leave a relative
+            // path in the origin, we can't fetch.
+            const tempDir = yield TestUtil.makeTempDir();
+            const metaDir = path.join(tempDir, "meta");
+            const repo = yield TestUtil.createSimpleRepository(metaDir);
+            const subRootRepo = yield TestUtil.createSimpleRepository(
+                                                   path.join(tempDir, "root"));
+            // Have to start out in the meta directory or it won't even be able
+            // to configure the submodule with a relative path -- it will fail
+            // too early.
+
+            process.chdir(metaDir);
+            yield runTest(repo, subRootRepo, "../root", "a/b");
         }));
     });
 });

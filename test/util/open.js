@@ -42,10 +42,16 @@ const TestUtil        = require("../../lib/util/test_util");
 describe("open", function () {
     // We'll open from repo `x`.
 
-    function opener(submoduleName) {
-        return co.wrap(function *(repos) {
+    function opener(submoduleName, url) {
+        return co.wrap(function *(repos, maps) {
             const x = repos.x;
-            const result = yield Open.open(x, submoduleName);
+            let realUrl;
+            for (let newUrl in maps.urlMap) {
+                if (url === maps.urlMap[newUrl]) {
+                    realUrl = newUrl;
+                }
+            }
+            const result = yield Open.open(x, submoduleName, realUrl);
             assert.instanceOf(result, NodeGit.Repository);
             const expectedDir = path.join(x.workdir(), submoduleName);
             assert(TestUtil.isSameRealPath(result.workdir(), expectedDir));
@@ -59,7 +65,7 @@ describe("open", function () {
     const cases = {
         "breathing": {
             input: "a=S|x=U",
-            manipulator: opener("s"),
+            manipulator: opener("s", "a"),
             expected: "x=U:Os Bmaster=1!*=master",
         },
     };

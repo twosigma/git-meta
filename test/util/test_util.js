@@ -81,7 +81,7 @@ describe("TestUtil", function () {
 
     describe("createSimpleRepository", function () {
 
-        it("createSimpleRepository", co.wrap(function *() {
+        it("with default", co.wrap(function *() {
             const repo = yield TestUtil.createSimpleRepository();
 
             assert.instanceOf(repo, NodeGit.Repository);
@@ -101,6 +101,14 @@ describe("TestUtil", function () {
 
             const status = yield repo.getStatus();
             assert(0 === status.length);
+        }));
+
+        it("with path", co.wrap(function *() {
+            const tempDir = yield TestUtil.makeTempDir();
+            const repoPath = path.join(tempDir, "foo");
+            const repo = yield TestUtil.createSimpleRepository(repoPath);
+            assert.instanceOf(repo, NodeGit.Repository);
+            assert(yield TestUtil.isSameRealPath(repo.workdir(), repoPath));
         }));
     });
 

@@ -939,6 +939,8 @@ describe("RepoAstIOUtil", function () {
                   "a=S|b=S:I x/y/z=Sa:1,x/y/q=Sa:1;Ox/y/z;Ox/y/q",
             "two open submodules with deep paths and changes in one":
                   "a=S|b=S:I x/y/z=Sa:1,x/y/q=Sa:1;Ox/y/z;Ox/y/q W x=hello",
+            "open sub with new commit":
+                "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os Bmaster=2!*=master",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];
