@@ -38,11 +38,11 @@ const os     = require("os");
 const path   = require("path");
 
 const GitUtil             = require("../../lib/util/git_util");
-const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 const TestUtil            = require("../../lib/util/test_util");
 const UserError           = require("../../lib/util/user_error");
+const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("GitUtil", function () {
     after(TestUtil.cleanup);
@@ -76,7 +76,8 @@ describe("GitUtil", function () {
                 const c = cases[caseName];
                 const path = yield TestUtil.makeTempDir();
                 const ast = ShorthandParserUtil.parseRepoShorthand(c.i);
-                const repo = (yield RepoASTIOUtil.writeRAST(ast, path)).repo;
+                const repo =
+                            (yield WriteRepoASTUtil.writeRAST(ast, path)).repo;
                 const branch = yield GitUtil.findBranch(repo, c.b);
                 if (!c.f) {
                     assert.isNull(branch);
@@ -100,7 +101,8 @@ describe("GitUtil", function () {
             it(caseName, co.wrap(function *() {
                 const path = yield TestUtil.makeTempDir();
                 const ast = ShorthandParserUtil.parseRepoShorthand(c.i);
-                const repo = (yield RepoASTIOUtil.writeRAST(ast, path)).repo;
+                const repo =
+                            (yield WriteRepoASTUtil.writeRAST(ast, path)).repo;
                 const result = yield GitUtil.isValidRemoteName(repo, c.r);
                 assert.equal(result, c.e);
             }));
@@ -133,7 +135,8 @@ describe("GitUtil", function () {
             it(caseName, co.wrap(function *() {
                 const path = yield TestUtil.makeTempDir();
                 const ast = ShorthandParserUtil.parseRepoShorthand(c.input);
-                const repo = (yield RepoASTIOUtil.writeRAST(ast, path)).repo;
+                const repo =
+                            (yield WriteRepoASTUtil.writeRAST(ast, path)).repo;
                 const result = yield GitUtil.findRemoteBranch(repo,
                                                               c.origin,
                                                               c.branch);
@@ -289,7 +292,8 @@ describe("GitUtil", function () {
             it(caseName, co.wrap(function *() {
                 const ast = ShorthandParserUtil.parseRepoShorthand(c.input);
                 const path = yield TestUtil.makeTempDir();
-                const repo = (yield RepoASTIOUtil.writeRAST(ast, path)).repo;
+                const repo =
+                            (yield WriteRepoASTUtil.writeRAST(ast, path)).repo;
                 const result = yield GitUtil.getCurrentBranchName(repo);
                 assert.equal(result, c.expected);
             }));
@@ -414,7 +418,7 @@ describe("GitUtil", function () {
             it(caseName, co.wrap(function *() {
                 const ast = ShorthandParserUtil.parseRepoShorthand(c.input);
                 const path = yield TestUtil.makeTempDir();
-                const written = yield RepoASTIOUtil.writeRAST(ast, path);
+                const written = yield WriteRepoASTUtil.writeRAST(ast, path);
                 const fromSha = written.oldCommitMap[c.from];
                 const unpushed = yield GitUtil.listUnpushedCommits(
                                                                   written.repo,

@@ -35,12 +35,13 @@ const fs      = require("fs-promise");
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const RepoASTIOUtil       = require("../../lib/util/repo_ast_io_util");
+const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 const TestUtil            = require("../../lib/util/test_util");
 const UserError           = require("../../lib/util/user_error");
+const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 const S = ShorthandParserUtil.RepoType.S;
 
@@ -57,7 +58,7 @@ const committer = co.wrap(function *(repo) {
 
 const makeRepo = co.wrap(function *() {
     const path = yield TestUtil.makeTempDir();
-    const written = yield RepoASTIOUtil.writeRAST(S, path);
+    const written = yield WriteRepoASTUtil.writeRAST(S, path);
     return {
         commitMap: written.commitMap,
         urlMap:  { a: path },
@@ -105,7 +106,7 @@ describe("RepoASTTestUtil", function () {
         it("with shorthand", co.wrap(function *() {
             const result = yield RepoASTTestUtil.createRepo("S");
             const repo = result.repo;
-            const ast = yield RepoASTIOUtil.readRAST(repo);
+            const ast = yield ReadRepoASTUtil.readRAST(repo);
             const mappedAST = RepoASTUtil.mapCommitsAndUrls(ast,
                                                             result.commitMap,
                                                             {});
@@ -116,7 +117,7 @@ describe("RepoASTTestUtil", function () {
         it("with AST", co.wrap(function *() {
             const result = yield RepoASTTestUtil.createRepo(S);
             const repo = result.repo;
-            const ast = yield RepoASTIOUtil.readRAST(repo);
+            const ast = yield ReadRepoASTUtil.readRAST(repo);
             const mappedAST = RepoASTUtil.mapCommitsAndUrls(ast,
                                                             result.commitMap,
                                                             {});
@@ -142,7 +143,7 @@ describe("RepoASTTestUtil", function () {
             it(caseName, co.wrap(function *() {
                 const result = yield RepoASTTestUtil.createMultiRepos(c);
                 const readRepo = co.wrap(function *(repo) {
-                    const ast = yield RepoASTIOUtil.readRAST(repo);
+                    const ast = yield ReadRepoASTUtil.readRAST(repo);
                     return RepoASTUtil.mapCommitsAndUrls(ast,
                                                          result.commitMap,
                                                          result.urlMap);
