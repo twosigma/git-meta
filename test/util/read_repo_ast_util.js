@@ -58,7 +58,8 @@ const astFromSimpleRepo = co.wrap(function *(repo) {
     const commit = headId.id().tostrS();
     let commits = {};
     commits[commit] = new RepoAST.Commit({
-        changes: { "README.md": ""}
+        changes: { "README.md": ""},
+        message: "first commit",
     });
     return new RepoAST({
         commits: commits,
@@ -94,14 +95,16 @@ const repoWithCommit = co.wrap(function *() {
     const secondCommit = anotherCommit.id().tostrS();
     let commits = {};
     commits[firstCommit] = new Commit({
-        changes: { "README.md": ""}
+        changes: { "README.md": ""},
+        message: "first commit",
     });
     commits[secondCommit] = new Commit({
         parents: [firstCommit],
         changes: {
             "README.md": "bleh",
             "foobar": "meh",
-        }
+        },
+        message: "message",
     });
     const expected = new RepoAST({
         commits: commits,
@@ -141,11 +144,13 @@ const repoWithDeeperCommits = co.wrap(function *() {
 
     let commits = {};
     commits[firstCommit] = new Commit({
-        changes: { "README.md": ""}
+        changes: { "README.md": ""},
+        message: "first commit",
     });
     commits[secondCommit] = new Commit({
         changes: { "README.md": "bleh" },
         parents: [firstCommit],
+        message: "message",
     });
     const expected = new RepoAST({
         commits: commits,
@@ -203,7 +208,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -230,11 +236,13 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[firstSha] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         commits[secondSha] = new Commit({
             parents: [firstSha],
             changes: { "foo/bar": "meh" },
+            message: "message",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -258,11 +266,13 @@ describe("readRAST", function () {
         const delCommit = yield TestUtil.makeCommit(r, ["README.md"]);
         const delSha = delCommit.id().tostrS();
         commits[headSha] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         commits[delSha] = new Commit({
             parents: [headSha],
             changes: { "README.md": null },
+            message: "message",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -284,7 +294,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -302,7 +313,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -340,7 +352,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -358,7 +371,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const path = repos.bare.path();
         const realPath = yield fs.realpath(path);
@@ -388,7 +402,8 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -421,6 +436,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
             parents: [headCommit.id().tostrS()],
@@ -428,6 +444,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
+            message: "message",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -465,6 +482,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
             parents: [headCommit.id().tostrS()],
@@ -472,6 +490,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
+            message: "message",
         });
         commits[lastCommit.id().tostrS()] = new Commit({
             parents: [commit.id().tostrS()],
@@ -480,6 +499,7 @@ describe("readRAST", function () {
                                             baseSubPath,
                                             anotherSubCommit.id().tostrS())
             },
+            message: "message",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -505,7 +525,8 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -532,7 +553,8 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -561,7 +583,8 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -589,7 +612,8 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""}
+            changes: { "README.md": ""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -617,6 +641,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -659,6 +684,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
             parents: [headCommit.id().tostrS()],
@@ -666,6 +692,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
+            message: "message",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -688,6 +715,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -707,6 +735,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -726,6 +755,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -749,6 +779,7 @@ describe("readRAST", function () {
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
+            message: "first commit",
         });
         const expected = new RepoAST({
             commits: commits,

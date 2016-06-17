@@ -48,10 +48,12 @@ describe("RepoAstUtil", function () {
                 actual: new Commit({
                     parents: ["1"],
                     changes: { foo: "bar" },
+                    message: "foo",
                 }),
                 expected: new Commit({
                     parents: ["1"],
                     changes: { foo: "bar" },
+                    message: "foo",
                 }),
             },
             "bad parents": {
@@ -98,17 +100,27 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
+            "bad message": {
+                actual: new Commit({
+                    message: "foo",
+                }),
+                expected: new Commit({
+                    message: "bar",
+                }),
+                fails: true,
+            },
         };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
             it(caseName, function () {
                 try {
                     RepoASTUtil.assertEqualCommits(c.actual, c.expected);
-                    assert(!c.fails);
                 }
                 catch (e) {
                     assert(c.fails, e.stack);
+                    return;                                           // RETURN
                 }
+                assert(!c.fails);
             });
         });
     });
@@ -383,7 +395,7 @@ describe("RepoAstUtil", function () {
 
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
-        const c1 = new Commit();
+        const c1 = new Commit({ message: "foo" });
         const cases = {
             "trivial": { i: new RepoAST(), m: {}, e: new RepoAST() },
             "just head": {
