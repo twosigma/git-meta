@@ -74,6 +74,18 @@ describe("ShorthandParserUtil", function () {
                     }),
                 }
             })},
+            "commit without a parent": {
+                i: "S:C1 y=2",
+                e: m({
+                    commits: {
+                        "1": new Commit({
+                            parents: [],
+                            changes: { y: "2" },
+                            message: "message",
+                        }),
+                    },
+                }),
+            },
             "commit with message": { i: "S:Chello world#1-2", e: m({
                 commits: {
                     "1": new Commit({
@@ -82,6 +94,24 @@ describe("ShorthandParserUtil", function () {
                         message: "hello world",
                     }),
                 }
+            })},
+            "commit with multiple parents": { i: "S:C3-1,2", e: m({
+                commits: {
+                    "3": new Commit({
+                        parents: ["1","2"],
+                        changes: { "3": "3"},
+                        message: "message",
+                    }),
+                },
+            })},
+            "commit with everything": { i: "S:Chello#3-1,2 x=y,q=r", e: m({
+                commits: {
+                    "3": new Commit({
+                        parents: ["1","2"],
+                        changes: { x: "y", q: "r" },
+                        message: "hello",
+                    }),
+                },
             })},
             "commit with longer names": { i: "S:Cxxx2-yy", e: m({
                 commits: {
