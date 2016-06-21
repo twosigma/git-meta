@@ -825,5 +825,62 @@ describe("readRAST", function () {
         const ast = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
+
+    it("merge commit", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const workdir = repo.workdir();
+        const firstCommit = yield repo.getHeadCommit();
+        const firstSha = firstCommit.id().tostrS();
+        const sig = repo.defaultSignature();
+        yield repo.createBranch("b", firstCommit, 0, sig);
+        yield repo.setHead("refs/heads/b");
+        yield fs.writeFile(path.join(workdir, "foo"), "foo");
+        const commitB = yield TestUtil.makeCommit(repo, ["foo"]);
+        const bSha = commitB.id().tostrS();
+        yield repo.setHead("refs/heads/master");
+        yield NodeGit.Reset.reset(repo, firstCommit, NodeGit.Reset.TYPE.HARD);
+        yield fs.writeFile(path.join(workdir, "bar"), "bar");
+        const commitC = yield TestUtil.makeCommit(repo, ["bar"]);
+        const cSha = commitC.id().tostrS();
+        const mergeId = yield repo.mergeBranches(
+                                                 "refs/heads/master",
+                                                 "refs/heads/b",
+                                                 sig,
+                                                 NodeGit.Merge.PREFERENCE.NONE,
+                                                 {});
+        const mergeSha = mergeId.tostrS();
+        const commits = {};
+        const Commit = RepoAST.Commit;
+        commits[firstSha] = new Commit({
+            changes: { "README.md": "", },
+            message: "first commit",
+        });
+        commits[bSha] = new Commit({
+            parents: [firstSha],
+            changes: { foo: "foo" },
+            message: "message",
+        });
+        commits[cSha] = new Commit({
+            parents: [firstSha],
+            changes: { bar: "bar" },
+            message: "message",
+        });
+        commits[mergeSha] = new Commit({
+            parents: [cSha, bSha],
+            changes: { foo: "foo" },
+            message: "Merged b into master",
+        });
+        const expected = new RepoAST({
+            head: mergeSha,
+            currentBranchName: "master",
+            branches: {
+                master: mergeSha,
+                b: bSha,
+            },
+            commits: commits,
+        });
+        const actual = yield ReadRepoASTUtil.readRAST(repo);
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
 });
 

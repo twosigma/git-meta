@@ -149,6 +149,9 @@ describe("WriteRepoASTUtil", function () {
             "rm nesed": "S:C2-1 x/y/z=meh;I x/y/z;Bmaster=2",
             "nested in workdir": "S:W x/y/z=foo",
             "two nested in workdir": "S:W x/y/z=foo,x/y/k=bar",
+            "merge": "S:C2-1;C3-1;C4-2,3 3=3;Bmaster=4",
+            "merge with deletion":
+                "S:C2-1;C3-1 README.md;C4-2,3 README.md;Bmaster=4",
         };
 
         Object.keys(cases).forEach(caseName => {
