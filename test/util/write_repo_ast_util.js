@@ -194,7 +194,9 @@ describe("WriteRepoASTUtil", function () {
             it(caseName, co.wrap(function *() {
                 const inASTs =
                             ShorthandParserUtil.parseMultiRepoShorthand(input);
-                const result = yield WriteRepoASTUtil.writeMultiRAST(inASTs);
+                const root = yield TestUtil.makeTempDir();
+                const result = yield WriteRepoASTUtil.writeMultiRAST(inASTs,
+                                                                     root);
                 assert.isObject(result);
                 assert.isObject(result.repos);
                 assert.isObject(result.commitMap);
