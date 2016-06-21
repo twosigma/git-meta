@@ -325,6 +325,57 @@ describe("RepoAST", function () {
                     openSubmodules: { y: new RepoAST() },
                 }, {
                 }, true),
+                "bad commit change": m({
+                    commits: {
+                        "1": new Commit({ changes: { x: "y"}}),
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { x: "y"},
+                        }),
+                    },
+                    head: "2",
+                }, {}, true),
+                "bad commit change from ancestor": m({
+                    commits: {
+                        "1": new Commit({ changes: { x: "y"}}),
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { y: "y"},
+                        }),
+                        "3": new Commit({
+                            parents: ["2"],
+                            changes: { x: "y"},
+                        }),
+                    },
+                    head: "2",
+                }, {}, true),
+                "ok commit duplicting right-hand ancestory": m({
+                    commits: {
+                        "1": new Commit({ changes: { x: "y"}}),
+                        "2": new Commit({ changes: { y: "y"}, }),
+                        "3": new Commit({
+                            parents: ["1","2"],
+                            changes: { y: "y"},
+                        }),
+                    },
+                    head: "3",
+                }, {
+                    commits: {
+                        "1": new Commit({ changes: { x: "y"}}),
+                        "2": new Commit({ changes: { y: "y"}, }),
+                        "3": new Commit({
+                            parents: ["1","2"],
+                            changes: { y: "y"},
+                        }),
+                    },
+                    head: "3",
+                }, false),
+                "bad commit deletion": m({
+                    commits: {
+                        "1": new Commit({ changes: { x: null } }),
+                    },
+                    head: "1",
+                }, {}, true),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
