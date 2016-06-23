@@ -430,9 +430,9 @@ describe("readRAST", function () {
                            "x/y",
                            subHead.id().tostrS());
 
-        yield Close.close(repo, "x/y");
         const commit = yield TestUtil.makeCommit(repo,
                                                  ["x/y", ".gitmodules"]);
+        yield Close.close(repo, "x/y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
