@@ -957,7 +957,7 @@ describe("readRAST", function () {
         yield NodeGit.Checkout.index(repo, index, {
             checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
         });
-        index = yield repo.openIndex();
+        index = yield repo.index();
         index.addByPath("s");
         index.write();
         const id = yield index.writeTreeTo(repo);
