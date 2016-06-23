@@ -263,7 +263,7 @@ describe("readRAST", function () {
         const index = yield r.index();
         yield index.addAll("README.md", -1);
         index.write();
-        const delCommit = yield TestUtil.makeCommit(r, ["README.md"]);
+        const delCommit = yield TestUtil.makeCommit(r, []);
         const delSha = delCommit.id().tostrS();
         commits[headSha] = new Commit({
             changes: { "README.md": ""},
@@ -884,7 +884,6 @@ describe("readRAST", function () {
 
     it("merge commit with submodule change", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
-        console.log(repo.workdir());
         const sig = repo.defaultSignature();
 
         // Create the base repo for the submodule and add a couple of
