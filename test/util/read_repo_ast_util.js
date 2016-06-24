@@ -1039,5 +1039,157 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(actual, expected);
     }));
 
+    it("merge commit with ignored submodule change", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const sig = repo.defaultSignature();
+
+        // Create the base repo for the submodule and add a couple of
+        // commits.
+
+        const base = yield TestUtil.createSimpleRepository();
+        const basePath = base.workdir();
+        const baseMaster = yield base.getHeadCommit();
+        const baseMasterSha = baseMaster.id().tostrS();
+        yield base.createBranch("foo", baseMaster, 0, sig);
+        yield base.checkoutBranch("foo");
+        yield fs.writeFile(path.join(basePath, "foo"), "foo");
+        const fooCommit = yield TestUtil.makeCommit(base, ["foo"]);
+        const fooSha = fooCommit.id().tostrS();
+        yield base.createBranch("bar", baseMaster, 0, sig);
+        yield base.checkoutBranch("bar");
+        yield fs.writeFile(path.join(basePath, "bar"), "bar");
+        const barCommit = yield TestUtil.makeCommit(base, ["bar"]);
+        const barSha = barCommit.id().tostrS();
+        yield base.checkoutBranch("master");
+
+        const firstCommit = yield repo.getHeadCommit();
+        const firstSha = firstCommit.id().tostrS();
+        // Add the submodule and commit
+        const submodule =
+                        yield addSubmodule(repo, basePath, "s", baseMasterSha);
+        const subCommit = yield TestUtil.makeCommit(repo,
+                                                    [".gitmodules", "s"]);
+        const subSha = subCommit.id().tostrS();
+
+        // Make the `wham` branch and put a change to the submodule on it.
+
+        yield repo.createBranch("wham", subCommit, 0, sig);
+        yield repo.checkoutBranch("wham");
+        const subRepo = yield submodule.open();
+        const localBar = yield subRepo.getCommit(barSha);
+        yield NodeGit.Reset.reset(subRepo,
+                                  localBar,
+                                  NodeGit.Reset.TYPE.HARD);
+        const whamCommit = yield TestUtil.makeCommit(repo, ["s"]);
+        const whamSha = whamCommit.id().tostrS();
+
+        // Go back to master and put a different submodule change on it.
+
+        yield repo.checkoutBranch("master");
+        const localFoo = yield subRepo.getCommit(fooSha);
+        yield NodeGit.Reset.reset(subRepo,
+                                  localFoo,
+                                  NodeGit.Reset.TYPE.HARD);
+        const masterCommit = yield TestUtil.makeCommit(repo, ["s"]);
+        const masterSha = masterCommit.id().tostrS();
+
+        // Now make the merge commit.
+
+        let index = yield NodeGit.Merge.commits(repo,
+                                                masterCommit,
+                                                whamCommit,
+                                                null);
+
+        // We're going to ignore the 'bar' commit.
+
+        yield index.conflictCleanup();
+        yield index.writeTreeTo(repo);
+        yield NodeGit.Checkout.index(repo, index, {
+            checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
+        });
+        index = yield repo.index();
+        yield index.write();
+        const id = yield index.writeTreeTo(repo);
+        const mergeCommit = yield repo.createCommit(
+                                                 "HEAD",
+                                                 sig,
+                                                 sig,
+                                                 "message",
+                                                 id,
+                                                 [ masterCommit, whamCommit ]);
+        const mergeSha = mergeCommit.tostrS();
+        const Commit = RepoAST.Commit;
+        const Submodule = RepoAST.Submodule;
+
+        const subCommits = {};
+        subCommits[baseMasterSha] = new Commit({
+            changes: { "README.md": "", },
+            message: "first commit",
+        });
+        subCommits[fooSha] = new Commit({
+            parents: [baseMasterSha],
+            changes: { foo: "foo" },
+            message: "message",
+        });
+        subCommits[barSha] = new Commit({
+            parents: [baseMasterSha],
+            changes: { bar: "bar" },
+            message: "message",
+        });
+
+        const commits = {};
+        commits[firstSha] = new Commit({
+            changes: { "README.md": "", },
+            message: "first commit",
+        });
+        commits[subSha] = new Commit({
+            parents: [firstSha],
+            changes: { "s": new Submodule(basePath, baseMasterSha), },
+            message: "message",
+        });
+        commits[whamSha] = new Commit({
+            parents: [subSha],
+            changes: { "s": new Submodule(basePath, barSha) },
+            message: "message",
+        });
+        commits[masterSha] = new Commit({
+            parents: [subSha],
+            changes: { "s": new Submodule(basePath, fooSha) },
+            message: "message",
+        });
+        commits[mergeSha] = new Commit({
+            parents: [masterSha, whamSha],
+            changes: {},
+            message: "message",
+        });
+
+        const expected = new RepoAST({
+            head: mergeSha,
+            currentBranchName: "master",
+            branches: {
+                master: mergeSha,
+                wham: whamSha,
+            },
+            commits: commits,
+            openSubmodules: {
+                s: new RepoAST({
+                    head: fooSha,
+                    commits: subCommits,
+                    remotes: {
+                        origin: new RepoAST.Remote(basePath, {
+                            branches: {
+                                foo: fooSha,
+                                bar: barSha,
+                                master: baseMasterSha,
+                            },
+                        }),
+                    },
+                }),
+            },
+        });
+        const actual = yield ReadRepoASTUtil.readRAST(repo);
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
+
 });
 
