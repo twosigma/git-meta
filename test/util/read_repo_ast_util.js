@@ -262,7 +262,7 @@ describe("readRAST", function () {
         yield fs.unlink(path.join(r.workdir(), "README.md"));
         const index = yield r.index();
         yield index.addAll("README.md", -1);
-        index.write();
+        yield index.write();
         const delCommit = yield TestUtil.makeCommit(r, []);
         const delSha = delCommit.id().tostrS();
         commits[headSha] = new Commit({
@@ -396,7 +396,7 @@ describe("readRAST", function () {
         const repo = yield TestUtil.createSimpleRepository();
         const tempDir = yield TestUtil.makeTempDir();
         const url = path.join(tempDir, "no-path");
-        NodeGit.Remote.create(repo, "badremote", url);
+        yield NodeGit.Remote.create(repo, "badremote", url);
         const ast = yield ReadRepoASTUtil.readRAST(repo);
         const headId = yield repo.getHeadCommit();
         const commit = headId.id().tostrS();
@@ -520,8 +520,8 @@ describe("readRAST", function () {
 
         yield fs.appendFile(readmePath, "foo");
         const index = yield r.index();
-        index.addByPath("README.md");
-        index.write();
+        yield index.addByPath("README.md");
+        yield index.write();
 
         let commits = {};
         commits[commit] = new Commit({
@@ -548,8 +548,8 @@ describe("readRAST", function () {
 
         yield fs.appendFile(fooPath, "foo");
         const index = yield r.index();
-        index.addByPath("foo");
-        index.write();
+        yield index.addByPath("foo");
+        yield index.write();
 
         let commits = {};
         commits[commit] = new Commit({
@@ -576,8 +576,8 @@ describe("readRAST", function () {
 
         yield fs.appendFile(fooPath, "foo");
         const index = yield r.index();
-        index.addByPath("foo");
-        index.write();
+        yield index.addByPath("foo");
+        yield index.write();
 
         fs.unlink(fooPath);
 
@@ -608,7 +608,7 @@ describe("readRAST", function () {
         yield fs.unlink(readmePath);
         const index = yield r.index();
         yield index.addAll("README.md", -1);
-        index.write();
+        yield index.write();
 
         let commits = {};
         commits[commit] = new Commit({
@@ -773,8 +773,8 @@ describe("readRAST", function () {
         const headCommit = yield r.getHeadCommit();
         yield fs.appendFile(path.join(r.workdir(), "README.md"), "x");
         const index = yield r.index();
-        index.addByPath("README.md");
-        index.write();
+        yield index.addByPath("README.md");
+        yield index.write();
         yield fs.appendFile(path.join(r.workdir(), "README.md"), "y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
@@ -945,21 +945,18 @@ describe("readRAST", function () {
 
         // Have to force set the submodule to the 'bar' commit.
 
-        NodeGit.Reset.reset(subRepo,
-                            localBar,
-                            NodeGit.Reset.TYPE.HARD);
+        yield NodeGit.Reset.reset(subRepo,
+                                  localBar,
+                                  NodeGit.Reset.TYPE.HARD);
 
-        // And deal with the index.
-        index.addByPath("s");
-        index.conflictCleanup();
-        index.write();
+        yield index.conflictCleanup();
         yield index.writeTreeTo(repo);
         yield NodeGit.Checkout.index(repo, index, {
             checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
         });
         index = yield repo.index();
-        index.addByPath("s");
-        index.write();
+        yield index.addByPath("s");
+        yield index.write();
         const id = yield index.writeTreeTo(repo);
         const mergeCommit = yield repo.createCommit(
                                                  "HEAD",

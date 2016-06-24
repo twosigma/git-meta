@@ -248,7 +248,7 @@ describe("SubmoduleConfigUtil", function () {
 `
                               );
             const index = yield repo.index();
-            index.addByPath(SubmoduleConfigUtil.modulesFileName);
+            yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
 
             const result = yield SubmoduleConfigUtil.getSubmodulesFromIndex(
                                                                         repo,
