@@ -34,6 +34,7 @@ const co     = require("co");
 
 const Checkout        = require("../../lib/util/checkout");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const Status          = require("../../lib/util/status");
 
 describe("checkout", function () {
     // We will operate on the repository `x`.
@@ -136,9 +137,14 @@ describe("checkout", function () {
         },
     };
     function checkout(branchName, create) {
-        return function (repos) {
-            return Checkout.checkout(repos.x, branchName, create);
-        };
+        return co.wrap(function *(repos) {
+            const x = repos.x;
+            const status = yield Status.getRepoStatus(x);
+            return yield Checkout.checkout(repos.x,
+                                           status,
+                                           branchName,
+                                           create);
+        });
     }
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
