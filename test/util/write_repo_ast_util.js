@@ -214,6 +214,28 @@ describe("WriteRepoASTUtil", function () {
                 RepoASTUtil.assertEqualRepoMaps(resultASTs, inASTs);
             }));
         });
-    });
 
+        it("no unreferenced commits", co.wrap(function *() {
+            const ast = ShorthandParserUtil.parseMultiRepoShorthand(
+                "a=Aa|b=Ab");
+            const root = yield TestUtil.makeTempDir();
+            const written = yield WriteRepoASTUtil.writeMultiRAST(ast, root);
+            let aSha;
+            Object.keys(written.commitMap).forEach(commit => {
+                const original = written.commitMap[commit];
+                if ("a" === original) {
+                    aSha = commit;
+                }
+            });
+
+            const b = written.repos.b;
+            try {
+                yield b.getCommit(aSha);
+            }
+            catch (e) {
+                return;                                               // RETURN
+            }
+            assert(false, "commit still exists");
+        }));
+    });
 });
