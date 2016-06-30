@@ -432,4 +432,49 @@ describe("GitUtil", function () {
             }));
         });
     });
+
+    describe("isUpToDate", function () {
+        const cases = {
+            "trivial": {
+                initial: "S",
+                from: "1",
+                to: "1",
+                expected: true,
+            },
+            "is in history": {
+                initial: "S:C2-1;Bmaster=2",
+                from: "2",
+                to: "1",
+                expected: true,
+            },
+            "behind": {
+                initial: "S:C2-1;Bmaster=2",
+                from: "1",
+                to: "2",
+                expected: false,
+            },
+            "divergent": {
+                initial: "S:C2-1;C3-1;Bmaster=2;Bfoo=3",
+                from: "2",
+                to: "3",
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const ast = ShorthandParserUtil.parseRepoShorthand(c.initial);
+                const path = yield TestUtil.makeTempDir();
+                const written = yield WriteRepoASTUtil.writeRAST(ast, path);
+                const repo = written.repo;
+                const oldMap = written.oldCommitMap;
+                assert.property(oldMap, c.from);
+                assert.property(oldMap, c.to);
+                const from = oldMap[c.from];
+                const to = oldMap[c.to];
+                const result = yield GitUtil.isUpToDate(repo, from, to);
+                assert.equal(result, c.expected);
+            }));
+        });
+    });
 });
