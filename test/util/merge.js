@@ -169,6 +169,7 @@ a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|\
 x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4",
             fromCommit: "4",
             mode: MODE.FF_ONLY,
+            expected: "x=E:Os Bmaster=b!*=master",
             fails: true,
         },
         "non-ffmerge with non-ffwd submodule change": {

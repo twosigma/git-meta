@@ -55,14 +55,12 @@ describe("checkout", function () {
             input: "x=S",
             branchName: "foo",
             create: "none",
-            expected: "x=S:Bfoo=1;*=foo",
             fails: true,
         },
         "simple -- branch exists -- all": {
             input: "x=S:Bfoo=1",
             branchName: "foo",
             create: "all",
-            expected: "x=S:Bfoo=1;*=foo",
             fails: true,
         },
         "simple -- branch exists -- some": {
@@ -105,7 +103,6 @@ describe("checkout", function () {
             input: "a=S|x=U:Os Bfoo=1",
             branchName: "foo",
             create: "all",
-            expected: "a=S|x=U:Bfoo=2;*=foo;Os Bfoo=1!*=foo",
             fails: true,
         },
         "one sub -- branch exists -- some ": {

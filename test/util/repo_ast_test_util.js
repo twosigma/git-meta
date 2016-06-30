@@ -257,6 +257,18 @@ describe("RepoASTTestUtil", function () {
                 }),
                 e: "a=E:C3-2 README.md=hello worlddata;Bmaster=3",
             },
+            "fails and makes state change": {
+                i: "x=S",
+                m: co.wrap(function *(repos) {
+                    const x = repos.x;
+                    const head = yield x.getHeadCommit();
+                    const sig = x.defaultSignature();
+                    yield repos.x.createBranch("foo", head, 0, sig);
+                    throw new UserError("bad bad");
+                }),
+                e: "x=E:Bfoo=1",
+                userError: true,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
