@@ -50,11 +50,8 @@ describe("merge", function () {
                                        maps) {
         const x = repos.x;
         const status = yield Status.getRepoStatus(x);
-        let reverseMap = {};
         const commitMap = maps.commitMap;
-        Object.keys(commitMap).forEach(id => {
-            reverseMap[commitMap[id]] = id;
-        });
+        const reverseMap = maps.reverseMap;
         assert.property(reverseMap, fromCommit);
         const physicalCommit = reverseMap[fromCommit];
         const commit = yield x.getCommit(physicalCommit);
