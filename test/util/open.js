@@ -39,6 +39,39 @@ const Open            = require("../../lib/util/open");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const TestUtil        = require("../../lib/util/test_util");
 
+describe("openBranchOnCommit", function () {
+    const cases = {
+        "breathing": {
+            initial: "a=Aa|x=U",
+            subName: "s",
+            url: "a",
+            branchName: "foo",
+            commitSha: "a",
+            expected: "x=E:Os Bfoo=a!*=foo",
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            const manipulator = co.wrap(function *(repos, maps) {
+                assert.property(maps.reverseMap, c.commitSha);
+                assert.property(maps.reverseUrlMap, c.url);
+                const commit = maps.reverseMap[c.commitSha];
+                const url = maps.reverseUrlMap[c.url];
+                const result = yield Open.openBranchOnCommit(repos.x,
+                                                             c.subName,
+                                                             url,
+                                                             c.branchName,
+                                                             commit);
+                assert.instanceOf(result, NodeGit.Repository);
+            });
+            yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                           c.expected,
+                                                           manipulator);
+        }));
+    });
+});
+
 describe("open", function () {
     // We'll open from repo `x`.
 
