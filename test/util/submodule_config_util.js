@@ -313,7 +313,6 @@ foo
             yield NodeGit.Reset.reset(subRepo,
                                       newHead,
                                       NodeGit.Reset.TYPE.HARD);
-
             yield submodule.addFinalize();
             const sig = repo.defaultSignature();
             yield repo.createCommitOnHead([".gitmodules", subName],
@@ -362,6 +361,7 @@ foo
         it("relative origin", co.wrap(function *() {
             // Make sure we normalize relative paths.  If we leave a relative
             // path in the origin, we can't fetch.
+
             const tempDir = yield TestUtil.makeTempDir();
             const metaDir = path.join(tempDir, "meta");
             const repo = yield TestUtil.createSimpleRepository(metaDir);
