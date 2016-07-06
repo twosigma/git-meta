@@ -484,33 +484,5 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
-
-    describe("syncSubmodules", function () {
-        // We will always sync and check "x".
-
-        const cases = {
-            "trivial": {
-                state: "x=S",
-                expected: "x=S",
-            },
-            "backed up to original commit": {
-                state: "a=S|x=S:C2-1 z=Sa:1;H=2;Oz C3-1!H=3",
-                expected: "a=S|x=S:C2-1 z=Sa:1;H=2;Oz",
-            },
-        };
-
-        const syncer = co.wrap(function *(repos) {
-            yield SubmoduleUtil.syncSubmodules(repos.x);
-        });
-
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
-                                                               c.expected,
-                                                               syncer);
-            }));
-        });
-    });
 });
 
