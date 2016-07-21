@@ -300,6 +300,35 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("readNote", function () {
+        it("simple test", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const headCommit = yield repo.getHeadCommit();
+
+            yield NodeGit.Note.create(repo, "refs/notes/foo",
+                                      headCommit.committer(),
+                                      headCommit.committer(), headCommit.id(),
+                                      "note", 1);
+
+            const readNote = yield GitUtil.readNote(repo, "refs/notes/foo",
+                                                   headCommit.id());
+            assert.equal(readNote.message(), "note");
+
+            const missingRef = yield GitUtil.readNote(repo,
+                                                      "refs/notes/missing",
+                                                      headCommit.id());
+            assert.isNull(missingRef);
+
+            const badSha = "0123456789012345678901234567890123456789";
+            const missingCommit = yield GitUtil.readNote(repo,
+                                                         "refs/notes/foo",
+                                                         badSha);
+            assert.isNull(missingCommit);
+
+        }));
+    });
+
+
     describe("resolveCommitish", function () {
 
         // We know the actual resolution is handled by 'NodeGit', so just do
