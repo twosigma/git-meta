@@ -47,6 +47,7 @@ describe("ShorthandParserUtil", function () {
                 branches: {},
                 remotes: {},
                 index: {},
+                notes: {},
                 workdir: {},
                 openSubmodules: {},
             };
@@ -348,6 +349,47 @@ describe("ShorthandParserUtil", function () {
                         origin: {
                             url: "a",
                             branches: {},
+                        },
+                    },
+                }),
+            },
+
+            "simple notes": {
+                i: "S:C2-1;N refs/notes/morx 2=two",
+                e: m({
+                    commits: {
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { "2": "2"},
+                            message: "message",
+                        }),
+                    },
+                    notes: {
+                        "refs/notes/morx": {
+                            "2": "two"
+                        },
+                    },
+                }),
+            },
+            "multiple notes refs, multiple commits": {
+                i: "S:C2-1;N refs/notes/morx 1=one;N refs/notes/morx 2=two;" +
+                "N refs/notes/fleem 1=fone;N refs/notes/fleem 2=ftwo",
+                e: m({
+                    commits: {
+                        "2": new Commit({
+                            parents: ["1"],
+                            changes: { "2": "2"},
+                            message: "message",
+                        }),
+                    },
+                    notes: {
+                        "refs/notes/fleem": {
+                            "1": "fone",
+                            "2": "ftwo",
+                        },
+                        "refs/notes/morx": {
+                            "1": "one",
+                            "2": "two",
                         },
                     },
                 }),

@@ -1191,5 +1191,35 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(actual, expected);
     }));
 
+    it("notes", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        const head = yield r.getHeadCommit();
+        const headId = head.id();
+
+        const sig = NodeGit.Signature.default(r);
+
+        yield NodeGit.Note.create(r, "refs/notes/test",
+                                  sig, sig, headId, "note", 0);
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const commit = headId.tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": ""},
+            message: "first commit",
+        });
+        const note = {};
+        note[headId] = "note";
+        const expected = new RepoAST({
+            notes: {
+                    "refs/notes/test" : note
+            },
+            commits: commits,
+            branches: { "master": commit },
+            head: commit,
+            currentBranchName: "master",
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
 });
 

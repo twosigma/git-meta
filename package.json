@@ -33,6 +33,7 @@
     "co": "",
     "colors": "",
     "fs-promise": "",
+    "generator-async": "",
     "nodegit": "^0.15.0",
     "rimraf": ""
   },
