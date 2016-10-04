@@ -30,10 +30,15 @@
  */
 "use strict";
 
-const co     = require("co");
+const assert  = require("chai").assert;
+const co      = require("co");
+const fsp     = require("fs-promise");
+const path    = require("path");
+const NodeGit = require("nodegit");
 const SyntheticBranch = require("../../lib/util/synthetic_branch_util");
 const UserError       = require("../../lib/util/user_error");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const TestUtil        = require("../../lib/util/test_util");
 
 describe("synthetic-branch", function () {
     const syntheticBranch = co.wrap(function *(repos, maps) {
@@ -160,4 +165,39 @@ describe("synthetic-branch", function () {
                                                            c.fails);
         }));
     });
+});
+
+describe("synthetic-branch-submodule-pre-receive", function () {
+    it("works", co.wrap(function *() {
+        const root = yield TestUtil.makeTempDir();
+        const rootDirectory = yield fsp.realpath(root);
+        const repo = yield NodeGit.Repository.init(rootDirectory, 0);
+        const index = yield repo.index();
+
+        yield fsp.writeFile(path.join(rootDirectory, "f"), "hello world");
+        yield index.addByPath("f");
+
+        const sig = NodeGit.Signature.create("A U Thor", "author@example.com",
+                                             1475535185, -4*60);
+        const oid = yield repo.createCommitOnHead(["f"], sig, sig, "a commit");
+
+        // an empty push succeeds
+        let fail = yield SyntheticBranch.submoduleCheck(repo, []);
+        assert(!fail);
+
+        // a push with f to a correct branch succeeds
+        fail = yield SyntheticBranch.submoduleCheck(repo, [{
+            oldSha: "0000000000000000000000000000000000000000",
+            newSha: oid.toString(),
+            ref: "refs/commits/" + oid.toString(),
+        }]);
+
+        // a push with f to a bogus branch fails
+        fail = yield SyntheticBranch.submoduleCheck(repo, [{
+            oldSha: "0000000000000000000000000000000000000000",
+            newSha: oid.toString(),
+            ref: "refs/commits/0000000000000000000000000000000000000000",
+        }]);
+        assert(fail);
+    }));
 });
