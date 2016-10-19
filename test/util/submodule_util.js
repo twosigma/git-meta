@@ -473,8 +473,9 @@ describe("SubmoduleUtil", function () {
                 const repo = written.repo;
                 const fromSha = written.oldCommitMap[c.from];
                 const fromId = NodeGit.Oid.fromString(fromSha);
+                const commit = yield repo.getCommit(fromId);
                 const changes =
-                         yield SubmoduleUtil.getSubmoduleChanges(repo, fromId);
+                         yield SubmoduleUtil.getSubmoduleChanges(repo, commit);
                 assert.deepEqual(Array.from(changes.added).sort(),
                                  c.added.sort());
                 assert.deepEqual(Array.from(changes.changed).sort(),

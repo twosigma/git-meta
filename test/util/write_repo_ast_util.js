@@ -152,6 +152,12 @@ describe("WriteRepoASTUtil", function () {
             "merge": "S:C2-1;C3-1;C4-2,3 3=3;Bmaster=4",
             "merge with deletion":
                 "S:C2-1;C3-1 README.md;C4-2,3 README.md;Bmaster=4",
+            "notes": "S:C2-1;Bmaster=2;N refs/notes/morx 1=one",
+            "multiple notes": "S:C2-1;Bmaster=2;" +
+                "N refs/notes/morx 1=one;" +
+                "N refs/notes/morx 2=two;" +
+                "N refs/notes/fleem 1=fone;" +
+                "N refs/notes/fleem 2=ftwo",
         };
 
         Object.keys(cases).forEach(caseName => {

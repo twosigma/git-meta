@@ -123,7 +123,7 @@ repositories as if they were a single repository.  Git-meta strives to be as
 easy-to-use as possible, but hiding Git is not a goal.  We understand that many
 times you will want to work directly with Git commands.  We will document our
 model, invariants, and sub-command implementations so that you will be able to
-understand how git-meta interacts with Git.  Furthermore, git-meta will provide 
+understand how git-meta interacts with Git.  Furthermore, git-meta will provide
 clear diagnostics and automatic recovery when it encounters a non-canonical state.
 
 In many cases, git-meta does provide sub-commands that map directly to Git
@@ -159,10 +159,29 @@ more information, or one of our test drivers (initially at least
 
 ### Invariants
 
-Git-meta, attempts to maintain the following invariants:
+Git-meta attempts to maintain the following invariants:
 
-- Every open sub-repository is set to the same local branch as the
-  meta-repository.
+- The sub-repositories in every successfully pushed revision of the
+  meta-repository have themselves been successfully pushed.
+
+- Each sub-repository's SHA in a pushed commit of the meta-repository is
+  either
+
+  - the same as in the meta-repository commit's parent, or
+
+  - directly referenced by the sub-repository's ref named
+    refs/commits/$SHA, or
+
+  - part of a chain of commits, the top commit of which meets the
+    previous requirement.
+
+  This requirement prevents subrepository commits from being
+  mistakenly garbage-collected, and ensures that anyone who pulls the
+  meta-repository has a consistent view of the sub-repositories despite
+  possible push failures.
+
+Git-meta provides a pre-receive hook which attempts to enforce these
+invariants.
 
 ### Vocabulary
 

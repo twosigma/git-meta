@@ -2,7 +2,7 @@
     "curly"    : true,
     "eqeqeq"   : true,
     "latedef"  : true,
-    "maxlen"   : 79,
+    "maxlen"   : 80,
     "multistr" : true,
     "newcap"   : true,
     "noarg"    : true,

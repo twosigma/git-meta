@@ -33,8 +33,9 @@
     "co": "",
     "colors": "",
     "fs-promise": "",
-    "nodegit": "^0.15.0",
-    "rimraf": ""
+    "nodegit": "^0.16.0",
+    "rimraf": "",
+    "split": ""
   },
   "devDependencies": {
     "deepcopy": "",
