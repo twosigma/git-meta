@@ -42,8 +42,9 @@
     "deeper": "",
     "istanbul": "",
     "mkdirp": "",
-    "mocha": "",
+    "mocha": "^3.1.2",
     "mocha-jshint": "",
+    "mocha-parallel-tests": "^1.2.3",
     "temp": ""
   }
 }

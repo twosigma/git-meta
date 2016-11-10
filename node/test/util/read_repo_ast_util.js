@@ -220,6 +220,30 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
+    it("with a ref", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        const headId = yield r.getHeadCommit();
+
+        yield NodeGit.Reference.create(r, "refs/foo/bar", headId.id(), 0, "");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const commit = headId.id().tostrS();
+
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": ""},
+            message: "first commit",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": commit },
+            refs: { "foo/bar": commit },
+            head: commit,
+            currentBranchName: "master",
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
     it("nested path", co.wrap(function *() {
         const r = yield TestUtil.createSimpleRepository();
         const firstCommit  = yield r.getHeadCommit();
