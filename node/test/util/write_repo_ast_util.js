@@ -125,6 +125,7 @@ describe("WriteRepoASTUtil", function () {
             "simple": "S",
             "new head": "S:C2-1;H=2",
             "simple with branch": "S:Bfoo=1",
+            "simple with ref": "S:Bfoo=1;Fa/b=1",
             "with another commit": "S:C2-1;Bmaster=2",
             "with commit chain": "S:C3-2;C2-1;Bmaster=3",
             "bare": "B",

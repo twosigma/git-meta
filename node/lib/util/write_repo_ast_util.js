@@ -293,6 +293,12 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         yield makeRef("refs/heads/" + branch, ast.branches[branch]);
     }
 
+    // Then create the refs
+
+    for (let ref in ast.refs) {
+        yield makeRef("refs/" + ref, ast.refs[ref]);
+    }
+
     // Handle remotes.
 
     for (let remoteName in ast.remotes) {
