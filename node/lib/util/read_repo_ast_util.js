@@ -60,6 +60,7 @@ exports.readRAST = co.wrap(function *(repo) {
     const branches = yield repo.getReferences(NodeGit.Reference.TYPE.LISTALL);
     let commits = {};
     let branchTargets = {};
+    let refTargets = {};
 
     // Load up the remotes.
 
@@ -179,8 +180,11 @@ exports.readRAST = co.wrap(function *(repo) {
         else if (branch.isBranch()) {
             branchTargets[branch.shorthand()] = id.tostrS();
         }
+        else if (!branch.isNote()) {
+            refTargets[branch.shorthand()] = id.tostrS();
+        }
         else {
-            return;                                                   // RETURN
+            return;                                           // RETURN
         }
         yield loadCommit(id);
     }));
@@ -370,6 +374,7 @@ exports.readRAST = co.wrap(function *(repo) {
     return new RepoAST({
         commits: commits,
         branches: branchTargets,
+        refs: refTargets,
         head: headCommitId,
         currentBranchName: branchName,
         remotes: remoteObjs,
