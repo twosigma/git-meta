@@ -164,6 +164,8 @@ describe("RepoAST", function () {
                     ecommits: ("commits" in expected) ? expected.commits: {},
                     ebranches:
                         ("branches" in expected) ? expected.branches : {},
+                    erefs:
+                        ("refs" in expected) ? expected.refs : {},
                     ehead   : ("head" in expected) ? expected.head : null,
                     ebranch : ("branch" in expected) ? expected.branch : null,
                     eremotes: ("remotes" in expected) ? expected.remotes : {},
@@ -196,6 +198,26 @@ describe("RepoAST", function () {
                     branches: {"master": "2"},
                     head: "1",
                 }, false),
+                "refCommit": m({
+                    commits: {"1":c1, "2": cWithPar},
+                    refs: {"foo/bar": "2"},
+                    currentBranchName: null,
+                }, {
+                    commits: {"1":c1, "2": cWithPar},
+                    refs: {"foo/bar": "2"},
+                }, false),
+                "refIsBranch": m({
+                    commits: {"1":c1, "2": cWithPar},
+                    refs: {"heads/bar": "2"},
+                    currentBranchName: null,
+                }, {
+                }, true),
+                "refIsRemote": m({
+                    commits: {"1":c1, "2": cWithPar},
+                    refs: {"remotes/bar": "2"},
+                    currentBranchName: null,
+                }, {
+                }, true),
                 "with submodule": m({
                     commits: {"1":cWithSubmodule, "2": cWithPar},
                     branches: {"master": "2"},
@@ -217,6 +239,7 @@ describe("RepoAST", function () {
                                undefined,
                                true),
                 "badBranch": m({ branches: { "master": "3"}}, undefined, true),
+                "badRef": m({ refs: { "a/b": "3"}}, undefined, true),
                 "badHead": m({ head: "3"}, undefined, true),
                 "branch": m({
                     commits: {"1": c1},
@@ -229,6 +252,20 @@ describe("RepoAST", function () {
                     head: "1",
                     branch: "master",
                 }, false),
+                "ref": m({
+                    commits: {"1": c1},
+                    refs: {"a/b": "1"},
+                }, {
+                    commits: {"1": c1},
+                    refs: {"a/b": "1"},
+                }, false),
+                "currentBranchIsRef": m({
+                    commits: {"1": c1},
+                    refs: {"a/b": "1"},
+                    head: "1",
+                    currentBranchName: "a/b",
+                }, {
+                }, true),
                 "badBranch with good commit": m({
                     commits: {"1": c1},
                     branches: {"aster": "1"},
@@ -391,6 +428,7 @@ describe("RepoAST", function () {
                     const obj = new RepoAST(c.input);
                     assert.deepEqual(obj.commits, c.ecommits);
                     assert.deepEqual(obj.branches, c.ebranches);
+                    assert.deepEqual(obj.refs, c.erefs);
                     assert.equal(obj.head, c.ehead);
                     assert.equal(obj.currentBranchName, c.ebranch);
                     assert.deepEqual(obj.index, c.eindex);
@@ -400,6 +438,7 @@ describe("RepoAST", function () {
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
                         assert.notEqual(obj.branches, c.input.branches);
+                        assert.notEqual(obj.refs, c.input.refs);
                         assert.notEqual(obj.remotes, c.input.remotes);
                         assert.notEqual(obj.workdir, c.input.workdir);
                         assert.notEqual(obj.openSubmodules,
@@ -536,6 +575,7 @@ describe("RepoAST", function () {
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": "1" },
+                refs: { "a/b": "1"},
                 head: "1",
                 currentBranchName: "master",
                 index: { foo: "bar" },
@@ -544,6 +584,7 @@ describe("RepoAST", function () {
             const newArgs = {
                 commits: { "2": new RepoAST.Commit()},
                 branches: { "foo": "2" },
+                refs: { "foo/bar": "2" },
                 head: "2",
                 currentBranchName: "foo",
                 remotes: { "foo": new RepoAST.Remote("meeeee") },
@@ -566,6 +607,7 @@ describe("RepoAST", function () {
                     const obj = base.copy(c.i);
                     assert.deepEqual(obj.commits, c.e.commits);
                     assert.deepEqual(obj.branches, c.e.branches);
+                    assert.deepEqual(obj.refs, c.e.refs);
                     assert.deepEqual(obj.remotes, c.e.remotes);
                     assert.equal(obj.head, c.e.head);
                     assert.equal(obj.currentBranchName, c.e.currentBranchName);

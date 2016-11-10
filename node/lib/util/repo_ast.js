@@ -224,13 +224,15 @@ class AST {
      * Create a new `AST` object.  The behavior is undefined unless
      * 
      * - each commit id referenced in each object in the specified `commits`,
-     *   each reference in the specified `branches`, and `head`, if specified,
-     *   exists in the `commits` map.
+     *   each reference in the specified `branches`, `refs`, and `head`, if
+     *   specified, exists in the `commits` map.
+     * - no names in `refs` indicate branches: local (starting with 'heads/' or
+     *   remote, (starting with 'remotes/')
      * - `currentBranchName`, if specified, exists in `branches`
      * - each commit in `commits` is *reachable* from at least one reference in
-     *   `branch`, by `head`, or by a remote branch that is, it is pointed to
-     *   by a reference or is a direct or indirect ancestor of a commit that
-     *   is.
+     *   `branch`, by `head`, by a reference in `refs`, or by a remote branch
+     *   that is, it is pointed to by a reference or is a direct or indirect
+     *   ancestor of a commit that is.
      * - every deletion described by a commit references a path that would have
      *   existed.
      * - each change introduced in a commit would actually alter the working
@@ -244,6 +246,8 @@ class AST {
      * @param {Object}      args
      * @param {Object}      [args.commits]
      * @param {Object}      [args.branches]
+     * @param {Object}      [args.refs]
+     * @param {Object}      [args.refs]
      * @param {String|null} [args.head]
      * @param {String|null} [args.currentBranchName]
      * @param {Object}      [args.remotes]
@@ -333,6 +337,21 @@ in commit ${id}.`);
             assert.isString(branch, name);
             checkAndTraverse(branch, `branch ${branch}`);
             this.d_branches[name] = branch;
+        }
+
+        // Validate and copy refs.
+
+        this.d_refs = {};
+        const refs = ("refs" in args) ? args.refs : {};
+        for (let name in refs) {
+            const ref = refs[name];
+            assert.isString(ref, name);
+            assert(!name.startsWith("heads/"),
+                   `ref ${name} indicates a branch`);
+            assert(!name.startsWith("remotes/"),
+                   `ref ${name} indicates a remote branch`);
+            checkAndTraverse(ref, `ref ${ref}`);
+            this.d_refs[name] = ref;
         }
 
         // Validate and copy head.
@@ -482,6 +501,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {Object} refs  map from ref name to expected commit id
+     */
+    get refs() {
+        return deepCopy(this.d_refs);
+    }
+
+    /**
      * @property {String|null} head the current HEAD commit.  A repo is bare
      * iff `null === head`.
      */
@@ -576,6 +602,7 @@ in commit ${id}.`);
      * @param {Object}      args
      * @param {Object}      [args.commits]
      * @param {Object}      [args.branches]
+     * @param {Object}      [args.refs]
      * @param {Object}      [args.notes]
      * @param {String|null} [args.head]
      * @param {String|null} [args.currentBranchName]
@@ -588,6 +615,7 @@ in commit ${id}.`);
         return new AST({
             commits: ("commits" in args) ? args.commits : this.d_commits,
             branches: ("branches" in args) ? args.branches : this.d_branches,
+            refs: ("refs" in args) ? args.refs : this.d_refs,
             head: ("head" in args) ? args.head: this.d_head,
             currentBranchName: ("currentBranchName" in args) ?
                 args.currentBranchName :
