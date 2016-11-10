@@ -229,10 +229,12 @@ class AST {
      * - no names in `refs` indicate branches: local (starting with 'heads/' or
      *   remote, (starting with 'remotes/')
      * - `currentBranchName`, if specified, exists in `branches`
-     * - each commit in `commits` is *reachable* from at least one reference in
-     *   `branch`, by `head`, by a reference in `refs`, or by a remote branch
-     *   that is, it is pointed to by a reference or is a direct or indirect
-     *   ancestor of a commit that is.
+     * - each commit in `commits` is *reachable* from at least one of a:
+     *   - branch
+     *   - reference
+     *   - remote branch
+     *   - HEAD
+     *   - another reachable commit
      * - every deletion described by a commit references a path that would have
      *   existed.
      * - each change introduced in a commit would actually alter the working
@@ -246,7 +248,6 @@ class AST {
      * @param {Object}      args
      * @param {Object}      [args.commits]
      * @param {Object}      [args.branches]
-     * @param {Object}      [args.refs]
      * @param {Object}      [args.refs]
      * @param {String|null} [args.head]
      * @param {String|null} [args.currentBranchName]
@@ -350,7 +351,7 @@ in commit ${id}.`);
                    `ref ${name} indicates a branch`);
             assert(!name.startsWith("remotes/"),
                    `ref ${name} indicates a remote branch`);
-            checkAndTraverse(ref, `ref ${ref}`);
+            checkAndTraverse(ref, `ref ${name}`);
             this.d_refs[name] = ref;
         }
 

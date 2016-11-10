@@ -61,7 +61,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * nothing        =
  * commit         = <alphanumeric>+
  * branch         = 'B'<name>'='<commit>|<nothing>     nothing deletes branch
- * ref            = 'F'<name>'='<commit>|<nothing>     nothing deletes branch
+ * ref            = 'F'<name>'='<commit>|<nothing>     nothing deletes ref
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
  *                  [' '<change>(','<change>*)]
@@ -298,7 +298,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         }
     });
 
-    // Copy in ref  overrides, deleting where `null` was specified.
+    // Copy in ref overrides, deleting where `null` was specified.
 
     Object.keys(rawRepo.refs).forEach(name => {
         const override = rawRepo.refs[name];
@@ -472,7 +472,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
 
     /**
      * Return a parser for the specified type of `reference`; copy the results
-     * into the specifeid `dest` object.
+     * into the specified `dest` object.
      *
      * @param {Object} dest
      * @param {String} type
