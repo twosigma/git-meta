@@ -45,6 +45,7 @@ describe("ShorthandParserUtil", function () {
                 type: args.type || "S",
                 commits: {},
                 branches: {},
+                refs: {},
                 remotes: {},
                 index: {},
                 notes: {},
@@ -65,6 +66,7 @@ describe("ShorthandParserUtil", function () {
             "just type": { i: "S", e: m({ type: "S"})},
             "just another type": { i: "B", e: m({ type: "B"})},
             "branch": { i: "S:Bm=2", e: m({ branches: { m: "2"}})},
+            "ref": { i: "S:Ffoo/bar=2", e: m({ refs: { "foo/bar": "2"}})},
             "null branch": { i: "S:Bm=", e: m({ branches: { m: null}})},
             "commit": { i: "S:C1-2", e: m({
                 commits: {
