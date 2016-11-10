@@ -269,6 +269,43 @@ describe("RepoASTTestUtil", function () {
                 e: "x=E:Bfoo=1",
                 userError: true,
             },
+            "simple transform": {
+                i: "x=S:Bfoo=1",
+                m: noOp,
+                e: "x=S",
+                options: {
+                    expectedTransformer: (expected) => {
+                        const x = expected.x;
+                        let branches = x.branches;
+                        branches.foo = "1";
+                        return {
+                            x: x.copy({ branches: branches}),
+                        };
+                    },
+                },
+            },
+            "commit id in branch": {
+                i: "x=S",
+                m: co.wrap(function *(repos) {
+                    const x = repos.x;
+                    const head = yield x.getHeadCommit();
+                    const headStr = head.id().tostrS();
+                    const sig = x.defaultSignature();
+                    yield repos.x.createBranch(`foo-${headStr}`, head, 0, sig);
+                }),
+                e: "x=S",
+                options: {
+                    expectedTransformer: (expected, mappings) => {
+                        const x = expected.x;
+                        let branches = x.branches;
+                        const commitId = mappings.reverseMap["1"];
+                        branches[`foo-${commitId}`] = "1";
+                        return {
+                            x: x.copy({ branches: branches}),
+                        };
+                    },
+                },
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -278,7 +315,8 @@ describe("RepoASTTestUtil", function () {
                                                                   c.i,
                                                                   c.e,
                                                                   c.m,
-                                                                  c.userError);
+                                                                  c.userError,
+                                                                  c.options);
                     assert(!c.fails);
                 }
                 catch (e) {
