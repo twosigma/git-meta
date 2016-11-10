@@ -152,6 +152,7 @@ describe("RepoAstUtil", function () {
                 actual: new AST({
                     commits: { "1": aCommit},
                     branches: { master: "1" },
+                    refs: { "a/b": "1" },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -162,6 +163,7 @@ describe("RepoAstUtil", function () {
                 expected: new AST({
                     commits: { "1": aCommit},
                     branches: { master: "1" },
+                    refs: { "a/b": "1" },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -209,6 +211,31 @@ describe("RepoAstUtil", function () {
                 expected: new AST({
                     commits: { "1": aCommit},
                     branches: { master: "1", foo: "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                fails: true,
+            },
+            "missing ref": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    refs: { "a/b": "1" },
+                    head: "1",
+                    currentBranchName: "master",
+                    remotes: { origin: aRemote },
+                    index: { y: aSubmodule },
+                    workdir: { foo: "bar" },
+                    openSubmodules: { y: anAST },
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    branches: { master: "1" },
+                    refs: { "a/b": "1", "e/d": "1" },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -462,6 +489,17 @@ describe("RepoAstUtil", function () {
                 e: new RepoAST({
                     commits: { "2": c1 },
                     branches: { "aaa": "2"},
+                }),
+            },
+            "refs": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    refs: { "aaa": "1"},
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    refs: { "aaa": "2"},
                 }),
             },
             "current branch": {
@@ -747,6 +785,25 @@ describe("RepoAstUtil", function () {
                 original: new AST({
                     commits: { "1": c1, "2": c2 },
                     branches: { x: "1", y: "2" },
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1, "2": c2 },
+                    remotes: {
+                        origin: new Remote("foo", {
+                            branches: {
+                                x: "1",
+                                y: "2",
+                            },
+                        }),
+                    },
+                }),
+            },
+            "with refs": {
+                original: new AST({
+                    commits: { "1": c1, "2": c2 },
+                    branches: { x: "1", y: "2" },
+                    refs: { q: "1", r: "2" },
                 }),
                 url: "foo",
                 expected: new AST({
