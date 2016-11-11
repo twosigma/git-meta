@@ -1196,7 +1196,7 @@ describe("readRAST", function () {
         const head = yield r.getHeadCommit();
         const headId = head.id();
 
-        const sig = NodeGit.Signature.default(r);
+        const sig = r.defaultSignature();
 
         yield NodeGit.Note.create(r, "refs/notes/test",
                                   sig, sig, headId, "note", 0);
