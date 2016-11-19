@@ -39,15 +39,31 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const SubmoduleUtil = require("./submodule_util");
-const GitUtil       = require("./git_util");
-const UserError     = require("./user_error");
+const GitUtil             = require("./git_util");
+const SubmoduleUtil       = require("./submodule_util");
+const SyntheticBranchUtil = require("./synthetic_branch_util");
+const UserError           = require("./user_error");
 
 /**
- * Push the specified `source` branch to the specified `target` branch in the
- * specified `remoteName` in all open submodules and the meta-repository.  Do
- * not push the meta-repository until submodules are pushed.  Throw a
- * `UserError` if any pushes fail.
+ * For each open submodule that exists in the commit indicated by the specified
+ * `source`, push a synthetic-meta-ref for the `source` commit.
+ * If all sub-repo pushes succeed, push `source` to
+ * to the specified `target` branch in `remoteName`.  If any pushes fail, throw
+ * a `UserError` object.
+ *
+ * Note that this strategy is naive: it does not handle the following
+ * situations:
+ *
+ * - closed submodules with commits that need to be pushed
+ * - submodules that do not exist in the `source` commit, but did previously
+ *   and need synthetic-meta-refs
+ * - submodules with divergent histories, i.e., the commit we create the
+ *   synthetic-meta-ref for doesn't contain one or more commits that need to be
+ *   pushed in its history
+ *
+ * Addressing these situations would have a performance impact, requiring
+ * calculation and traversal of all meta-repo commits being pushed.  We should
+ * probably add a way to do an "exhaustive" push.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -65,14 +81,26 @@ exports.push = co.wrap(function *(repo, remoteName, source, target) {
 
     let errorMessage = "";
     const subRepos = yield SubmoduleUtil.getSubmoduleRepos(repo);
+    const shas = yield SubmoduleUtil.getSubmoduleShasForBranch(repo, source);
     yield subRepos.map(co.wrap(function *(sub) {
         const subName = sub.name;
+
+        // If no commit for a submodule on this branch, skip it.
+        if (!(subName in shas)) {
+            return;                                                   // RETURN
+        }
+
+        // Push to a synthetic branch; first, calculate name.
+
+        const sha = shas[subName];
+        const syntheticName =
+                          SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
         const subRepo = sub.repo;
 
         const pushResult = yield GitUtil.push(subRepo,
                                               remoteName,
-                                              source,
-                                              target);
+                                              sha,
+                                              syntheticName);
         if (null !== pushResult) {
             errorMessage +=
            `Failed to push submodule ${colors.yellow(subName)}: ${pushResult}`;

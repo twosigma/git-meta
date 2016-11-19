@@ -33,7 +33,162 @@
 const co     = require("co");
 
 const Push            = require("../../lib/util/push");
+const RepoAST         = require("../../lib/util/repo_ast");
+const RepoASTUtil     = require("../../lib/util/repo_ast_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+
+/**
+ * Return a map from name to RepoAST that is the same as the one in the
+ * specified `expected`, but having transformed the name of each reference from
+ * the form of `ref/commit/<logical commit id>` to
+ * `ref/commit/<physical commit id>`, where <logical commit id> is the id of
+ * the commit the ref points to.  The specified `mapping` argument contains a
+ * `reverseMap` object that maps from logical to physical commit id.
+ *
+ * @param {Object} expected
+ * @param {Object} mapping (as in RepoASTTestUtil)
+ * @return  {Object}
+ */
+function refMapper(expected, mapping) {
+    const syntheticMetaRefRE = /(commits\/)(.*)/;
+    const reverseMap = mapping.reverseMap;
+
+    function mapASTRefs(ast) {
+        let newRefs = {};
+        const oldRefs = ast.refs;
+        Object.keys(oldRefs).forEach(ref => {
+            const logicalId = oldRefs[ref];
+            const physicalId = reverseMap[logicalId];
+            const newRefName = ref.replace(syntheticMetaRefRE,
+                                           `$1${physicalId}`);
+            newRefs[newRefName] = logicalId;
+        });
+        return newRefs;
+    }
+
+    let result = {};
+    Object.keys(expected).forEach(key => {
+        const ast = expected[key];
+        const newRefs = mapASTRefs(ast);
+        const newSubs = refMapper(ast.openSubmodules, mapping);
+        result[key] = ast.copy({
+            openSubmodules: newSubs,
+            refs: newRefs,
+        });
+    });
+    return result;
+}
+
+describe("refMapper", function () {
+    // Test the `refMapper` function used in this test driver.
+
+    const Commit    = RepoAST.Commit;
+    const Submodule = RepoAST.Submodule;
+    const cases = {
+        "trivial": {
+            input: {
+            },
+            expected: {
+            },
+        },
+        "simple": {
+            input: {
+                x: new RepoAST(),
+            },
+            expected: {
+                x: new RepoAST(),
+            },
+        },
+        "no transform": {
+            input: {
+                x: new RepoAST({
+                    commits: { "1": new Commit() },
+                    refs: {
+                        "foo/bar": "1",
+                    },
+                }),
+            },
+            expected: {
+                x: new RepoAST({
+                    commits: { "1": new Commit() },
+                    refs: {
+                        "foo/bar": "1",
+                    },
+                }),
+            },
+        },
+        "transform": {
+            input: {
+                x: new RepoAST({
+                    commits: { "1": new Commit() },
+                    refs: {
+                        "commits/1": "1",
+                    },
+                }),
+            },
+            expected: {
+                x: new RepoAST({
+                    commits: { "1": new Commit() },
+                    refs: {
+                        "commits/ffff": "1",
+                    },
+                }),
+            },
+            reverseMap: {
+                "1": "ffff",
+            },
+        },
+        "transform in sub": {
+            input: {
+                x: new RepoAST({
+                    commits: { "2": new Commit() },
+                    head: "2",
+                    index: {
+                        q: new Submodule("a","a"),
+                    },
+                    openSubmodules: {
+                        q: new RepoAST({
+                            commits: { "1": new Commit() },
+                            refs: {
+                                "commits/1": "1",
+                            },
+                        })
+                    },
+                }),
+            },
+            expected: {
+                x: new RepoAST({
+                    commits: { "2": new Commit() },
+                    head: "2",
+                    index: {
+                        q: new Submodule("a","a"),
+                    },
+                    openSubmodules: {
+                        q: new RepoAST({
+                            commits: { "1": new Commit() },
+                            refs: {
+                                "commits/ffff": "1",
+                            },
+                        })
+                    },
+                }),
+            },
+            reverseMap: {
+                "1": "ffff",
+            },
+        },
+    };
+
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, () => {
+            const result = refMapper(c.input, {
+                reverseMap: c.reverseMap || {},
+            });
+            RepoASTUtil.assertEqualRepoMaps(result, c.expected);
+        });
+    });
+});
 
 describe("push", function () {
 
@@ -72,19 +227,22 @@ describe("push", function () {
             initial: "a=B|b=B|x=Ca:I b=Sb:1;Ob Bmaster=1",
             manipulator: pusher("x", "origin", "master", "master"),
         },
-        "open submodule make a branch": {
-            initial: "a=B|b=B|x=Ca:I b=Sb:1;Ob Bmaster=1",
+        "open submodule make an unneeded ref": {
+            initial: "a=B|b=B|x=Ca:C2-1 b=Sb:1;Bmaster=2;Ob",
             manipulator: pusher("x", "origin", "master", "foo"),
             expected: "\
-a=E:Bfoo=1|\
-b=E:Bfoo=1|\
-x=E:Rorigin=a master=1,foo=1;Ob Bmaster=1!Rorigin=b master=1,foo=1",
+a=E:Bfoo=2|\
+b=E:Fcommits/1=1|\
+x=E:Rorigin=a master=1,foo=2;Ob",
         },
-        "open submodule fails, no meta update": {
-            initial: "a=B|b=B|x=Ca:I b=Sb:1;Ob",
+        "open submodule push new ref": {
+            initial: "a=B|b=B|x=Ca:C2-1 b=Sb:3;Bmaster=2;Ob C3-1",
             manipulator: pusher("x", "origin", "master", "foo"),
-            fails: true,
-        }
+            expected: "\
+a=E:Bfoo=2|\
+b=E:Fcommits/3=3|\
+x=E:Rorigin=a master=1,foo=2;Ob",
+        },
     };
 
     Object.keys(cases).forEach(caseName => {
@@ -93,7 +251,9 @@ x=E:Rorigin=a master=1,foo=1;Ob Bmaster=1!Rorigin=b master=1,foo=1",
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                            c.expected,
                                                            c.manipulator,
-                                                           c.fails);
+                                                           c.fails, {
+                expectedTransformer: refMapper,
+            });
         }));
     });
 });

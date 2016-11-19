@@ -96,6 +96,7 @@ exports.createBranchFromHead = co.wrap(function *(repo, branchName) {
  * @async
  * @param {NodeGit.Repository} repo
  * @param {String} branchName
+ * @return {NodeGit.Reference|null}
  */
 exports.findBranch = co.wrap(function *(repo, branchName) {
     assert.instanceOf(repo, NodeGit.Repository);
