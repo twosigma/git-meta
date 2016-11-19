@@ -415,6 +415,52 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("fetchSha", function () {
+        it("already have it, would fail otherwise", co.wrap(function *() {
+            const ast = ShorthandParserUtil.parseRepoShorthand("S");
+            const path = yield TestUtil.makeTempDir();
+            const written = yield WriteRepoASTUtil.writeRAST(ast, path);
+            const commit = written.oldCommitMap["1"];
+            const repo = written.repo;
+            yield GitUtil.fetchSha(repo, commit);
+        }));
+
+        it("fetch one", co.wrap(function *() {
+            const xPath= yield TestUtil.makeTempDir();
+            const yPath= yield TestUtil.makeTempDir();
+            const astX =
+                ShorthandParserUtil.parseRepoShorthand("S:C2-1;Bmaster=2");
+            const astY = ShorthandParserUtil.parseRepoShorthand("S");
+            const writtenX = yield WriteRepoASTUtil.writeRAST(astX, xPath);
+            const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
+            const commit = writtenX.oldCommitMap["2"];
+            const repo = writtenY.repo;
+            yield NodeGit.Remote.create(repo, "origin", xPath);
+            yield GitUtil.fetchSha(repo, commit);
+            yield repo.getCommit(commit);
+        }));
+
+        it("bad sha", co.wrap(function *() {
+            const xPath= yield TestUtil.makeTempDir();
+            const yPath= yield TestUtil.makeTempDir();
+            const astX =
+                ShorthandParserUtil.parseRepoShorthand("S:C2-1;Bmaster=2");
+            const astY = ShorthandParserUtil.parseRepoShorthand("S");
+            yield WriteRepoASTUtil.writeRAST(astX, xPath);
+            const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
+            const repo = writtenY.repo;
+            yield NodeGit.Remote.create(repo, "origin", xPath);
+            const bad = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            try {
+                yield GitUtil.fetchSha(repo, bad);
+                assert(false, "Bad sha, should have failed");
+            }
+            catch (e) {
+                assert.instanceOf(e, UserError);
+            }
+        }));
+    });
+
     describe("listUnpushedCommits", function () {
         const cases = {
             "no branches": {

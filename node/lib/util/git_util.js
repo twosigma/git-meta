@@ -307,6 +307,48 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 });
 
 /**
+ * Fetch the specified `sha` from the "origin" repository of the specifieded
+ * `repo`.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String} sha
+ */
+exports.fetchSha  = co.wrap(function *(repo, sha) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(sha);
+
+    // First, try to get the commit.  If we succeed, no need to fetch.
+
+    try {
+        yield repo.getCommit(sha);
+        return;                                                       // RETURN
+    }
+    catch (e) {
+    }
+
+    let origin;
+    try {
+        origin = yield repo.getRemote("origin");
+    }
+    catch (e) {
+        throw new UserError(`No origin at ${repo.workdir()}.`);
+    }
+
+    const execString = `\
+git -C ${repo.workdir()} fetch-pack -q '${origin.url()}' ${sha}
+`;
+    try {
+        return yield exec(execString);
+    }
+    catch (e) {
+        throw new UserError(e.message);
+    }
+});
+
+
+
+/**
  * Return a list the shas of commits in the history of the specified `commit`
  * not present in the history of the specified `remote` in the specified
  * `repo`.  Note that this command does not do a *fetch*; the check is made
