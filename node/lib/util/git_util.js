@@ -200,9 +200,7 @@ exports.push = co.wrap(function *(repo, remote, source, target) {
     assert.isString(target);
 
     const execString = `\
-cd ${repo.workdir()}
-git push ${remote} ${source}:${target}
-`;
+git -C '${repo.workdir()}' push ${remote} ${source}:${target}`;
     try {
         yield exec(execString);
         return null;
@@ -299,10 +297,7 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(remoteName);
 
-    const execString = `\
-cd '${repo.workdir()}'
-git fetch -q '${remoteName}'
-`;
+    const execString = `git -C '${repo.workdir()}' fetch -q '${remoteName}'`;
     try {
         return yield exec(execString);
     }
