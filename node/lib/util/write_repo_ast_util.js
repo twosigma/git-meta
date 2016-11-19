@@ -591,6 +591,14 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 
         let index = null;
 
+        // If the base repo has a remote, read its url.
+
+        const remotes = ast.remotes;
+        let originUrl = null;
+        if ("origin" in remotes) {
+            originUrl = remotes.origin.url;
+        }
+
         // Render open submodules.
 
         for (let subName in ast.openSubmodules) {
@@ -603,6 +611,7 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
             const openSubAST = ast.openSubmodules[subName];
 
             const subRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
+                                                                originUrl,
                                                                 repo.workdir(),
                                                                 subName,
                                                                 sub.url);

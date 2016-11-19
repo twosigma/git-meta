@@ -83,7 +83,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Status     = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
-    yield Status.ensureCleanAndConsistent(repo);
+    const status = yield Status.getRepoStatus(repo);
+    Status.ensureCleanAndConsistent(status);
 
     for (let i = 0; i < args.commits.length; ++i) {
         let commitish = args.commits[i];

@@ -128,6 +128,27 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
 });
 
 /**
+ * Return the URL for the remote named "origin" in the specified `repo`, or
+ * null if there is no remote named "origin".
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @return {String|null}
+ */
+exports.getOriginUrl = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    let remote;
+    try {
+        remote = yield repo.getRemote("origin");
+    }
+    catch (e) {
+        return null;
+    }
+    return remote.url();
+});
+
+/**
  * Return the remote branch having the specified local `branchName` in the
  * remote having the specified `remoteName` in the specified `repo`, or null if
  * no such branch exists.  The behavior is undefined unless 'remoteName' refers
@@ -464,4 +485,20 @@ exports.isUpToDate = co.wrap(function *(repo, source, target) {
         return true;                                                  // RETURN
     }
     return yield NodeGit.Graph.descendantOf(repo, source, target);
+});
+
+/**
+ * Set the HEAD of the specified `repo` to the specified `commit` and force the
+ * contents to match it.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ */
+exports.setHeadHard = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    repo.setHeadDetached(commit);
+    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.HARD);
 });

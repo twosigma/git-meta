@@ -36,7 +36,7 @@
 
 const co            = require("co");
 const NodeGit       = require("nodegit");
-const SubmoduleUtil = require("./submodule_util");
+const GitUtil       = require("./git_util");
 const UserError     = require("./user_error");
 
 /**
@@ -64,46 +64,21 @@ exports.include = co.wrap(function* (repo, url, path) {
 
     const submoduleRepo = yield submodule.open();
 
-    const originName = yield SubmoduleUtil.fetchSubmodule(repo, submoduleRepo);
-
     // Next, we have to explicitly connect to the origin.  I'm not exactly sure
     // what this does, except that subsequent commands will complain about
     // having never been connected to the origin otherwise.
 
-    const origin = yield submoduleRepo.getRemote(originName);
-
-    yield origin.connect(NodeGit.Enums.DIRECTION.FETCH,
-                         new NodeGit.RemoteCallbacks(),
-                         function () {});
+    yield GitUtil.fetch(submoduleRepo, "origin");
 
     // Then, we need to figure out what the commit that the remote master is
     // pointing to.
 
     const remoteBranch = yield submoduleRepo.getBranch("origin/master");
-    const branchCommit = yield submoduleRepo.getBranchCommit(remoteBranch);
+    const commit = yield submoduleRepo.getBranchCommit(remoteBranch);
 
-    // And we need to identify the branch name used by the parent repository.
-    // We'll use this name as the branch to configure the new submodule with.
+    // Set up HEAD and checkout.
 
-    const activeBranch = yield repo.getCurrentBranch();
-    const branchName = activeBranch.shorthand();
-
-    // Finally, we can create the branch.
-
-    const branch = yield submoduleRepo.createBranch(
-                                                   branchName,
-                                                   branchCommit,
-                                                   0,
-                                                   repo.defaultSignature(),
-                                                   "git-meta branch");
-
-    // And check it out.
-
-    yield submoduleRepo.checkoutBranch(branch);
-
-
-    // It looks like you're supposed to call 'addFinalize' to finish setting up
-    // a submodule, but I'm not sure what it does.
+    yield GitUtil.setHeadHard(submoduleRepo, commit);
 
     yield submodule.addFinalize();
 });

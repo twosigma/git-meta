@@ -33,83 +33,54 @@
  * This module contains methods for opening repositories.
  */
 const assert  = require("chai").assert;
-const NodeGit = require("nodegit");
 const co      = require("co");
 
+const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
-const SubmoduleUtil       = require("./submodule_util");
 
 /**
  * Open the submodule having the specified `submoduleName` in the specified
- * `repo`; configure it to be checked out on the specified `branchName` on the
- * specified `commitSha`.
+ * `repo`; fetch the specified `commitSha` and set HEAD to point to it.
+ * Configure the "origin" remote to the specified `url`, using the specified
+ * `baseUrl` to resolve against `url` if it is relative.
  *
  * @async
- * @param {NodeGit.Repository} repo
- * @param {String}             submoduleName
- * @param {String}             url
- * @param {String}             branchName
- * @param {String}             commitSha
+ * @param {String|null} repoOriginUrl
+ * @param {String}      repoPath
+ * @param {String}      submoduleName
+ * @param {String}      url
+ * @param {String}      commitSha
  * @return {NodeGit.Repository}
  */
-exports.openBranchOnCommit = co.wrap(function *(repo,
-                                                submoduleName,
-                                                url,
-                                                branchName,
-                                                commitSha) {
-    assert.instanceOf(repo, NodeGit.Repository);
+exports.openOnCommit = co.wrap(function *(repoOriginUrl,
+                                          repoPath,
+                                          submoduleName,
+                                          url,
+                                          commitSha) {
+    if (null !== repoOriginUrl) {
+        assert.isString(repoOriginUrl);
+    }
+    assert.isString(repoPath);
     assert.isString(submoduleName);
     assert.isString(url);
-    assert.isString(branchName);
     assert.isString(commitSha);
 
+    // Set up the submodule.
+
     const submoduleRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
-                                                                repo.workdir(),
+                                                                repoOriginUrl,
+                                                                repoPath,
                                                                 submoduleName,
                                                                 url);
 
-    yield SubmoduleUtil.fetchSubmodule(repo, submoduleRepo);
+    // Fetch the needed sha.
 
-    const branch = yield submoduleRepo.createBranch(branchName,
-                                                    commitSha,
-                                                    0,
-                                                    repo.defaultSignature(),
-                                                    "git-meta branch");
+    yield GitUtil.fetchSha(submoduleRepo, commitSha);
 
-    // And check it out.
+    // Check out HEAD
 
-    yield submoduleRepo.checkoutBranch(branch);
+    const commit = yield submoduleRepo.getCommit(commitSha);
+    yield GitUtil.setHeadHard(submoduleRepo, commit);
+
     return submoduleRepo;
-});
-
-/**
- * Open the submodule having the specified `submoduleName` in the specified
- * `repo`.  Return an object containing the submodule and its repository.
- *
- * @async
- * @param {NodeGit.Repository} repo
- * @param {String}             submoduleName
- * @param {String}             url
- * @return {NodeGit.Repository}
- */
-exports.open = co.wrap(function *(repo, submoduleName, url) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(submoduleName);
-    assert.isString(url);
-
-    const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(repo,
-                                                             [submoduleName]);
-    const sha = shas[0];
-
-    // Identify the branch name used by the parent repository.  We'll use this
-    // name as the branch to configure the new submodule with.
-
-    const activeBranch = yield repo.getCurrentBranch();
-    const branchName = activeBranch.shorthand();
-
-    return yield exports.openBranchOnCommit(repo,
-                                            submoduleName,
-                                            url,
-                                            branchName,
-                                            sha);
 });

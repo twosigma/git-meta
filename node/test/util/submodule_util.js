@@ -238,8 +238,9 @@ describe("SubmoduleUtil", function () {
             it(caseName, co.wrap(function *() {
                 const written = yield RepoASTTestUtil.createRepo(c.state);
                 const repo = written.repo;
+                const index = yield repo.index();
                 const result = yield SubmoduleUtil.getCurrentSubmoduleShas(
-                                                                      repo,
+                                                                      index,
                                                                       c.names);
                 const mappedResult = result.map(id => written.commitMap[id]);
                 assert.deepEqual(mappedResult, c.expected);
@@ -349,41 +350,6 @@ describe("SubmoduleUtil", function () {
             assert.equal(x.name, "x");
             assert.instanceOf(x.repo, NodeGit.Repository);
         }));
-    });
-
-    describe("fetchSubmodule", function () {
-        // This method should probably go away, but I'll do a quick test for it
-        // anyway.  It defers to `GitUtil.fetch`, so we'll just do basic
-        // testing.
-        // We'll always do the operation on repo 'x', subrepo 'a'.
-
-        const fetcher = co.wrap(function *(repos) {
-            const repo = repos.x;
-            const subRepo = yield SubmoduleUtil.getRepo(repo, "a");
-            const result = yield SubmoduleUtil.fetchSubmodule(repo, subRepo);
-            assert.equal(result, "origin");
-        });
-
-        const cases = {
-            "nothing fetched": {
-                state: "a=S|x=S:C2-1 a=Sa:1;Oa;H=2",
-                expected: "a=S|x=S:C2-1 a=Sa:1;Oa;H=2",
-            },
-            "fetched a branch": {
-                state: "a=S:Bfoo=1|x=S:C2-1 a=Sa:1;Oa;H=2",
-                expected:
-                  "a=S:Bfoo=1|x=S:C2-1 a=Sa:1;Oa Rorigin=a master=1,foo=1;H=2",
-            },
-        };
-
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
-                                                               c.expected,
-                                                               fetcher);
-            }));
-        });
     });
 
     describe("getSubmoduleChanges", function () {

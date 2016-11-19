@@ -143,14 +143,14 @@ describe("merge", function () {
         "ff merge with submodule change": {
             initial: "a=S:C4-1;Bfoo=4|x=U:C5-2 s=Sa:4;Bfoo=5",
             fromCommit: "5",
-            expected: "x=E:Bmaster=5;Os Bmaster=4!*=master",
+            expected: "x=E:Bmaster=5;Os H=4",
         },
         "fforwardable but disallowed with submodule change": {
             initial: "a=S:C4-1;Bfoo=4|x=U:C5-2 s=Sa:4;Bfoo=5",
             fromCommit: "5",
             mode: MODE.FORCE_COMMIT,
             expected:
-                "x=E:Bmaster=x;Cx-2,5 s=Sa:s;Os Cs-1,4 4=4!Bmaster=s!*=master",
+                "x=E:Bmaster=x;Cx-2,5 s=Sa:s;Os Cs-1,4 4=4!H=s",
         },
         "fforwardable merge with non-ffwd submodule change": {
             initial: "\
@@ -158,7 +158,7 @@ a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|\
 x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4",
             fromCommit: "4",
             expected:
-                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!Bmaster=s!*=master;Bmaster=x",
+                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
         },
         "fforwardable merge with non-ffwd submodule change, ff requested": {
             initial: "\
@@ -166,7 +166,7 @@ a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|\
 x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4",
             fromCommit: "4",
             mode: MODE.FF_ONLY,
-            expected: "x=E:Os Bmaster=b!*=master",
+            expected: "x=E:Os H=b",
             fails: true,
         },
         "non-ffmerge with non-ffwd submodule change": {
@@ -175,22 +175,22 @@ a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|\
 x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4",
             fromCommit: "4",
             expected:
-                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!Bmaster=s!*=master;Bmaster=x",
+                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
         },
         "non-ffmerge with non-ffwd submodule change, sub open": {
             initial: "\
 a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|\
-x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os Bmaster=b!*=master",
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os",
             fromCommit: "4",
             expected:
-                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!Bmaster=s!*=master;Bmaster=x",
+                "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
         },
         "submodule commit is up-to-date": {
             initial: "\
 a=Aa:Cb-a;Cc-b;Bfoo=b;Bbar=c|\
 x=U:C3-2 s=Sa:c;C4-2 s=Sa:b,x=y;Bmaster=3;Bfoo=4",
             fromCommit: "4",
-            expected: "x=E:Cx-3,4 x=y;Os Bmaster=c!*=master;Bmaster=x",
+            expected: "x=E:Cx-3,4 x=y;Os H=c;Bmaster=x",
         },
         "submodule commit is same": {
             initial: "\
@@ -206,8 +206,8 @@ x=U:C3-2 s=Sa:b,t=Sa:c;C4-3 s=Sa:c,t=Sa:d;Bmaster=3;Bfoo=4",
             fromCommit: "4",
             expected: "\
 x=E:Cx-3,4 s=Sa:s,t=Sa:d;Bmaster=x;\
-Os Cs-b,c c=c!Bmaster=s!*=master;\
-Ot Bmaster=d!*=master",
+Os Cs-b,c c=c!H=s;\
+Ot H=d",
         },
     };
     Object.keys(cases).forEach(caseName => {

@@ -586,8 +586,11 @@ describe("ShorthandParserUtil", function () {
     describe("parseMultiRepoShorthand", function () {
         const AST = RepoAST;
         const Commit = AST.Commit;
+        const Remote = AST.Remote;
         const Submodule = AST.Submodule;
+        const B = ShorthandParserUtil.RepoType.B;
         const S = ShorthandParserUtil.RepoType.S;
+        const U = ShorthandParserUtil.RepoType.U;
         const cases = {
             "simple": { i: "a=S", e: { a: "S"} },
             "multiple": {
@@ -665,6 +668,7 @@ describe("ShorthandParserUtil", function () {
                             foo: RepoASTUtil.cloneRepo(S, "a").copy({
                                 branches: {},
                                 currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
                             })
                         }
                     }),
@@ -680,6 +684,7 @@ describe("ShorthandParserUtil", function () {
                             foo: RepoASTUtil.cloneRepo(S, "a").copy({
                                 branches: { m: "1" },
                                 currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
                             })
                         }
                     }),
@@ -708,6 +713,7 @@ describe("ShorthandParserUtil", function () {
                                 },
                                 branches: { m: "1", aa: "2" },
                                 currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
                             })
                         }
                     }),
@@ -725,6 +731,7 @@ describe("ShorthandParserUtil", function () {
                                 index: { x: "y"},
                                 workdir: { u: "2" },
                                 currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
                             })
                         }
                     }),
@@ -785,7 +792,7 @@ describe("ShorthandParserUtil", function () {
                         },
                         openSubmodules: {
                             s: ShorthandParserUtil.parseRepoShorthand(
-                                "S:C3-1;H=3;Bmaster=;Rorigin=a master=1"),
+                                "S:C3-1;H=3;Bmaster=;Rorigin=a"),
                         },
                     }),
                 },
@@ -816,6 +823,7 @@ describe("ShorthandParserUtil", function () {
                                 },
                                 branches: { x: "2" },
                                 currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
                             })
                         }
                     }),
@@ -861,6 +869,40 @@ describe("ShorthandParserUtil", function () {
                         branches: { master: "2" },
                         head: "2",
                         currentBranchName: "master",
+                    }),
+                },
+            },
+            "missing commits in open sub": {
+                i: "a=B:C8-1;Bmaster=8|b=U:Os",
+                e: {
+                    a: B.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message",
+                            }),
+                        },
+                        branches: {
+                            master: "8",
+                        },
+                        currentBranchName: "master",
+                    }),
+                    b: U.copy({
+                        openSubmodules: {
+                            s: RepoASTUtil.cloneRepo(S, "a").copy({
+                                branches: {},
+                                head: "1",
+                                currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
+                            })
+                        },
                     }),
                 },
             },

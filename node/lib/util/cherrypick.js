@@ -35,6 +35,7 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
+const GitUtil       = require("../util/git_util");
 const Open          = require("../util/open");
 const RepoStatus    = require("../util/repo_status");
 const SubmoduleUtil = require("../util/submodule_util");
@@ -87,8 +88,10 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     const repoStat = yield Status.getRepoStatus(metaRepo);
     const subStats = repoStat.submodules;
 
+    const originUrl = yield GitUtil.getOriginUrl(metaRepo);
+    const repoPath = metaRepo.workdir();
+
     const picker = co.wrap(function *(subName, subStat) {
-        // If this submodule's not open, open it.
         const id = NodeGit.Oid.fromString(subStat.indexSha);
         let commitMap = {};
         submoduleCommits[subName] = commitMap;
@@ -97,15 +100,20 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
 
         if (null === subStat.repoStatus) {
             console.log(`Opening ${colors.blue(subName)}.`);
-            yield Open.openBranchOnCommit(metaRepo,
-                                          subName,
-                                          subStat.indexUrl,
-                                          repoStat.currentBranchName,
-                                          subStat.commitSha);
+            yield Open.openOnCommit(originUrl,
+                                    repoPath,
+                                    subName,
+                                    subStat.indexUrl,
+                                    subStat.commitSha);
         }
         const repo = yield SubmoduleUtil.getRepo(metaRepo, subName);
         console.log(`Sub-repo ${colors.blue(subName)}: cherry-picking commit \
 ${colors.green(id)}.`);
+
+        // Fetch the commit; it may not be present.
+
+        yield GitUtil.fetchSha(repo, id.tostrS());
+
         const commit = yield repo.getCommit(id);
         yield NodeGit.Cherrypick.cherrypick(repo, commit, {});
         const index = yield repo.index();
