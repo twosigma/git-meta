@@ -270,7 +270,9 @@ exports.testMultiRepoManipulator =
         if (!shouldFail) {
             throw e;
         }
-        assert.instanceOf(e, UserError);
+        if (!(e instanceof UserError)) {
+            throw e;
+        }
         failed = true;
     }
 
