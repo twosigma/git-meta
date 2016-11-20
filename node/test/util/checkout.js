@@ -34,119 +34,67 @@ const co     = require("co");
 
 const Checkout        = require("../../lib/util/checkout");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const Status          = require("../../lib/util/status");
 
 describe("checkout", function () {
     // We will operate on the repository `x`.
     const cases = {
-        "simple -- branch doesn't exist -- all": {
+        "bad branch name": {
             input: "x=S",
             branchName: "foo",
-            create: "all",
-            expected: "x=S:Bfoo=1;*=foo",
-        },
-        "simple -- branch doesn't exist -- some": {
-            input: "x=S",
-            branchName: "foo",
-            create: "some",
-            expected: "x=S:Bfoo=1;*=foo",
-        },
-        "simple -- branch doesn't exist -- none": {
-            input: "x=S",
-            branchName: "foo",
-            create: "none",
             fails: true,
         },
-        "simple -- branch exists -- all": {
+        "simple branch switch": {
             input: "x=S:Bfoo=1",
             branchName: "foo",
-            create: "all",
-            fails: true,
+            expected: "x=E:*=foo",
         },
-        "simple -- branch exists -- some": {
-            input: "x=S:Bfoo=1",
-            branchName: "foo",
-            create: "some",
-            expected: "x=S:Bfoo=1;*=foo",
+        "committish": {
+            input: "x=S:C2-1;Bfoo=2",
+            commit: "2",
+            expected: "x=E:H=2",
         },
-        "simple -- branch exists -- none": {
-            input: "x=S:Bfoo=1",
+        "sub closed": {
+            input: "a=S|x=U:Bfoo=2",
             branchName: "foo",
-            create: "none",
-            expected: "x=S:Bfoo=1;*=foo",
+            expected: "x=E:*=foo",
         },
-        "one sub closed": {
-            input: "a=S|x=U",
+        "sub closed, but different commit": {
+            input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3",
             branchName: "foo",
-            create: "all",
-            expected: "a=S|x=U:Bfoo=2;*=foo",
+            expected: "x=E:*=foo",
         },
-        "one sub -- branch doesn't exist -- all": {
-            input: "a=S|x=U:Os",
+        "open sub but no change": {
+            input: "a=S|x=U:Os;Bfoo=1",
             branchName: "foo",
-            create: "all",
-            expected: "a=S|x=U:Bfoo=2;*=foo;Os Bfoo=1!*=foo",
+            expected: "x=E:*=foo",
         },
-        "one sub -- branch doesn't exist -- some": {
-            input: "a=S|x=U:Os",
+        "open sub but no change to sub": {
+            input: "a=S|x=U:C4-2;Os;Bfoo=4",
             branchName: "foo",
-            create: "some",
-            expected: "a=S|x=U:Bfoo=2;*=foo;Os Bfoo=1!*=foo",
+            expected: "x=E:*=foo;Os",
         },
-        "one sub -- branch doesn't exist -- none": {
-            input: "a=S|x=U:Bfoo=1;Os",
+        "sub open, different commit": {
+            input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os",
             branchName: "foo",
-            create: "none",
-            fails: true,
-        },
-        "one sub -- branch exists -- all": {
-            input: "a=S|x=U:Os Bfoo=1",
-            branchName: "foo",
-            create: "all",
-            fails: true,
-        },
-        "one sub -- branch exists -- some ": {
-            input: "a=S|x=U:Os Bfoo=1",
-            branchName: "foo",
-            create: "some",
-            expected: "a=S|x=U:Bfoo=2;*=foo;Os Bfoo=1!*=foo",
-        },
-        "one sub -- branch exists and is current -- some": {
-            input: "a=S|x=U:Os Bfoo=1!*=foo",
-            branchName: "foo",
-            create: "some",
-            expected: "a=S|x=U:Bfoo=2;*=foo;Os Bfoo=1!*=foo",
-        },
-        // Basic checking of multiple-subs; we know the codepaths are not
-        // different when more than one.
-        "two subs, all": {
-            input: "a=S|b=S|x=U:C3-2 t=Sb:1;Bmaster=3;Os;Ot",
-            branchName: "foo",
-            create: "all",
-            expected: "x=E:Bfoo=3;*=foo;Os Bfoo=1!*=foo;Ot Bfoo=1!*=foo",
-        },
-        "two subs, none": {
-            input:
-                "a=S|b=S|x=U:C3-2 t=Sb:1;Bmaster=3;Bfoo=3;Os Bfoo=1;Ot Bfoo=1",
-            branchName: "foo",
-            create: "none",
-            expected: "x=E:*=foo;Os Bfoo=1!*=foo;Ot Bfoo=1!*=foo",
+            expected: "x=E:*=foo;Os H=4",
         },
     };
-    function checkout(branchName, create) {
-        return co.wrap(function *(repos) {
+    function checkout(branchName, commit) {
+        return co.wrap(function *(repos, mapping) {
             const x = repos.x;
-            const status = yield Status.getRepoStatus(x);
-            return yield Checkout.checkout(repos.x,
-                                           status,
-                                           branchName,
-                                           create);
+            if (undefined !== branchName) {
+                return yield Checkout.checkout(x, branchName);
+            }
+            else {
+                const realCommit = mapping.reverseMap[commit];
+                return yield Checkout.checkout(x, realCommit);
+            }
         });
     }
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
-            const manipulator = checkout(c.branchName, c.create);
+            const manipulator = checkout(c.branchName, c.commit);
             yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                            c.expected,
                                                            manipulator,
