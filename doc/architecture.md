@@ -927,13 +927,13 @@ sub-repos containing code that they require to work.
 There is a commit in the meta-repo for every change made in the organization,
 so the number of commits in the history of the meta-repo may be very large.
 However, the information contained in each commit is relatively small,
-generally indicating only changes to submodule pointers.  Furthermore, the
-on-disk (checked out) rendering of the meta-repo is also small, being only a
-file indicating the state of each sub-repo, and growing only as sub-repos are
-added.  Therefore, the cost of cloning and checking out a meta-repo will be
-relatively cheap, and scale slowly with the addition of new code -- especially
-compared with the cost of doing the same operations in a single (physical)
-repository.
+generally indicating only changes to submodule pointers (shallow cloning could
+be used to further improve performance).  Furthermore, the on-disk (checked
+out) rendering of the meta-repo is also small, being only a file indicating the
+state of each sub-repo, and growing only as sub-repos are added.  Therefore,
+the cost of cloning and checking out a meta-repo will be relatively cheap, and
+scale slowly with the addition of new code -- especially compared with the cost
+of doing the same operations in a single (physical) repository.
 
 Most other operations such as `checkout`, `commit`, `merge`, `status`, etc.
 increase in cost with the number of files in open repositories on disk.
