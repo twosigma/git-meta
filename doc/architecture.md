@@ -78,8 +78,8 @@ a mono-repo provides the following advantages:
 - Atomic changes can be made across the organization's code.
 - The history of the of an organization's source is described in a mono-repo.
   With multiple repositories, it is impossible to present a unified history.
-- Because all source is described in one history, archaeological operations such
-  as `bisect` are easily supported.
+- Because all source is described in one history, archaeological operations
+  such as `bisect` are easily supported.
 - Source in the organization is easy to find.
 - The use of a mono-repo encourages an organization to standardize on tools,
   e.g.: build and test.  When an organization has unrelated repositories that

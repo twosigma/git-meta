@@ -35,21 +35,21 @@
 
 Git-meta allows developers to work with extremely large codebases --
 performance only degrades very slowly when physical size, number of
-files, number of contributors increases, or the depth of history grows.  
-You can use granualar ACLs with git-meta to help refine the scope of work. 
-Users only need to clone the subsets of the code that they need, yet they 
+files, number of contributors increases, or the depth of history grows.
+You can use granualar ACLs with git-meta to help refine the scope of work.
+Users only need to clone the subsets of the code that they need, yet they
 can still make atomic commits across the entire codebase.  Development and
-collaboration are done mostly using normal Git commands; we provide a Git 
+collaboration are done mostly using normal Git commands; we provide a Git
 plug-in for ease-of-use.
 
 ## A little more detail
 
-Git-meta both describes an architecture and provides a set of tools to facilitate
-the implementation of a *mono-repo* and attendant workflows.  Aside from the
-ability to install the tools provided in this repository, git-meta requires
-only Git.  Git-meta is not tied to any specific Git hosting solution, and does
-not provide operations that are hosting-solution-specific, such as the ability
-to create new (server-side) repositories.
+Git-meta both describes an architecture and provides a set of tools to
+facilitate the implementation of a *mono-repo* and attendant workflows.  Aside
+from the ability to install the tools provided in this repository, git-meta
+requires only Git.  Git-meta is not tied to any specific Git hosting solution,
+and does not provide operations that are hosting-solution-specific, such as the
+ability to create new (server-side) repositories.
 
 A detailed description of the architecture of Git-meta is provided in
 [doc/architecture.md](doc/architecture.md).
