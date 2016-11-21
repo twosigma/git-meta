@@ -911,7 +911,7 @@ longer have any knowledge that Jill's fork exists.
 1. We use symbolic-meta-refs as push-targets in sub-repos; as the contents of a
    symbolic-meta-ref are immutable (a given symbolic-meta-ref can point to only
    one commit), we are always guaranteed to be able to update them when needed.
-1. Forking sub-repos is potentially expensive, an probably impractical on the
+1. Forking sub-repos is potentially expensive, and probably impractical on the
    server-side, and creates many complications on the client-side.  Therefore,
    we allow forking of only meta-repos; each sub-repo has a single namespace
    for the entire mono-repo.
