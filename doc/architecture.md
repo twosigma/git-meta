@@ -783,7 +783,7 @@ repositories and auto-fork them, but when?  To allow for collaboration, we
 would most likely need to perform the auto-fork whenever a new repository is
 created, likely a very expensive operation for a potentially speculative
 operation.  The existence of these forks could be confusing, at best, if the
-when repositories are abandoned.  At the very least, we have created a new
+new repositories are abandoned.  At the very least, we have created a new
 concept -- a set of related orchards -- that undermines our peer-to-peer model.
 
 ## Remote Frenzy
