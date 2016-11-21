@@ -76,8 +76,8 @@ into multiple repositories.  In comparison to a multi-repo strategy,
 a mono-repo provides the following advantages:
 
 - Atomic changes can be made across the organization's code.
-- The history of the of an organization's source is described in a mono-repo.
-  With multiple repositories, it is impossible to present a unified history.
+- The history of an organization's source is described in a mono-repo.  With
+  multiple repositories, it is impossible to present a unified history.
 - Because all source is described in one history, archaeological operations
   such as `bisect` are easily supported.
 - Source in the organization is easy to find.
@@ -127,7 +127,7 @@ none of them are sufficient:
 Git submodules come the closest: they do provide the technical ability to solve
 the problem, but are very difficult to use and lack some of the desired
 features.  With git-meta, we build on top of Git submodules to provide the
-desired functionality leveraging existing Git commands.
+desired functionality by leveraging only existing Git commands.
 
 # Git-meta Architecture
 
@@ -141,8 +141,8 @@ work in a mono-repo.
 ## Repository Structure
 
 Git-meta creates a logical mono-repo out of multiple *sub-repositories* (a.k.a.
-sub-repo) by tying them together in a *meta-repository* (a.k.a. meta-repo) with
-Git submodules.  Recall that a Git submodule consists of the following:
+sub-repos) by tying them together in a *meta-repository* (a.k.a. meta-repo)
+with Git submodules.  Recall that a Git submodule consists of the following:
 
 1. a path at which to root the submodule in the referencing (meta) repository
 1. the url of the referenced (sub) repository
@@ -157,9 +157,9 @@ state of all sub-repos, i.e., the mono-repo:
 |                                                                        |
 |  '-----------------------`                                             |
 |  | meta-repo  |          |                                             |
-|  | *master    | foo/bar--|---------> [a1   http://foo-bar.git]         |
-|  | [m1]       | foo/baz--|---------> [b1   http://foo-baz.git]         |
-|  |            |     zam--|---------> [c1   http://zam.git]             |
+|  | *master    | foo/bar--|---------> [a1   http://foo-bar.example.com] |
+|  | [m1]       | foo/baz--|---------> [b1   http://foo-baz.example.com] |
+|  |            |     zam--|---------> [c1   http://zam.example.com]     |
 |  |            |          |                                             |
 |  `-----------------------,                                             |
 |                                                                        |
