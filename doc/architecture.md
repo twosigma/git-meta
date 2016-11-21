@@ -541,7 +541,7 @@ commits, probably many more than what is needed at any given time.
 
 # Naive Architecture
 
-In this section we describer the basic model we had in mind when we started
+In this section we describe the basic model we had in mind when we started
 git-meta.  First, we provide an overview of the original architecture.  Then,
 we describe a series of problems that arise from this architecture.  Finally,
 we draw conclusions by this exercise and connect them to our final design
@@ -550,10 +550,10 @@ choices.
 ## Overview
 
 One of the principles behind git-meta is to diverge as little as possible from
-"normal" Git.  We want to use vanilla Git commands where possible, and we
+"normal" Git.  We wanted to use vanilla Git commands where possible, and we
 wanted to preserve the basic decentralized model of Git.  We believed we could
-achieve our goals mostly by making submodules work "better", e.g., by
-providing submodule-aware `merge` and `rebase` operations.
+achieve our goals mostly by making submodules work "better", e.g., by providing
+submodule-aware `merge` and `rebase` operations.
 
 With branching, for example, we expected to synchronize branches among the
 meta-repo and its open sub-repos such that (when using our tools) they would
