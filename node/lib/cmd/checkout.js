@@ -35,8 +35,8 @@ const co = require("co");
  * This module contains the entrypoint for the `checkout` command.
  */
 
-exports.helpText = `Check out a branch in the meta-repository and each
-(visible) sub-repository.`;
+exports.helpText = `Check out a commit in the meta-repository and each
+(visible) submodule.  Fetch commits by SHA as needed for submodules`;
 
 /**
  * Configure the sepcified `parser` for the `checkout` command.
@@ -45,21 +45,9 @@ exports.helpText = `Check out a branch in the meta-repository and each
  */
 exports.configureParser = function (parser) {
 
-    parser.addArgument(["branchname"], {
+    parser.addArgument(["committish"], {
         type: "string",
-        help: "name of the branch",
-    });
-
-    parser.addArgument(["-c", "--create"], {
-        choices: ["all", "none", "some"],
-        defaultValue: "some",
-        required: false,
-        help: `Control whether creation of new branches is allowed or not.  If
-'all' is specified, the branch to create must not exist in the meta-repository
-or any (visible) sub-repositories; it will be created.  If 'none' is specified,
-the branch must already exist in all repositories.  If 'some' is specified, the
-branch will be created in repositories as needed where it does not exist.  The
-default value is 'some'.`,
+        help: "commit to check out",
     });
 };
 
@@ -68,8 +56,7 @@ default value is 'some'.`,
  *
  * @async
  * @param {Object} args
- * @param {String} args.branchname
- * @param {String} args.create
+ * @param {String} args.committish
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const Checkout = require("../util/checkout");
@@ -79,5 +66,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const status = yield Status.getRepoStatus(repo);
     Status.ensureClean(status);
-    yield Checkout.checkout(repo, status, args.branchname, args.create);
+    yield Checkout.checkout(repo, args.committish);
 });
