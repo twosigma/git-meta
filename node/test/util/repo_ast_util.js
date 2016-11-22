@@ -411,11 +411,12 @@ describe("RepoAstUtil", function () {
             it(caseName, function () {
                 try {
                     RepoASTUtil.assertEqualASTs(c.actual, c.expected);
-                    assert(!c.fails);
                 }
                 catch (e) {
                     assert(c.fails, e.stack);
+                    return;
                 }
+                assert(!c.fails);
             });
         });
     });

@@ -317,11 +317,12 @@ describe("RepoASTTestUtil", function () {
                                                                   c.m,
                                                                   c.userError,
                                                                   c.options);
-                    assert(!c.fails);
                 }
                 catch (e) {
                     assert(c.fails, e.stack);
+                    return;
                 }
+                assert(!c.fails);
             }));
         });
     });

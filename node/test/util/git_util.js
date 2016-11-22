@@ -109,6 +109,37 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("getOriginUrl", function () {
+        const cases = {
+            "good": { i: "a=B|x=Ca", e: "a" },
+            "bad": { i: "x=S", e: null},
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createMultiRepos(c.i);
+                const x = written.repos.x;
+                const result = yield GitUtil.getOriginUrl(x);
+
+                // If we are expecting a URL, `expected` will not be null.  In
+                // that case, we need map the physical value written to disk
+                // for that logical URL, and check that physical value against
+                // what was returned by `getOriginUrl`.
+
+                let expected = c.e;
+                if (null !== expected) {
+                    for (let key in written.urlMap) {
+                        if (expected === written.urlMap[key]) {
+                            expected = key;
+                        }
+                    }
+                }
+
+                assert.equal(result, expected);
+            }));
+        });
+    });
+
     describe("findRemoteBranch", function () {
         const cases = {
             "simple fail": {
@@ -215,11 +246,12 @@ describe("GitUtil", function () {
 
             try {
                 yield GitUtil.getCurrentRepo();
-                assert(false, "didn't throw error");
             }
             catch (e) {
                 assert.instanceOf(e, UserError);
+                return;
             }
+            assert(false, "didn't throw error");
         }));
     });
 
@@ -271,11 +303,12 @@ describe("GitUtil", function () {
                                                                 c.input,
                                                                 c.expected,
                                                                 c.manipulator);
-                    assert(!c.fail);
                 }
                 catch (e) {
                     assert(c.fail, e.stack);
+                    return;
                 }
+                assert(!c.fail);
             }));
         });
     });
@@ -406,13 +439,61 @@ describe("GitUtil", function () {
                                                                 c.input,
                                                                 c.expected,
                                                                 c.manipulator);
-                    assert(!c.fail);
                 }
                 catch (e) {
                     assert(c.fail, e.stack);
+                    return;
                 }
+                assert(!c.fail);
             }));
         });
+    });
+
+    describe("fetchSha", function () {
+        it("already have it, would fail otherwise", co.wrap(function *() {
+            const ast = ShorthandParserUtil.parseRepoShorthand("S");
+            const path = yield TestUtil.makeTempDir();
+            const written = yield WriteRepoASTUtil.writeRAST(ast, path);
+            const commit = written.oldCommitMap["1"];
+            const repo = written.repo;
+            yield GitUtil.fetchSha(repo, commit);
+        }));
+
+        it("fetch one", co.wrap(function *() {
+            const xPath= yield TestUtil.makeTempDir();
+            const yPath= yield TestUtil.makeTempDir();
+            const astX =
+                ShorthandParserUtil.parseRepoShorthand("S:C2-1;Bmaster=2");
+            const astY = ShorthandParserUtil.parseRepoShorthand("S");
+            const writtenX = yield WriteRepoASTUtil.writeRAST(astX, xPath);
+            const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
+            const commit = writtenX.oldCommitMap["2"];
+            const repo = writtenY.repo;
+            yield NodeGit.Remote.create(repo, "origin", xPath);
+            yield GitUtil.fetchSha(repo, commit);
+            yield repo.getCommit(commit);
+        }));
+
+        it("bad sha", co.wrap(function *() {
+            const xPath= yield TestUtil.makeTempDir();
+            const yPath= yield TestUtil.makeTempDir();
+            const astX =
+                ShorthandParserUtil.parseRepoShorthand("S:C2-1;Bmaster=2");
+            const astY = ShorthandParserUtil.parseRepoShorthand("S");
+            yield WriteRepoASTUtil.writeRAST(astX, xPath);
+            const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
+            const repo = writtenY.repo;
+            yield NodeGit.Remote.create(repo, "origin", xPath);
+            const bad = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            try {
+                yield GitUtil.fetchSha(repo, bad);
+            }
+            catch (e) {
+                assert.instanceOf(e, UserError);
+                return;
+            }
+            assert(false, "Bad sha, should have failed");
+        }));
     });
 
     describe("listUnpushedCommits", function () {
@@ -503,6 +584,32 @@ describe("GitUtil", function () {
                 const to = oldMap[c.to];
                 const result = yield GitUtil.isUpToDate(repo, from, to);
                 assert.equal(result, c.expected);
+            }));
+        });
+    });
+
+    describe("setHeadHard", function () {
+        function makeSetter(commitId) {
+            return co.wrap(function *(repo, commitMap, oldMap) {
+                const realId = oldMap[commitId];
+                const commit = yield repo.getCommit(realId);
+                yield GitUtil.setHeadHard(repo, commit);
+            });
+        }
+        const cases = {
+            "same commit": { i: "S", c: "1", e: "S:H=1" },
+            "old commit": {
+                i: "S:C2-1;Bmaster=2",
+                c: "1",
+                e: "S:C2-1;H=1;Bmaster=2"
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, co.wrap(function *() {
+                const c = cases[caseName];
+                yield RepoASTTestUtil.testRepoManipulator(c.i,
+                                                          c.e,
+                                                          makeSetter(c.c));
             }));
         });
     });

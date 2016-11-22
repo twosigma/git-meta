@@ -50,6 +50,9 @@ const co      = require("co");
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
+const url     = require("url");
+
+const UserError = require("./user_error");
 
 const CONFIG_FILE_NAME = "config";
 
@@ -66,6 +69,47 @@ const CONFIG_FILE_NAME = "config";
  * @property {String}
  */
 exports.modulesFileName = ".gitmodules";
+
+/**
+ * Return the result of resolving the specified `relativeUrl` onto the
+ * specified `baseUrl`.
+ *
+ * @param {String} baseUrl
+ * @param {String} relativeUrl
+ * @return {String}
+ */
+exports.resolveUrl = function (baseUrl, relativeUrl) {
+    assert.isString(baseUrl);
+    assert.isString(relativeUrl);
+    if (0 !== baseUrl.length && baseUrl[baseUrl.length - 1] !== "/") {
+        baseUrl += "/";
+    }
+    return url.resolve(baseUrl, relativeUrl);
+};
+
+/**
+ * If the specified `submoduleUrl` is a relative path, return the result of
+ * resolving it onto the specified `baseUrl`; otherwise, return `submoduleURL`.
+ * Throw a `UserError` if `null === baseUrl` and `submoduleUrl` is relative.
+ *
+ * @param {String|null} baseUrl
+ * @param {String} submoduleUrl
+ * @return {String}
+ */
+exports.resolveSubmoduleUrl = function (baseUrl, submoduleUrl) {
+    if (null !== baseUrl) {
+        assert.isString(baseUrl);
+    }
+    assert.isString(submoduleUrl);
+    if (submoduleUrl.startsWith("./") || submoduleUrl.startsWith("../")) {
+        if (null === baseUrl) {
+            throw new UserError(
+      `Attempt to use relative url: ${submoduleUrl}, but no 'origin' remote.`);
+        }
+        return exports.resolveUrl(baseUrl, submoduleUrl);
+    }
+    return submoduleUrl;
+};
 
 /**
  * Return a map from submodule name to url from the specified `text`.
@@ -229,17 +273,26 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
 /**
  * Open the submodule having the specified `name` and `url` for the repo at the
  * specified `repoPath`.  Configure the repository for this submodule to have
- * `url` as its remote.  Return the newly opened repository.  Note that this
- * command does not fetch any refs from the remote for this submodule, and
- * while its repo can be opened it will be empty.
+ * `url` as its remote, unless `url` is relative, in which case resolve `url`
+ * against the specified `repoUrl`.  Throw a `UserError` if
+ * `null === repoUrl` and `url` is relative.  Return the newly opened
+ * repository.  Note that this command does not fetch any refs from the remote
+ * for this submodule, and while its repo can be opened it will be empty.
  *
  * @async
- * @param {String} repoPath
- * @param {String} name
- * @param {String} url
+ * @param {String|null} repoUrl
+ * @param {String}      repoPath
+ * @param {String}      name
+ * @param {String}      url
  * @return {NodeGit.Repository}
  */
-exports.initSubmoduleAndRepo = co.wrap(function *(repoPath, name, url) {
+exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
+                                                  repoPath,
+                                                  name,
+                                                  url) {
+    if (null !== repoUrl) {
+        assert.isString(repoUrl);
+    }
     assert.isString(repoPath);
     assert.isString(name);
     assert.isString(url);
@@ -269,14 +322,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoPath, name, url) {
     }
     workdirPath += name;
 
-    let realUrl = url;
-    try {
-        // Use the real url to fix relative paths, if it's a path
-
-        realUrl = yield fs.realpath(url);
-    }
-    catch (e) {
-    }
+    const realUrl = exports.resolveSubmoduleUrl(repoUrl, url);
 
     return yield NodeGit.Repository.initExt(subRepoDir, {
         originUrl: realUrl,

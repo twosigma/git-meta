@@ -134,6 +134,9 @@ ${colors.red(commitSha)}.`);
 
     const sig = metaRepo.defaultSignature();
 
+    const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
+    const metaPath = metaRepo.workdir();
+
     // Kick off the merge.  It is important to note is that `Merge.commit` does
     // not directly modify the working directory or index.  The `metaIndex`
     // object it returns is magical, virtual, does not operate on HEAD or
@@ -177,7 +180,8 @@ ${colors.red(commitSha)}.`);
 
         // Otherwise, we have a submodule that needs to be merged.
 
-        const subCommitId = NodeGit.Oid.fromString(entry.id.tostrS());
+        const subSha = entry.id.tostrS();
+        const subCommitId = NodeGit.Oid.fromString(subSha);
         const sub = subs[path];
         const subHeadSha = sub.commitSha;
         const subCommitSha = subCommitId.tostrS();
@@ -195,12 +199,21 @@ ${colors.red(commitSha)}.`);
             // If this submodule's not open, open it.
 
             console.log(`Opening ${colors.blue(path)}.`);
-            subRepo = yield Open.open(metaRepo, path, sub.indexUrl);
+            subRepo = yield Open.openOnCommit(metaUrl,
+                                              metaPath,
+                                              path,
+                                              sub.indexUrl,
+                                              subHeadSha);
             subRepoStatus = yield Status.getRepoStatus(subRepo);
         }
         else {
             subRepo = yield SubmoduleUtil.getRepo(metaRepo, path);
         }
+
+        // Fetch commit to merge.
+
+        yield GitUtil.fetchSha(subRepo, subSha);
+
         const subCommit = yield subRepo.getCommit(subCommitId);
 
         // If this submodule is up-to-date with the merge commit, exit.
@@ -249,9 +262,9 @@ ${colors.green(subCommitSha)}.\n`);
 
         const subHead = yield subRepo.getCommit(subHeadSha);
         let index = yield NodeGit.Merge.commits(subRepo,
-                                                  subHead,
-                                                  subCommit,
-                                                  null);
+                                                 subHead,
+                                                 subCommit,
+                                                 null);
 
         // Abort if conflicted.
 

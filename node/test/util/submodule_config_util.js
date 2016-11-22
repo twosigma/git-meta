@@ -39,8 +39,80 @@ const path    = require("path");
 const Close               = require("../../lib/util/close");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
+const UserError           = require("../../lib/util/user_error");
 
 describe("SubmoduleConfigUtil", function () {
+
+    describe("resolveUrl", function () {
+        const cases = {
+            "base": {
+                base: "foo/bar",
+                rel: "./b",
+                expected: "foo/bar/b",
+            },
+            "inside trailing /": {
+                base: "foo/bar/",
+                rel: "./b",
+                expected: "foo/bar/b",
+            },
+        };
+        Object.keys(cases).forEach(function (caseName) {
+            it(caseName, function () {
+                const c = cases[caseName];
+                const result = SubmoduleConfigUtil.resolveUrl(c.base, c.rel);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("resolveSubmoduleUrl", function () {
+        const cases = {
+            "not relative": {
+                base: "/foo/bar",
+                sub: "/x/y",
+                expected: "/x/y",
+            },
+            "not relative, null origin": {
+                base: null,
+                sub: "/x/y",
+                expected: "/x/y",
+            },
+            "inside": {
+                base: "/foo/bar",
+                sub: "./y",
+                expected: "/foo/bar/y",
+            },
+            "next to": {
+                base: "/foo/bar",
+                sub: "../y",
+                expected: "/foo/y",
+            },
+            "relative, but null origin": {
+                base: null,
+                sub: "../y",
+                expected: "/foo/y",
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, function () {
+                const c = cases[caseName];
+                let result;
+                try {
+                    result = SubmoduleConfigUtil.resolveSubmoduleUrl(c.base,
+                                                                     c.sub);
+                }
+                catch (e) {
+                    assert(c.fails);
+                    assert.instanceOf(e, UserError);
+                    return;
+                }
+                assert(!c.fails);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
     describe("parseSubmoduleConfig", function () {
         const cases = {
             "trivial": {
@@ -300,7 +372,14 @@ foo
 
     describe("initSubmoduleAndRepo", function () {
 
-        const runTest = co.wrap(function *(repo, subRootRepo, url, subName) {
+        const runTest = co.wrap(function *(repo,
+                                           subRootRepo,
+                                           url,
+                                           subName,
+                                           originUrl) {
+            if (undefined === originUrl) {
+                originUrl = "";
+            }
             const subHead = yield subRootRepo.getHeadCommit();
             const submodule   = yield NodeGit.Submodule.addSetup(repo,
                                                                  url,
@@ -322,9 +401,10 @@ foo
             yield Close.close(repo, subName);
             const repoPath = repo.workdir();
             const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
-                                                                      repoPath,
-                                                                      subName,
-                                                                      url);
+                                                                     originUrl,
+                                                                     repoPath,
+                                                                     subName,
+                                                                     url);
             assert.instanceOf(result, NodeGit.Repository);
             assert(TestUtil.isSameRealPath(result.workdir(),
                                            path.join(repoPath, subName)));
@@ -372,7 +452,11 @@ foo
             // too early.
 
             process.chdir(metaDir);
-            yield runTest(repo, subRootRepo, "../root", "a/b");
+            yield runTest(repo,
+                          subRootRepo,
+                          "../root",
+                          "a/b",
+                          metaDir);
         }));
     });
 });

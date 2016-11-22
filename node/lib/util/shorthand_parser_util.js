@@ -1142,10 +1142,7 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
 
                 const subBase = result[sub.url];
                 const clone = RepoASTUtil.cloneRepo(subBase, sub.url);
-                const baseSubAST = clone.copy({
-                    branches: {},
-                    currentBranchName: null,
-                });
+                const origin = clone.remotes.origin;
                 const rawSubRepo = rawResult.openSubmodules[subName];
 
                 // Also, if the rawSubRepo (overrides) do not specified a HEAD,
@@ -1154,9 +1151,22 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                 // to a commit that exists in the overrides but not in the base
                 // repo.
 
+                let head = rawSubRepo.head;
                 if (!("head" in rawSubRepo)) {
-                    rawSubRepo.head = sub.sha;
+                    head = sub.sha;
                 }
+
+                let subCommits = {};
+                copyCommitAndParents(subCommits, commits, head);
+
+                const baseSubAST = clone.copy({
+                    branches: {},
+                    currentBranchName: null,
+                    remotes: { origin: new RepoAST.Remote(origin.url) },
+                    commits: subCommits,
+                    head: head,
+                });
+
                 openSubs[subName] = makeRepoAST(baseSubAST, rawSubRepo);
             });
             result[name] = ast.copy({
