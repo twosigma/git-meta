@@ -149,11 +149,11 @@ describe("commit", function () {
             expected: "x=U:Cx-2 s=Sb:q;Bmaster=x",
         },
         "staged change in submodule": {
-            initial: "a=S|x=U:Os I u=v!Bmaster=1!*=master",
+            initial: "a=S|x=U:Os I u=v",
             doAll: false,
             message: "message",
             expected:
-                "x=U:Cx-2 s=Sa:s;Os Cs-1 u=v!Bmaster=s!*=master;Bmaster=x",
+                "x=U:Cx-2 s=Sa:s;Os Cs-1 u=v!H=s;Bmaster=x",
         },
         "wd change in submodule": {
             initial: "a=S|x=U:Os W README.md=bar",
@@ -162,14 +162,13 @@ describe("commit", function () {
             expected: {},
         },
         "wd change in submodule -- auto-stage": {
-            initial: "a=S|x=U:Os W README.md=bar!Bmaster=1!*=master",
+            initial: "a=S|x=U:Os W README.md=bar",
             message: "message",
             doAll: true,
-            expected: `\
-x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!Bmaster=s!*=master;Bmaster=x`,
+            expected: "x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x",
         },
         "wd addition in submodule -- auto-stage": {
-            initial: "a=S|x=U:Os W foo=baz!Bmaster=1!*=master",
+            initial: "a=S|x=U:Os W foo=baz",
             message: "foo",
             doAll: true,
             expected: {},
