@@ -41,7 +41,6 @@ const NodeGit = require("nodegit");
 const fs      = require("fs-promise");
 const path    = require("path");
 
-const GitUtil             = require("../util/git_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
 
 /**
@@ -161,19 +160,17 @@ exports.getSubmoduleShasForBranch = co.wrap(function *(repo, branchName) {
 
 /**
  * Return an array of the expected shas for the submodules having the specified
- * `submoduleNames` in the specified `repo`.
+ * `submoduleNames` in the specified `index`.
  *
- * @asyn
- * @param {NodeGit.Repository} repo
- * @param {String []}          submoduleNames
+ * @param {NodeGit.Index} index
+ * @param {String []}      submoduleNames
  * @return {String []}
  */
-exports.getCurrentSubmoduleShas = co.wrap(function *(repo, submoduleNames) {
-    assert.instanceOf(repo, NodeGit.Repository);
+exports.getCurrentSubmoduleShas = function (index, submoduleNames) {
+    assert.instanceOf(index, NodeGit.Index);
     assert.isArray(submoduleNames);
     submoduleNames.forEach(name => assert.isString(name));
 
-    const index = yield repo.index();
     let result = [];
     let entry;
     for (let i = 0; i < submoduleNames.length; ++i) {
@@ -185,7 +182,7 @@ exports.getCurrentSubmoduleShas = co.wrap(function *(repo, submoduleNames) {
         }
     }
     return result;
-});
+};
 
 /**
  * Return true if the submodule having the specified `submoduleName` in the
@@ -292,36 +289,6 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
     }));
     const repos = yield openers;
     return repos.filter(x => x !== null);
-});
-
-/**
- * Fetch the specified `submoduleRpo` from the specified `metaRepo` and return
- * the name of the origin of this submodule.  The behavior is undefined if
- * remotes have been added or removed; it should be used only immediately after
- * the submodule is opened.
- *
- * TODO: This method was written with the assumption that the origin name might
- * somehow be different than "origin", yet that there would always be one.  I
- * think this assumption should be checked and this function eliminated.
- *
- * @async
- * @param {NodeGit.Repository} metaRepo
- * @param {NodeGit.Repository} submoduleRepo
- * @return {String}
- */
-exports.fetchSubmodule  = co.wrap(function *(metaRepo, submoduleRepo) {
-    assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.instanceOf(submoduleRepo, NodeGit.Repository);
-
-    const remotes = yield submoduleRepo.getRemotes({});
-    const originName = remotes[0];
-
-    // If we don't do the fetch, necessary refs are missing and we can't set up
-    // the branch.
-
-    yield GitUtil.fetch(submoduleRepo, originName);
-
-    return originName;
 });
 
 /**

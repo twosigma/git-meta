@@ -469,33 +469,6 @@ describe("Status", function () {
                 }),
                 regex: /foo/,
             },
-            "bad branch": {
-                input: new Submodule({
-                    indexStatus: STAT.ADDED,
-                    indexSha: "1",
-                    indexUrl: "a",
-                    workdirShaRelation: RELATION.SAME,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                        currentBranchName: "bar",
-                    })
-                }),
-                branch: "foo",
-                regex: /On wrong branch.*bar/,
-            },
-            "no branch": {
-                input: new Submodule({
-                    indexStatus: STAT.ADDED,
-                    indexSha: "1",
-                    indexUrl: "a",
-                    workdirShaRelation: RELATION.SAME,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                    })
-                }),
-                branch: "foo",
-                regex: /not on a branch/,
-            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -623,8 +596,20 @@ describe("Status", function () {
                     }),
                 }),
             },
-            "old in open": {
+            "missing commit in open": {
                 state: "a=S:C2-1;Bb=2|x=S:I s=Sa:2;Os H=1",
+                expected: new Submodule({
+                    indexSha: "2",
+                    indexUrl: "a",
+                    indexStatus: FILESTATUS.ADDED,
+                    workdirShaRelation: RELATION.UNKNOWN,
+                    repoStatus: new RepoStatus({
+                        headCommit: "1",
+                    }),
+                }),
+            },
+            "old in open": {
+                state: "a=S:C2-1;Bb=2|x=S:I s=Sa:2;Os H=1!Bf=2",
                 expected: new Submodule({
                     indexSha: "2",
                     indexUrl: "a",
@@ -636,7 +621,7 @@ describe("Status", function () {
                 }),
             },
             "unrelated in open": {
-                state: "a=S:C2-1;C3-1;Bb=2;Bc=3|x=S:I s=Sa:2;Os H=3",
+                state: "a=S:C2-1;C3-1;Bb=2;Bc=3|x=S:I s=Sa:2;Os H=3!Bf=2",
                 expected: new Submodule({
                     indexSha: "2",
                     indexUrl: "a",
@@ -1006,10 +991,6 @@ describe("Status", function () {
                 state: "x=S",
                 fails: false,
             },
-            "no current branch": {
-                state: "x=S:*=",
-                fails: true,
-            },
             "good sub": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2",
                 fails: false,
@@ -1021,14 +1002,6 @@ describe("Status", function () {
             "good open sub": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os Bmaster=1!*=master",
                 fails: false,
-            },
-            "no sub branch": {
-                state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os",
-                fails: true,
-            },
-            "sub on wrong branch": {
-                state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os Bfoo=1!*=foo",
-                fails: true,
             },
             "sub with new commit in open repo": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os Bmaster=2!*=master",
@@ -1068,10 +1041,6 @@ describe("Status", function () {
                 state: "x=S",
                 fails: false,
             },
-            "inconsistent": {
-                state: "x=S:*=",
-                fails: true,
-            },
             "unclean": {
                 state: "x=S:I foo=bar",
                 fails: true,
@@ -1083,8 +1052,9 @@ describe("Status", function () {
                 const w = yield RepoASTTestUtil.createMultiRepos(c.state);
                 const x = w.repos.x;
                 let error = "";
+                const status = yield Status.getRepoStatus(x);
                 try {
-                    yield Status.ensureCleanAndConsistent(x);
+                    Status.ensureCleanAndConsistent(status);
                     assert.equal(c.fails, false);
                     return;                                           // RETURN
                 }

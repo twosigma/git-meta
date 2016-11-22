@@ -99,7 +99,8 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
     // First do some sanity checking on the repos to see if they have a remote
     // with `remoteName` and are clean.
 
-    yield Status.ensureCleanAndConsistent(metaRepo);
+    const status = yield Status.getRepoStatus(metaRepo);
+    Status.ensureCleanAndConsistent(status);
 
     // Fetch and validate the sub-repos.
 

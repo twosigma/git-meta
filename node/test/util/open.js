@@ -32,22 +32,28 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const path    = require("path");
 const NodeGit = require("nodegit");
 
 const Open            = require("../../lib/util/open");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const TestUtil        = require("../../lib/util/test_util");
 
-describe("openBranchOnCommit", function () {
+describe("openOnCommit", function () {
+    // Assumption is that 'x' is the target repo.
+
     const cases = {
-        "breathing": {
-            initial: "a=Aa|x=U",
+        "simple": {
+            initial: "a=B|x=U",
             subName: "s",
             url: "a",
-            branchName: "foo",
-            commitSha: "a",
-            expected: "x=E:Os Bfoo=a!*=foo",
+            commitSha: "1",
+            expected: "x=E:Os",
+        },
+        "not head": {
+            initial: "a=B:C3-1;Bmaster=3|x=U",
+            subName: "s",
+            url: "a",
+            commitSha: "3",
+            expected: "x=E:Os H=3",
         },
     };
     Object.keys(cases).forEach(caseName => {
@@ -58,57 +64,17 @@ describe("openBranchOnCommit", function () {
                 assert.property(maps.reverseUrlMap, c.url);
                 const commit = maps.reverseMap[c.commitSha];
                 const url = maps.reverseUrlMap[c.url];
-                const result = yield Open.openBranchOnCommit(repos.x,
-                                                             c.subName,
-                                                             url,
-                                                             c.branchName,
-                                                             commit);
+                const x = repos.x;
+                const result = yield Open.openOnCommit(null,
+                                                       x.workdir(),
+                                                       c.subName,
+                                                       url,
+                                                       commit);
                 assert.instanceOf(result, NodeGit.Repository);
             });
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                            c.expected,
                                                            manipulator);
-        }));
-    });
-});
-
-describe("open", function () {
-    // We'll open from repo `x`.
-
-    function opener(submoduleName, url) {
-        return co.wrap(function *(repos, maps) {
-            const x = repos.x;
-            let realUrl;
-            for (let newUrl in maps.urlMap) {
-                if (url === maps.urlMap[newUrl]) {
-                    realUrl = newUrl;
-                }
-            }
-            const result = yield Open.open(x, submoduleName, realUrl);
-            assert.instanceOf(result, NodeGit.Repository);
-            const expectedDir = path.join(x.workdir(), submoduleName);
-            assert(TestUtil.isSameRealPath(result.workdir(), expectedDir));
-        });
-    }
-
-    // Not any boundary conditions yet; I'll set up the `cases` format for now
-    // as I presume more complexity will arise as this method becomes more
-    // robust.
-
-    const cases = {
-        "breathing": {
-            input: "a=S|x=U",
-            manipulator: opener("s", "a"),
-            expected: "x=U:Os Bmaster=1!*=master",
-        },
-    };
-
-    Object.keys(cases).forEach(caseName => {
-        const c = cases[caseName];
-        it(caseName, co.wrap(function *() {
-            yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
-                                                           c.expected,
-                                                           c.manipulator);
         }));
     });
 });

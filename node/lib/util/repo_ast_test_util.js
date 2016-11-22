@@ -119,7 +119,7 @@ exports.createRepo = co.wrap(function *(input) {
  *
  * @param {String|RepoAST}  input
  * @param {String|RepoAST}  expectedShorthand
- * @param {(NodeGit.Repository) => Promise} manipulator
+ * @param {(NodeGit.Repository, commitMap, oldMap) => Promise} manipulator
  */
 exports.testRepoManipulator = co.wrap(function *(input,
                                                  expected,
@@ -130,7 +130,9 @@ exports.testRepoManipulator = co.wrap(function *(input,
     }
     const written = yield exports.createRepo(input);
     const repo = written.repo;
-    const userMap = yield manipulator(repo);
+    const userMap = yield manipulator(repo,
+                                      written.commitMap,
+                                      written.oldCommitMap);
     if (undefined !== userMap) {
         Object.assign(written.commitMap, userMap);
     }
@@ -268,7 +270,9 @@ exports.testMultiRepoManipulator =
         if (!shouldFail) {
             throw e;
         }
-        assert.instanceOf(e, UserError);
+        if (!(e instanceof UserError)) {
+            throw e;
+        }
         failed = true;
     }
 

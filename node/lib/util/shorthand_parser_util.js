@@ -61,6 +61,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * nothing        =
  * commit         = <alphanumeric>+
  * branch         = 'B'<name>'='<commit>|<nothing>     nothing deletes branch
+ * ref            = 'F'<name>'='<commit>|<nothing>     nothing deletes ref
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
  *                  [' '<change>(','<change>*)]
@@ -263,6 +264,7 @@ function prepareASTArguments(baseAST, rawRepo) {
     let resultArgs = {
         currentBranchName: baseAST.currentBranchName,
         branches: baseAST.branches,
+        refs: baseAST.refs,
         commits: baseAST.commits,
         remotes: baseAST.remotes,
         head: baseAST.head,
@@ -293,6 +295,18 @@ function prepareASTArguments(baseAST, rawRepo) {
         }
         else {
             delete resultArgs.branches[name];
+        }
+    });
+
+    // Copy in ref overrides, deleting where `null` was specified.
+
+    Object.keys(rawRepo.refs).forEach(name => {
+        const override = rawRepo.refs[name];
+        if (null !== override) {
+            resultArgs.refs[name] = override;
+        }
+        else {
+            delete resultArgs.refs[name];
         }
     });
 
@@ -405,6 +419,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let workdir = {};
     let currentBranchName;
     let branches = {};
+    let refs = {};
     let commits = {};
     let remotes = {};
     let notes = {};
@@ -456,36 +471,40 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
-     * Parse the branch override beginning at the specified `begin` and ending
-     * at the specified `end`.
+     * Return a parser for the specified type of `reference`; copy the results
+     * into the specified `dest` object.
      *
-     * @param {Number} begin
-     * @param {Number} end
+     * @param {Object} dest
+     * @param {String} type
      */
-    function parseBranchOverride(begin, end) {
-        let nameEnd = begin;
+    function parseRefOverride(dest, type) {
+        return function (begin, end) {
+            let nameEnd = begin;
 
-        while (end !== nameEnd && "=" !== shorthand[nameEnd]) {
-            ++nameEnd;
-        }
-        assert.notEqual(end, nameEnd, "invalid branch override");
-        assert.equal(shorthand[nameEnd], "=", "missing branch assignment");
+            while (end !== nameEnd && "=" !== shorthand[nameEnd]) {
+                ++nameEnd;
+            }
+            assert.notEqual(end, nameEnd, `invalid ${type} override`);
+            assert.equal(shorthand[nameEnd],
+                         "=",
+                         `missing ${type} assignment`);
 
-        let branchOverride = null;
+            let branchOverride = null;
 
-        let assignmentBegin = nameEnd + 1;  // skip "="
-        if (assignmentBegin !== end) {
-            branchOverride = shorthand.substr(assignmentBegin,
-                                              end - assignmentBegin);
-        }
+            let assignmentBegin = nameEnd + 1;  // skip "="
+            if (assignmentBegin !== end) {
+                branchOverride = shorthand.substr(assignmentBegin,
+                                                  end - assignmentBegin);
+            }
 
-        const name = shorthand.substr(begin, nameEnd - begin);
+            const name = shorthand.substr(begin, nameEnd - begin);
 
-        assert.notProperty(branches,
-                           name,
-                           "multiple overrides for same branch");
+            assert.notProperty(dest,
+                               name,
+                               `multiple overrides for same ${type}`);
 
-        branches[name] = branchOverride;
+            dest[name] = branchOverride;
+        };
     }
 
     /**
@@ -727,7 +746,8 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         const parser = (() => {
             switch(override) {
                 case "*": return parseCurrentBranchOverride;
-                case "B": return parseBranchOverride;
+                case "B": return parseRefOverride(branches, "branch");
+                case "F": return parseRefOverride(refs, "ref");
                 case "C": return parseNewCommit;
                 case "H": return parseHeadOverride;
                 case "R": return parseRemote;
@@ -753,6 +773,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let result = {
         commits: commits,
         branches: branches,
+        refs: refs,
         remotes: remotes,
         notes: notes,
         index: index,
@@ -780,6 +801,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
  * @return {String} return.type
  * @return {Object} return.commits     map from id to commit
  * @return {Object} return.branches    map from name to commit id
+ * @return {Object} return.refs        map from name to commit id
  * @return {String|null} [return.head]
  * @return {String|null} [return.currentBranchName]
  */
@@ -1003,6 +1025,9 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         for (let branch in resultArgs.branches) {
             includeCommit(resultArgs.branches[branch]);
         }
+        for (let ref in resultArgs.refs) {
+            includeCommit(resultArgs.refs[ref]);
+        }
         if (resultArgs.head) {
             includeCommit(resultArgs.head);
         }
@@ -1117,10 +1142,7 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
 
                 const subBase = result[sub.url];
                 const clone = RepoASTUtil.cloneRepo(subBase, sub.url);
-                const baseSubAST = clone.copy({
-                    branches: {},
-                    currentBranchName: null,
-                });
+                const origin = clone.remotes.origin;
                 const rawSubRepo = rawResult.openSubmodules[subName];
 
                 // Also, if the rawSubRepo (overrides) do not specified a HEAD,
@@ -1129,9 +1151,22 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                 // to a commit that exists in the overrides but not in the base
                 // repo.
 
+                let head = rawSubRepo.head;
                 if (!("head" in rawSubRepo)) {
-                    rawSubRepo.head = sub.sha;
+                    head = sub.sha;
                 }
+
+                let subCommits = {};
+                copyCommitAndParents(subCommits, commits, head);
+
+                const baseSubAST = clone.copy({
+                    branches: {},
+                    currentBranchName: null,
+                    remotes: { origin: new RepoAST.Remote(origin.url) },
+                    commits: subCommits,
+                    head: head,
+                });
+
                 openSubs[subName] = makeRepoAST(baseSubAST, rawSubRepo);
             });
             result[name] = ast.copy({

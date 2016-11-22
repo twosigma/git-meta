@@ -39,102 +39,58 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const GitUtil       = require("./git_util");
-const RepoStatus    = require("./repo_status");
 const SubmoduleUtil = require("./submodule_util");
 const UserError     = require("./user_error");
 
 /**
- * Checkout the branch having the specified `branchName` in the specified
- * `metaRepo` having the specified `metaStatus` and all visible sub-repos.  If
- * the specified `create` is "all" then the behavior is undefined if any repo
- * already has a branch named `branchName`.  If `create` is "none" then throw a
- * `UserError` unless all repos have a branch named `branchName`.  The behavior
- * is undefined unless `create === "none" || create === "some" || create ===
- * "all"`.
+ * Checkout the commit identified by the specified `committish` in the specified
+ * `metaRepo`, and update all open submodules to be on the indicated commit,
+ * fetching it if necessary.  If `committish` identifies a branch, set that as
+ * the current branch.  Throw a `UserError` if `committish` cannot be resolved.
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {RepoStatus}         metaStatus
- * @param {String}             branchName
- * @param {String}             create
+ * @param {String}             committish
  */
-exports.checkout = co.wrap(function *(metaRepo,
-                                      metaStatus,
-                                      branchName,
-                                      create) {
+exports.checkout = co.wrap(function *(metaRepo, committish) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.instanceOf(metaStatus, RepoStatus);
-    assert.isString(branchName);
-    assert.isString(create);
+    assert.isString(committish);
 
-    const submodules = metaStatus.submodules;
-    const openSubNames = Object.keys(submodules).filter(
-        name => null !== submodules[name].repoStatus
-    );
-    const openSubRepos = yield openSubNames.map(
-        name => SubmoduleUtil.getRepo(metaRepo, name)
-    );
-
-    /**
-     * Checkout the branch in the specified `repo`.  Create it if it can't be
-     * found.
-     */
-    const checkout = co.wrap(function *(repo, status) {
-        if (status.currentBranchName === branchName) {
-            return;                                                   // RETURN
-        }
-        if (null === (yield GitUtil.findBranch(repo, branchName))) {
-            const head = yield repo.getCommit(status.headCommit);
-            yield repo.createBranch(branchName,
-                                    head,
-                                    0,
-                                    repo.defaultSignature());
-        }
-
-        // Do a force because (a) we've already validated that there are no
-        // changes and (b) it won't change the branch in the meta repo
-        // otherwise.
-
-        yield repo.checkoutBranch(branchName, {
-            checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
-        });
-    });
-
-    /**
-     * Validate the specified `repo` and fail using the specified `description`
-     * if `repo` is not in the correct state according to the `create`
-     * parameter.
-     */
-    const validate = co.wrap(function *(repo, description) {
-        const branch = yield GitUtil.findBranch(repo, branchName);
-        if (null !== branch && create === "all") {
-            throw new UserError(`
-${description} already has a branch named ${colors.red(branchName)}.`);
-        }
-        if (null === branch && create === "none") {
-            throw new UserError(`
-${description} does not have a branch named ${colors.red(branchName)}.`);
-        }
-    });
-
-    // Skip validation if `"some" === create` because every configuration is
-    // valid in that case.
-
-    if ("some" !== create) {
-        let validators = openSubNames.map(
-            (sub, i) => validate(openSubRepos[i], sub)
-        );
-        validators.push(validate(metaRepo, "The meta-repo"));
-        yield validators;
+    const annotated = yield GitUtil.resolveCommitish(metaRepo, committish);
+    if (null === annotated) {
+        throw new UserError(`Could not resolve ${colors.red(committish)}.`);
     }
+    const commit = yield metaRepo.getCommit(annotated.id());
 
-    // TODO: I believe there is a bug in nodegit/libgit2 somewhere that results
-    // in a crash 
+    yield GitUtil.setHeadHard(metaRepo, commit);
 
-    for (let i = 0; i < openSubNames.length; ++i) {
-        const sub = openSubNames[i];
-        yield checkout(openSubRepos[i], submodules[sub].repoStatus);
+    const open = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
+    const names = yield SubmoduleUtil.getSubmoduleNamesForCommit(metaRepo,
+                                                                 commit);
+    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
+                                                               names,
+                                                               commit);
+
+    // checkout submodules
+
+    yield open.map(co.wrap(function *(name) {
+        // Open repo but not alive on this commit.
+
+        if (!(name in shas)) {
+            return; // RETURN
+        }
+
+        const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
+        const sha = shas[name];
+        yield GitUtil.fetchSha(repo, sha);
+        const commit = yield repo.getCommit(sha);
+        yield GitUtil.setHeadHard(repo, commit);
+    }));
+
+    // if 'committish' is a branch,  make it current
+
+    const branch = yield GitUtil.findBranch(metaRepo, committish);
+    if (null !== branch) {
+        yield metaRepo.checkoutBranch(branch);
     }
-
-    yield checkout(metaRepo, metaStatus);
 });

@@ -108,9 +108,6 @@ class Submodule {
      *     `workdirShaRelation` is not `COMMIT_RELATION.SAME`, or
      *     `workdirShaRelation` is `COMMIT_RELATION.SAME but `indexSha` and
      *     `repoStatus.headCommit` differ
-     *   - COMMIT_RELATION.UNKNOWN is specified for `workdirShaRelation` -- the
-     *     only reason for an unknown relation is when a commit is staged to
-     *     the index and the submodule repo is not open.
      *
      * @param {Object} status
      * @param {RepoStatus.FILESTATUS} [status.indexStatus]
@@ -257,8 +254,6 @@ class Submodule {
             else {
                 assert.notEqual(this.d_workdirShaRelation,
                                 COMMIT_RELATION.SAME);
-                assert.notEqual(this.d_workdirShaRelation,
-                                COMMIT_RELATION.UNKNOWN);
             }
         }
         else {

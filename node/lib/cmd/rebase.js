@@ -76,7 +76,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Status  = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
-    yield Status.ensureCleanAndConsistent(repo);
+    const status = yield Status.getRepoStatus(repo);
+    Status.ensureCleanAndConsistent(status);
     const commitish = yield GitUtil.resolveCommitish(repo, args.commit);
     if (null === commitish) {
         console.error(`Could not resolve ${colors.red(args.commit)} to a \
@@ -84,5 +85,5 @@ commit.`);
         process.exit(-1);
     }
     const commit = yield repo.getCommit(commitish.id());
-    yield Rebase.rebase(repo, commit);
+    yield Rebase.rebase(repo, commit, status);
 });

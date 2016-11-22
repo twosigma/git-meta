@@ -300,7 +300,32 @@ ${colorExp(expectedBranch)}`
                 missingExpectedBranch,
                 compareBranches);
 
+    // Then check refs
+
+    function missingActualRef(ref) {
+        result.push(`missing ref ${colorBad(ref)}`);
+    }
+    function missingExpectedRef(ref) {
+        result.push(`unexpected ref ${colorBad(ref)}`);
+    }
+    function compareRefs(ref) {
+        const actualRef = actual.refs[ref];
+        const expectedRef = expected.refs[ref];
+        if (actualRef !== expectedRef) {
+            result.push(`\
+ref ${colorBad(ref)} is ${colorAct(actualRef)} but expected \
+${colorExp(expectedRef)}`
+                       );
+        }
+    }
+    diffObjects(actual.refs,
+                expected.refs,
+                missingActualRef,
+                missingExpectedRef,
+                compareRefs);
+
     // Then the notes
+
     function missingActualNote(ref) {
             result.push(`missing notes ref ${colorBad(ref)}`);
     }
@@ -590,6 +615,13 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         branches[branchName] = mapCommitId(ast.branches[branchName]);
     }
 
+    // Then refs -- they're strings that map to commit ids, like branches
+
+    let refs = {};
+    for (let refName in ast.refs) {
+        refs[refName] = mapCommitId(ast.refs[refName]);
+    }
+
     // Then remote branches.
     let remotes = {};
     for (let remoteName in ast.remotes) {
@@ -623,6 +655,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
     return ast.copy({
         commits: commits,
         branches: branches,
+        refs: refs,
         head: head,
         currentBranchName: ast.currentBranchName,
         remotes: remotes,
@@ -648,6 +681,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
  * - the clone has a clean index
  * - the clone has a clean working directory
  * - the clone has no open submodules
+ * - non-branch refs are not copied
  *
  * @param {RepoAST} original
  * @param {String}  url

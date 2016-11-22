@@ -74,19 +74,16 @@ const callNext = co.wrap(function *(rebase) {
  *
  * @constructor
  * Create a new `SubmoduleRebaser` for the specified `submodule` having the
- * specified `repo`.  If a rebase is started, perform the rebase on the
- * branch having the specified `branchName`.  Record commits (from new to old)
- * in the specified `commits` map.
+ * specified `repo`.  Record commits (from new to old) in the specified
+ * `commits` map.
  *
  * @param {String}             submoduleName
  * @param {NodeGit.Repository} repo
- * @param {String}             branchName
  * @param {Object}             commits writable
  */
-function SubmoduleRebaser(submoduleName, repo, branchName, commits) {
+function SubmoduleRebaser(submoduleName, repo, commits) {
     assert.isString(submoduleName);
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(branchName);
     assert.isObject(commits);
 
     let rebase         = null;   // set to `NodeGit.Rebase` object when started
@@ -94,7 +91,7 @@ function SubmoduleRebaser(submoduleName, repo, branchName, commits) {
     let finishedRebase = false;  // true if the rebase was finished
 
     /**
-     * Begin a rebase for this submodule from the current branch onto the
+     * Begin a rebase for this submodule from the current HEAD onto the
      * specified `remoteCommitId`.  If a rebase is in progress do nothing.
      *
      * @async
@@ -105,9 +102,10 @@ function SubmoduleRebaser(submoduleName, repo, branchName, commits) {
         if (null !== rebase) {
             return;                                                   // RETURN
         }
-        const branch = yield repo.getBranch(branchName);
+        yield GitUtil.fetchSha(repo, remoteCommitSha);
+        const head = yield repo.head();
         const localAnnotated =
-                           yield NodeGit.AnnotatedCommit.fromRef(repo, branch);
+                             yield NodeGit.AnnotatedCommit.fromRef(repo, head);
         const remoteCommitId = NodeGit.Oid.fromString(remoteCommitSha);
         const remoteAnnotated =
                     yield NodeGit.AnnotatedCommit.lookup(repo, remoteCommitId);
@@ -134,11 +132,8 @@ function SubmoduleRebaser(submoduleName, repo, branchName, commits) {
         // commit.
 
         if (null === rebase) {
-            const subCommit = yield NodeGit.Commit.lookup(repo, commitSha);
-            yield repo.checkoutBranch(branchName);
-            yield NodeGit.Reset.reset(repo,
-                                      subCommit,
-                                      NodeGit.Reset.TYPE.HARD);
+            repo.setHeadDetached(commitSha);
+            yield NodeGit.Checkout.head(repo);
             return true;                                              // RETURN
         }
         const oper = yield callNext(rebase);
@@ -244,6 +239,9 @@ exports.rebase = co.wrap(function *(metaRepo, commit, status) {
         submoduleCommits: {},
     };
 
+    const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
+    const metaPath = metaRepo.workdir();
+
     const currentBranchName = status.currentBranchName;
     const currentBranch = yield metaRepo.getBranch(currentBranchName);
     const currentCommitId = NodeGit.Oid.fromString(status.headCommit);
@@ -287,21 +285,18 @@ up-to-date.`);
 
             if (null === submodule.repoStatus) {
                 console.log(`Opening submodule ${colors.blue(path)}.`);
-                repo = yield Open.openBranchOnCommit(metaRepo,
-                                                     path,
-                                                     submodule.commitUrl,
-                                                     status.currentBranchName,
-                                                     submodule.commitSha);
+                repo = yield Open.openOnCommit(metaUrl,
+                                               metaPath,
+                                               path,
+                                               submodule.commitUrl,
+                                               submodule.commitSha);
             }
             else { 
                 repo = yield SubmoduleUtil.getRepo(metaRepo, path);
             }
             const commits = {};
             result.submoduleCommits[path] = commits;
-            return new SubmoduleRebaser(path,
-                                        repo,
-                                        currentBranchName,
-                                        commits);
+            return new SubmoduleRebaser(path, repo, commits);
         });
 
         submoduleRebasers[path] = promise;

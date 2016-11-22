@@ -118,16 +118,14 @@ describe("rebase", function () {
 a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
 x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
             rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!Bmaster=bs!*=master",
+            expected: "x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!H=bs",
         },
         "rebase change in sub, sub already open": {
             initial: "\
 a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
-x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os Bmaster=b!*=master",
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os H=b",
             rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!Bmaster=bs!*=master",
+            expected: "x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!H=bs",
         },
         "ffwd, but not sub (should ffwd anyway)": {
             initial: "\
@@ -141,8 +139,7 @@ x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
 a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
 x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
             rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 3=3;Bmaster=3M;Os Bmaster=c!*=master",
+            expected: "x=E:C3M-4 3=3;Bmaster=3M;Os H=c",
         },
         "rebase two changes in sub": {
             initial: "\
@@ -150,7 +147,7 @@ a=Aa:Cb-a;Cc-b;Cd-a;Bmaster=c;Bfoo=d|\
 x=U:C3-2 s=Sa:c;C4-2 s=Sa:d;Bmaster=3;Bfoo=4;Bother=3",
             rebaser: rebaser("x", "4"),
             expected: "\
-x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b!Bmaster=cs!*=master",
+x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b!H=cs",
         },
     };
     Object.keys(cases).forEach(caseName => {
