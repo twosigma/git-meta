@@ -12,5 +12,14 @@ addons:
       - gcc-5
       - g++-5
 
+before_install:
+     -  cd node
+
+install:
+      - npm install
+
+script:
+      - npm test
+
 notifications:
   email: false
