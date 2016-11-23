@@ -357,7 +357,7 @@ exports.fetchSha  = co.wrap(function *(repo, sha) {
     }
 
     const execString = `\
-git -C ${repo.workdir()} fetch-pack -q '${origin.url()}' ${sha}
+git -C ${repo.workdir()} fetch -q '${origin.url()}' ${sha}
 `;
     try {
         return yield exec(execString);
