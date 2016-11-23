@@ -183,6 +183,17 @@ echo '${treeData}' | git mktree
 });
 
 /**
+ * Configure the specified `repo` to have settings needed by git-meta tests.
+ *
+ * @param {NodeGit.Repository}
+ */
+const configRepo = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    const config = yield repo.config();
+    yield config.setString("uploadpack.allowReachableSHA1InWant", "true");
+});
+
+/**
  * Write the specified `commits` map into the specified `repo`.  Return maps
  * from old commit to new and new commit to old.
  *
@@ -456,6 +467,8 @@ exports.writeRAST = co.wrap(function *(ast, path) {
 
     const repo = yield NodeGit.Repository.init(path, ast.isBare() ? 1 : 0);
 
+    yield configRepo(repo);
+
     const commits = yield writeCommits(repo, ast.commits);
     const resultRepo = yield configureRepo(repo, ast, commits.oldToNew);
     return {
@@ -586,6 +599,7 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
                                                repoPath, {
             bare: ast.isBare() ? 1 : 0
         });
+        yield configRepo(repo);
         yield writeRepo(repo, ast, repoPath);
         resultRepos[repoName] = repo;
 
