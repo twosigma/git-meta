@@ -1,6 +1,6 @@
 {
   "name": "git-meta",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "large scale SCM made easy",
   "scripts": {
     "test": "mocha test",
