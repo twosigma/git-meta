@@ -48,10 +48,10 @@ const open       = require("./cmd/open");
 const pull       = require("./cmd/pull");
 const push       = require("./cmd/push");
 const rebase     = require("./cmd/rebase");
+const reset      = require("./cmd/reset");
 const status     = require("./cmd/status");
-const version    = require("./cmd/version");
-
 const UserError  = require("./util/user_error");
+const version    = require("./cmd/version");
 
 /**
  * Configure the specified `parser` to include the command having the specified
@@ -116,6 +116,7 @@ configureSubcommand(subParser, "open", open);
 configureSubcommand(subParser, "pull", pull);
 configureSubcommand(subParser, "push", push);
 configureSubcommand(subParser, "rebase", rebase);
+configureSubcommand(subParser, "reset", reset);
 configureSubcommand(subParser, "status", status);
 configureSubcommand(subParser, "version", version);
 
