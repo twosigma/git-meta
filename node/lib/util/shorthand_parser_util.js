@@ -56,7 +56,8 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * shorthand      = <base repo type> [':'<override>(';'<override>)*]
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit>
  * override       = <head> | <branch> | <current branch> | <new commit> |
- *                  <remote> | <index> | <workdir> | <open submodule> | <note>
+ *                  <remote> | <index> | <workdir> | <open submodule> |
+ *                  <note> | <rebase>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
@@ -72,6 +73,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * remote         = R<name>=[<url>]
  *                  [' '<name>=[<commit>](','<name>=[<commit>])*]
  * note           = N <ref> <commit>=message
+ * rebase         = E<head name>,<original commit id>,<onto commit id>
  * index          = I <change>[,<change>]*
  * workdir        = W <change>[,<change>]*
  * open submodule = 'O'<path>[' '<override>('!'<override>)*]
@@ -150,6 +152,8 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * S:I foo=S/a:1;Ofoo W x=y     -- A submodule added to the index at `foo`
  *                              -- that is open and has changed the local
  *                              -- file `x` to be `y`.
+ * S:Emaster,1,2                -- rebase in progress started on "master",
+ *                                 original head "1", onto commit "2"
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
@@ -272,6 +276,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         index: baseAST.index,
         workdir: baseAST.workdir,
         openSubmodules: baseAST.openSubmodules,
+        rebase: baseAST.rebase,
     };
 
     // Process HEAD.
@@ -379,6 +384,12 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.remotes[remoteName] = remote;
     });
 
+    // Override rebase if provided
+
+    if ("rebase" in rawRepo) {
+        resultArgs.rebase = rawRepo.rebase;
+    }
+
     return resultArgs;
 }
 
@@ -425,6 +436,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let remotes = {};
     let notes = {};
     let openSubmodules = {};
+    let rebase;
 
     /**
      * Parse a set of changes from the specified `begin` character to the
@@ -734,6 +746,22 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
+     * Parse the rebase definition beginning at the specified `begin` and
+     * terminating at the specified `end`.
+     *
+     * @param {Number} begin
+     * @param {Number} end
+     */
+    function parseRebase(begin, end) {
+        const rebaseDef = shorthand.substr(begin, end - begin);
+        const parts = rebaseDef.split(",");
+        assert.equal(parts.length,
+                     3,
+                     `Wrong number of rebase parts in ${rebaseDef}`);
+        rebase = new RepoAST.Rebase(parts[0], parts[1], parts[2]);
+    }
+
+    /**
      * Parse the override beginning at the specified `begin` and finishing at
      * the specified `end`.
      *
@@ -756,6 +784,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "N": return parseNote;
                 case "W": return parseWorkdir;
                 case "O": return parseOpenSubmodule;
+                case "E": return parseRebase;
                 default:
                     assert.isNull(`Invalid override ${override}.`);
                 break;
@@ -786,6 +815,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== currentBranchName) {
         result.currentBranchName = currentBranchName;
+    }
+    if (undefined !== rebase) {
+        result.rebase = rebase;
     }
     return result;
 }
