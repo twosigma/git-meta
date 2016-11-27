@@ -39,6 +39,8 @@ const assert   = require("chai").assert;
 const deeper   = require("deeper");
 const deepCopy = require("deepcopy");
 
+const Rebase = require("./rebase");
+
 /**
  * @class {Submodule}
  *
@@ -244,6 +246,8 @@ class AST {
      * - `head` is specified whenever `index` or `workdir` are provided
      * - `workdir` contains no submodule changes
      * - all specified `openSubmodules` exist on HEAD or in the `index`.
+     * - If provided, the `onto` and `originalHead` commits in `rebase` exist
+     *   in `commits`.
      *
      * @param {Object}      args
      * @param {Object}      [args.commits]
@@ -256,6 +260,7 @@ class AST {
      * @param {Object}      [args.workdir]
      * @param {Object}      [args.notes]
      * @param {Object}      [args.openSubmodules]
+     * @param {Rebase}      [args.Rebase]
      */
     constructor(args) {
         if (undefined === args) {
@@ -479,6 +484,16 @@ in commit ${id}.`);
                 }
             }
         }
+        this.d_rebase = null;
+        if ("rebase" in args) {
+            const rebase = args.rebase;
+            if (null !== rebase) {
+                assert.instanceOf(rebase, Rebase);
+                checkCommit(rebase.originalHead, "original head of rebase");
+                checkCommit(rebase.onto, "onto of rebase");
+                this.d_rebase = rebase;
+            }
+        }
 
         Object.freeze(this);
     }
@@ -563,6 +578,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {Rebase} rebase if rebase in progress, the state of the rebase
+     */
+    get rebase() {
+        return this.d_rebase;
+    }
+
+    /**
      * Accumulate the specified `changes` into the specified `dest` map.  A
      * non-null value in `changes` overrides any existing value in `dest`; a
      * `null value causes the path mapped to `null` to be removed.  The
@@ -627,6 +649,7 @@ in commit ${id}.`);
             workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
             openSubmodules: ("openSubmodules" in args) ?
                 args.openSubmodules : this.d_openSubmodules,
+            rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
         });
     }
 
@@ -693,6 +716,7 @@ in commit ${id}.`);
 }
 
 AST.Commit = Commit;
+AST.Rebase = Rebase;
 AST.Remote = Remote;
 AST.Submodule = Submodule;
 module.exports = AST;
