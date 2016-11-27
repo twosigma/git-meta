@@ -79,7 +79,7 @@ describe("checkout", function () {
             expected: "x=E:*=foo",
         },
         "open sub but no change": {
-            input: "a=S|x=U:Os;Bfoo=1",
+            input: "a=S|x=U:Os;Bfoo=2",
             branchName: "foo",
             expected: "x=E:*=foo",
         },

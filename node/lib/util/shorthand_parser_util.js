@@ -271,6 +271,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         notes: baseAST.notes,
         index: baseAST.index,
         workdir: baseAST.workdir,
+        openSubmodules: baseAST.openSubmodules,
     };
 
     // Process HEAD.
