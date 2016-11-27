@@ -33,7 +33,7 @@
 const assert = require("chai").assert;
 const co     = require("co");
 
-const Rebase          = require("../../lib/util/rebase");
+const RebaseUtil      = require("../../lib/util/rebase_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const Status          = require("../../lib/util/status");
 
@@ -51,7 +51,8 @@ describe("rebase", function () {
             assert.property(reverseMap, commit);
             const originalActualCommit = reverseMap[commit];
             const originalCommit = yield repo.getCommit(originalActualCommit);
-            const result = yield Rebase.rebase(repo, originalCommit, status);
+            const result = yield RebaseUtil.rebase(repo, originalCommit,
+                                                   status);
 
             // Now build a map from the newly generated commits to the logical
             // names that will be used in the expected case.

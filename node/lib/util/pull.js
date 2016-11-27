@@ -35,7 +35,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const GitUtil       = require("../util/git_util");
-const Rebase        = require("../util/rebase");
+const RebaseUtil    = require("../util/rebase_util");
 const Status        = require("../util/status");
 const UserError     = require("../util/user_error");
 
@@ -85,5 +85,5 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
     const remoteCommitId = remoteBranch.target();
     const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, remoteCommitId);
 
-    yield Rebase.rebase(metaRepo, remoteCommit, status);
+    yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
 });
