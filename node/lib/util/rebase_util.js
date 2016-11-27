@@ -321,10 +321,10 @@ up-to-date.`);
     const annotatedCommit =
                       yield NodeGit.AnnotatedCommit.lookup(metaRepo, commitId);
     const rebase = yield NodeGit.Rebase.init(metaRepo,
-                                           currentAnnotedCommit,
-                                           annotatedCommit,
-                                           null,
-                                           null);
+                                             currentAnnotedCommit,
+                                             annotatedCommit,
+                                             null,
+                                             null);
 
    const signature = metaRepo.defaultSignature();
 
