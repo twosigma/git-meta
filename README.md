@@ -62,7 +62,7 @@ To install the git-meta plugin:
 
 ```bash
 $ git clone https://github.com/twosigma/git-meta.git
-$ cd git-meta
+$ cd git-meta/node
 $ npm install -g
 ```
 
