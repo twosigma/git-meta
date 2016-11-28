@@ -149,6 +149,14 @@ x=U:C3-2 s=Sa:c;C4-2 s=Sa:d;Bmaster=3;Bfoo=4;Bother=3",
             expected: "\
 x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b!H=cs",
         },
+        "rebase with ffwd changes in sub and meta": {
+            initial: "\
+a=B:Bmaster=3;C2-1 s=Sb:q;C3-2 s=Sb:r,rar=wow|\
+b=B:Cq-1;Cr-q;Bmaster=r|\
+x=Ca:Bmaster=2;Os",
+            rebaser: rebaser("x", "3"),
+            expected: "x=E:Bmaster=3;Os H=r",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
