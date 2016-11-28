@@ -208,8 +208,8 @@ from ${colors.red(GitUtil.shortSha(status.commitSha))}.
 
                         result += `
 Change staged to commit ${colors.yellow(GitUtil.shortSha(status.indexSha))} \
-but cannot verify relation to previous commit \
-${colors.yellow(GitUtil.shortSha(status.commitSha))}.
+but cannot find previous commit \
+${colors.yellow(GitUtil.shortSha(status.commitSha))} to compare to.
 `;
                 }
                 break;
@@ -250,6 +250,19 @@ Open repo has unrelated commit \
 ${colors.red(GitUtil.shortSha(status.repoStatus.headCommit))} on head.
 `;
             break;
+        case RELATION.UNKNOWN:
+            // TODO: when we have an appropriate command, such as
+            // `git meta fetch`, recommend using it here instead of
+            // giving this obtuse diagnosis.
+
+            result += `\
+New commit in working directory \
+${colors.yellow(GitUtil.shortSha(status.repoStatus.headCommit))} \
+but cannot find previous commit \
+${colors.yellow(GitUtil.shortSha(status.indexSha))} to compare to.
+`;
+            break;
+
     }
 
     // Finally, check the state of the index and workdir of the open repo.
