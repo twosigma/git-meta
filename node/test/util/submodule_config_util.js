@@ -402,7 +402,7 @@ foo
             const repoPath = repo.workdir();
             const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                      originUrl,
-                                                                     repoPath,
+                                                                     repo,
                                                                      subName,
                                                                      url);
             assert.instanceOf(result, NodeGit.Repository);
@@ -457,6 +457,28 @@ foo
                           "../root",
                           "a/b",
                           metaDir);
+        }));
+
+        it("with template", co.wrap(function *() {
+            const templateDir = yield TestUtil.makeTempDir();
+            const repo        = yield TestUtil.createSimpleRepository();
+            const config = yield repo.config();
+            yield config.setString("meta.submoduleTemplatePath", templateDir);
+            const subDir = "bar";
+            const subPath = path.join(templateDir, subDir);
+            yield fs.mkdir(subPath);
+            const fileName = "hello-sub-repo";
+            const data = "welcome";
+            yield fs.writeFile(path.join(subPath, fileName), data);
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            yield runTest(repo, subRootRepo, subRootRepo.workdir(), "foo");
+            const copiedPath = path.join(repo.path(),
+                                         "modules",
+                                         "foo",
+                                         subDir,
+                                         fileName);
+            const read = yield fs.readFile(copiedPath, { encoding: "utf8" });
+            assert.equal(read, data);
         }));
     });
 });

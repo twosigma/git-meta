@@ -251,7 +251,6 @@ exports.rebase = co.wrap(function *(metaRepo, commit, status) {
     };
 
     const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
-    const metaPath = metaRepo.workdir();
 
     const currentBranchName = status.currentBranchName;
     const currentBranch = yield metaRepo.getBranch(currentBranchName);
@@ -297,7 +296,7 @@ up-to-date.`);
             if (null === submodule.repoStatus) {
                 console.log(`Opening submodule ${colors.blue(path)}.`);
                 repo = yield Open.openOnCommit(metaUrl,
-                                               metaPath,
+                                               metaRepo,
                                                path,
                                                submodule.commitUrl,
                                                submodule.commitSha);

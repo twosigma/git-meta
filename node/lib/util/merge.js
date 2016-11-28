@@ -135,7 +135,6 @@ ${colors.red(commitSha)}.`);
     const sig = metaRepo.defaultSignature();
 
     const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
-    const metaPath = metaRepo.workdir();
 
     // Kick off the merge.  It is important to note is that `Merge.commit` does
     // not directly modify the working directory or index.  The `metaIndex`
@@ -200,7 +199,7 @@ ${colors.red(commitSha)}.`);
 
             console.log(`Opening ${colors.blue(path)}.`);
             subRepo = yield Open.openOnCommit(metaUrl,
-                                              metaPath,
+                                              metaRepo,
                                               path,
                                               sub.indexUrl,
                                               subHeadSha);

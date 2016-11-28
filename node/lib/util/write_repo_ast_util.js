@@ -626,7 +626,7 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 
             const subRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                 originUrl,
-                                                                repo.workdir(),
+                                                                repo,
                                                                 subName,
                                                                 sub.url);
             // Pull in commits from the commits repo, but remove the remote

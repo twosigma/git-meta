@@ -47,8 +47,10 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const errno   = require("errno").errno;
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
+const ncp     = require("ncp").ncp;
 const path    = require("path");
 const url     = require("url");
 
@@ -271,34 +273,35 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
 });
 
 /**
- * Open the submodule having the specified `name` and `url` for the repo at the
- * specified `repoPath`.  Configure the repository for this submodule to have
- * `url` as its remote, unless `url` is relative, in which case resolve `url`
- * against the specified `repoUrl`.  Throw a `UserError` if
- * `null === repoUrl` and `url` is relative.  Return the newly opened
- * repository.  Note that this command does not fetch any refs from the remote
- * for this submodule, and while its repo can be opened it will be empty.
+ * Open the submodule having the specified `name` and `url` for the `metaRepo`.
+ * Configure the repository for this submodule to have `url` as its remote,
+ * unless `url` is relative, in which case resolve `url` against the specified
+ * `repoUrl`.  Throw a `UserError` if `null === repoUrl` and `url` is relative.
+ * Return the newly opened repository.  Note that this command does not fetch
+ * any refs from the remote for this submodule, and while its repo can be
+ * opened it will be empty.
  *
  * @async
- * @param {String|null} repoUrl
- * @param {String}      repoPath
- * @param {String}      name
- * @param {String}      url
+ * @param {String|null}        repoUrl
+ * @param {NodeGit.Repository} metaRepo
+ * @param {String}             name
+ * @param {String}             url
  * @return {NodeGit.Repository}
  */
 exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
-                                                  repoPath,
+                                                  metaRepo,
                                                   name,
                                                   url) {
     if (null !== repoUrl) {
         assert.isString(repoUrl);
     }
-    assert.isString(repoPath);
+    assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(name);
     assert.isString(url);
 
     // Update the `.git/config` file.
 
+    const repoPath = metaRepo.workdir();
     yield exports.initSubmodule(repoPath, name, url);
 
     // Then, initializee the repository.  We pass `initExt` the right set of
@@ -324,9 +327,56 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
 
     const realUrl = exports.resolveSubmoduleUrl(repoUrl, url);
 
-    return yield NodeGit.Repository.initExt(subRepoDir, {
+    const result = yield NodeGit.Repository.initExt(subRepoDir, {
         originUrl: realUrl,
         workdirPath: workdirPath,
         flags: NO_DOTGIT_DIR | MKPATH | RELATIVE_GITLINK,
     });
+
+    // If there is a `submodule_template` directory in the git folder, copy its
+    // contents into the new `.git` directory for this submodule.
+    //
+    // TODO: fix NodeGit/libgit2 to support the `templatePath` argument.
+
+    // Try to get configuration entry for template path.
+
+    const config = yield metaRepo.config();
+    let templateDirName = null;
+    try {
+        templateDirName = yield config.getString("meta.submoduleTemplatePath");
+    }
+    catch (e) {
+    }
+
+    // If it exists, try to use the submodule template directory."
+
+    if (null !== templateDirName) {
+        const templatePath = path.resolve(metaRepo.workdir(), templateDirName);
+
+        // First, check for existence of template directory.
+
+        let hasTemplateDirectory = false;
+
+        try {
+            yield fs.access(templatePath);
+            hasTemplateDirectory = true;
+        }
+        catch(e) {
+            // no template directory
+
+            if (errno[e.errno].code !== "ENOENT") {
+                throw e;
+            }
+        }
+
+        // If we have a template directory, then copy its contents.
+
+        if (hasTemplateDirectory) {
+            yield (new Promise(callback => {
+                return ncp(templatePath, result.path(), callback);
+            }));
+        }
+    }
+
+    return result;
 });
