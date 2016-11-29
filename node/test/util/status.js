@@ -399,7 +399,7 @@ describe("Status", function () {
                     commitUrl: "x",
                     commitSha: "1",
                 }),
-                regex: /cannot verify relation/,
+                regex: /cannot find previous commit/,
             },
             "new head commit": {
                 input: new Submodule({
