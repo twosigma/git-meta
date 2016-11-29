@@ -37,6 +37,7 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 
 const Close               = require("../../lib/util/close");
+const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
@@ -1245,5 +1246,32 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
+    it("rebase", co.wrap(function *() {
+        // Start out with a base repo having two branches, "master", and "foo",
+        // foo having one commit on top of master.
+
+        const start = yield repoWithCommit();
+        const r = start.repo;
+
+        // Switch to master
+
+        yield r.checkoutBranch("master");
+
+        const master = yield r.getBranch("master");
+        const foo = yield r.getBranch("foo");
+
+        const current = yield NodeGit.AnnotatedCommit.fromRef(r, master);
+        const onto = yield NodeGit.AnnotatedCommit.fromRef(r, foo);
+
+        // Then begin a rebase.
+
+        yield NodeGit.Rebase.init(r, current, onto, null, null);
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        assert.deepEqual(ast.rebase,
+                         new Rebase("refs/heads/master",
+                                    current.id().tostrS(),
+                                    onto.id().tostrS()));
+    }));
 });
 
