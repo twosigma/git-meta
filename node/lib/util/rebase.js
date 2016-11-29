@@ -42,6 +42,18 @@ const SubmoduleUtil = require("./submodule_util");
 const UserError     = require("./user_error");
 
 /**
+ * Put the head of the specified `repo` on the specified `commitSha`.
+ */
+const setHead = co.wrap(function *(repo, commitSha) {
+    // TODO: use a more "gentle" strategy that won't stomp on untracked files.
+    // The `checkout` function won't work because it doesn't affect
+    // non-conflicting staged changes.
+
+    const commit = yield repo.getCommit(commitSha);
+    yield GitUtil.setHeadHard(repo, commit);
+});
+
+/**
  * Call `next` on the specified `rebase`; return the rebase operation for the
  * rebase or null if there is no further operation.
  *
@@ -132,8 +144,7 @@ function SubmoduleRebaser(submoduleName, repo, commits) {
         // commit.
 
         if (null === rebase) {
-            repo.setHeadDetached(commitSha);
-            yield NodeGit.Checkout.head(repo);
+            yield setHead(repo, commitSha);
             return true;                                              // RETURN
         }
         const oper = yield callNext(rebase);
@@ -153,7 +164,7 @@ function SubmoduleRebaser(submoduleName, repo, commits) {
             changed = true;
         }));
         if (changed) {
-            index.write();
+            yield index.write();
             if (null === signature) {
                 signature = repo.defaultSignature();
             }
@@ -447,6 +458,27 @@ Conflict rebasing the submodule ${colors.red(rebaser.path())}.`;
         const rebaser = yield submoduleRebasers[name];
         yield rebaser.finish();
     }));
+
+    // If this was a fast-forward rebase, we need to set the heads of the
+    // submodules correctly.
+
+    const wasFF = yield NodeGit.Graph.descendantOf(metaRepo,
+                                                   commit.id(),
+                                                   currentBranch.target());
+    if (wasFF) {
+        const metaIndex = yield metaRepo.index();
+        const openSubs = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
+        const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(metaIndex,
+                                                                 openSubs);
+        yield openSubs.map(co.wrap(function *(name, index) {
+            const sha = shas[index];
+            if (sha !== status.submodules[name].commitSha) {
+                const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+                yield GitUtil.fetchSha(subRepo, sha);
+                yield setHead(subRepo, sha);
+            }
+        }));
+    }
 
     rebase.finish();
 
