@@ -37,45 +37,7 @@ const NodeGit = require("nodegit");
 const GitUtil       = require("../util/git_util");
 const Rebase        = require("../util/rebase");
 const Status        = require("../util/status");
-const SubmoduleUtil = require("../util/submodule_util");
-
-/**
- * Fail and log if the specified `metaRepo` or any of the specefied
- * `submodules` cannot be pulled.  A repository cannot be pulled if:
- *
- * - it has unstaged changes
- * - it has staged, uncommitted changes
- * - it does not have a remote with the specified `remoteName`
- *
- * @private
- * @async
- * @param {NodeGit.Repository} repo
- * @param {Object}             submodules
- * @param {NodeGit.Submodules} submodules.submodule
- * @param {NodeGit.Repository} submodules.repo
- * @param {String}             remoteName
- */
-const validateRepos = co.wrap(function *(metaRepo, submodules, remoteName) {
-
-    let allGood = true;
-    const checker = co.wrap(function *(repo, description) {
-
-        const validRemote = yield GitUtil.isValidRemoteName(repo, remoteName);
-        if (!validRemote) {
-            allGood = false;
-            console.error(description + " does not have a remote named '" +
-                          remoteName + "'.");
-        }
-    });
-    let checkers = submodules.map(sub => {
-        checker(sub.repo, `The sub-repo ${colors.red(sub.name)}`);
-    });
-    checkers.push(checker(metaRepo, "The meta-repo"));
-    yield checkers;
-    if (!allGood) {
-        process.exit(-1);
-    }
-});
+const UserError     = require("../util/user_error");
 
 /**
  * Pull the specified `source` branch from the remote having the specified
@@ -99,31 +61,29 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
     // First do some sanity checking on the repos to see if they have a remote
     // with `remoteName` and are clean.
 
+    const validRemote = yield GitUtil.isValidRemoteName(metaRepo, remoteName);
+
+    if (!validRemote) {
+        throw new UserError(`Invalid remote name ${colors.red(remoteName)}.`);
+    }
+
     const status = yield Status.getRepoStatus(metaRepo);
     Status.ensureCleanAndConsistent(status);
 
-    // Fetch and validate the sub-repos.
-
-    const submodules = yield SubmoduleUtil.getSubmoduleRepos(metaRepo);
-    const subFetchers = submodules.map(sub =>
-                                       GitUtil.fetch(sub.repo, remoteName));
-    yield subFetchers;
-    yield validateRepos(metaRepo, submodules, remoteName);
-
-    // Next, fetch the meta-repo and check to see if it needs to be rebased.
+    // Just fetch the meta-repo; rebase will trigger necessary fetches in
+    // sub-repos.
 
     yield GitUtil.fetch(metaRepo, remoteName);
     const remoteBranch = yield GitUtil.findRemoteBranch(metaRepo,
                                                         remoteName,
                                                         source);
     if (null === remoteBranch) {
-        console.error("The meta-repo does not have a branch named '" +
-                      source + "' in the remote '" + remoteName + "'.");
-        process.exit(-1);
+        throw new UserError(`The meta-repo does not have a branch named \
+${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
     }
 
     const remoteCommitId = remoteBranch.target();
     const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, remoteCommitId);
 
-    yield Rebase.rebase(metaRepo, remoteCommit);
+    yield Rebase.rebase(metaRepo, remoteCommit, status);
 });

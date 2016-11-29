@@ -69,6 +69,12 @@ specified`,
         help: `name of remote branch from which to pull; active branch name
 used if not specified`,
     });
+
+    parser.addArgument(["--rebase"], {
+        help: "rebase local changes on top of pulled commits",
+        action: "storeConst",
+        constant: true,
+    });
 };
 
 /**
@@ -81,10 +87,15 @@ used if not specified`,
  * @param {String}  [source]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const GitUtil = require("../util/git_util");
-    const pull    = require("../util/pull");
+    const GitUtil   = require("../util/git_util");
+    const pull      = require("../util/pull");
+    const UserError =  require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
+
+    if (!args.rebase) {
+        throw new UserError("Non-rebase pull not supported.");
+    }
 
     let source = args.source;
     if (null === source) {
