@@ -192,10 +192,11 @@ describe("refMapper", function () {
 
 describe("push", function () {
 
-    function pusher(repoName, remoteName, source, target) {
+    function pusher(repoName, remoteName, source, target, force) {
         return co.wrap(function *(repos) {
+            force = force || false;
             const x = repos[repoName];
-            yield Push.push(x, remoteName, source, target);
+            yield Push.push(x, remoteName, source, target, force);
         });
     }
 
@@ -204,6 +205,16 @@ describe("push", function () {
             initial: "a=S",
             manipulator: pusher("a", "origin", "master", "master"),
             fails: true,
+        },
+        "no-ffwd failure": {
+            initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+            manipulator: pusher("b", "origin", "master", "master"),
+            fails: true,
+        },
+        "no-ffwd success": {
+            initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+            manipulator: pusher("b", "origin", "master", "master", true),
+            expected: "a=B:C3-1;Bmaster=3|b=Ca",
         },
         "simple (noop) success": {
             initial: "a=S|b=Ca",

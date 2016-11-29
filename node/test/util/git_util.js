@@ -261,10 +261,15 @@ describe("GitUtil", function () {
         // done in terms of `git push`, though eventually it will be through
         // NodeGit.
 
-        function pusher(repoName, origin, local, remote) {
+        function pusher(repoName, origin, local, remote, force) {
             return co.wrap(function *(repos) {
+                force = force || false;
                 const result =
-                    yield GitUtil.push(repos[repoName], origin, local, remote);
+                    yield GitUtil.push(repos[repoName],
+                                       origin,
+                                       local,
+                                       remote,
+                                       force);
                 if (null !== result) {
                     throw new Error(result);
                 }
@@ -277,6 +282,16 @@ describe("GitUtil", function () {
                 expected: {},
                 manipulator: pusher("a", "foo", "bar", "bar"),
                 fail: true
+            },
+            "no-ffwd failure": {
+                input: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+                manipulator: pusher("b", "origin", "master", "master"),
+                fail: true,
+            },
+            "force success": {
+                input: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+                manipulator: pusher("b", "origin", "master", "master", true),
+                expected: "a=B:C3-1;Bmaster=3|b=Ca:Bmaster=3",
             },
             "push new branch": {
                 input: "a=S|b=Ca:Bfoo=1",
