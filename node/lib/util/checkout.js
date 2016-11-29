@@ -47,6 +47,8 @@ const UserError     = require("./user_error");
  * `metaRepo`, and update all open submodules to be on the indicated commit,
  * fetching it if necessary.  If `committish` identifies a branch, set that as
  * the current branch.  Throw a `UserError` if `committish` cannot be resolved.
+ * Throw a `UserError` if one of the submodules or the meta-repo cannot be
+ * checked out.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -62,7 +64,6 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
     }
     const commit = yield metaRepo.getCommit(annotated.id());
 
-    yield GitUtil.setHeadHard(metaRepo, commit);
 
     const open = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
     const names = yield SubmoduleUtil.getSubmoduleNamesForCommit(metaRepo,
@@ -70,8 +71,38 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
     const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
                                                                names,
                                                                commit);
+    // First, do dry runs.
 
-    // checkout submodules
+    let errors = [];
+
+    /**
+     * If it is possible to check out the specified `commit` in the specified
+     * `repo`, return `null`; otherwise, return an error message.
+     */
+    const dryRun = co.wrap(function *(repo, commit) {
+        try {
+            yield NodeGit.Checkout.tree(repo, commit, {
+                checkoutStrategy: NodeGit.Checkout.STRATEGY.NONE,
+            });
+            return null;                                              // RETURN
+        }
+        catch(e) {
+            return e.message;                                         // RETURN
+        }
+    });
+
+    // Check meta
+
+    const metaError = yield dryRun(metaRepo, commit);
+    if (null !== metaError) {
+        errors.push(`Unable to check out meta-repo: ${metaError}.`);
+    }
+
+    // Try the submodules; store the opened repos and loaded commits for use
+    // in the actual checkout later.
+
+    let subRepos = [];     // will contain a list of repositories for sub-repos
+    let subCommits = [];   // will contain a list of commits to checkout
 
     yield open.map(co.wrap(function *(name) {
         // Open repo but not alive on this commit.
@@ -81,10 +112,48 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
         }
 
         const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
+        subRepos.push(repo);
         const sha = shas[name];
         yield GitUtil.fetchSha(repo, sha);
         const commit = yield repo.getCommit(sha);
-        yield GitUtil.setHeadHard(repo, commit);
+        subCommits.push(commit);
+        const error = yield dryRun(repo, commit);
+        if (null !== error) {
+            errors.push(
+             `Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
+        }
+    }));
+
+    // Throw an error if any dry-runs failed.
+
+    if (0 !== errors.length) {
+        throw new UserError(errors.join("\n"));
+    }
+
+    /**
+     * Checkout and set as head the specified `commit` in the specified `repo`.
+     */
+    const doCheckout = co.wrap(function *(repo, commit) {
+        yield NodeGit.Checkout.tree(repo, commit, {
+            checkoutStrategy: NodeGit.Checkout.STRATEGY.SAFE,
+        });
+        repo.setHeadDetached(commit);
+    });
+
+    // Now do the actual checkouts.
+
+    yield doCheckout(metaRepo, commit);
+
+    yield open.map(co.wrap(function *(name, index) {
+        // Open repo but not alive on this commit.
+
+        if (!(name in shas)) {
+            return; // RETURN
+        }
+
+        const repo = subRepos[index];
+        const commit = subCommits[index];
+        yield doCheckout(repo, commit);
     }));
 
     // if 'committish' is a branch,  make it current

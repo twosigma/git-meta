@@ -48,6 +48,21 @@ describe("checkout", function () {
             branchName: "foo",
             expected: "x=E:*=foo",
         },
+        "simple branch switch with untracked file": {
+            input: "x=S:Bfoo=1;W car=bmw",
+            branchName: "foo",
+            expected: "x=E:*=foo",
+        },
+        "simple branch switch with unrelated change": {
+            input: "x=S:C2-1;Bfoo=2;W README.md=meh",
+            branchName: "foo",
+            expected: "x=E:*=foo",
+        },
+        "simple branch switch with conflict": {
+            input: "x=S:C2-1;Bfoo=2;W 2=meh",
+            branchName: "foo",
+            fails: true,
+        },
         "committish": {
             input: "x=S:C2-1;Bfoo=2",
             commit: "2",
@@ -77,6 +92,30 @@ describe("checkout", function () {
             input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os",
             branchName: "foo",
             expected: "x=E:*=foo;Os H=4",
+        },
+        "sub open, new commit": {
+            input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1!H=5",
+            branchName: "foo",
+            expected: "x=E:*=foo;Os H=4",
+        },
+        "sub open, new overlapping commit": {
+            input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1 3=x!H=5",
+            branchName: "foo",
+            expected: "x=E:*=foo;Os H=4",
+        },
+        "overlapping change failure": {
+            input: "\
+a=S:C4-1 README.md=q;Bmeh=4|\
+x=U:C3-2 s=Sa:4;Bfoo=3;Os W README.md=r",
+            branchName: "foo",
+            fails: true,
+        },
+        "non-overlapping change success": {
+            input: "\
+a=S:C4-1 README.md=q;Bmeh=4|\
+x=U:C3-2 s=Sa:4;Bfoo=3;Os W bar=r",
+            branchName: "foo",
+            expected: "x=E:*=foo;Os H=4!W bar=r",
         },
     };
     function checkout(branchName, commit) {

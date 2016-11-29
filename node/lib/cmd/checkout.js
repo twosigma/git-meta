@@ -61,10 +61,7 @@ exports.configureParser = function (parser) {
 exports.executeableSubcommand = co.wrap(function *(args) {
     const Checkout = require("../util/checkout");
     const GitUtil  = require("../util/git_util");
-    const Status   = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const status = yield Status.getRepoStatus(repo);
-    Status.ensureClean(status);
     yield Checkout.checkout(repo, args.committish);
 });
