@@ -38,6 +38,8 @@
 const ArgumentParser = require("argparse").ArgumentParser;
 const co             = require("co");
 const mkdirp         = require("mkdirp");
+const path           = require("path");
+const rimraf         = require("rimraf");
 
 const WriteRepoASTUtil    = require("./util/write_repo_ast_util");
 const ShorthandParserUtil = require("./util/shorthand_parser_util");
@@ -62,6 +64,13 @@ parser.addArgument(["shorthand"], {
     help: "shorthand description of repos",
 });
 
+parser.addArgument(["-o", "--overwrite"], {
+    required: false,
+    action: "storeConst",
+    constant: true,
+    help: `automatically remove existing directories`,
+});
+
 const args = parser.parseArgs();
 
 co(function *() {
@@ -69,6 +78,14 @@ co(function *() {
         mkdirp.sync(args.target);
         const shorthand =
                    ShorthandParserUtil.parseMultiRepoShorthand(args.shorthand);
+        if (args.overwrite) {
+            yield Object.keys(shorthand).map(co.wrap(function *(name) {
+                const dir = path.join(args.target, name);
+                yield (new Promise(callback => {
+                    return rimraf(dir, {}, callback);
+                }));
+            }));
+        }
         yield WriteRepoASTUtil.writeMultiRAST(shorthand, args.target);
     }
     catch(e) {
