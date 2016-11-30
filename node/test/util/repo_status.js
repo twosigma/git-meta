@@ -32,7 +32,8 @@
 
 const assert = require("chai").assert;
 
-const RepoStatus= require("../../lib/util/repo_status");
+const Rebase     = require("../../lib/util/rebase");
+const RepoStatus = require("../../lib/util/repo_status");
 
 describe("RepoStatus", function () {
     describe("Submodule", function () {
@@ -296,6 +297,7 @@ describe("RepoStatus", function () {
                 staged: {},
                 workdir: {},
                 submodules: {},
+                rebase: null,
             };
             return Object.assign(result, args);
         }
@@ -323,6 +325,7 @@ describe("RepoStatus", function () {
                             commitUrl: "a",
                         }),
                     },
+                    rebase: new Rebase("foo", "1", "2"),
                 },
                 e: m({
                     currentBranchName: "foo",
@@ -338,6 +341,7 @@ describe("RepoStatus", function () {
                             commitUrl: "a",
                         }),
                     },
+                    rebase: new Rebase("foo", "1", "2"),
                 }),
             }
         };
@@ -352,6 +356,7 @@ describe("RepoStatus", function () {
             assert.deepEqual(result.staged, c.e.staged);
             assert.deepEqual(result.workdir, c.e.workdir);
             assert.deepEqual(result.submodules, c.e.submodules);
+            assert.deepEqual(result.rebase, c.e.rebase);
         });
     });
 
