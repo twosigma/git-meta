@@ -79,6 +79,13 @@ specified`,
         help: `name of target remote branch to push to; the name of the local
 active branch is used if not specified`,
     });
+
+    parser.addArgument(["-f", "--force"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `Attempt to push even if not a fast-forward change.`,
+    });
 };
 
 /**
@@ -113,5 +120,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     });
     const source = yield getName(args.source);
     const target = yield getName(args.target);
-    return push.push(repo, args.repository, source, target);
+    return push.push(repo,
+                     args.repository,
+                     source,
+                     target,
+                     args.force || false);
 });

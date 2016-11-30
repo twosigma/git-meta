@@ -70,12 +70,14 @@ const UserError           = require("./user_error");
  * @param {String}             remoteName
  * @param {String}             source
  * @param {String}             target
+ * @param {Boolean}            force
  */
-exports.push = co.wrap(function *(repo, remoteName, source, target) {
+exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(remoteName);
     assert.isString(source);
     assert.isString(target);
+    assert.isBoolean(force);
 
     // First, push the submodules.
 
@@ -97,10 +99,14 @@ exports.push = co.wrap(function *(repo, remoteName, source, target) {
                           SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
         const subRepo = sub.repo;
 
+        // Always force push synthetic refs.  It should not be necessary, but
+        // if something does go wrong forcing will allow us to auto-correct.
+
         const pushResult = yield GitUtil.push(subRepo,
                                               remoteName,
                                               sha,
-                                              syntheticName);
+                                              syntheticName,
+                                              true);
         if (null !== pushResult) {
             errorMessage +=
            `Failed to push submodule ${colors.yellow(subName)}: ${pushResult}`;
@@ -116,7 +122,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target) {
 
     // Finally, push the meta-repo and throw on failure.
 
-    const result = yield GitUtil.push(repo, remoteName, source, target);
+    const result = yield GitUtil.push(repo, remoteName, source, target, force);
     if (null !== result) {
         throw new UserError(`Failed to push meta-repo: ${result}`);
     }

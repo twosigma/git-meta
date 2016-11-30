@@ -202,15 +202,17 @@ exports.getCurrentRepo = function () {
  * Push the specified `source` branch in the specified `repo` to the specified
  * `target` branch in the specified `remote` repository.  Return null if the
  * push succeeded and string containing an error message if the push failed.
+ * Attempt to allow a non-ffwd push if the specified `force` is `true`.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {String}             remote
  * @param {String}             source
  * @param {String}             target
+ * @param {String}             force
  * @return {String} [return]
  */
-exports.push = co.wrap(function *(repo, remote, source, target) {
+exports.push = co.wrap(function *(repo, remote, source, target, force) {
     // TODO: this is an awful hack because I can't yet figure out how to get
     // nodegit to work with kerberos.  For now, will shell out and use the
     // 'git' command.
@@ -219,9 +221,15 @@ exports.push = co.wrap(function *(repo, remote, source, target) {
     assert.isString(remote);
     assert.isString(source);
     assert.isString(target);
+    assert.isBoolean(force);
+
+    let forceStr = "";
+    if (force) {
+        forceStr = "-f";
+    }
 
     const execString = `\
-git -C '${repo.workdir()}' push ${remote} ${source}:${target}`;
+git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
         yield exec(execString);
         return null;
