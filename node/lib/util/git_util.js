@@ -507,6 +507,8 @@ exports.setHeadHard = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
+    yield NodeGit.Checkout.tree(repo, commit, {
+        checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
+    });
     repo.setHeadDetached(commit);
-    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.HARD);
 });
