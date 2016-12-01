@@ -89,7 +89,6 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     const subStats = repoStat.submodules;
 
     const originUrl = yield GitUtil.getOriginUrl(metaRepo);
-    const repoPath = metaRepo.workdir();
 
     const picker = co.wrap(function *(subName, subStat) {
         const id = NodeGit.Oid.fromString(subStat.indexSha);
@@ -101,7 +100,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
         if (null === subStat.repoStatus) {
             console.log(`Opening ${colors.blue(subName)}.`);
             yield Open.openOnCommit(originUrl,
-                                    repoPath,
+                                    metaRepo,
                                     subName,
                                     subStat.indexUrl,
                                     subStat.commitSha);

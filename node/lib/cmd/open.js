@@ -44,6 +44,18 @@ const co = require("co");
 exports.helpText = "make a repository visible locally";
 
 /**
+ * detailed description of the `open` command
+ * @property {String}
+ */
+exports.description = `Open one or more submodules and check out their heads
+as specified in the index of the meta-repo.  If there is a
+'meta.submoduleTemplatePath' configuration entry, use its value to locate a
+template configuration directory whose contents will be copied into the '.git'
+directory of the opened submodules.  Note that if this entry contains a
+relative path, it will be resolved against the working direcotry of the
+meta-repo.`;
+
+/**
  * Configure the specified `parser` for the `open` command.
  *
  * @param {ArgumentParser} parser
@@ -78,8 +90,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const originUrl = yield GitUtil.getOriginUrl(repo);
 
-    const repoPath = repo.workdir();
-
     let errors = "";
 
     const subs = status.submodules;
@@ -103,7 +113,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         }
         else {
             yield Open.openOnCommit(originUrl,
-                                    repoPath,
+                                    repo,
                                     name,
                                     sub.indexUrl,
                                     shas[index]);

@@ -34,33 +34,34 @@
  */
 const assert  = require("chai").assert;
 const co      = require("co");
+const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Open the submodule having the specified `submoduleName` in the specified
- * `repo`; fetch the specified `commitSha` and set HEAD to point to it.
+ * `metaRepo`; fetch the specified `commitSha` and set HEAD to point to it.
  * Configure the "origin" remote to the specified `url`, using the specified
  * `baseUrl` to resolve against `url` if it is relative.
  *
  * @async
- * @param {String|null} repoOriginUrl
- * @param {String}      repoPath
- * @param {String}      submoduleName
- * @param {String}      url
- * @param {String}      commitSha
+ * @param {String|null}        repoOriginUrl
+ * @param {NodeGit.Repository} metaRepo
+ * @param {String}             submoduleName
+ * @param {String}             url
+ * @param {String}             commitSha
  * @return {NodeGit.Repository}
  */
 exports.openOnCommit = co.wrap(function *(repoOriginUrl,
-                                          repoPath,
+                                          metaRepo,
                                           submoduleName,
                                           url,
                                           commitSha) {
     if (null !== repoOriginUrl) {
         assert.isString(repoOriginUrl);
     }
-    assert.isString(repoPath);
+    assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(submoduleName);
     assert.isString(url);
     assert.isString(commitSha);
@@ -69,7 +70,7 @@ exports.openOnCommit = co.wrap(function *(repoOriginUrl,
 
     const submoduleRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                 repoOriginUrl,
-                                                                repoPath,
+                                                                metaRepo,
                                                                 submoduleName,
                                                                 url);
 
