@@ -253,7 +253,7 @@ exports.rebase = co.wrap(function *(metaRepo, commit, status) {
     const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
     const metaPath = metaRepo.workdir();
 
-    const currentBranchName = status.currentBranchName;
+    const currentBranchName = status.currentBranchName || "HEAD";
     const currentBranch = yield metaRepo.getBranch(currentBranchName);
     const currentCommitId = NodeGit.Oid.fromString(status.headCommit);
     const commitId = commit.id();
