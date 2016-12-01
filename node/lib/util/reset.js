@@ -74,7 +74,7 @@ function getType(type) {
 exports.reset = co.wrap(function *(repo, commit, type) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
-    assert.oneOf(type, Object.values(TYPE));
+    assert.isString(type);
 
     const resetType = getType(type);
 
