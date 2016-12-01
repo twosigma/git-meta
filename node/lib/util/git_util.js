@@ -231,7 +231,13 @@ exports.push = co.wrap(function *(repo, remote, source, target, force) {
     const execString = `\
 git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
-        yield exec(execString);
+        const result = yield exec(execString);
+        if (result.stdout) {
+            console.log(result.stdout);
+        }
+        if (result.stderr) {
+            console.error(result.stderr);
+        }
         return null;
     }
     catch (e) {
