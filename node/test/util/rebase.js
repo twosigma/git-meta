@@ -157,6 +157,15 @@ x=Ca:Bmaster=2;Os",
             rebaser: rebaser("x", "3"),
             expected: "x=E:Bmaster=3;Os H=r",
         },
+        "make sure unchanged repos stay closed": {
+            initial: "\
+a=B|\
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 t=Sb:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 t=Sb:jt;Bmaster=3M;Ot H=jt!Cjt-k j=j",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
