@@ -361,14 +361,7 @@ up-to-date.`);
             const stage = RepoStatus.getStage(e.flags);
             switch (stage) {
             case RepoStatus.STAGE.NORMAL:
-                const normalPath = e.path;
-                const normalRebaser = yield getSubmoduleRebaser(normalPath);
-                if (null !== normalRebaser) {
-                    nexts.push({rebaser: normalRebaser, id: id.tostrS()});
-                }
-                else {
-                    yield index.addByPath(e.path);
-                }
+                // Do nothing; this indicates same both sides.
                 break;
             case RepoStatus.STAGE.OURS:
                 const initRebaser = yield getSubmoduleRebaser(e.path);
