@@ -391,6 +391,27 @@ git checkout-index -a -f
 `;
         yield exec(checkoutIndexStr);
 
+        // Set up a rebase if there is one, this has to come right before
+        // setting up the workdir, otherwise the rebase won't be allowed to
+        // start.
+
+        if (null !== ast.rebase) {
+            const rebase = ast.rebase;
+            const originalSha = commitMap[rebase.originalHead];
+            const ontoSha = commitMap[rebase.onto];
+            const original = yield NodeGit.AnnotatedCommit.lookup(repo,
+                                                                  originalSha);
+            const onto = yield NodeGit.AnnotatedCommit.lookup(repo, ontoSha);
+            yield NodeGit.Rebase.init(repo, original, onto, null, null);
+            const gitDir = repo.path();
+            const rbDir = yield RebaseFileUtil.findRebasingDir(gitDir);
+            const headNamePath = path.join(gitDir,
+                                           rbDir,
+                                           RebaseFileUtil.headFileName);
+            yield fs.writeFile(headNamePath, rebase.headName + "\n");
+        }
+
+
         // Now apply changes to the workdir.
 
         const workdir = ast.workdir;
@@ -406,24 +427,6 @@ git checkout-index -a -f
                 yield fs.writeFile(absPath, change);
             }
         }
-    }
-
-    // set up a rebase if there is one
-
-    if (null !== ast.rebase) {
-        const rebase = ast.rebase;
-        const originalSha = commitMap[rebase.originalHead];
-        const ontoSha = commitMap[rebase.onto];
-        const original = yield NodeGit.AnnotatedCommit.lookup(repo,
-                                                              originalSha);
-        const onto = yield NodeGit.AnnotatedCommit.lookup(repo, ontoSha);
-        yield NodeGit.Rebase.init(repo, original, onto, null, null);
-        const gitDir = repo.path();
-        const rbDir = yield RebaseFileUtil.findRebasingDir(gitDir);
-        const headNamePath = path.join(gitDir,
-                                       rbDir,
-                                       RebaseFileUtil.headFileName);
-        yield fs.writeFile(headNamePath, rebase.headName + "\n");
     }
 
     return repo;

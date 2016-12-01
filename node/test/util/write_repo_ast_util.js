@@ -180,6 +180,12 @@ describe("WriteRepoASTUtil", function () {
                 input: "S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3",
                 expected: "S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3;H=3",
             },
+            "with rebase and workdir changes": {
+                input: "\
+S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;W x=q",
+                expected: "\
+S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;W x=q;H=3",
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
