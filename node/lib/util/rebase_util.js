@@ -34,12 +34,15 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
+const path    = require("path");
+const rimraf  = require("rimraf");
 
-const Open          = require("./open");
-const GitUtil       = require("./git_util");
-const RepoStatus    = require("./repo_status");
-const SubmoduleUtil = require("./submodule_util");
-const UserError     = require("./user_error");
+const Open           = require("./open");
+const GitUtil        = require("./git_util");
+const RepoStatus     = require("./repo_status");
+const RebaseFileUtil = require("./rebase_file_util");
+const SubmoduleUtil  = require("./submodule_util");
+const UserError      = require("./user_error");
 
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
@@ -76,6 +79,29 @@ const callNext = co.wrap(function *(rebase) {
             return null;
         }
         throw e;
+    }
+});
+
+/**
+ * Finish the specified `rebase` in the specified `repo`.  Note that this
+ * method is necessary only as a workaround for:
+ * https://github.com/twosigma/git-meta/issues/115.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Rebase} rebase
+ */
+const callFinish = co.wrap(function *(repo, rebase) {
+    const result = rebase.finish();
+    const CLEANUP_FAILURE = -15;
+    if (CLEANUP_FAILURE === result) {
+        const gitDir = repo.path();
+        const rebaseDir = yield RebaseFileUtil.findRebasingDir(gitDir);
+        if (null !== rebaseDir) {
+            const rebasePath = path.join(gitDir, rebaseDir);
+            yield (new Promise(callback => {
+                return rimraf(rebasePath, {}, callback);
+            }));
+        }
     }
 });
 
@@ -149,7 +175,7 @@ function SubmoduleRebaser(submoduleName, repo, commits) {
         }
         const oper = yield callNext(rebase);
         if (null === oper) {
-            rebase.finish();
+            yield callFinish(repo, rebase);
             finishedRebase = true;
             return true;                                              // RETURN
         }
@@ -472,7 +498,7 @@ Conflict rebasing the submodule ${colors.red(rebaser.path())}.`;
         }));
     }
 
-    rebase.finish();
+    yield callFinish(metaRepo, rebase);
 
     return result;
 });
