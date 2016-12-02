@@ -61,8 +61,14 @@ const TestUtil            = require("../util/test_util");
  * @return {String}
  */
 const doExec = co.wrap(function *(string) {
-    const result = yield exec(string);
-    return result.stdout.split("\n")[0];
+    try {
+        const result = yield exec(string);
+        return result.stdout.split("\n")[0];
+    }
+    catch (e) {
+        console.log(string.split("\n")[1]);
+        throw e;
+    }
 });
 
 /**
@@ -146,9 +152,12 @@ const makeTree = co.wrap(function *(repo, flatTree, getSubmoduleSha) {
             const treeObj = builder.write();
             return treeObj.tostrS();                                  // RETURN
         }
+        const tempDir = yield TestUtil.makeTempDir();
+        const tempPath = path.join(tempDir, "treeData");
+        yield fs.writeFile(tempPath, treeData);
         const makeTreeExecString = `\
 cd ${repo.path()}
-echo '${treeData}' | git mktree
+cat '${tempPath}' | git mktree
 `;
         return yield doExec(makeTreeExecString);
     });
