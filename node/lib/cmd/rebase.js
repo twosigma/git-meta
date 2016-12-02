@@ -71,7 +71,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const Rebase  = require("../util/rebase");
+    const RebaseUtil  = require("../util/rebase_util");
     const GitUtil = require("../util/git_util");
     const Status  = require("../util/status");
 
@@ -85,5 +85,5 @@ commit.`);
         process.exit(-1);
     }
     const commit = yield repo.getCommit(commitish.id());
-    yield Rebase.rebase(repo, commit, status);
+    yield RebaseUtil.rebase(repo, commit, status);
 });

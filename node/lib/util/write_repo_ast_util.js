@@ -45,10 +45,11 @@ const mkdirp   = require("mkdirp");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
-const RepoAST             = require("../util/repo_ast");
-const RepoASTUtil         = require("../util/repo_ast_util");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
-const TestUtil            = require("../util/test_util");
+const RebaseFileUtil      = require("./rebase_file_util");
+const RepoAST             = require("./repo_ast");
+const RepoASTUtil         = require("./repo_ast_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
+const TestUtil            = require("./test_util");
 
                          // Begin module-local methods
 
@@ -405,6 +406,24 @@ git checkout-index -a -f
                 yield fs.writeFile(absPath, change);
             }
         }
+    }
+
+    // set up a rebase if there is one
+
+    if (null !== ast.rebase) {
+        const rebase = ast.rebase;
+        const originalSha = commitMap[rebase.originalHead];
+        const ontoSha = commitMap[rebase.onto];
+        const original = yield NodeGit.AnnotatedCommit.lookup(repo,
+                                                              originalSha);
+        const onto = yield NodeGit.AnnotatedCommit.lookup(repo, ontoSha);
+        yield NodeGit.Rebase.init(repo, original, onto, null, null);
+        const gitDir = repo.path();
+        const rbDir = yield RebaseFileUtil.findRebasingDir(gitDir);
+        const headNamePath = path.join(gitDir,
+                                       rbDir,
+                                       RebaseFileUtil.headFileName);
+        yield fs.writeFile(headNamePath, rebase.headName + "\n");
     }
 
     return repo;

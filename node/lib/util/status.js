@@ -36,6 +36,8 @@ const NodeGit = require("nodegit");
 
 const GitUtil             = require("../util/git_util");
 const UserError           = require("../util/user_error");
+const Rebase              = require("../util/rebase");
+const RebaseFileUtil      = require("../util/rebase_file_util");
 const RepoStatus          = require("../util/repo_status");
 const SubmoduleUtil       = require("../util/submodule_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
@@ -457,6 +459,19 @@ exports.getRepoStatus = co.wrap(function *(repo) {
         submodules: {},
     };
 
+    // Rebase, need to get shorthand for branch if available.
+
+    let rebase = yield RebaseFileUtil.readRebase(repo.path());
+    if (null !== rebase) {
+        const rebaseBranch = yield GitUtil.findBranch(repo, rebase.headName);
+        if (null !== rebaseBranch) {
+            rebase = new Rebase(rebaseBranch.shorthand(),
+                                rebase.originalHead,
+                                rebase.onto);
+        }
+        args.rebase = rebase;
+    }
+
     // Loop through each of the `NodeGit.FileStatus` objects in the repo and
     // categorize them into `args`.
 
@@ -602,6 +617,17 @@ exports.printSubmodulesStatus = co.wrap(function *(metaRepo, requestedNames) {
 exports.printRepoStatus = function (metaStatus) {
     let result = "";
 
+    if (null !== metaStatus.rebase) {
+        const rb = metaStatus.rebase;
+        const shortSha = GitUtil.shortSha(rb.onto);
+        result += `${colors.red("rebase in progress; onto ", shortSha)}
+You are currently rebasing branch '${rb.headName}' on '${shortSha}'.
+  (fix conflicts and then run "git meta rebase --continue")
+  (use "git meta rebase --skip" to skip this patch)
+  (use "git meta rebase --abort" to check out the original branch)
+`;
+    }
+
     if (null !== metaStatus.currentBranchName) {
         result += `On branch ${colors.green(metaStatus.currentBranchName)}.\n`;
     }
@@ -612,7 +638,7 @@ On detached head ${colors.red(GitUtil.shortSha(metaStatus.headCommit))}.`;
     const metaStatusDesc = exports.printFileStatuses(metaStatus);
     result += metaStatusDesc;
     if ("" === metaStatusDesc) {
-        result += "nothing to commit, working directory clean\n";
+        result += "  nothing to commit, working directory clean\n";
     }
 
     let submodulesText = "";

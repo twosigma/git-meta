@@ -97,10 +97,17 @@ describe("WriteRepoASTUtil", function () {
         // We will "cheat" and utilize the already-tested `readRAST` to test
         // this one.
 
-        const testCase = co.wrap(function *(shorthand, testName) {
+        const testCase = co.wrap(function *(testName,
+                                            shorthand,
+                                            expectedShorthand) {
             let ast = shorthand;
             if (!(ast instanceof RepoAST)) {
                 ast = ShorthandParserUtil.parseRepoShorthand(shorthand);
+            }
+            let expectedAst = expectedShorthand;
+            if (!(expectedAst instanceof RepoAST)) {
+                expectedAst =
+                           ShorthandParserUtil.parseRepoShorthand(expectedAst);
             }
             const path = yield TestUtil.makeTempDir();
             const result = yield WriteRepoASTUtil.writeRAST(ast, path);
@@ -118,8 +125,18 @@ describe("WriteRepoASTUtil", function () {
             const mappedNewAst =
                RepoASTUtil.mapCommitsAndUrls(newAst, result.commitMap, {});
 
-            RepoASTUtil.assertEqualASTs(mappedNewAst, ast, testName);
+            RepoASTUtil.assertEqualASTs(mappedNewAst, expectedAst, testName);
         });
+
+        // The general format for a case in this test driver is to specify a
+        // string that is both the input and the expected value of the
+        // repository after the repository is rendered.
+        //
+        // Certain types of strings may not be reflexive.  For example, when a
+        // shorthand string denotes a rebase, that rebase is applied to the
+        // repository after it has been written, and will change its state.
+        // For these types of test cases, the case is given as an object
+        // containing an `input` and `expected` string.
 
         const cases = {
             "simple": "S",
@@ -159,12 +176,22 @@ describe("WriteRepoASTUtil", function () {
                 "N refs/notes/morx 2=two;" +
                 "N refs/notes/fleem 1=fone;" +
                 "N refs/notes/fleem 2=ftwo",
+            "with rebase": {
+                input: "S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3",
+                expected: "S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3;H=3",
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
-            const shorthand = cases[caseName];
+            let input = cases[caseName];
+            let expected = input;
+
+            if ("string" !== typeof input) {
+                expected = input.expected;
+                input = input.input;
+            }
             it(caseName, co.wrap(function *() {
-                yield testCase(shorthand);
+                yield testCase(caseName, input, expected);
             }));
         });
     });

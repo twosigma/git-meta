@@ -31,6 +31,8 @@
 "use strict";
 const assert  = require("chai").assert;
 
+const Rebase = require("./rebase");
+
 /**
  * This modules defines the type `RepoStatus`, used to describe modifications
  * to a repo.
@@ -273,6 +275,7 @@ class RepoStatus {
      * @param {Object}   [args.staged] map from name to `FILESTATUS`
      * @param {Object}   [args.submodules] map from name to `Submodule`
      * @param {Object}   [args.workdir] map from name to `FILESTATUS`
+     * @param {Rebase}   [args.rebase] rebase, if one is in progress
      */
     constructor(args) {
         if (undefined === args) {
@@ -286,6 +289,7 @@ class RepoStatus {
         this.d_staged = {};
         this.d_workdir = {};
         this.d_submodules = {};
+        this.d_rebase = null;
 
         if ("currentBranchName" in args) {
             if (null !== args.currentBranchName) {
@@ -324,6 +328,14 @@ class RepoStatus {
                 assert.instanceOf(submodule, Submodule);
                 this.d_submodules[name] = submodule;
             }
+        }
+
+        if ("rebase" in args) {
+            const rebase = args.rebase;
+            if (null !== rebase) {
+                assert.instanceOf(rebase, Rebase);
+            }
+            this.d_rebase = rebase;
         }
         Object.freeze(this);
     }
@@ -387,6 +399,13 @@ class RepoStatus {
      */
     get workdir() {
         return Object.assign({}, this.d_workdir);
+    }
+
+    /**
+     * @property {Rebase} rebase if non-null, state of in-progress rebase
+     */
+    get rebase() {
+        return this.d_rebase;
     }
 }
 

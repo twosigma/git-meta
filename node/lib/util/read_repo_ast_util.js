@@ -42,8 +42,9 @@ const fs       = require("fs-promise");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
-const RepoAST             = require("../util/repo_ast");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const RepoAST             = require("./repo_ast");
+const RebaseFileUtil      = require("./rebase_file_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Return a representation of the specified `repo` encoded in an `AST` object.
@@ -382,6 +383,7 @@ exports.readRAST = co.wrap(function *(repo) {
         notes: notes,
         workdir: workdir,
         openSubmodules: openSubmodules,
+        rebase: yield RebaseFileUtil.readRebase(repo.path()),
     });
 });
 

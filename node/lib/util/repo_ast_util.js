@@ -150,7 +150,7 @@ got ${colorAct(actualChange)}`
 }
 
 /**
- * Return an array of  description of the difference between the specified
+ * Return an array of description of the difference between the specified
  * `actual` and `expected` `Commit` objects; if there are no differences, the
  * array will be empty.
  *
@@ -412,7 +412,7 @@ ${colorExp(expected.currentBranchName)}`
         });
     }
 
-    // Finally, check open submodules
+    // Check open submodules
 
     function missingActualOpenSubmodule(name) {
         result.push(`missing open submodule ${colorBad(name)}`);
@@ -435,6 +435,31 @@ ${colorExp(expected.currentBranchName)}`
                 missingActualOpenSubmodule,
                 missingExpectedOpenSubmodule,
                 compareOpenSubmodules);
+
+    // Check rebases
+
+    if (null === actual.rebase && null !== expected.rebase) {
+        result.push("Missing rebase.");
+    }
+    else if (null !== actual.rebase && null === expected.rebase) {
+        result.push("Unexpected rebase.");
+    }
+    else if (null !== actual.rebase) {
+        if (actual.rebase.headName !== expected.rebase.headName) {
+            result.push(`Expected ${colorBad("rebase head name")} to be \
+${colorExp(expected.rebase.headName)} but got \
+${colorAct(actual.rebase.headName)}.`);
+        }
+        if (actual.rebase.originalHead !== expected.rebase.originalHead) {
+            result.push(`Expected ${colorBad("rebase original head")} to be \
+${colorExp(expected.rebase.originalHead)} but got \
+${colorAct(actual.rebase.originalHead)}.`);
+        }
+        if (actual.rebase.onto !== expected.rebase.onto) {
+            result.push(`Expected ${colorBad("rebase onto")} to be \
+${colorExp(expected.rebase.onto)} but got ${colorAct(actual.rebase.onto)}.`);
+        }
+    }
 
     return result;
 }
@@ -652,6 +677,13 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         head = mapCommitId(ast.head);
     }
 
+    let rebase = ast.rebase;
+    if (null !== rebase) {
+        rebase = new RepoAST.Rebase(rebase.headName,
+                                    mapCommitId(rebase.originalHead),
+                                    mapCommitId(rebase.onto));
+    }
+
     return ast.copy({
         commits: commits,
         branches: branches,
@@ -663,6 +695,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         notes: notes,
         workdir: mapChanges(ast.workdir),
         openSubmodules: openSubmodules,
+        rebase: rebase,
     });
 };
 

@@ -147,6 +147,7 @@ describe("RepoAST", function () {
             // perform.
 
             const Commit = RepoAST.Commit;
+            const Rebase = RepoAST.Rebase;
             const Remote = RepoAST.Remote;
 
             const c1       = new Commit();
@@ -173,6 +174,8 @@ describe("RepoAST", function () {
                     eworkdir: ("workdir" in expected) ? expected.workdir : {},
                     eopenSubmodules: ("openSubmodules" in expected) ?
                                                   expected.openSubmodules : {},
+                    erebase: ("rebase" in expected) ?
+                        expected.rebase : null,
                     fails   : fails,
                 };
             }
@@ -184,7 +187,8 @@ describe("RepoAST", function () {
                         commits: {},
                         branches: {},
                         head: null,
-                        currentBranchName: null
+                        currentBranchName: null,
+                        rebase: null,
                     },
                     undefined,
                     false),
@@ -413,6 +417,22 @@ describe("RepoAST", function () {
                     },
                     head: "1",
                 }, {}, true),
+                "with rebase": m({
+                    commits: {
+                        "1": new Commit(),
+                    },
+                    head: "1",
+                    rebase: new Rebase("fff", "1", "1"),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                    },
+                    head: "1",
+                    rebase: new Rebase("fff", "1", "1"),
+                }),
+                "bad rebase": m({
+                    rebase: new Rebase("fff", "1", "1"),
+                }, undefined, true),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -434,6 +454,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.index, c.eindex);
                     assert.deepEqual(obj.workdir, c.eworkdir);
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
+                    assert.deepEqual(obj.rebase, c.erebase);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
@@ -572,6 +593,7 @@ describe("RepoAST", function () {
         });
 
         describe("AST.copy", function () {
+            const Rebase = RepoAST.Rebase;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": "1" },
@@ -580,6 +602,7 @@ describe("RepoAST", function () {
                 currentBranchName: "master",
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
+                rebase: new Rebase("hello", "1", "1"),
             });
             const newArgs = {
                 commits: { "2": new RepoAST.Commit()},
@@ -590,6 +613,7 @@ describe("RepoAST", function () {
                 remotes: { "foo": new RepoAST.Remote("meeeee") },
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
+                rebase: new Rebase("hello world", "2", "2"),
             };
             const cases = {
                 "trivial": {
@@ -614,6 +638,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.index, c.e.index);
                     assert.deepEqual(obj.workdir, c.e.workdir);
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
+                    assert.deepEqual(obj.rebase, c.e.rebase);
                 });
             });
         });

@@ -128,6 +128,7 @@ describe("RepoAstUtil", function () {
     describe("assertEqualASTs", function () {
         const AST = RepoAST;
         const Commit = AST.Commit;
+        const Rebase = AST.Rebase;
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
 
@@ -159,6 +160,7 @@ describe("RepoAstUtil", function () {
                     index: { y: aSubmodule },
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
+                    rebase: new Rebase("foo", "1", "1"),
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
@@ -170,6 +172,7 @@ describe("RepoAstUtil", function () {
                     index: { y: aSubmodule },
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
+                    rebase: new Rebase("foo", "1", "1"),
                 }),
             },
             "wrong commit": {
@@ -405,6 +408,73 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
+            "missing rebase": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                fails: true,
+            },
+            "unexpected rebase": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong rebase head name": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    rebase: new Rebase("foo bar", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong rebase original commit": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: "2" },
+                    rebase: new Rebase("foo", "2", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: "2" },
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong rebase onto": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: "2" },
+                    rebase: new Rebase("foo", "1", "2"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: "2" },
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                fails: true,
+            },
         };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
@@ -423,6 +493,7 @@ describe("RepoAstUtil", function () {
 
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
+        const Rebase = RepoAST.Rebase;
         const c1 = new Commit({ message: "foo" });
         const cases = {
             "trivial": { i: new RepoAST(), m: {}, e: new RepoAST() },
@@ -753,6 +824,32 @@ describe("RepoAstUtil", function () {
                     })},
                 }),
             },
+            "rebase": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    rebase: new Rebase("foo", "2", "2"),
+                }),
+            },
+            "rebase unmapped": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+                m: {},
+                e: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    rebase: new Rebase("foo", "1", "1"),
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
@@ -902,6 +999,21 @@ describe("RepoAstUtil", function () {
                                 master: "1",
                             },
                         }),
+                    },
+                }),
+            },
+            "no clone rebase": {
+                original: new AST({
+                    commits: { "1": c1},
+                    head: "1",
+                    rebase: new RepoAST.Rebase("foo", "1", "1"),
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        origin: new Remote("foo", {}),
                     },
                 }),
             },

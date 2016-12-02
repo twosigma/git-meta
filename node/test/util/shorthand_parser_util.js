@@ -423,6 +423,13 @@ describe("ShorthandParserUtil", function () {
                     },
                 }),
             },
+            "rebase": {
+                i: "S:Emaster,1,2",
+                e: m({
+                    type: "S",
+                    rebase: new RepoAST.Rebase("master", "1", "2"),
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -446,6 +453,7 @@ describe("ShorthandParserUtil", function () {
                 assert.equal(r.head, e.head);
                 assert.equal(r.currentBranchName, e.currentBranchName);
                 assert.deepEqual(r.openSubmodules, e.openSubmodules);
+                assert.deepEqual(r.rebase, e.rebase);
             });
         });
     });
@@ -564,6 +572,12 @@ describe("ShorthandParserUtil", function () {
             "test U": {
                 i: "S:Cadded 's'#2-1 s=Sa:1;Bmaster=2",
                 e: ShorthandParserUtil.RepoType.U,
+            },
+            "rebase": {
+                i: "S:Efoo,1,1",
+                e: S.copy({
+                    rebase: new RepoAST.Rebase("foo", "1", "1"),
+                }),
             },
         };
         Object.keys(cases).forEach(caseName => {

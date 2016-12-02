@@ -33,6 +33,7 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 
+const Rebase              = require("../../lib/util/rebase");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const RepoStatus          = require("../../lib/util/repo_status");
 const Status              = require("../../lib/util/status");
@@ -91,6 +92,29 @@ function remapSubmodule(sub, commitMap, urlMap) {
     });
 }
 
+/**
+ * Return a new `Rebase` object having the same value as the specified `rebase`
+ * but with commit shas being replaced by commits in the specified `commitMap`.
+ *
+ * @param {Rebase} rebase
+ * @param {Object} commitMap from sha to sha
+ */
+function remapRebase(rebase, commitMap) {
+    assert.instanceOf(rebase, Rebase);
+    assert.isObject(commitMap);
+
+    let originalHead = rebase.originalHead;
+    let onto = rebase.onto;
+    if (originalHead in commitMap) {
+        originalHead = commitMap[originalHead];
+    }
+    if (onto in commitMap) {
+        onto = commitMap[onto];
+    }
+    return new Rebase(rebase.headName, originalHead, onto);
+}
+
+
 remapRepoStatus = function (status, commitMap, urlMap) {
     assert.instanceOf(status, RepoStatus);
     assert.isObject(commitMap);
@@ -114,6 +138,8 @@ remapRepoStatus = function (status, commitMap, urlMap) {
         staged: status.staged,
         submodules: submodules,
         workdir: status.workdir,
+        rebase: status.rebase === null ? null : remapRebase(status.rebase,
+                                                            commitMap),
     });
 };
 
@@ -185,6 +211,7 @@ describe("Status", function () {
                     headCommit: "1",
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
+                    rebase: new Rebase("foo", "1", "1"),
                 }),
                 commitMap: { "1": "3"},
                 urlMap: {},
@@ -193,6 +220,7 @@ describe("Status", function () {
                     headCommit: "3",
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
+                    rebase: new Rebase("foo", "3", "3"),
                 }),
             },
             "with a sub": {
@@ -682,6 +710,13 @@ describe("Status", function () {
                     headCommit: "1",
                 }),
             },
+            "rebase": {
+                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Erefs/heads/master,2,3",
+                expected: new RepoStatus({
+                    headCommit: "3",
+                    rebase: new Rebase("master", "2", "3"),
+                }),
+            },
             "staged change": {
                 state: "x=S:I README.md=whoohoo",
                 expected: new RepoStatus({
@@ -900,7 +935,11 @@ describe("Status", function () {
         const cases = {
             "trivial": {
                 state: "x=S",
-                regex: /On branch.*master.*\nnothing to commit.*/,
+                regex: /On branch.*master.*\n.*nothing to commit.*/,
+            },
+            "rebase": {
+                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3",
+                regex: /rebas/,
             },
             "detached": {
                 state: "x=S:*=",
