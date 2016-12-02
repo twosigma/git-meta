@@ -121,14 +121,39 @@ class Submodule {
      */
     constructor(status) {
         assert.isObject(status);
-        this.d_indexStatus        = status.indexStatus || null;
-        this.d_indexSha           = status.indexSha || null;
-        this.d_indexShaRelation   = status.indexShaRelation || null;
-        this.d_indexUrl           = status.indexUrl || null;
-        this.d_commitSha          = status.commitSha || null;
-        this.d_commitUrl          = status.commitUrl || null;
-        this.d_workdirShaRelation = status.workdirShaRelation || null;
-        this.d_repoStatus         = status.repoStatus || null;
+        this.d_indexStatus        = null;
+        this.d_indexSha           = null;
+        this.d_indexShaRelation   = null;
+        this.d_indexUrl           = null;
+        this.d_commitSha          = null;
+        this.d_commitUrl          = null;
+        this.d_workdirShaRelation = null;
+        this.d_repoStatus         = null;
+
+        if ("indexStatus" in status) {
+            this.d_indexStatus = status.indexStatus;
+        }
+        if ("indexSha" in status) {
+            this.d_indexSha = status.indexSha;
+        }
+        if ("indexShaRelation" in status) {
+            this.d_indexShaRelation = status.indexShaRelation;
+        }
+        if ("indexUrl" in status) {
+            this.d_indexUrl = status.indexUrl;
+        }
+        if ("commitSha" in status) {
+            this.d_commitSha = status.commitSha;
+        }
+        if ("commitUrl" in status) {
+            this.d_commitUrl = status.commitUrl;
+        }
+        if ("workdirShaRelation" in status) {
+            this.d_workdirShaRelation = status.workdirShaRelation;
+        }
+        if ("repoStatus" in status) {
+            this.d_repoStatus = status.repoStatus;
+        }
         Object.freeze(this);
     }
 
