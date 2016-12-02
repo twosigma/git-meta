@@ -53,16 +53,21 @@ const TestUtil            = require("../util/test_util");
                          // Begin module-local methods
 
 /**
- * Exec the specified `string` and return the result, omitting the "\n" at the
+ * Exec the specified `command` and return the result, omitting the "\n" at the
  * end.
  * @async
  * @private
- * @param {String} string
+ * @param {String} command
  * @return {String}
  */
-const doExec = co.wrap(function *(string) {
-    const result = yield exec(string);
-    return result.stdout.split("\n")[0];
+const doExec = co.wrap(function *(command) {
+    try {
+        const result = yield exec(command);
+        return result.stdout.split("\n")[0];
+    }
+    catch (e) {
+        throw e;
+    }
 });
 
 /**
@@ -146,9 +151,12 @@ const makeTree = co.wrap(function *(repo, flatTree, getSubmoduleSha) {
             const treeObj = builder.write();
             return treeObj.tostrS();                                  // RETURN
         }
+        const tempDir = yield TestUtil.makeTempDir();
+        const tempPath = path.join(tempDir, "treeData");
+        yield fs.writeFile(tempPath, treeData);
         const makeTreeExecString = `\
 cd ${repo.path()}
-echo '${treeData}' | git mktree
+cat '${tempPath}' | git mktree
 `;
         return yield doExec(makeTreeExecString);
     });
