@@ -166,6 +166,14 @@ x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 t=Sb:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
             expected: "\
 x=E:C3M-4 t=Sb:jt;Bmaster=3M;Ot H=jt!Cjt-k j=j",
         },
+        "maintain submodule branch": {
+            initial: "\
+a=B:Ca-1;Cb-1;Bx=a;By=b|\
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3;Os Bmaster=a!*=master",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 s=Sa:as;Bmaster=3M;Os Bmaster=as!Cas-b a=a!*=master",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
