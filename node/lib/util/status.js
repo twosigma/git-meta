@@ -306,19 +306,6 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
                                                 commitTree,
                                                 isVisible,
                                                 readRepoStatus) {
-    assert.isString(name);
-    assert.instanceOf(metaRepo, NodeGit.Repository);
-    if (null !== indexUrl) {
-        assert.isString(indexUrl);
-    }
-    if (null !== commitUrl) {
-        assert.isString(commitUrl);
-    }
-    assert.instanceOf(index, NodeGit.Index);
-    assert.instanceOf(commitTree, NodeGit.Tree);
-    assert.isBoolean(isVisible);
-    assert.isFunction(readRepoStatus);
-
     const args = {
         indexUrl: indexUrl,
         commitUrl: commitUrl,
@@ -332,7 +319,6 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     // up the commit sha.
 
     if (null === commitUrl) {
-        assert.isNotNull(indexUrl);
         args.indexStatus = FILESTATUS.ADDED;
     }
     else {
@@ -343,7 +329,6 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     // load up the sha in the index.
 
     if (null === indexUrl) {
-        assert.isNotNull(commitUrl);
         args.indexStatus = FILESTATUS.REMOVED;
     }
     else {

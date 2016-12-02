@@ -53,20 +53,19 @@ const TestUtil            = require("../util/test_util");
                          // Begin module-local methods
 
 /**
- * Exec the specified `string` and return the result, omitting the "\n" at the
+ * Exec the specified `command` and return the result, omitting the "\n" at the
  * end.
  * @async
  * @private
- * @param {String} string
+ * @param {String} command
  * @return {String}
  */
-const doExec = co.wrap(function *(string) {
+const doExec = co.wrap(function *(command) {
     try {
-        const result = yield exec(string);
+        const result = yield exec(command);
         return result.stdout.split("\n")[0];
     }
     catch (e) {
-        console.log(string.split("\n")[1]);
         throw e;
     }
 });
