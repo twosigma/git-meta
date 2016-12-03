@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - "6.1.0"
+  - "6.9.1"
 
 env:
   - CC=gcc-5
@@ -13,7 +13,11 @@ addons:
       - g++-5
 
 before_install:
-     -  cd node
+      - sudo add-apt-repository ppa:git-core/ppa -y
+      - sudo apt-get update -q
+      - sudo apt-get install git -y
+      - git version
+      - cd node
 
 install:
       - npm install
