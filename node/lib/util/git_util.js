@@ -518,3 +518,74 @@ exports.setHeadHard = co.wrap(function *(repo, commit) {
     });
     repo.setHeadDetached(commit);
 });
+
+/**
+ * @class {Refspec}
+ *
+ * This class represents the definition of a refspec.
+ */
+class Refspec {
+    /**
+     * Create a new `Refspec` object.
+     *
+     * @param {Boolean} force whether or not the refspec begins with +
+     * @param {String} src
+     * @param {String} dst
+     * @constructor
+     */
+    constructor(force, src, dst) {
+        assert.isBoolean(force);
+        assert.isString(src);
+        assert.isString(dst);
+        this.d_force = force;
+        this.d_src = src;
+        this.d_dst = dst;
+    }
+
+    /**
+     * @property {Boolean} update ref even if it isn’t a fast-forward
+     */
+    get force() {
+        return this.d_force;
+    }
+
+    /**
+     * @property {String}
+     */
+    get src() {
+        return this.d_src;
+    }
+
+    /**
+     * @property {String}
+     */
+    get dst() {
+        return this.d_dst;
+    }
+}
+
+/**
+ * Create a new `Refspec` object from a string.
+ *
+ * @param {String} str
+ */
+exports.parseRefspec = function(str) {
+    assert.isString(str);
+
+    let force = false;
+
+    if (0 === str.indexOf("+")) {
+        force = true;
+        str = str.replace(/^\+/, "");
+    }
+
+    const objs = str.split(":");
+    if (1 === objs.length) {
+        return new Refspec(force, objs[0], objs[0]);
+    }
+    else if (2 === objs.length && "" !== objs[1]) {
+        return new Refspec(force, objs[0], objs[1]);
+    }
+
+    throw new UserError("Refspec must match the format <src>:<dest>.");
+};
