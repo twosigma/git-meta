@@ -672,12 +672,36 @@ describe("ShorthandParserUtil", function () {
                 i: "a=S I max=maz|b=S:C2-1 foo=Sa:1;Bmaster=2",
                 fails: true,
             },
+            "relative sub": {
+                i: "a=B|x=S:C2-1 s=S../a:1;Bmaster=2",
+                e: {
+                    a: "B",
+                    x: "S:C2-1 s=S../a:1;Bmaster=2",
+                },
+            },
             "simple open sub": {
                 i: "a=S|b=S:I foo=Sa:1;Ofoo",
                 e: {
                     a: "S",
                     b: S.copy({
                         index: { foo: new Submodule("a", "1") },
+                        openSubmodules: {
+                            foo: RepoASTUtil.cloneRepo(S, "a").copy({
+                                branches: {},
+                                currentBranchName: null,
+                                remotes: { origin: new Remote("a") },
+                            })
+                        }
+                    }),
+                },
+            },
+            "simple open sub with relative URL": {
+                i: "a=S|b=S|x=Cb:I foo=S../a:1;Ofoo",
+                e: {
+                    a: "S",
+                    b: "S",
+                    x: RepoASTUtil.cloneRepo(S, "b").copy({
+                        index: { foo: new Submodule("../a", "1") },
                         openSubmodules: {
                             foo: RepoASTUtil.cloneRepo(S, "a").copy({
                                 branches: {},

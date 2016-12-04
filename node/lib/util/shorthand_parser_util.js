@@ -121,7 +121,9 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * detached HEAD set to the sha recorded in the submodule definition.  Optional
  * overrides can be applied.  Note that the delimiter for overrides with a
  * submodule is '!' to simplify parsing -- otherwise it would require more
- * sophisticated logic to determin when the submodule override ended.
+ * sophisticated logic to determin when the submodule override ended.  To allow
+ * testing of relative URLs, a relative URL in the form of "../foo" will be
+ * translated into "foo" in a open submodule.
  *
  * Examples:
  *
@@ -1165,16 +1167,24 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                 assert.instanceOf(sub,
                                   RepoAST.Submodule,
                                   `${subName} not a submodule in ${name}`);
+
+                // Configure the url for the sub-repo.  If it's in the form of
+                // "../foo", translate it to "foo".
+
+                let openUrl = sub.url;
+                if (openUrl.startsWith("../")) {
+                    openUrl = openUrl.substr(3);
+                }
                 assert.property(result,
-                                sub.url,
-`cannot find url ${sub.url} for submodule ${subName} in repo ${name}.`);
+                                openUrl,
+`cannot find url ${openUrl} for submodule ${subName} in repo ${name}.`);
 
                 // Configure the submodule using its origin repo as its base.
                 // We configure it similar to a clone, but omitting current
                 // branch and any local branches.
 
-                const subBase = result[sub.url];
-                const clone = RepoASTUtil.cloneRepo(subBase, sub.url);
+                const subBase = result[openUrl];
+                const clone = RepoASTUtil.cloneRepo(subBase, openUrl);
                 const origin = clone.remotes.origin;
                 const rawSubRepo = rawResult.openSubmodules[subName];
 
