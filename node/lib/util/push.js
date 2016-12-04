@@ -38,9 +38,11 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
+const url     = require("url");
 
 const GitUtil             = require("./git_util");
 const SubmoduleUtil       = require("./submodule_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError           = require("./user_error");
 
@@ -79,11 +81,22 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     assert.isString(target);
     assert.isBoolean(force);
 
+    let remote;
+    try {
+        remote = yield repo.getRemote(remoteName);
+    }
+    catch (e) {
+        throw new UserError(`No remote named colors.red(${remoteName}).`);
+    }
+    const remoteUrl = remote.url();
+
     // First, push the submodules.
 
     let errorMessage = "";
     const subRepos = yield SubmoduleUtil.getSubmoduleRepos(repo);
     const shas = yield SubmoduleUtil.getSubmoduleShasForBranch(repo, source);
+    const index = yield repo.index();
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
     yield subRepos.map(co.wrap(function *(sub) {
         const subName = sub.name;
 
@@ -99,11 +112,16 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
                           SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
         const subRepo = sub.repo;
 
+        // Resolve the submodule's URL against the URL of the meta-repo,
+        // ignoring the remote that is configured in the open submodule.
+
+        const subUrl = url.resolve(remoteUrl, urls[subName]);
+
         // Always force push synthetic refs.  It should not be necessary, but
         // if something does go wrong forcing will allow us to auto-correct.
 
         const pushResult = yield GitUtil.push(subRepo,
-                                              remoteName,
+                                              subUrl,
                                               sha,
                                               syntheticName,
                                               true);

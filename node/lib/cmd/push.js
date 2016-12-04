@@ -50,10 +50,12 @@ exports.description =`
 Push commits from all (visible) sub-repositories and the meta-repository.  By
 default, this command pushes from the current branch to a branch with the
 same name in the 'origin' repository.  The name of the remote, as well as the
-source and target branches may be overridden.  This command will do refuse to
-push the meta-repository unless the remote pushes succeed and the pushed
-branches contain the commits indicated by the submodules in
-the meta-repository.`;
+source and target branches may be overridden.  Push synthetic-meta-refs for
+each submodule with changes indicated by commits being pushed to the meta-repo.
+Don't push to the meta-repo until the submodule pushes finish successfully.  Do
+not consult the remotes configured for the submodules; instead, push the
+synthetic-meta-ref for each submodule to a URL that is derived by resolving
+its configured URL against the URL being pushed to by the meta-repo.`;
 
 exports.configureParser = function (parser) {
 

@@ -254,6 +254,18 @@ a=E:Bfoo=2|\
 b=E:Fcommits/3=3|\
 x=E:Rorigin=a master=1,foo=2;Ob",
         },
+        "open submodule derive URL from meta-repo, not local remote": {
+            initial: "\
+a=B|\
+b=B|\
+c=B|\
+x=Ca:C2-1 b=Sb:3;Bmaster=2;Ob C3-1!Rorigin=c",
+            manipulator: pusher("x", "origin", "master", "foo"),
+            expected: "\
+a=E:Bfoo=2|\
+b=E:Fcommits/3=3|\
+x=E:Rorigin=a master=1,foo=2;Ob Rorigin=c",
+        },
     };
 
     Object.keys(cases).forEach(caseName => {
