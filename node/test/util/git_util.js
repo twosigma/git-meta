@@ -628,4 +628,30 @@ describe("GitUtil", function () {
             }));
         });
     });
+
+    describe("parseRefspec", function () {
+        const cases = {
+            null: { fail: true },
+            "a": { d_force: false, d_src: "a", d_dst: "a" },
+            ":": { fail: true },
+            "a:": { fail: true },
+            ":b": { d_force: false, d_src: "", d_dst: "b" },
+            "a:b": { d_force: false, d_src: "a", d_dst: "b" },
+            "+a": { d_force: true, d_src: "a", d_dst: "a" },
+            "+:": { fail: true },
+            "+a:": { fail: true },
+            "+:b": { d_force: true, d_src: "", d_dst: "b"},
+            "+a:b": { d_force: true, d_src: "a", d_dst: "b" },
+        };
+        Object.keys(cases).forEach(str => {
+            it(str, function() {
+                try {
+                    const actual = GitUtil.parseRefspec(str);
+                    assert.deepEqual(cases[str], actual);
+                } catch (e) {
+                    assert(true === cases[str].fail);
+                }
+            });
+        });
+    });
 });

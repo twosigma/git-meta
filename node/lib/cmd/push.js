@@ -57,27 +57,21 @@ the meta-repository.`;
 
 exports.configureParser = function (parser) {
 
-    parser.addArgument(["-r", "--repository"], {
+    parser.addArgument("repository", {
         type: "string",
-        required: false,
+        nargs: "?",
         defaultValue: "origin",
-        help: "name of remote to push to; 'origin' used if not specified",
+        help: `remote repository that is the destination of a push; can either
+be a URL or name of a remote; 'origin' used if not specified`,
     });
 
-    parser.addArgument(["-s", "--source"], {
+    parser.addArgument("refspec", {
         type: "string",
-        required: false,
+        nargs: "*",
         defaultValue: null,
-        help: `name of local branch to push; active branch used if not
-specified`,
-    });
-
-    parser.addArgument(["-t", "--target"], {
-        type: "string",
-        required: false,
-        defaultValue: null,
-        help: `name of target remote branch to push to; the name of the local
-active branch is used if not specified`,
+        help: `(optional) plus, follow by a source ref, (optionally) followed
+by a : and a destination ref <dst>; will push branch to destination branch
+if not specified.`,
     });
 
     parser.addArgument(["-f", "--force"], {
@@ -94,8 +88,7 @@ active branch is used if not specified`,
  * @async
  * @param {Object} args
  * @param {String} args.repository
- * @param {String} [args.source]
- * @param {String} [args.target]
+ * @param {String} [args.refspec]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const GitUtil = require("../util/git_util");
@@ -107,22 +100,21 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repoStatus = yield status.getRepoStatus(repo);
     status.ensureConsistent(repoStatus);
 
-    let activeBranchName = null;
-    const getName = co.wrap(function *(inputName) {
-        if (inputName) {
-            return inputName;
-        }
-        if (null === activeBranchName) {
-            const currentBranch = yield repo.getCurrentBranch();
-            activeBranchName = currentBranch.shorthand();
-        }
-        return activeBranchName;
-    });
-    const source = yield getName(args.source);
-    const target = yield getName(args.target);
-    return push.push(repo,
-                     args.repository,
-                     source,
-                     target,
-                     args.force || false);
+    let strRefspecs = [];
+    if (0 === args.refspec.length) {
+        const currentBranch = yield repo.getCurrentBranch();
+        const activeBranchName = currentBranch.shorthand();
+        strRefspecs.push(activeBranchName + ":" + activeBranchName);
+    } else {
+        strRefspecs = strRefspecs.concat(args.refspec);
+    }
+
+    yield strRefspecs.map(co.wrap(function *(strRefspec) {
+        const refspec = GitUtil.parseRefspec(strRefspec);
+        yield push.push(repo,
+            args.repository,
+            refspec.src,
+            refspec.dst,
+            args.force || refspec.force || false);
+    }));
 });
