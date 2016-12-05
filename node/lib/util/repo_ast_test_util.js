@@ -90,9 +90,7 @@ function createMultiRepoASTMap(input, expectedRepos) {
  * Return the repository an object maps as returned by
  * `WriteRepoASTUtil.writeRAST` as described by the specified `input`.  The
  * value of `input` may be a string parseable by
- * `ShorthandParserUtil.parseRepoShorthand`, or a `RepoAST` object.  The
- * behavior is undefined unless `TestUtil.cleanup` is called some time after
- * this method.
+ * `ShorthandParserUtil.parseRepoShorthand`, or a `RepoAST` object.
  */
 exports.createRepo = co.wrap(function *(input) {
     let ast;
@@ -112,10 +110,9 @@ exports.createRepo = co.wrap(function *(input) {
  * `manipulator` to it, then verify that it has the state described by the
  * specified `expected`.  The `manipulator` must return a map from IDs
  * in the repository to those described in `expectedShorthand`, or
- * `undefined` if no such mapping is required.  The behavior is undefined
- * unless `TestUtil.cleanup` is called some time after this method.  Both
- * `input` and `expected` may be either a string in the syntax accepted by
- * `parseRepoShorthand` or a `RepoAST` object.
+ * `undefined` if no such mapping is required.  Both `input` and `expected` may
+ * be either a string in the syntax accepted by `parseRepoShorthand` or a
+ * `RepoAST` object.
  *
  * @param {String|RepoAST}  input
  * @param {String|RepoAST}  expectedShorthand
@@ -146,8 +143,7 @@ exports.testRepoManipulator = co.wrap(function *(input,
  * `WriteRepoASTUtil.writeMultiRAST` as described by the specified `input` map.
  * The values of `input` may be strings parseable by
  * `ShorthandParserUtil.parseRepoShorthand`, or `RepoAST` objects, or any mix
- * of the two.  The behavior is undefined unless `TestUtil.cleanup` is called
- * some time after this method.
+ * of the two.
  */
 exports.createMultiRepos = co.wrap(function *(input) {
     const inputASTs = createMultiRepoASTMap(input);
@@ -243,20 +239,11 @@ exports.testMultiRepoManipulator =
     const inputRepos = written.repos;
     const commitMap = written.commitMap;
     const urlMap    = written.urlMap;
-    const reverseMap = {};
-    Object.keys(commitMap).forEach(id => {
-        reverseMap[commitMap[id]] = id;
-    });
-    const reverseUrlMap = {};
-    Object.keys(urlMap).forEach(url => {
-        reverseUrlMap[urlMap[url]] = url;
-    });
-
     const mappings = {
         commitMap: commitMap,
-        reverseMap: reverseMap,
+        reverseMap: written.reverseMap,
         urlMap: urlMap,
-        reverseUrlMap: reverseUrlMap,
+        reverseUrlMap: written.reverseUrlMap,
     };
 
     // Pass the repos off to the manipulator.
