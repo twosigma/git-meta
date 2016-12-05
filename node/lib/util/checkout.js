@@ -38,9 +38,10 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil       = require("./git_util");
-const SubmoduleUtil = require("./submodule_util");
-const UserError     = require("./user_error");
+const GitUtil          = require("./git_util");
+const SubmoduleFetcher = require("./submodule_fetcher");
+const SubmoduleUtil    = require("./submodule_util");
+const UserError        = require("./user_error");
 
 /**
  * Checkout the commit identified by the specified `committish` in the specified
@@ -71,6 +72,8 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
     const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
                                                                names,
                                                                commit);
+    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
+
     // First, do dry runs.
 
     let errors = [];
@@ -114,7 +117,7 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
         const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
         subRepos.push(repo);
         const sha = shas[name];
-        yield GitUtil.fetchSha(repo, sha);
+        yield subFetcher.fetchSha(repo, name, sha);
         const commit = yield repo.getCommit(sha);
         subCommits.push(commit);
         const error = yield dryRun(repo, commit);

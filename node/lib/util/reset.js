@@ -34,8 +34,8 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const SubmoduleUtil = require("./submodule_util");
-const GitUtil       = require("./git_util");
+const SubmoduleFetcher = require("./submodule_fetcher");
+const SubmoduleUtil    = require("./submodule_util");
 
 const TYPE = {
     SOFT: "soft",
@@ -87,6 +87,7 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     const openNames = yield SubmoduleUtil.listOpenSubmodules(repo);
     const index = yield repo.index();
     const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(index, openNames);
+    const fetcher = new SubmoduleFetcher(repo, commit);
 
     yield openNames.map(co.wrap(function *(name, index) {
         const sha = shas[index];
@@ -94,7 +95,7 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
         // Fetch the sha in case we don't already have it.
 
-        yield GitUtil.fetchSha(subRepo, sha);
+        yield fetcher.fetchSha(subRepo, name, sha);
 
         const subCommit = yield subRepo.getCommit(sha);
         yield NodeGit.Reset.reset(subRepo, subCommit, resetType);

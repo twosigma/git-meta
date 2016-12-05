@@ -34,53 +34,47 @@
  */
 const assert  = require("chai").assert;
 const co      = require("co");
-const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleFetcher    = require("./submodule_fetcher");
 
 /**
- * Open the submodule having the specified `submoduleName` in the specified
- * `metaRepo`; fetch the specified `commitSha` and set HEAD to point to it.
- * Configure the "origin" remote to the specified `url`, using the specified
- * `baseUrl` to resolve against `url` if it is relative.
+ * Open the submodule having the specified `submoduleName` in the meta-repo
+ * associated with the specified `fetcher`; fetch the specified `submoduleSha`
+ * using `fetcher` and set HEAD to point to it.  Configure the "origin" remote
+ * to the `url` configured in the meta-repo.
  *
  * @async
- * @param {String|null}        repoOriginUrl
- * @param {NodeGit.Repository} metaRepo
- * @param {String}             submoduleName
- * @param {String}             url
- * @param {String}             commitSha
+ * @param {SubmoduleFetcher} fetcher
+ * @param {String}           submoduleName
+ * @param {String}           submoduleSha
  * @return {NodeGit.Repository}
  */
-exports.openOnCommit = co.wrap(function *(repoOriginUrl,
-                                          metaRepo,
+exports.openOnCommit = co.wrap(function *(fetcher,
                                           submoduleName,
-                                          url,
-                                          commitSha) {
-    if (null !== repoOriginUrl) {
-        assert.isString(repoOriginUrl);
-    }
-    assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.isString(submoduleName);
-    assert.isString(url);
-    assert.isString(commitSha);
+                                          submoduleSha) {
+    assert.instanceOf(fetcher, SubmoduleFetcher);
+
+    const metaRepoUrl = yield fetcher.getMetaOriginUrl();
+    const metaRepo = fetcher.repo;
+    const submoduleUrl = yield fetcher.getSubmoduleUrl(submoduleName);
 
     // Set up the submodule.
 
     const submoduleRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
-                                                                repoOriginUrl,
+                                                                metaRepoUrl,
                                                                 metaRepo,
                                                                 submoduleName,
-                                                                url);
+                                                                submoduleUrl);
 
     // Fetch the needed sha.
 
-    yield GitUtil.fetchSha(submoduleRepo, commitSha);
+    yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
 
     // Check out HEAD
 
-    const commit = yield submoduleRepo.getCommit(commitSha);
+    const commit = yield submoduleRepo.getCommit(submoduleSha);
     yield GitUtil.setHeadHard(submoduleRepo, commit);
 
     return submoduleRepo;

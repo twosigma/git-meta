@@ -78,17 +78,16 @@ exports.configureParser = function (parser) {
 exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
 
-    const GitUtil       = require("../util/git_util");
-    const Open          = require("../util/open");
-    const Status        = require("../util/status");
-    const SubmoduleUtil = require("../util/submodule_util");
-    const UserError     = require("../util/user_error");
+    const GitUtil          = require("../util/git_util");
+    const Open             = require("../util/open");
+    const Status           = require("../util/status");
+    const SubmoduleFetcher = require("../util/submodule_fetcher");
+    const SubmoduleUtil    = require("../util/submodule_util");
+    const UserError        = require("../util/user_error");
 
     const repo   = yield GitUtil.getCurrentRepo();
     const index  = yield repo.index();
     const status = yield Status.getRepoStatus(repo);
-
-    const originUrl = yield GitUtil.getOriginUrl(repo);
 
     let errors = "";
 
@@ -98,6 +97,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
                                                              subsToOpen);
+    const head = yield repo.getHeadCommit();
+    const fetcher = new SubmoduleFetcher(repo, head);
 
     const openers = subsToOpen.map(co.wrap(function *(name, index) {
         if (!(name in subs)) {
@@ -112,11 +113,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             errors += `Submodule ${colors.cyan(name)} has been deleted.\n`;
         }
         else {
-            yield Open.openOnCommit(originUrl,
-                                    repo,
-                                    name,
-                                    sub.indexUrl,
-                                    shas[index]);
+            yield Open.openOnCommit(fetcher, name, shas[index]);
         }
     }));
     yield openers;

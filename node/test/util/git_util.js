@@ -471,7 +471,7 @@ describe("GitUtil", function () {
             const written = yield WriteRepoASTUtil.writeRAST(ast, path);
             const commit = written.oldCommitMap["1"];
             const repo = written.repo;
-            yield GitUtil.fetchSha(repo, commit);
+            yield GitUtil.fetchSha(repo, "not a url", commit);
         }));
 
         it("fetch one", co.wrap(function *() {
@@ -484,8 +484,7 @@ describe("GitUtil", function () {
             const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
             const commit = writtenX.oldCommitMap["2"];
             const repo = writtenY.repo;
-            yield NodeGit.Remote.create(repo, "origin", xPath);
-            yield GitUtil.fetchSha(repo, commit);
+            yield GitUtil.fetchSha(repo, xPath, commit);
             yield repo.getCommit(commit);
         }));
 
@@ -498,10 +497,9 @@ describe("GitUtil", function () {
             yield WriteRepoASTUtil.writeRAST(astX, xPath);
             const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
             const repo = writtenY.repo;
-            yield NodeGit.Remote.create(repo, "origin", xPath);
             const bad = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
             try {
-                yield GitUtil.fetchSha(repo, bad);
+                yield GitUtil.fetchSha(repo, xPath, bad);
             }
             catch (e) {
                 assert.instanceOf(e, UserError);
