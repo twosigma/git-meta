@@ -47,10 +47,8 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const errno   = require("errno").errno;
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
-const ncp     = require("ncp").ncp;
 const path    = require("path");
 const url     = require("url");
 
@@ -304,14 +302,8 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     const repoPath = metaRepo.workdir();
     yield exports.initSubmodule(repoPath, name, url);
 
-    // Then, initializee the repository.  We pass `initExt` the right set of
+    // Then, initialize the repository.  We pass `initExt` the right set of
     // flags so that it will set it up as a git link.
-
-    // From repository.h
-
-    const NO_DOTGIT_DIR    = 1 << 2;
-    const MKPATH           = 1 << 4;
-    const RELATIVE_GITLINK = 1 << 6;
 
     const subRepoDir = path.join(repoPath, ".git", "modules", name);
 
@@ -327,56 +319,28 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
 
     const realUrl = exports.resolveSubmoduleUrl(repoUrl, url);
 
-    const result = yield NodeGit.Repository.initExt(subRepoDir, {
-        originUrl: realUrl,
-        workdirPath: workdirPath,
-        flags: NO_DOTGIT_DIR | MKPATH | RELATIVE_GITLINK,
-    });
-
     // If there is a `submodule_template` directory in the git folder, copy its
     // contents into the new `.git` directory for this submodule.
-    //
-    // TODO: fix NodeGit/libgit2 to support the `templatePath` argument.
 
     // Try to get configuration entry for template path.
 
     const config = yield metaRepo.config();
-    let templateDirName = null;
+    let templatePath = null;
     try {
-        templateDirName = yield config.getString("meta.submoduleTemplatePath");
+        templatePath = yield config.getString("meta.submoduleTemplatePath");
     }
     catch (e) {
     }
 
-    // If it exists, try to use the submodule template directory."
+    const FLAGS = NodeGit.Repository.INIT_FLAG;
 
-    if (null !== templateDirName) {
-        const templatePath = path.resolve(metaRepo.workdir(), templateDirName);
-
-        // First, check for existence of template directory.
-
-        let hasTemplateDirectory = false;
-
-        try {
-            yield fs.access(templatePath);
-            hasTemplateDirectory = true;
-        }
-        catch(e) {
-            // no template directory
-
-            if (errno[e.errno].code !== "ENOENT") {
-                throw e;
-            }
-        }
-
-        // If we have a template directory, then copy its contents.
-
-        if (hasTemplateDirectory) {
-            yield (new Promise(callback => {
-                return ncp(templatePath, result.path(), callback);
-            }));
-        }
-    }
+    const result = yield NodeGit.Repository.initExt(subRepoDir, {
+        originUrl: realUrl,
+        workdirPath: workdirPath,
+        flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH | FLAGS.RELATIVE_GITLINK |
+            (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
+        templatePath: templatePath
+    });
 
     return result;
 });

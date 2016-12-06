@@ -32,9 +32,7 @@
     "child-process-promise": "",
     "co": "",
     "colors": "",
-    "errno": "^0.1.4",
     "fs-promise": "",
-    "ncp": "^2.0.0",
     "nodegit": "^0.16.0",
     "rimraf": "",
     "split": ""
