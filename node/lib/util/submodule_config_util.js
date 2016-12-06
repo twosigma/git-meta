@@ -71,6 +71,34 @@ const CONFIG_FILE_NAME = "config";
 exports.modulesFileName = ".gitmodules";
 
 /**
+ * Return the relative path from the working directory of a submodule having
+ * the specified `subName` to its .git directory.
+ * @param {String} subName
+ */
+exports.computeRelativeGitDir = function (subName) {
+    const depth = subName.split("/").length;
+    let moveUp = "";
+    for (let i = 0; i < depth; ++i) {
+        moveUp = path.join(moveUp, "..");
+    }
+    return path.join(moveUp, ".git", "modules", subName);
+};
+
+/**
+ * Return the relative path from the .git directory of a submodule to its
+ * working directory.
+ * @param {String} subName
+ */
+exports.computeRelativeWorkDir = function (subName) {
+    const depth = subName.split("/").length;
+    let moveUp = path.join("..", "..");
+    for (let i = 0; i < depth; ++i) {
+        moveUp = path.join(moveUp, "..");
+    }
+    return path.join(moveUp, subName);
+};
+
+/**
  * Return the result of resolving the specified `relativeUrl` onto the
  * specified `baseUrl`.
  *
@@ -279,6 +307,10 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
  * any refs from the remote for this submodule, and while its repo can be
  * opened it will be empty.
  *
+ * This method is largely needed to workaround deficiences in
+ * `NodeGit.Submodule`, for example, it cannot be used to initialize a repo
+ * that has an existing .git dir in `.git/modules`.
+ *
  * @async
  * @param {String|null}        repoUrl
  * @param {NodeGit.Repository} metaRepo
@@ -307,18 +339,6 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
 
     const subRepoDir = path.join(repoPath, ".git", "modules", name);
 
-    // Put the right number of dots based on the depth of `name`, e.g.,
-    // "foo/bar/bam" needs two more sets of dots than "foo".
-
-    let workdirPath = "../../../";
-    const extraDepth = name.split("/").length - 1;
-    for (let i = 0; i < extraDepth; ++i) {
-        workdirPath += "../";
-    }
-    workdirPath += name;
-
-    const realUrl = exports.resolveSubmoduleUrl(repoUrl, url);
-
     // If there is a `submodule_template` directory in the git folder, copy its
     // contents into the new `.git` directory for this submodule.
 
@@ -334,13 +354,52 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
 
     const FLAGS = NodeGit.Repository.INIT_FLAG;
 
-    const result = yield NodeGit.Repository.initExt(subRepoDir, {
-        originUrl: realUrl,
-        workdirPath: workdirPath,
-        flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH | FLAGS.RELATIVE_GITLINK |
-            (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
-        templatePath: templatePath
-    });
+    // See if modules repo exists.
+
+    try {
+        yield NodeGit.Repository.open(subRepoDir);
+    }
+    catch (e) {
+        // Or, make it if not.
+
+        yield NodeGit.Repository.initExt(subRepoDir, {
+            workdirPath: exports.computeRelativeWorkDir(name),
+            flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH |
+                FLAGS.RELATIVE_GITLINK |
+                (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
+            templatePath: templatePath
+        });
+    }
+
+
+    // Write out the .git file.  Note that `initExt` configured to write a
+    // relative .git directory will not write this file successfully if the
+    // `.git/modules/${name}` directory exists.
+
+    const relativeGitDir = exports.computeRelativeGitDir(name);
+    yield fs.writeFile(path.join(repoPath, name, ".git"),
+                       `gitdir: ${relativeGitDir}\n`);
+
+    const result = yield NodeGit.Repository.open(path.join(repoPath, name));
+
+    // Configure the origin.  If there is already an origin, make sure it has
+    // the correct URL; otherwise, add it.
+
+    const realUrl = exports.resolveSubmoduleUrl(repoUrl, url);
+    let origin = null;
+    try {
+        origin = yield result.getRemote("origin");
+    }
+    catch (e) {
+    }
+    if (null !== origin) {
+        if (realUrl !== origin.url()) {
+            yield origin.setUrl("origin");
+        }
+    }
+    else {
+        yield NodeGit.Remote.create(result, "origin", realUrl);
+    }
 
     return result;
 });

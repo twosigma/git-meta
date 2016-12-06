@@ -35,6 +35,7 @@ const co      = require("co");
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
+const rimraf  = require("rimraf");
 
 const Close               = require("../../lib/util/close");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
@@ -42,6 +43,48 @@ const TestUtil            = require("../../lib/util/test_util");
 const UserError           = require("../../lib/util/user_error");
 
 describe("SubmoduleConfigUtil", function () {
+
+    describe("computeRelativeGitDir", function () {
+        const cases = {
+            "simple": {
+                input: "foo",
+                expected: "../.git/modules/foo",
+            },
+            "two": {
+                input: "foo/bar",
+                expected: "../../.git/modules/foo/bar",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result =
+                            SubmoduleConfigUtil.computeRelativeGitDir(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("computeRelativeWorkDir", function () {
+        const cases = {
+            "simple": {
+                input: "foo",
+                expected: "../../../foo",
+            },
+            "two": {
+                input: "foo/bar",
+                expected: "../../../../foo/bar",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result =
+                           SubmoduleConfigUtil.computeRelativeWorkDir(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
 
     describe("resolveUrl", function () {
         const cases = {
@@ -471,7 +514,39 @@ foo
             const data = "welcome";
             yield fs.writeFile(path.join(subPath, fileName), data);
             const subRootRepo = yield TestUtil.createSimpleRepository();
-            yield runTest(repo, subRootRepo, subRootRepo.workdir(), "foo");
+            const subHead = yield subRootRepo.getHeadCommit();
+            const url = subRootRepo.path();
+            const submodule   = yield NodeGit.Submodule.addSetup(repo,
+                                                                 url,
+                                                                 "foo",
+                                                                 1);
+            const subRepo = yield submodule.open();
+            yield subRepo.fetchAll();
+            subRepo.setHeadDetached(subHead.id());
+            const newHead = yield subRepo.getCommit(subHead.id().tostrS());
+            yield NodeGit.Reset.reset(subRepo,
+                                      newHead,
+                                      NodeGit.Reset.TYPE.HARD);
+            yield submodule.addFinalize();
+            const sig = repo.defaultSignature();
+            yield repo.createCommitOnHead([".gitmodules", "foo"],
+                                          sig,
+                                          sig,
+                                          "my message");
+            yield Close.close(repo, "foo");
+
+            // Remove `foo` dir, otherwise, we will not need to re-init the
+            // repo and the template will not be executed.
+
+            yield (new Promise(callback => {
+                return rimraf(path.join(subRepo.path()), {}, callback);
+            }));
+
+            yield SubmoduleConfigUtil.initSubmoduleAndRepo(url,
+                                                           repo,
+                                                           "foo",
+                                                           url);
+
             const copiedPath = path.join(repo.path(),
                                          "modules",
                                          "foo",
