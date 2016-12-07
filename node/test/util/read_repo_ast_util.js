@@ -1273,5 +1273,61 @@ describe("readRAST", function () {
                                     current.id().tostrS(),
                                     onto.id().tostrS()));
     }));
+
+    it("add subs again", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        let expected = yield astFromSimpleRepo(repo);
+        const another = yield TestUtil.createSimpleRepository();
+        const anotherUrl = another.path();
+        const anotherHead = yield another.getHeadCommit();
+        const anotherHeadSha = anotherHead.id().tostrS();
+        const third = yield TestUtil.createSimpleRepository();
+        const thirdUrl = third.path();
+        const headCommit = yield repo.getHeadCommit();
+        yield addSubmodule(repo,
+                           anotherUrl,
+                           "a",
+                           anotherHeadSha);
+        const modules = ".gitmodules";
+        const nextCommit = yield TestUtil.makeCommit(repo, ["a", modules]);
+        const nextSha = nextCommit.id().tostrS();
+        yield Close.close(repo, "a");
+
+        yield fs.writeFile(path.join(repo.workdir(),
+                                     modules),
+                            `\
+[submodule "a"]
+\tpath = a
+\turl = ${thirdUrl}
+`
+                          );
+        const finalCommit = yield TestUtil.makeCommit(repo, [modules]);
+        const finalSha = finalCommit.id().tostrS();
+
+        let commits = expected.commits;
+        commits[nextSha] = new RepoAST.Commit({
+            parents: [headCommit.id().tostrS()],
+            changes: {
+                a: new RepoAST.Submodule(anotherUrl, anotherHeadSha),
+            },
+            message: "message",
+        });
+        commits[finalSha] = new RepoAST.Commit({
+            parents: [nextSha],
+            changes: {
+                a: new RepoAST.Submodule(thirdUrl, anotherHeadSha),
+            },
+            message: "message",
+        });
+        expected = expected.copy({
+            branches: {
+                master: finalSha,
+            },
+            head: finalSha,
+            commits: commits,
+        });
+        const ast = yield ReadRepoASTUtil.readRAST(repo);
+        assert.deepEqual(ast, expected);
+    }));
 });
 
