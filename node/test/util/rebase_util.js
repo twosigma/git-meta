@@ -202,6 +202,24 @@ x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3;Os Bmaster=a!*=master",
             expected: "\
 x=E:C3M-4 s=Sa:as;Bmaster=3M;Os Bmaster=as!Cas-b a=a!*=master",
         },
+        "adding subs on both": {
+            initial: "\
+q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 q=Sq:1;Bmaster=3M",
+        },
+        "adding subs then changing": {
+            initial: "\
+q=B|\
+r=B|\
+s=B|\
+x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C31-3 q=Sr:1;C4-2 r=Sr:1;C41-4 r=Ss:1;\
+Bmaster=31;Bfoo=41;Bold=31",
+            rebaser: rebaser("x", "41"),
+            expected: "\
+x=E:C3M-41 q=Sq:1;C31M-3M q=Sr:1;Bmaster=31M",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];

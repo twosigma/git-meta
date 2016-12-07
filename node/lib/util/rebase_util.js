@@ -33,16 +33,18 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const Open           = require("./open");
-const GitUtil        = require("./git_util");
-const RepoStatus     = require("./repo_status");
-const RebaseFileUtil = require("./rebase_file_util");
-const SubmoduleUtil  = require("./submodule_util");
-const UserError      = require("./user_error");
+const Open                 = require("./open");
+const GitUtil              = require("./git_util");
+const RepoStatus           = require("./repo_status");
+const RebaseFileUtil       = require("./rebase_file_util");
+const SubmoduleUtil        = require("./submodule_util");
+const SubmoduleConfigUtil  = require("./submodule_config_util");
+const UserError            = require("./user_error");
 
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
@@ -354,6 +356,40 @@ up-to-date.`);
 
    const signature = metaRepo.defaultSignature();
 
+   let mergeBase = null; // Will load merge-base into this if needed.
+
+   const getMergeBase = co.wrap(function *() {
+       if (null !== mergeBase) {
+           return mergeBase;                                          // RETURN
+       }
+       const baseId = yield NodeGit.Merge.base(metaRepo,
+                                               currentCommitId,
+                                               commitId);
+       mergeBase = yield metaRepo.getCommit(baseId);
+       return mergeBase;
+   });
+
+   let baseSubmodules = null;  // state of submodules at merge-base
+   const getMergeBaseSubs = co.wrap(function *() {
+       if (null !== baseSubmodules) {
+           return baseSubmodules;                                     // RETURN
+       }
+       const base = yield getMergeBase();
+       baseSubmodules =
+             yield SubmoduleConfigUtil.getSubmodulesFromCommit(metaRepo, base);
+       return baseSubmodules;
+   });
+
+   let ontoSubmodules = null;  // state of subs in commit rebasing onto
+   const getOntoSubs = co.wrap(function *() {
+       if (null !== ontoSubmodules) {
+           return ontoSubmodules;                                     // RETURN
+       }
+       ontoSubmodules =
+           yield SubmoduleConfigUtil.getSubmodulesFromCommit(metaRepo, commit);
+       return ontoSubmodules;
+   });
+
     // Now, iterate over the rebase commits.  We pull the operation out into a
     // separate function to avoid problems associated with creating functions
     // in loops.
@@ -403,6 +439,34 @@ up-to-date.`);
                     inits.push(initRebaser.init(id.tostrS()));
                 }
                 else {
+                    if (SubmoduleConfigUtil.modulesFileName === e.path) {
+
+                        // If there is a conflict in the '.gitmodules' file,
+                        // attempt to resolve it by comparing the current
+                        // change against the original onto commit and the
+                        // merge base between the base and onto commits.
+
+                        const next = yield metaRepo.getCommit(rebaseOper.id());
+                        const Conf = SubmoduleConfigUtil;
+                        const getSubs = Conf.getSubmodulesFromCommit;
+                        const fromNext = yield getSubs(metaRepo, next);
+                        const fromBase = yield getMergeBaseSubs();
+                        const fromOnto = yield getOntoSubs();
+                        const merged = Conf.mergeSubmoduleConfigs(fromNext,
+                                                                  fromOnto,
+                                                                  fromBase);
+                        // If it was resolved, write out and stage the new
+                        // modules state.
+
+                        if (null !== merged) {
+                            const newConf = Conf.writeConfigText(merged);
+                            yield fs.writeFile(path.join(metaRepo.workdir(),
+                                                         Conf.modulesFileName),
+                                               newConf);
+                            yield index.addByPath(e.path);
+                            break;
+                        }
+                    }
                     errorMessage += `
 There is a conflict in ${colors.red(e.path)}.\n`;
                  }
