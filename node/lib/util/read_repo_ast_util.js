@@ -47,6 +47,24 @@ const RebaseFileUtil      = require("./rebase_file_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
+ * Load the submodules objects from the specified `repo` on the specified
+ * `commitId`.
+ * @param {NodeGit.Repository} repo
+ * @param {Object}             urls
+ * @param {NodeGit.Commit}     commit
+ */
+const getSubmodules = co.wrap(function *(repo, urls, commit) {
+    let result = {};
+    const tree = yield commit.getTree();
+    for (let subName in urls) {
+        const url = urls[subName];
+        const sha = (yield tree.entryByPath(subName)).sha();
+        result[subName] = new RepoAST.Submodule(url, sha);
+    }
+    return result;
+});
+
+/**
  * Return a representation of the specified `repo` encoded in an `AST` object.
  *
  * @async
@@ -107,10 +125,7 @@ exports.readRAST = co.wrap(function *(repo) {
             commits[commitStr] = true;
 
             // Loop through all the diffs for the commit and read the value of
-            // each changed file.  Special action must be taken for submodules.
-            // We will first load up a list of them from the `.gitmodules` file
-            // in the specified commit (if it exists) and that is how we will
-            // be able to identify changed paths as being submodules.
+            // each changed file.
 
             const commit = yield repo.getCommit(commitId);
             const submodules =
@@ -132,13 +147,8 @@ exports.readRAST = co.wrap(function *(repo) {
                     if (DELETED === delta.status()) {
                         changes[path] = null;
                     }
-                    else if (path in submodules) {
-                        const url = submodules[path];
-                        const entry = yield commit.getEntry(path);
-                        const sha = entry.sha();
-                        changes[path] = new RepoAST.Submodule(url, sha);
-                    }
-                    else {
+                    else if (!(path in submodules)) {
+                        // Skip submodules; we handle them later.
                         const entry = yield commit.getEntry(path);
                         const blob = yield entry.getBlob();
                         changes[path] = blob.toString();
@@ -154,13 +164,42 @@ exports.readRAST = co.wrap(function *(repo) {
             const parents = yield commit.getParents(MAX_IDS);
             const parentShas = parents.map(p => p.id().tostrS());
 
-            commits[commitStr] = new RepoAST.Commit({
+            // Check the submodules manually; they may be changed by a change
+            // to the tree or to the `.gitmodules` file.  First, load the
+            // parent's submodules (this step could be optimized to not reload
+            // parent submodules but we currently don't load in any order).
+
+            let parentSubs = {};
+
+            if (0 !== parents.length) {
+                const parentCommit = yield repo.getCommit(parents[0]);
+                const parentUrls =
+                             yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                 repo,
+                                                                 parentCommit);
+                parentSubs = yield getSubmodules(repo,
+                                                 parentUrls,
+                                                 parentCommit);
+            }
+            const mySubs = yield getSubmodules(repo, submodules, commit);
+            for (let key in mySubs) {
+                const mySub = mySubs[key];
+                if (!deeper(mySub, parentSubs[key])) {
+                    changes[key] = mySub;
+                }
+            }
+
+            const result = new RepoAST.Commit({
                 parents: parentShas,
                 changes: changes,
                 message: commit.message(),
             });
+
+            commits[commitStr] = result;
+            return result;
         }));
         yield commitLoaders;
+        return commits[id.tostrS()];
     });
 
     // List all the branches.
