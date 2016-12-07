@@ -40,21 +40,6 @@ const path    = require("path");
 const fs      = require("fs-promise");
 
 /**
- * Remove the modules directory for the submodule having the specified 'name'
- * in the repo located at the specified 'root'.
- * @param {String} root
- * @param {String} name
- */
-exports.cleanModulesDirectory = co.wrap(function *(root, name) {
-    const submoduleModuleDir = path.join(root, ".git", "modules", name);
-
-    const rmModDir = new Promise(callback => {
-        return rimraf(submoduleModuleDir, {}, callback);
-    });
-    yield rmModDir;
-});
-
-/**
  * Close the repository having the specified `submoduleName` in the specified
  * `repo`.
  *
@@ -135,7 +120,4 @@ exports.close = co.wrap(function *(repo, submoduleName) {
         newConfigLines.push("");  // one more new line
         fs.writeFileSync(configPath, newConfigLines.join("\n"));
     }
-
-    // Finally, remove the .git/modules/<submodule> directory
-    yield exports.cleanModulesDirectory(rootDir, submoduleName);
 });
