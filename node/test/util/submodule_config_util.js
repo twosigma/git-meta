@@ -556,5 +556,150 @@ foo
             assert.equal(read, data);
         }));
     });
+
+    describe("mergeSubmoduleConfigs", function () {
+        const cases = {
+            "trivial": {
+                lhs: {},
+                rhs: {},
+                mergeBase: {},
+                expected: {},
+            },
+            "add from left": {
+                lhs: { foo: "bar"},
+                rhs: {},
+                mergeBase: {},
+                expected: { foo: "bar",},
+            },
+            "add from right": {
+                lhs: {},
+                rhs: { foo: "bar"},
+                mergeBase: {},
+                expected: { foo: "bar",},
+            },
+            "removed from both": {
+                lhs: {},
+                rhs: {},
+                mergeBase: { foo: "bar" },
+                expected: {},
+            },
+            "removed from left": {
+                lhs: {},
+                rhs: { foo: "bar" },
+                mergeBase: { foo: "bar" },
+                expected: {},
+            },
+            "removed from right": {
+                lhs: { foo: "bar" },
+                rhs: {},
+                mergeBase: { foo: "bar" },
+                expected: {},
+            },
+            "change from left": {
+                lhs: { foo: "baz" },
+                rhs: { foo: "bar" },
+                mergeBase: { foo: "bar"},
+                expected: { foo: "baz" },
+            },
+            "change from right": {
+                lhs: { foo: "bar" },
+                rhs: { foo: "baz" },
+                mergeBase: { foo: "bar"},
+                expected: { foo: "baz" },
+            },
+            "same change from both": {
+                lhs: { foo: "baz" },
+                rhs: { foo: "baz" },
+                mergeBase: { foo: "bar"},
+                expected: { foo: "baz" },
+            },
+            "both deleted": {
+                lhs: {},
+                rhs: {},
+                mergeBase: { foo: "zot" },
+                expected: {},
+            },
+            "conflict -- different add": {
+                lhs: { foo: "bar" },
+                rhs: { foo: "baz" },
+                mergeBase: {},
+                expected: null,
+            },
+            "conflict -- different change": {
+                lhs: { foo: "bar" },
+                rhs: { foo: "baz" },
+                mergeBase: { foo: "bak" },
+                expected: null,
+            },
+            "conflict -- lhs delete, rhs change": {
+                lhs: {},
+                rhs: { foo: "bar" },
+                mergeBase: { foo: "boo" },
+                expected: null,
+            },
+            "conflict -- lhs change, rhs delete": {
+                lhs: { foo: "bar" },
+                rhs: {},
+                mergeBase: { foo: "boo" },
+                expected: null,
+            },
+            "conflict -- both add different": {
+                lhs: { foo: "bar" },
+                rhs: { foo: "baz" },
+                mergeBase: {},
+                expected: null,
+            },
+            "multiple, arbitrary, mixed changes": {
+                lhs: {
+                    foo: "bar",
+                    baz: "bam",
+                    ack: "woo",
+                    wee: "meh",
+                },
+                rhs: {
+                    foo: "bar",
+                    ack: "waz",
+                    wee: "meh",
+                },
+                mergeBase: {
+                    foo: "gaz",
+                    ack: "woo",
+                    wee: "fleh",
+                    yah: "arg",
+                },
+                expected: {
+                    foo: "bar",
+                    baz: "bam",
+                    ack: "waz",
+                    wee: "meh",
+                },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, function () {
+                const c = cases[caseName];
+                const result = SubmoduleConfigUtil.mergeSubmoduleConfigs(
+                                                                  c.lhs,
+                                                                  c.rhs,
+                                                                  c.mergeBase);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+    describe("writeConfigText", function () {
+        const cases = {
+            "base": {},
+            "one": { a: "foo" },
+            "two": { a: "foo", t: "/a/b/c"},
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = SubmoduleConfigUtil.writeConfigText(c);
+                const parse = SubmoduleConfigUtil.parseSubmoduleConfig(result);
+                assert.deepEqual(parse, c);
+            });
+        });
+    });
 });
 

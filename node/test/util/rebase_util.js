@@ -167,6 +167,33 @@ x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 t=Sb:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
             expected: "\
 x=E:C3M-4 t=Sb:jt;Bmaster=3M;Ot H=jt!Cjt-k j=j",
         },
+        "make sure unchanged repos stay closed -- onto-only change": {
+            initial: "\
+a=B|\
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 3=3;Bmaster=3M",
+        },
+        "make sure unchanged repos stay closed -- local-only change": {
+            initial: "\
+a=B|\
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=4;Bfoo=3;Bold=4",
+            rebaser: rebaser("x", "3"),
+            expected: "\
+x=E:C4M-3 t=Sb:k;Bmaster=4M",
+        },
+        "make sure unchanged repos stay closed -- different onto and local": {
+            initial: "\
+a=B:Cj-1;Bmaster=j|\
+b=B:Ck-1;Bmaster=k|\
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 s=Sa:j;Bmaster=3M",
+        },
         "maintain submodule branch": {
             initial: "\
 a=B:Ca-1;Cb-1;Bx=a;By=b|\
@@ -174,6 +201,24 @@ x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3;Os Bmaster=a!*=master",
             rebaser: rebaser("x", "4"),
             expected: "\
 x=E:C3M-4 s=Sa:as;Bmaster=3M;Os Bmaster=as!Cas-b a=a!*=master",
+        },
+        "adding subs on both": {
+            initial: "\
+q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3",
+            rebaser: rebaser("x", "4"),
+            expected: "\
+x=E:C3M-4 q=Sq:1;Bmaster=3M",
+        },
+        "adding subs then changing": {
+            initial: "\
+q=B|\
+r=B|\
+s=B|\
+x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C31-3 q=Sr:1;C4-2 r=Sr:1;C41-4 r=Ss:1;\
+Bmaster=31;Bfoo=41;Bold=31",
+            rebaser: rebaser("x", "41"),
+            expected: "\
+x=E:C3M-41 q=Sq:1;C31M-3M q=Sr:1;Bmaster=31M",
         },
     };
     Object.keys(cases).forEach(caseName => {
