@@ -515,9 +515,11 @@ exports.writeRAST = co.wrap(function *(ast, path) {
  * @param {Object} repos
  * @param {String} rootDirectory
  * @return {Object}
- * @return {Object} return.repos       map from name to `NodeGit.Repository`
- * @return {Object} return.commitMap   map from new to old commit IDs
- * @return {Object} return.urlMap      map from url to name
+ * @return {Object} return.repos        map from name to `NodeGit.Repository`
+ * @return {Object} return.commitMap    map from new to old commit IDs
+ * @return {Object} return.reverseCommitMap   map from old to new commit IDs
+ * @return {Object} return.urlMap       map from new url to old name
+ * @return {Object} return.reverseUrlMap map from old url to new name
  */
 exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
     // This operation is complicated by the need to have a single commit ID
@@ -668,11 +670,16 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
             yield writeRepo(subRepo, openSubAST);
         }
     }
-
+    const reverseUrlMap = {};
+    Object.keys(urlMap).forEach(url => {
+        reverseUrlMap[urlMap[url]] = url;
+    });
     return {
         repos: resultRepos,
         commitMap: commitMaps.newToOld,
+        reverseCommitMap: commitMaps.oldToNew,
         urlMap: urlMap,
+        reverseUrlMap: reverseUrlMap,
     };
 });
 

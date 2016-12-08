@@ -35,11 +35,11 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil             = require("../util/git_util");
 const Open                = require("../util/open");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("../util/submodule_util");
-const UserError           = require("../util/user_error");
+const UserError           = require("../util/submodule_util");
 
 /**
  * Cherry-pick the specified `commit` in the specified `metaRepo`.  Return an
@@ -102,8 +102,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(metaRepo));
 
     let submoduleCommits = {};
-
-    const originUrl = yield GitUtil.getOriginUrl(metaRepo);
+    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
 
     const picker = co.wrap(function *(subName, headSha, commitSha) {
         let commitMap = {};
@@ -114,10 +113,8 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
         let repo;
         if (!openSubs.has(subName)) {
             console.log(`Opening ${colors.blue(subName)}.`);
-            repo = yield Open.openOnCommit(originUrl,
-                                           metaRepo,
+            repo = yield Open.openOnCommit(subFetcher,
                                            subName,
-                                           headUrls[subName],
                                            headShas[subName]);
         }
         else {
@@ -128,7 +125,7 @@ ${colors.green(commitSha)}.`);
 
         // Fetch the commit; it may not be present.
 
-        yield GitUtil.fetchSha(repo, commitSha);
+        yield subFetcher.fetchSha(repo, subName, commitSha);
 
         const commit = yield repo.getCommit(commitSha);
         yield NodeGit.Cherrypick.cherrypick(repo, commit, {});

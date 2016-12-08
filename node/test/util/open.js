@@ -34,8 +34,9 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const Open            = require("../../lib/util/open");
-const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const Open             = require("../../lib/util/open");
+const RepoASTTestUtil  = require("../../lib/util/repo_ast_test_util");
+const SubmoduleFetcher = require("../../lib/util/submodule_fetcher");
 
 describe("openOnCommit", function () {
     // Assumption is that 'x' is the target repo.
@@ -44,14 +45,12 @@ describe("openOnCommit", function () {
         "simple": {
             initial: "a=B|x=U",
             subName: "s",
-            url: "a",
             commitSha: "1",
             expected: "x=E:Os",
         },
         "not head": {
             initial: "a=B:C3-1;Bmaster=3|x=U",
             subName: "s",
-            url: "a",
             commitSha: "3",
             expected: "x=E:Os H=3",
         },
@@ -60,15 +59,13 @@ describe("openOnCommit", function () {
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
             const manipulator = co.wrap(function *(repos, maps) {
-                assert.property(maps.reverseMap, c.commitSha);
-                assert.property(maps.reverseUrlMap, c.url);
-                const commit = maps.reverseMap[c.commitSha];
-                const url = maps.reverseUrlMap[c.url];
+                assert.property(maps.reverseCommitMap, c.commitSha);
+                const commit = maps.reverseCommitMap[c.commitSha];
                 const x = repos.x;
-                const result = yield Open.openOnCommit(null,
-                                                       x,
+                const head = yield x.getHeadCommit();
+                const fetcher = new SubmoduleFetcher(x, head);
+                const result = yield Open.openOnCommit(fetcher,
                                                        c.subName,
-                                                       url,
                                                        commit);
                 assert.instanceOf(result, NodeGit.Repository);
             });

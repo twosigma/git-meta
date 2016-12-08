@@ -43,7 +43,7 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
  * the form of `ref/commit/<logical commit id>` to
  * `ref/commit/<physical commit id>`, where <logical commit id> is the id of
  * the commit the ref points to.  The specified `mapping` argument contains a
- * `reverseMap` object that maps from logical to physical commit id.
+ * `reverseCommitMap` object that maps from logical to physical commit id.
  *
  * @param {Object} expected
  * @param {Object} mapping (as in RepoASTTestUtil)
@@ -51,14 +51,14 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
  */
 function refMapper(expected, mapping) {
     const syntheticMetaRefRE = /(commits\/)(.*)/;
-    const reverseMap = mapping.reverseMap;
+    const reverseCommitMap = mapping.reverseCommitMap;
 
     function mapASTRefs(ast) {
         let newRefs = {};
         const oldRefs = ast.refs;
         Object.keys(oldRefs).forEach(ref => {
             const logicalId = oldRefs[ref];
-            const physicalId = reverseMap[logicalId];
+            const physicalId = reverseCommitMap[logicalId];
             const newRefName = ref.replace(syntheticMetaRefRE,
                                            `$1${physicalId}`);
             newRefs[newRefName] = logicalId;
@@ -134,7 +134,7 @@ describe("refMapper", function () {
                     },
                 }),
             },
-            reverseMap: {
+            reverseCommitMap: {
                 "1": "ffff",
             },
         },
@@ -173,7 +173,7 @@ describe("refMapper", function () {
                     },
                 }),
             },
-            reverseMap: {
+            reverseCommitMap: {
                 "1": "ffff",
             },
         },
@@ -183,7 +183,7 @@ describe("refMapper", function () {
         const c = cases[caseName];
         it(caseName, () => {
             const result = refMapper(c.input, {
-                reverseMap: c.reverseMap || {},
+                reverseCommitMap: c.reverseCommitMap || {},
             });
             RepoASTUtil.assertEqualRepoMaps(result, c.expected);
         });

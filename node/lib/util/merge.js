@@ -35,12 +35,13 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil       = require("./git_util");
-const Open          = require("./open");
-const RepoStatus    = require("./repo_status");
-const Status        = require("./status");
-const SubmoduleUtil = require("./submodule_util");
-const UserError     = require("./user_error");
+const GitUtil          = require("./git_util");
+const Open             = require("./open");
+const RepoStatus       = require("./repo_status");
+const Status           = require("./status");
+const SubmoduleFetcher = require("./submodule_fetcher");
+const SubmoduleUtil    = require("./submodule_util");
+const UserError        = require("./user_error");
 
 /**
  * @enum {MODE}
@@ -134,8 +135,6 @@ ${colors.red(commitSha)}.`);
 
     const sig = metaRepo.defaultSignature();
 
-    const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
-
     // Kick off the merge.  It is important to note is that `Merge.commit` does
     // not directly modify the working directory or index.  The `metaIndex`
     // object it returns is magical, virtual, does not operate on HEAD or
@@ -159,6 +158,8 @@ ${colors.red(commitSha)}.`);
     const subCommits = {};  // Record of merge commits in submodules.
 
     const subs = metaRepoStatus.submodules;
+
+    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
 
     const mergeEntry = co.wrap(function *(entry) {
         const path = entry.path;
@@ -198,11 +199,7 @@ ${colors.red(commitSha)}.`);
             // If this submodule's not open, open it.
 
             console.log(`Opening ${colors.blue(path)}.`);
-            subRepo = yield Open.openOnCommit(metaUrl,
-                                              metaRepo,
-                                              path,
-                                              sub.indexUrl,
-                                              subHeadSha);
+            subRepo = yield Open.openOnCommit(subFetcher, path, subHeadSha);
             subRepoStatus = yield Status.getRepoStatus(subRepo);
         }
         else {
@@ -211,7 +208,7 @@ ${colors.red(commitSha)}.`);
 
         // Fetch commit to merge.
 
-        yield GitUtil.fetchSha(subRepo, subSha);
+        yield subFetcher.fetchSha(subRepo, path, subSha);
 
         const subCommit = yield subRepo.getCommit(subCommitId);
 

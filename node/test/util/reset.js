@@ -113,7 +113,7 @@ a=B:Ca-1 y=x;Bfoo=a|x=U:C3-2 t=Sa:1;C4-3 s=Sa:a,t=Sa:a;Bfoo=4;Bmaster=3;Os;Ot",
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
             const resetter = co.wrap(function *(repos, maps) {
-                const commitId = maps.reverseMap[c.to];
+                const commitId = maps.reverseCommitMap[c.to];
                 const repo = repos.x;
                 const commit = yield repo.getCommit(commitId);
                 yield Reset.reset(repo, commit, c.type);

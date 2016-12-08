@@ -58,9 +58,9 @@ describe("cherrypick", function () {
     const picker = co.wrap(function *(repos, maps) {
         const x = repos.x;
         const oldMap = maps.commitMap;
-        const reverseMap = maps.reverseMap;
-        assert.property(reverseMap, "8");
-        const eightCommitSha = reverseMap["8"];
+        const reverseCommitMap = maps.reverseCommitMap;
+        assert.property(reverseCommitMap, "8");
+        const eightCommitSha = reverseCommitMap["8"];
         const eightCommit = yield x.getCommit(eightCommitSha);
         const result  = yield Cherrypick.cherryPick(x, eightCommit);
 

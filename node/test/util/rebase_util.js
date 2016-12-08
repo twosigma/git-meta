@@ -47,9 +47,9 @@ describe("rebase", function () {
             assert.property(repos, repoName);
             const repo = repos[repoName];
             const status = yield Status.getRepoStatus(repo);
-            const reverseMap = maps.reverseMap;
-            assert.property(reverseMap, commit);
-            const originalActualCommit = reverseMap[commit];
+            const reverseCommitMap = maps.reverseCommitMap;
+            assert.property(reverseCommitMap, commit);
+            const originalActualCommit = reverseCommitMap[commit];
             const originalCommit = yield repo.getCommit(originalActualCommit);
             const result = yield RebaseUtil.rebase(repo, originalCommit,
                                                    status);

@@ -342,15 +342,17 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 });
 
 /**
- * Fetch the specified `sha` from the "origin" repository of the specifieded
- * `repo`.
+ * Fetch the specified `sha` from the specifid `url` into the specified `repo`,
+ * if it does not already exist in `repo`.
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {String} sha
+ * @param {String}             url
+ * @param {String}             sha
  */
-exports.fetchSha  = co.wrap(function *(repo, sha) {
+exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(url);
     assert.isString(sha);
 
     // First, try to get the commit.  If we succeed, no need to fetch.
@@ -362,16 +364,8 @@ exports.fetchSha  = co.wrap(function *(repo, sha) {
     catch (e) {
     }
 
-    let origin;
-    try {
-        origin = yield repo.getRemote("origin");
-    }
-    catch (e) {
-        throw new UserError(`No origin at ${repo.workdir()}.`);
-    }
-
     const execString = `\
-git -C ${repo.workdir()} fetch -q '${origin.url()}' ${sha}
+git -C ${repo.workdir()} fetch -q '${url}' ${sha}
 `;
     try {
         return yield exec(execString);

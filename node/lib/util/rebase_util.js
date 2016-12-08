@@ -38,14 +38,14 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const Open                 = require("./open");
-const GitUtil              = require("./git_util");
-const RepoStatus           = require("./repo_status");
-const RebaseFileUtil       = require("./rebase_file_util");
-const SubmoduleUtil        = require("./submodule_util");
-const SubmoduleConfigUtil  = require("./submodule_config_util");
-const UserError            = require("./user_error");
-
+const Open                = require("./open");
+const GitUtil             = require("./git_util");
+const RepoStatus          = require("./repo_status");
+const RebaseFileUtil      = require("./rebase_file_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleFetcher    = require("./submodule_fetcher");
+const SubmoduleUtil       = require("./submodule_util");
+const UserError           = require("./user_error");
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
  */
@@ -120,11 +120,13 @@ const callFinish = co.wrap(function *(repo, rebase) {
  * @param {String}             submoduleName
  * @param {NodeGit.Repository} repo
  * @param {Object}             commits writable
+ * @param {SubmoduleFetcher}   fetcher
  */
-function SubmoduleRebaser(submoduleName, repo, commits) {
+function SubmoduleRebaser(submoduleName, repo, commits, fetcher) {
     assert.isString(submoduleName);
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isObject(commits);
+    assert.instanceOf(fetcher, SubmoduleFetcher);
 
     let rebase         = null;   // set to `NodeGit.Rebase` object when started
     let signature      = null;   // lazily set when needed
@@ -142,7 +144,7 @@ function SubmoduleRebaser(submoduleName, repo, commits) {
         if (null !== rebase) {
             return;                                                   // RETURN
         }
-        yield GitUtil.fetchSha(repo, remoteCommitSha);
+        yield fetcher.fetchSha(repo, submoduleName, remoteCommitSha);
         const head = yield repo.head();
         const localAnnotated =
                              yield NodeGit.AnnotatedCommit.fromRef(repo, head);
@@ -278,13 +280,11 @@ exports.rebase = co.wrap(function *(metaRepo, commit, status) {
         submoduleCommits: {},
     };
 
-    const metaUrl = yield GitUtil.getOriginUrl(metaRepo);
-
     const currentBranchName = status.currentBranchName || "HEAD";
     const currentBranch = yield metaRepo.getBranch(currentBranchName);
     const currentCommitId = NodeGit.Oid.fromString(status.headCommit);
     const commitId = commit.id();
-
+    const fetcher = new SubmoduleFetcher(metaRepo, commit);
     const submodules = status.submodules;
 
     // First, see if 'commit' already exists in the current history.  If so, we
@@ -323,10 +323,8 @@ up-to-date.`);
 
             if (null === submodule.repoStatus) {
                 console.log(`Opening submodule ${colors.blue(path)}.`);
-                repo = yield Open.openOnCommit(metaUrl,
-                                               metaRepo,
+                repo = yield Open.openOnCommit(fetcher,
                                                path,
-                                               submodule.commitUrl,
                                                submodule.commitSha);
             }
             else { 
@@ -334,7 +332,7 @@ up-to-date.`);
             }
             const commits = {};
             result.submoduleCommits[path] = commits;
-            return new SubmoduleRebaser(path, repo, commits);
+            return new SubmoduleRebaser(path, repo, commits, fetcher);
         });
 
         submoduleRebasers[path] = promise;
@@ -556,7 +554,7 @@ Conflict rebasing the submodule ${colors.red(rebaser.path())}.`;
             const sha = shas[index];
             if (sha !== status.submodules[name].commitSha) {
                 const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
-                yield GitUtil.fetchSha(subRepo, sha);
+                yield fetcher.fetchSha(subRepo, name, sha);
                 yield setHead(subRepo, sha);
             }
         }));
