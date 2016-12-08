@@ -111,6 +111,12 @@ a=Ax:Cz-y;Cy-x;Bfoo=z|\
 x=S:C8-3 s=Sa:z;C3-2;C2-1 s=Sa:x;Bfoo=8;Bmaster=2",
             expected: "x=E:C9-2 s=Sa:zs;Bmaster=9;Os Czs-x z=z!H=zs",
         },
+        "picking closed sub with change": {
+            input: "\
+a=Ax:Cw-x;Cz-x;Cy-x;Bfoo=z;Bbar=y;Bbaz=w|\
+x=S:C4-2 s=Sa:w;C8-3 s=Sa:z;C3-2;C2-1 s=Sa:y;Bfoo=8;Bmaster=4",
+            expected: "x=E:C9-4 s=Sa:zs;Bmaster=9;Os Czs-w z=z!H=zs",
+        },
         "picking two closed subs": {
             input: "\
 a=Ax:Cz-y;Cy-x;Bfoo=z|\

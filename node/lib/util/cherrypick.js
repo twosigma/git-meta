@@ -35,12 +35,11 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil       = require("../util/git_util");
-const Open          = require("../util/open");
-const RepoStatus    = require("../util/repo_status");
-const SubmoduleUtil = require("../util/submodule_util");
-const Status        = require("../util/status");
-const UserError     = require("../util/submodule_util");
+const GitUtil             = require("../util/git_util");
+const Open                = require("../util/open");
+const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const SubmoduleUtil       = require("../util/submodule_util");
+const UserError           = require("../util/user_error");
 
 /**
  * Cherry-pick the specified `commit` in the specified `metaRepo`.  Return an
@@ -76,44 +75,62 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     // - if any conflicts in sub-repos, bail
     // - finalize commit in meta-repo
 
+    const head = yield metaRepo.getHeadCommit();
+
     yield NodeGit.Cherrypick.cherrypick(metaRepo, commit, {});
 
     let errorMessage = "";
     let indexChanged = false;
     let pickers = [];
+
+    const headUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                      metaRepo,
+                                                                      head);
+    const commitUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                      metaRepo,
+                                                                      commit);
+    const headShas = yield SubmoduleUtil.getSubmoduleShasForCommit(
+                                                         metaRepo,
+                                                         Object.keys(headUrls),
+                                                         head);
+    const commitShas = yield SubmoduleUtil.getSubmoduleShasForCommit(
+                                                       metaRepo,
+                                                       Object.keys(commitUrls),
+                                                       commit);
     const metaIndex = yield metaRepo.index();
+
+    const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(metaRepo));
 
     let submoduleCommits = {};
 
-    const repoStat = yield Status.getRepoStatus(metaRepo);
-    const subStats = repoStat.submodules;
-
     const originUrl = yield GitUtil.getOriginUrl(metaRepo);
 
-    const picker = co.wrap(function *(subName, subStat) {
-        const id = NodeGit.Oid.fromString(subStat.indexSha);
+    const picker = co.wrap(function *(subName, headSha, commitSha) {
         let commitMap = {};
         submoduleCommits[subName] = commitMap;
 
         // If closed, open this submodule.
 
-        if (null === subStat.repoStatus) {
+        let repo;
+        if (!openSubs.has(subName)) {
             console.log(`Opening ${colors.blue(subName)}.`);
-            yield Open.openOnCommit(originUrl,
-                                    metaRepo,
-                                    subName,
-                                    subStat.indexUrl,
-                                    subStat.commitSha);
+            repo = yield Open.openOnCommit(originUrl,
+                                           metaRepo,
+                                           subName,
+                                           headUrls[subName],
+                                           headShas[subName]);
         }
-        const repo = yield SubmoduleUtil.getRepo(metaRepo, subName);
+        else {
+            repo = yield SubmoduleUtil.getRepo(metaRepo, subName);
+        }
         console.log(`Sub-repo ${colors.blue(subName)}: cherry-picking commit \
-${colors.green(id)}.`);
+${colors.green(commitSha)}.`);
 
         // Fetch the commit; it may not be present.
 
-        yield GitUtil.fetchSha(repo, id.tostrS());
+        yield GitUtil.fetchSha(repo, commitSha);
 
-        const commit = yield repo.getCommit(id);
+        const commit = yield repo.getCommit(commitSha);
         yield NodeGit.Cherrypick.cherrypick(repo, commit, {});
         const index = yield repo.index();
         if (index.hasConflicts()) {
@@ -128,17 +145,18 @@ ${colors.green(id)}.`);
                                                   commit.committer(),
                                                   commit.message());
             yield metaIndex.addByPath(subName);
-            commitMap[id.tostrS()] = newCommit.tostrS();
+            commitMap[commitSha] = newCommit.tostrS();
             indexChanged = true;
         }
     });
 
     // Create a submodule picker for each submodule in the index.
 
-    Object.keys(subStats).forEach(subName => {
-        const subStat = subStats[subName];
-        if (RepoStatus.FILESTATUS.MODIFIED === subStat.indexStatus) {
-            pickers.push(picker(subName, subStat));
+    Object.keys(headShas).forEach(subName => {
+        const headSha = headShas[subName];
+        const commitSha = commitShas[subName];
+        if (headSha !== commitSha) {
+            pickers.push(picker(subName, headSha, commitSha));
         }
     });
 
