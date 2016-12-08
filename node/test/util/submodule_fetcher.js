@@ -62,7 +62,7 @@ describe("SubmoduleFetcher", function () {
                 const written =
                              yield RepoASTTestUtil.createMultiRepos(c.initial);
                 const repo = written.repos.x;
-                const newSha = written.reverseMap[c.metaSha];
+                const newSha = written.reverseCommitMap[c.metaSha];
                 const commit = yield repo.getCommit(newSha);
                 let metaUrl = c.metaOriginUrl;
                 if (null !== metaUrl) {
@@ -82,14 +82,14 @@ describe("SubmoduleFetcher", function () {
         it("repo", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createMultiRepos("x=S");
             const x = written.repos.x;
-            const commit = yield x.getCommit(written.reverseMap["1"]);
+            const commit = yield x.getCommit(written.reverseCommitMap["1"]);
             const fetcher = new SubmoduleFetcher(x, commit);
             assert.equal(x, fetcher.repo);
         }));
         it("commit", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createMultiRepos("x=S");
             const x = written.repos.x;
-            const commit = yield x.getCommit(written.reverseMap["1"]);
+            const commit = yield x.getCommit(written.reverseCommitMap["1"]);
             const fetcher = new SubmoduleFetcher(x, commit);
             assert.equal(commit, fetcher.commit);
         }));
@@ -100,7 +100,7 @@ describe("SubmoduleFetcher", function () {
             const written = yield RepoASTTestUtil.createMultiRepos(
                                                         "a=B:C4-1;Bfoo=4|x=U");
             const x = written.repos.x;
-            const commit = yield x.getCommit(written.reverseMap["2"]);
+            const commit = yield x.getCommit(written.reverseCommitMap["2"]);
             const fetcher = new SubmoduleFetcher(x, commit);
             const newUrl = yield fetcher.getSubmoduleUrl("s");
             const resultUrl = written.urlMap[newUrl];
@@ -110,7 +110,7 @@ describe("SubmoduleFetcher", function () {
             const written = yield RepoASTTestUtil.createMultiRepos(
                                                         "a=B:C4-1;Bfoo=4|x=U");
             const x = written.repos.x;
-            const commit = yield x.getCommit(written.reverseMap["1"]);
+            const commit = yield x.getCommit(written.reverseCommitMap["1"]);
             const fetcher = new SubmoduleFetcher(x, commit);
             try {
                 yield fetcher.getSubmoduleUrl("s");
@@ -164,7 +164,7 @@ describe("SubmoduleFetcher", function () {
             it(caseName, co.wrap(function *() {
                 const fetcher = co.wrap(function *(repos, maps) {
                     const x = repos.x;
-                    const revMap = maps.reverseMap;
+                    const revMap = maps.reverseCommitMap;
                     const newShaw = revMap[c.metaSha];
                     const commit = yield x.getCommit(newShaw);
                     const subFetcher = new SubmoduleFetcher(x, commit);

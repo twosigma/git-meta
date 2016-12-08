@@ -59,8 +59,8 @@ describe("openOnCommit", function () {
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
             const manipulator = co.wrap(function *(repos, maps) {
-                assert.property(maps.reverseMap, c.commitSha);
-                const commit = maps.reverseMap[c.commitSha];
+                assert.property(maps.reverseCommitMap, c.commitSha);
+                const commit = maps.reverseCommitMap[c.commitSha];
                 const x = repos.x;
                 const head = yield x.getHeadCommit();
                 const fetcher = new SubmoduleFetcher(x, head);

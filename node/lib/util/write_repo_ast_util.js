@@ -517,7 +517,7 @@ exports.writeRAST = co.wrap(function *(ast, path) {
  * @return {Object}
  * @return {Object} return.repos        map from name to `NodeGit.Repository`
  * @return {Object} return.commitMap    map from new to old commit IDs
- * @return {Object} return.reverseMap   map from old to new commit IDs
+ * @return {Object} return.reverseCommitMap   map from old to new commit IDs
  * @return {Object} return.urlMap       map from new url to old name
  * @return {Object} return.reverseUrlMap map from old url to new name
  */
@@ -677,7 +677,7 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
     return {
         repos: resultRepos,
         commitMap: commitMaps.newToOld,
-        reverseMap: commitMaps.oldToNew,
+        reverseCommitMap: commitMaps.oldToNew,
         urlMap: urlMap,
         reverseUrlMap: reverseUrlMap,
     };

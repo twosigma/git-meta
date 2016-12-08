@@ -173,7 +173,7 @@ exports.createMultiRepos = co.wrap(function *(input) {
  *   argument containing a commit map and a url map.  It may return an
  *   object containing:
  *      - `commitMap`  -- specifying actual to logical mappings for new commits
- *      - `reverseMap` -- reverse of `commitMap` -- logical to actual
+ *      - `reverseCommitMap` -- reverse of `commitMap` -- logical to actual
  *      - `urlMap`     -- specifying repo name to path for new repos.  Note
  *                        that this is the opposite format returned by
  *                        `writeRAST` and expected by `mapCommitsAndUrls`.
@@ -203,8 +203,8 @@ exports.createMultiRepos = co.wrap(function *(input) {
  * @param {Object}               options.expectedTransformer.mapping
  * @param {Object}               options.expectedTransformer.mapping.commitMap
  * @param {Object}               options.expectedTransformer.mapping.urlMap
- * @param {Object}               options.expectedTransformer.mapping.reverseMap
- * @param {Object}            options.expectedTransformer.mapping.reverseUrlMap
+ * @param {Object}         options.expectedTransformer.mapping.reverseCommitMap
+ * @param {Object}         options.expectedTransformer.mapping.reverseUrlMap
  * @param {Object}               options.expectedTransformer.return
  */
 exports.testMultiRepoManipulator =
@@ -241,7 +241,7 @@ exports.testMultiRepoManipulator =
     const urlMap    = written.urlMap;
     const mappings = {
         commitMap: commitMap,
-        reverseMap: written.reverseMap,
+        reverseCommitMap: written.reverseCommitMap,
         urlMap: urlMap,
         reverseUrlMap: written.reverseUrlMap,
     };

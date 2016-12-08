@@ -298,7 +298,7 @@ describe("RepoASTTestUtil", function () {
                     expectedTransformer: (expected, mappings) => {
                         const x = expected.x;
                         let branches = x.branches;
-                        const commitId = mappings.reverseMap["1"];
+                        const commitId = mappings.reverseCommitMap["1"];
                         branches[`foo-${commitId}`] = "1";
                         return {
                             x: x.copy({ branches: branches}),

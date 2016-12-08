@@ -125,7 +125,7 @@ x=U:C3-2 s=Sa:4;Bfoo=3;Os W bar=r",
                 return yield Checkout.checkout(x, branchName);
             }
             else {
-                const realCommit = mapping.reverseMap[commit];
+                const realCommit = mapping.reverseCommitMap[commit];
                 return yield Checkout.checkout(x, realCommit);
             }
         });

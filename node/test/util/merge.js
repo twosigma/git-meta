@@ -51,9 +51,9 @@ describe("merge", function () {
         const x = repos.x;
         const status = yield Status.getRepoStatus(x);
         const commitMap = maps.commitMap;
-        const reverseMap = maps.reverseMap;
-        assert.property(reverseMap, fromCommit);
-        const physicalCommit = reverseMap[fromCommit];
+        const reverseCommitMap = maps.reverseCommitMap;
+        assert.property(reverseCommitMap, fromCommit);
+        const physicalCommit = reverseCommitMap[fromCommit];
         const commit = yield x.getCommit(physicalCommit);
         const result = yield Merge.merge(x, status, commit, mode, "message");
         if (upToDate) {
