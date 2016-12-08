@@ -45,9 +45,17 @@ exports.helpText = `Check out a commit in the meta-repository and each
  */
 exports.configureParser = function (parser) {
 
+    parser.addArgument(["-b"], {
+        dest: "new branch name",
+        help: `Create a new branch to check out.`,
+        nargs: 1,
+    });
+
     parser.addArgument(["committish"], {
         type: "string",
         help: "commit to check out",
+        defaultValue: null,
+        nargs: "?",
     });
 };
 
@@ -59,9 +67,31 @@ exports.configureParser = function (parser) {
  * @param {String} args.committish
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const Checkout = require("../util/checkout");
-    const GitUtil  = require("../util/git_util");
+    const colors = require("colors");
+
+    const Checkout  = require("../util/checkout");
+    const GitUtil   = require("../util/git_util");
+
+    let committish = args.committish;
+    let newBranch = null;
+
+    const newBranchNameArr = args["new branch name"];
+    if (newBranchNameArr) {
+        newBranch = newBranchNameArr[0];
+    }
 
     const repo = yield GitUtil.getCurrentRepo();
-    yield Checkout.checkout(repo, args.committish);
+    if (null !== committish) {
+        yield Checkout.checkout(repo, committish);
+    }
+    if (null !== newBranch) {
+        const branch = yield GitUtil.createBranchFromHead(repo, newBranch);
+        yield repo.setHead(branch.name());
+        console.log(`Switched to new branch ${colors.green(newBranch)}.`);
+    }
+    else {
+        // TODO display info about whether this is a branch, detached head,
+        // etc.
+        console.log(`Switched to ${colors.green(committish)}.`);
+    }
 });
