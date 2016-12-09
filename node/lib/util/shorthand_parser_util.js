@@ -1142,6 +1142,10 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.head) {
             includeCommit(resultArgs.head);
         }
+        if (resultArgs.rebase) {
+            includeCommit(resultArgs.rebase.originalHead);
+            includeCommit(resultArgs.rebase.onto);
+        }
         for (let remoteName in resultArgs.remotes) {
             const remote = resultArgs.remotes[remoteName];
             for (let branch in remote.branches) {

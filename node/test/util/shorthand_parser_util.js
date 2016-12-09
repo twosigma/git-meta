@@ -1078,6 +1078,58 @@ describe("ShorthandParserUtil", function () {
                     }),
                 },
             },
+            "missing commits in rebase": {
+                i: `
+a=B:C8-1;C9-1;Bmaster=8;Bfoo=9|
+x=S:Efoo,8,9`,
+                e: {
+                    a: B.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message",
+                            }),
+                        },
+                        branches: {
+                            master: "8",
+                            foo: "9",
+                        },
+                    }),
+                    x: S.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message",
+                            }),
+                        },
+                        rebase: new RepoAST.Rebase("foo", "8", "9"),
+                    }),
+                }
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
