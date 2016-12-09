@@ -53,7 +53,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *
  * The shorthand syntax for describing a repository:
  *
- * shorthand      = <base repo type> [':'<override>(';'<override>)*]
+ * shorthand      = <base repo type> [':'<override>(';\s*'<override>)*]
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit>
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
@@ -65,13 +65,13 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * ref            = 'F'<name>'='<commit>|<nothing>     nothing deletes ref
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
- *                  [' '<change>(','<change>*)]
+ *                  [' '<change>(',\s*'<change>*)]
  * change         = path ['=' <submodule> | <data>]
  * path           = (<alpha numeric>|'/')+
  * submodule      = Surl:<commit>
  * data           = ('0-9'|'a-z'|'A-Z'|' ')*    basically non-delimiter ascii
  * remote         = R<name>=[<url>]
- *                  [' '<name>=[<commit>](','<name>=[<commit>])*]
+ *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
  * note           = N <ref> <commit>=message
  * rebase         = E<head name>,<original commit id>,<onto commit id>
  * index          = I <change>[,<change>]*
@@ -87,6 +87,16 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *        same name as the commit and that name as its data.
  * - U -- like `S`, but with a second commit `2` introducing a submodule named
  *        "s" with a url of "a" on commit `1`
+ *
+ * Whitespace is skipped at the beginning of shorthanad, and also after some,
+ * but not all delimitors.  We can't skip it in places where the space
+ * character is itself a separator, such as after the parent commit ids.  It is
+ * skipped after separators for:
+ *
+ * - commit changes
+ * - remote branches
+ * - overrides (including submodules)
+ * - repos
  *
  * Specifying a non-null current branch implies that the HEAD is set to the
  * same commit; specifying HEAD implies detached state and no current branch;
@@ -396,6 +406,36 @@ function prepareASTArguments(baseAST, rawRepo) {
 }
 
 /**
+ * Return the range for the specified seprator `char` within the specified
+ * [begin,end) range in the `string`.  A seprator range consists of `char` and
+ * any trailing whitespace.
+ *
+ * @param {String} string
+ * @param {String} char
+ * @param {Number} begin
+ * @param {Number} end
+ * @return {Object|null}
+ * @return {Number} return.begin inclusive
+ * @return {Number} return.end   exclusive
+ */
+function findSeparator (string, char, begin, end) {
+    const separator = findChar(string, char, begin, end);
+    if (null === separator) {
+        return null;                                                  // RETURN
+    }
+    const whitespace = /\s/;
+    let sepEnd = separator + 1;
+    while (sepEnd < end && whitespace.test(string[sepEnd])) {
+        ++sepEnd;
+    }
+    return {
+        begin: separator,
+        end: sepEnd,
+    };
+}
+
+exports.findSeparator = findSeparator;
+/**
  * Copy the commit having the specified `id` and its parents from the specified
  * `commits` map to the specified `destCommits` map.  The behavior is undefined
  * unless `id` and its ancestors exist in `commits`.
@@ -451,21 +491,23 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         let changes = {};
         assert.notEqual(begin, end, "must be at least one change");
         while (end !== begin) {
-            const currentEnd = findChar(shorthand, ",", begin, end) || end;
-            const assign = findChar(shorthand, "=", begin, currentEnd);
+            const currentEnd = findSeparator(shorthand, ",", begin, end) ||
+                               { begin: end, end: end};
+            const assign = findChar(shorthand, "=", begin, currentEnd.begin);
             assert.notEqual(begin, assign, "no path");
             let change = null;
-            let pathEnd = currentEnd;
+            let pathEnd = currentEnd.begin;
             if (null !== assign) {
                 pathEnd = assign;
                 const dataBegin = assign + 1;
                 const rawChange =
-                           shorthand.substr(dataBegin, currentEnd - dataBegin);
+                           shorthand.substr(dataBegin,
+                                            currentEnd.begin - dataBegin);
                 change = parseChangeData(rawChange);
             }
             const path = shorthand.substr(begin, pathEnd - begin);
             changes[path] = change;
-            begin = Math.min(currentEnd + 1, end);
+            begin = currentEnd.end;
         }
         return changes;
     }
@@ -641,24 +683,25 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         assert.notProperty(remotes, name);
 
         let branches = {};
-        let nextBranch = endUrl;
+        let nextBranch = Math.min(endUrl + 1, end);
         while (end !== nextBranch) {
-            const branchBegin = nextBranch + 1;
+            const branchBegin = nextBranch;
             assert.notEqual(branchBegin, end);
             const equal = findChar(shorthand, "=", branchBegin, end);
             assert.isNotNull(equal);
             assert.notEqual(equal, branchBegin);
-            const branchEnd = findChar(shorthand, ",", equal, end) || end;
+            const branchEnd = findSeparator(shorthand, ",", equal, end) ||
+                              { begin: end, end: end };
             const branchName = shorthand.substr(branchBegin,
                                                 equal - branchBegin);
             let branchCommit = null;
             const commitBegin = equal + 1;
-            if (commitBegin !== branchEnd) {
+            if (commitBegin !== branchEnd.begin) {
                 branchCommit = shorthand.substr(commitBegin,
-                                                branchEnd - commitBegin);
+                                                branchEnd.begin - commitBegin);
             }
             branches[branchName] = branchCommit;
-            nextBranch = branchEnd;
+            nextBranch = branchEnd.end;
         }
         remotes[name] = {
             url: url,
@@ -797,9 +840,10 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     while (begin !== end) {
-        const nextEnd = findChar(shorthand, delimiter, begin, end) || end;
-        parseOverride(begin, nextEnd);
-        begin = Math.min(nextEnd + 1, end);  // skip delimiter
+        const nextEnd = findSeparator(shorthand, delimiter, begin, end) ||
+                        { begin: end, end: end};
+        parseOverride(begin, nextEnd.begin);
+        begin = nextEnd.end;
     }
 
     let result = {
@@ -924,6 +968,7 @@ function getBaseRepo(type, data) {
 exports.parseRepoShorthand = function (shorthand) {
     assert.isString(shorthand);
 
+    shorthand = shorthand.trim();
     const rawResult = exports.parseRepoShorthandRaw(shorthand);
     assert.equal(0,
                  Object.keys(rawResult.openSubmodules),
@@ -955,6 +1000,7 @@ exports.parseRepoShorthand = function (shorthand) {
  */
 exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
     assert.isString(shorthand);
+    shorthand = shorthand.trim();
     if (undefined !== existingRepos) {
         assert.isObject(existingRepos);
     }
@@ -972,12 +1018,16 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         assert.notEqual(equal, begin, "empty name");
         const repoBegin = equal + 1;
         assert.notEqual(repoBegin, shorthand.length, "no repo definition");
-        const end = findChar(shorthand, "|", repoBegin, shorthand.length) ||
-                                                              shorthand.length;
-        assert.notEqual(repoBegin, end, "empty repo definition");
+        const end = findSeparator(shorthand,
+                                  "|",
+                                  repoBegin,
+                                  shorthand.length) ||
+                    { begin: shorthand.length, end: shorthand.length };
+        assert.notEqual(repoBegin, end.begin, "empty repo definition");
         const name = shorthand.substr(begin, equal - begin);
-        const repoShorthand = shorthand.substr(repoBegin, end - repoBegin);
-        begin = Math.min(end + 1, shorthand.length);
+        const repoShorthand = shorthand.substr(repoBegin,
+                                               end.begin - repoBegin);
+        begin = end.end;
         const repo = exports.parseRepoShorthandRaw(repoShorthand);
         rawRepos[name] = repo;
     }

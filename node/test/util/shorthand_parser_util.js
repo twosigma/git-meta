@@ -37,6 +37,77 @@ const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 
 describe("ShorthandParserUtil", function () {
+    describe("findSeparator", function () {
+        const cases = {
+            missing: {
+                char: ";",
+                input: "",
+                begin: 0,
+                end: 0,
+                expected: null,
+            },
+            simpleMatch: {
+                char: ";",
+                input: ";",
+                begin: 0,
+                end: 1,
+                expected: {
+                    begin: 0,
+                    end: 1,
+                },
+            },
+            "trailing out of scope": {
+                char: ";",
+                input: "; ",
+                begin: 0,
+                end: 1,
+                expected: {
+                    begin: 0,
+                    end: 1,
+                },
+            },
+            "trailing": {
+                char: ";",
+                input: "; ",
+                begin: 0,
+                end: 2,
+                expected: {
+                    begin: 0,
+                    end: 2,
+                },
+            },
+            "trailing and more": {
+                char: ";",
+                input: "; \n 3",
+                begin: 0,
+                end: 5,
+                expected: {
+                    begin: 0,
+                    end: 4,
+                },
+            },
+            "offset": {
+                char: "|",
+                input: "a b | \n  3",
+                begin: 1,
+                end: 8,
+                expected: {
+                    begin: 4,
+                    end: 8,
+                },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = ShorthandParserUtil.findSeparator(c.input,
+                                                                 c.char,
+                                                                 c.begin,
+                                                                 c.end);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
     describe("parseRepoShorthandRaw", function () {
         const Commit = RepoAST.Commit;
         const Submodule = RepoAST.Submodule;
@@ -152,12 +223,34 @@ describe("ShorthandParserUtil", function () {
                     }),
                 }
             })},
+            "commit with changes and ws": { i: "S:C1-2 foo=bar,\n b=z", e: m({
+                commits: {
+                    "1": new Commit({
+                        parents: ["2"],
+                        changes: { "foo": "bar", "b": "z"},
+                        message: "message",
+                    }),
+                }
+            })},
             "head": { i: "S:H=2", e: m({ head: "2"})},
             "no head": { i: "S:H=", e: m({ head: null })},
             "current branch": { i: "S:*=1", e: m({currentBranchName: "1"})},
             "no current branch": { i: "S:*=", e: m({currentBranchName: null})},
             "multiple overrides": {
                 i: "S:Bm=;C1-2;*=1",
+                e: m({
+                    currentBranchName: "1",
+                    commits: {
+                        "1": new Commit({
+                            parents: ["2"],
+                            changes: { "1": "1"},
+                            message: "message",
+                    })},
+                    branches: { m: null },
+                }),
+            },
+            "multiple overrides with spaces": {
+                i: "S:Bm=;\nC1-2;    *=1",
                 e: m({
                     currentBranchName: "1",
                     commits: {
@@ -212,6 +305,17 @@ describe("ShorthandParserUtil", function () {
             },
             "remote with branches": {
                 i: "S:Rfoo=bar origin=1,lame=2",
+                e: m({
+                    remotes: {
+                        foo: {
+                            url: "bar",
+                            branches: { origin: "1", lame: "2", },
+                        },
+                    },
+                }),
+            },
+            "remote with branches and spaces": {
+                i: "S:Rfoo=bar origin=1,  \nlame=2",
                 e: m({
                     remotes: {
                         foo: {
@@ -472,6 +576,10 @@ describe("ShorthandParserUtil", function () {
                 i: "S",
                 e: S
             },
+            "simple trimmed": {
+                i: "\n  S",
+                e: S
+            },
             "bare": {
                 i: "B",
                 e: B,
@@ -607,8 +715,13 @@ describe("ShorthandParserUtil", function () {
         const U = ShorthandParserUtil.RepoType.U;
         const cases = {
             "simple": { i: "a=S", e: { a: "S"} },
+            "simple trimmed": { i: "\n  a=S", e: { a: "S"} },
             "multiple": {
                 i: "a=S|b=S:Bfoo=1",
+                e: { a: "S", b: "S:Bfoo=1" }
+            },
+            "multiple with space": {
+                i: "a=S|\n    b=S:Bfoo=1",
                 e: { a: "S", b: "S:Bfoo=1" }
             },
             "external commit": {
