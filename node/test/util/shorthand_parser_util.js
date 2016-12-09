@@ -392,6 +392,13 @@ describe("ShorthandParserUtil", function () {
                     index: { x: "y", q: null, z: "r" },
                 }),
             },
+            "index deletion and removal": {
+                i: "S:I x=y,q=~,z=r",
+                e: m({
+                    type: "S",
+                    index: { x: "y", q: undefined, z: "r" },
+                }),
+            },
             "index submodule change": {
                 i: "S:I x=S/x:1",
                 e: m({
@@ -406,11 +413,18 @@ describe("ShorthandParserUtil", function () {
                     workdir: { x: "y" },
                 }),
             },
-            "workdir  deletion and changes": {
+            "workdir deletion and changes": {
                 i: "S:W x=y,q,z=r",
                 e: m({
                     type: "S",
                     workdir: { x: "y", q: null, z: "r" },
+                }),
+            },
+            "workdir removal and changes": {
+                i: "S:W x=y,q=~,z=r",
+                e: m({
+                    type: "S",
+                    workdir: { x: "y", q: undefined, z: "r" },
                 }),
             },
             "workdir submodule change": {
