@@ -411,6 +411,13 @@ exports.readRAST = co.wrap(function *(repo) {
         }
     });
 
+    const rebase = yield RebaseFileUtil.readRebase(repo.path());
+
+    if (null !== rebase) {
+        yield loadCommit(NodeGit.Oid.fromString(rebase.originalHead));
+        yield loadCommit(NodeGit.Oid.fromString(rebase.onto));
+    }
+
     return new RepoAST({
         commits: commits,
         branches: branchTargets,
@@ -422,7 +429,7 @@ exports.readRAST = co.wrap(function *(repo) {
         notes: notes,
         workdir: workdir,
         openSubmodules: openSubmodules,
-        rebase: yield RebaseFileUtil.readRebase(repo.path()),
+        rebase: rebase,
     });
 });
 
