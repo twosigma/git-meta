@@ -406,6 +406,20 @@ in commit ${id}.`);
             }
         }
 
+        this.d_rebase = null;
+        if ("rebase" in args) {
+            const rebase = args.rebase;
+            if (null !== rebase) {
+                assert.instanceOf(rebase, Rebase);
+                checkAndTraverse(rebase.originalHead,
+                                 "original head of rebase");
+                checkAndTraverse(rebase.onto,
+                                 "onto of rebase");
+                this.d_rebase = rebase;
+            }
+        }
+
+
         // Validate that all commits have been reached.
 
         for (let key in commits) {
@@ -484,17 +498,6 @@ in commit ${id}.`);
                 }
             }
         }
-        this.d_rebase = null;
-        if ("rebase" in args) {
-            const rebase = args.rebase;
-            if (null !== rebase) {
-                assert.instanceOf(rebase, Rebase);
-                checkCommit(rebase.originalHead, "original head of rebase");
-                checkCommit(rebase.onto, "onto of rebase");
-                this.d_rebase = rebase;
-            }
-        }
-
         Object.freeze(this);
     }
 
