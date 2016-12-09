@@ -495,7 +495,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                                { begin: end, end: end};
             const assign = findChar(shorthand, "=", begin, currentEnd.begin);
             assert.notEqual(begin, assign, "no path");
-            let change = null;
+            let change;
             let pathEnd = currentEnd.begin;
             if (null !== assign) {
                 pathEnd = assign;
@@ -798,6 +798,10 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      * @param {Number} end
      */
     function parseRebase(begin, end) {
+        if (begin === end) {
+            rebase = null;
+            return;                                                   // RETURN
+        }
         const rebaseDef = shorthand.substr(begin, end - begin);
         const parts = rebaseDef.split(",");
         assert.equal(parts.length,

@@ -534,6 +534,13 @@ describe("ShorthandParserUtil", function () {
                     rebase: new RepoAST.Rebase("master", "1", "2"),
                 }),
             },
+            "rebase null": {
+                i: "S:E",
+                e: m({
+                    type: "S",
+                    rebase: null,
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
