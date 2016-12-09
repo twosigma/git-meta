@@ -37,6 +37,7 @@ const path    = require("path");
 
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const TestUtil            = require("../../lib/util/test_util");
+const Submodule           = require("../../lib/util/submodule");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 
@@ -448,6 +449,39 @@ describe("SubmoduleUtil", function () {
                                  c.changed.sort());
                 assert.deepEqual(Array.from(changes.removed).sort(),
                                  c.removed.sort());
+            }));
+        });
+    });
+    describe("getSubmodulesForCommit", function () {
+         const cases = {
+            "one": {
+                state: "S:C2-1 foo=Sa:1;H=2",
+                commit: "2",
+                expected: { foo: new Submodule("a", "1") },
+            },
+            "from later commit": {
+                state: "S:C2-1 x=S/a:1;C3-2 x=S/a:2;H=3",
+                commit: "3",
+                expected: { x: new Submodule("/a", "2") },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const mappedCommitSha = written.oldCommitMap[c.commit];
+                const commit = yield repo.getCommit(mappedCommitSha);
+                const result = yield SubmoduleUtil.getSubmodulesForCommit(
+                                                                       repo,
+                                                                       commit);
+                let mappedResult = {};
+                Object.keys(result).forEach((name) => {
+                    const resultSub = result[name];
+                    const commit = written.commitMap[resultSub.sha];
+                    mappedResult[name] = new Submodule(resultSub.url, commit);
+                });
+                assert.deepEqual(mappedResult, c.expected);
             }));
         });
     });
