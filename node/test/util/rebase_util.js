@@ -35,7 +35,37 @@ const co     = require("co");
 
 const RebaseUtil      = require("../../lib/util/rebase_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const Status          = require("../../lib/util/status");
+
+function makeRebaser(operation) {
+    return co.wrap(function *(repos, maps) {
+        const result = yield operation(repos, maps);
+
+        // Now build a map from the newly generated commits to the
+        // logical names that will be used in the expected case.
+
+        let commitMap = {};
+        function addNewCommit(newCommit, oldCommit, suffix) {
+            const oldLogicalCommit = maps.commitMap[oldCommit];
+            commitMap[newCommit] = oldLogicalCommit + suffix;
+        }
+        Object.keys(result.metaCommits).forEach(newCommit => {
+            addNewCommit(newCommit,
+                         result.metaCommits[newCommit],
+                         "M");
+        });
+        Object.keys(result.submoduleCommits).forEach(subName => {
+            const subCommits = result.submoduleCommits[subName];
+            Object.keys(subCommits).forEach(newCommit => {
+                addNewCommit(newCommit,
+                             subCommits[newCommit],
+                             subName);
+            });
+        });
+        return {
+            commitMap: commitMap,
+        };
+    });
+}
 
 describe("rebase", function () {
     describe("rebase", function () {
@@ -43,45 +73,21 @@ describe("rebase", function () {
         // Will append the leter 'M' to any created meta-repo commits, and the
         // submodule name to commits created in respective submodules.
 
+
         function rebaser(repoName, commit) {
-            return co.wrap(function *(repos, maps) {
+            const rebaseOper = co.wrap(function *(repos, maps) {
                 assert.property(repos, repoName);
                 const repo = repos[repoName];
-                const status = yield Status.getRepoStatus(repo);
                 const reverseCommitMap = maps.reverseCommitMap;
                 assert.property(reverseCommitMap, commit);
                 const originalActualCommit = reverseCommitMap[commit];
                 const originalCommit =
                                     yield repo.getCommit(originalActualCommit);
-                const result = yield RebaseUtil.rebase(repo,
-                                                       originalCommit,
-                                                       status);
 
-                // Now build a map from the newly generated commits to the
-                // logical names that will be used in the expected case.
-
-                let commitMap = {};
-                function addNewCommit(newCommit, oldCommit, suffix) {
-                    const oldLogicalCommit = maps.commitMap[oldCommit];
-                    commitMap[newCommit] = oldLogicalCommit + suffix;
-                }
-                Object.keys(result.metaCommits).forEach(newCommit => {
-                    addNewCommit(newCommit,
-                                 result.metaCommits[newCommit],
-                                 "M");
-                });
-                Object.keys(result.submoduleCommits).forEach(subName => {
-                    const subCommits = result.submoduleCommits[subName];
-                    Object.keys(subCommits).forEach(newCommit => {
-                        addNewCommit(newCommit,
-                                     subCommits[newCommit],
-                                     subName);
-                    });
-                });
-                return {
-                    commitMap: commitMap,
-                };
+                return  yield RebaseUtil.rebase(repo, originalCommit);
             });
+
+            return makeRebaser(rebaseOper);
         }
         const cases = {
             "trivially nothing to do": {
@@ -121,7 +127,7 @@ describe("rebase", function () {
                 rebaser: rebaser("x", "3"),
                 expected: "x=E:Bmaster=3",
             },
-            "rebase change in sub": {
+            "rebase change in closed sub": {
                 initial: "\
 a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
 x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
@@ -269,5 +275,76 @@ x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
             }));
         });
     });
-});
 
+    describe("continue", function () {
+        const cases = {
+            "meta-only": {
+                initial: `
+x=S:C2-1 q=r;C3-1 q=s;Bmaster=2;Erefs/heads/master,2,3;I q=z`,
+                expected: `
+x=S:C2M-3 q=z;Bmaster=2M;E`,
+            },
+            "two, meta-only": {
+                initial: `
+x=S:C2-1;C3-1;C4-3;Bmaster=4;Erefs/heads/master,4,2;I qq=hh,3=3`,
+                expected: `
+x=S:C4M-3M 4=4;C3M-2 3=3,qq=hh;Bmaster=4M;E`,
+            },
+            "meta, has to open": {
+                initial: `
+a=B:Ca-1;Cb-1;Bmaster=a;Bfoo=b|
+x=U:C3-2 s=Sa:a;
+    C4-2;C5-4 s=Sa:b;
+    Bmaster=5;Bfoo=5;
+    I 4=4;
+    Erefs/heads/master,5,3`,
+                expected: `
+x=E:C5M-4M s=Sa:bs;C4M-3 4=4;Bmaster=5M;E;Os Cbs-a b=b!H=bs;I 4=~`,
+            },
+            "with rebase in submodule": {
+                initial: `
+a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
+x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
+    Bmaster=3;Bfoo=4;Bold=3;
+    Erefs/heads/master,3,4;
+    Os EHEAD,q,r!I q=q`,
+                expected: `
+x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E`
+            },
+            "staged fix in submodule": {
+                initial: `
+a=B:Ca-1 q=r;Cb-1 q=s;Bmaster=a;Bfoo=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Erefs/heads/master,3,4;Bold=3;
+    Os EHEAD,a,b!I q=z`,
+                expected: `
+x=E:C3M-4 s=Sa:as;E;Bmaster=3M;Os Cas-b q=z!H=as`,
+            },
+            "multiple in subs": {
+                initial: `
+a=B:Ca1-1 f=g;Ca2-1 f=h;Bmaster=a1;Bfoo=a2|
+b=B:Cb1-1 q=r;Cb2-1 q=s;Bmaster=b1;Bfoo=b2|
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:a1,t=Sb:b1;C4-2 s=Sa:a2,t=Sb:b2;
+    Bmaster=3;Bfoo=4;Bold=3;
+    Erefs/heads/master,3,4;
+    Os EHEAD,a1,a2!I f=z;
+    Ot EHEAD,b1,b2!I q=t`,
+                expected: `
+x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;E;Bmaster=3M;
+    Os Ca1s-a2 f=z!H=a1s;
+    Ot Cb1t-b2 q=t!H=b1t`
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const continuer = makeRebaser(co.wrap(function *(repos) {
+                    return yield RebaseUtil.continue(repos.x);
+                }));
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                               c.expected,
+                                                               continuer,
+                                                               c.fails);
+            }));
+        });
+    });
+});

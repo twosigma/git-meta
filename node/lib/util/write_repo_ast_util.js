@@ -363,33 +363,8 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
     }
 
     if (null !== ast.head) {
-        // Set up the index.  We render the current commit and apply the index
-        // on top of it.
 
-        const tree =
-                   yield RepoAST.renderIndex(ast.commits, ast.head, ast.index);
-        const treeId = yield makeTree(repo, tree, co.wrap(function *(sha) {
-            return yield Promise.resolve(commitMap[sha]);
-        }));
-
-        const index = yield repo.index();
-        const treeObj = yield repo.getTree(treeId);
-        yield index.readTree(treeObj);
-        yield index.write();
-
-        // Update the workdir to be up-to-date with index.
-
-
-        // TODO: Firgure out if this can be done with NodeGit; extend if
-        // not.  I didn't see anything about `clean` and `Checkout.index`
-        // didn't seem to work..
-
-        const checkoutIndexStr = `\
-cd ${repo.workdir()}
-git clean -f -d
-git checkout-index -a -f
-`;
-        yield exec(checkoutIndexStr);
+        let indexHead = ast.head;
 
         // Set up a rebase if there is one, this has to come right before
         // setting up the workdir, otherwise the rebase won't be allowed to
@@ -402,15 +377,51 @@ git checkout-index -a -f
             const original = yield NodeGit.AnnotatedCommit.lookup(repo,
                                                                   originalSha);
             const onto = yield NodeGit.AnnotatedCommit.lookup(repo, ontoSha);
-            yield NodeGit.Rebase.init(repo, original, onto, null, null);
+
+            // `init` creates the rebase, but it's not actually started (some
+            // files are not made) until the first call to `next`.
+
+            const rb  =
+                   yield NodeGit.Rebase.init(repo, original, onto, null, null);
+            yield rb.next();
             const gitDir = repo.path();
             const rbDir = yield RebaseFileUtil.findRebasingDir(gitDir);
             const headNamePath = path.join(gitDir,
                                            rbDir,
                                            RebaseFileUtil.headFileName);
             yield fs.writeFile(headNamePath, rebase.headName + "\n");
+
+            // Starting a rebase will change the HEAD  If we render the index
+            // against `ast.head`, it will be incorrect; we must adjust so that
+            // we render against the new head, `onto`.
+
+            indexHead = rebase.onto;
         }
 
+        // Set up the index.  We render the current commit and apply the index
+        // on top of it.
+
+        const tree =
+                   yield RepoAST.renderIndex(ast.commits, indexHead, ast.index);
+        const treeId = yield makeTree(repo, tree, co.wrap(function *(sha) {
+            return yield Promise.resolve(commitMap[sha]);
+        }));
+
+        const index = yield repo.index();
+        const treeObj = yield repo.getTree(treeId);
+        yield index.readTree(treeObj);
+        yield index.write();
+
+        // TODO: Firgure out if this can be done with NodeGit; extend if
+        // not.  I didn't see anything about `clean` and `Checkout.index`
+        // didn't seem to work..
+
+        const checkoutIndexStr = `\
+cd ${repo.workdir()}
+git clean -f -d
+git checkout-index -a -f
+`;
+        yield exec(checkoutIndexStr);
 
         // Now apply changes to the workdir.
 

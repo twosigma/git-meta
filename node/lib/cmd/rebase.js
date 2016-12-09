@@ -64,6 +64,11 @@ exports.configureParser = function (parser) {
         constant: true,
         help: "abort an in-progress rebase",
     });
+    parser.addArgument(["--continue"], {
+        action: "storeConst",
+        constant: true,
+        help: "continue an in-progress rebase",
+    });
 };
 
 /**
@@ -80,18 +85,18 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const RebaseUtil  = require("../util/rebase_util");
     const GitUtil     = require("../util/git_util");
-    const Status      = require("../util/status");
     const UserError   = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const status = yield Status.getRepoStatus(repo);
-    Status.ensureCleanAndConsistent(status);
+    if (args.abort && args.continue) {
+        throw new UserError("Cannot use 'continue' and 'abort' together.");
+    }
 
     if (args.abort) {
-        if (null === status.rebase) {
-            throw new UserError("No rebase in progress.");
-        }
         yield RebaseUtil.abort(repo);
+    }
+    else if (args.continue) {
+        yield RebaseUtil.continue(repo);
     }
     else {
         if (null === args.commit) {
@@ -103,6 +108,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                   `Could not resolve ${colors.red(args.commit)} to a commit.`);
         }
         const commit = yield repo.getCommit(committish.id());
-        yield RebaseUtil.rebase(repo, commit, status);
+        yield RebaseUtil.rebase(repo, commit);
     }
 });
