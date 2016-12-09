@@ -36,10 +36,9 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const Open                = require("../util/open");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("../util/submodule_util");
-const UserError           = require("../util/submodule_util");
+const UserError           = require("../util/user_error");
 
 /**
  * Cherry-pick the specified `commit` in the specified `metaRepo`.  Return an
@@ -83,20 +82,11 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     let indexChanged = false;
     let pickers = [];
 
-    const headUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                      metaRepo,
-                                                                      head);
-    const commitUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                      metaRepo,
-                                                                      commit);
-    const headShas = yield SubmoduleUtil.getSubmoduleShasForCommit(
-                                                         metaRepo,
-                                                         Object.keys(headUrls),
-                                                         head);
-    const commitShas = yield SubmoduleUtil.getSubmoduleShasForCommit(
-                                                       metaRepo,
-                                                       Object.keys(commitUrls),
-                                                       commit);
+    const headSubs = yield SubmoduleUtil.getSubmodulesForCommit(metaRepo,
+                                                                head);
+    const commitSubs = yield SubmoduleUtil.getSubmodulesForCommit(metaRepo,
+                                                                  commit);
+
     const metaIndex = yield metaRepo.index();
 
     const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(metaRepo));
@@ -115,7 +105,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
             console.log(`Opening ${colors.blue(subName)}.`);
             repo = yield Open.openOnCommit(subFetcher,
                                            subName,
-                                           headShas[subName]);
+                                           headSubs[subName].sha);
         }
         else {
             repo = yield SubmoduleUtil.getRepo(metaRepo, subName);
@@ -149,9 +139,11 @@ ${colors.green(commitSha)}.`);
 
     // Create a submodule picker for each submodule in the index.
 
-    Object.keys(headShas).forEach(subName => {
-        const headSha = headShas[subName];
-        const commitSha = commitShas[subName];
+    Object.keys(headSubs).forEach(subName => {
+        const headSub = headSubs[subName];
+        const commitSub = commitSubs[subName];
+        const headSha = headSub.sha;
+        const commitSha = commitSub.sha;
         if (headSha !== commitSha) {
             pickers.push(picker(subName, headSha, commitSha));
         }
