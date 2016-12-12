@@ -89,7 +89,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         yield repo.setHead(branch.name());
         console.log(`Switched to new branch ${colors.green(newBranch)}.`);
     }
-    else {
+    else if (null !== committish) {
         // TODO display info about whether this is a branch, detached head,
         // etc.
         console.log(`Switched to ${colors.green(committish)}.`);

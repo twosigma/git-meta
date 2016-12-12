@@ -41,7 +41,8 @@ const NodeGit = require("nodegit");
 const fs      = require("fs-promise");
 const path    = require("path");
 
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const Submodule           = require("./submodule");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Return the names of the submodules (visible or otherwise) for the index
@@ -348,6 +349,27 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
                 result.removed.add(path);
             }
         }
+    });
+    return result;
+});
+
+/**
+ * Return the states of the submodules in the specified `commit` in the
+ * specified `repo`.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @return {Object} map from submodule name to `Submodule` object
+ */
+exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
+    const urls =
+               yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, commit);
+    const names = Object.keys(urls);
+    const shas = yield exports.getSubmoduleShasForCommit(repo, names, commit);
+    let result = {};
+    names.forEach(name => {
+        result[name] = new Submodule(urls[name], shas[name]);
     });
     return result;
 });
