@@ -55,7 +55,14 @@ sub-repository, opening it if necessary.`;
 exports.configureParser = function (parser) {
     parser.addArgument(["commit"], {
         type: "string",
-        help: "the commitish to rebase onto"
+        help: "the commitish to rebase onto",
+        defaultValue: null,
+        nargs: "?",
+    });
+    parser.addArgument(["--abort"], {
+        action: "storeConst",
+        constant: true,
+        help: "abort an in-progress rebase",
     });
 };
 
@@ -72,18 +79,30 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
 
     const RebaseUtil  = require("../util/rebase_util");
-    const GitUtil = require("../util/git_util");
-    const Status  = require("../util/status");
+    const GitUtil     = require("../util/git_util");
+    const Status      = require("../util/status");
+    const UserError   = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
     const status = yield Status.getRepoStatus(repo);
     Status.ensureCleanAndConsistent(status);
-    const commitish = yield GitUtil.resolveCommitish(repo, args.commit);
-    if (null === commitish) {
-        console.error(`Could not resolve ${colors.red(args.commit)} to a \
-commit.`);
-        process.exit(-1);
+
+    if (args.abort) {
+        if (null === status.rebase) {
+            throw new UserError("No rebase in progress.");
+        }
+        yield RebaseUtil.abort(repo);
     }
-    const commit = yield repo.getCommit(commitish.id());
-    yield RebaseUtil.rebase(repo, commit, status);
+    else {
+        if (null === args.commit) {
+            throw new UserError(`No onto committish specified.`);
+        }
+        const committish = yield GitUtil.resolveCommitish(repo, args.commit);
+        if (null === committish) {
+            throw new UserError(
+                  `Could not resolve ${colors.red(args.commit)} to a commit.`);
+        }
+        const commit = yield repo.getCommit(committish.id());
+        yield RebaseUtil.rebase(repo, commit, status);
+    }
 });

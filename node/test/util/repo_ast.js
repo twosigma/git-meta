@@ -430,6 +430,21 @@ describe("RepoAST", function () {
                     head: "1",
                     rebase: new Rebase("fff", "1", "1"),
                 }),
+                "with rebase specific commits": m({
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    rebase: new Rebase("fff", "2", "2"),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    rebase: new Rebase("fff", "2", "2"),
+                }),
                 "bad rebase": m({
                     rebase: new Rebase("fff", "1", "1"),
                 }, undefined, true),

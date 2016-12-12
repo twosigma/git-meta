@@ -1274,6 +1274,29 @@ describe("readRAST", function () {
                                     onto.id().tostrS()));
     }));
 
+    it("rebase - unreachable", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        r.detachHead();
+        const secondCommit = yield TestUtil.generateCommit(r);
+        const thirdCommit = yield TestUtil.generateCommit(r);
+        const current = yield NodeGit.AnnotatedCommit.lookup(r,
+                                                             thirdCommit.id());
+        const onto = yield NodeGit.AnnotatedCommit.lookup(r,
+                                                          secondCommit.id());
+
+        // Then begin a rebase.
+
+        yield NodeGit.Rebase.init(r, current, onto, null, null);
+
+        // Remove the branches, making the commits reachable only from the
+        // rebase.
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const rebase = ast.rebase;
+        assert.equal(rebase.originalHead, thirdCommit.id().tostrS());
+        assert.equal(rebase.onto, secondCommit.id().tostrS());
+    }));
+
     it("add subs again", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         let expected = yield astFromSimpleRepo(repo);

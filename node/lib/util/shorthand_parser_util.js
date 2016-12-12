@@ -66,7 +66,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
  *                  [' '<change>(',\s*'<change>*)]
- * change         = path ['=' <submodule> | <data>]
+ * change         = path ['=' <submodule> | "~" | <data>]
  * path           = (<alpha numeric>|'/')+
  * submodule      = Surl:<commit>
  * data           = ('0-9'|'a-z'|'A-Z'|' ')*    basically non-delimiter ascii
@@ -119,6 +119,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * - textual data
  * - a submodule definition
  * - if the '=' is omitted, a deletion
+ * - if `~` removes the change from the base, if an override
  *
  * An Index override indicates changes staged in the repository index.
  *
@@ -237,13 +238,16 @@ function findChar(str, c, begin, end) {
 /**
  * Return the path change data described by the specified `commitData`.  If
  * `commitData` begins with an `S` it is a submodule description; otherwise, it
- * is just `commitData`.
+ * is just `commitData`; if it is "~" it indicates removal from the override.
  *
  * @private
  * @param {String} commitData
  * @return {String|RepoAST.Submodule}
  */
 function parseChangeData(commitData) {
+    if ("~" === commitData) {
+        return undefined;
+    }
     const end = commitData.length;
     if (0 === end || "S" !== commitData[0]) {
         return commitData;                                            // RETURN
@@ -262,6 +266,26 @@ function parseChangeData(commitData) {
                                                    urlEnd - urlBegin),
                                  commitData.substr(commitIdBegin,
                                                    end - commitIdBegin));
+}
+
+/**
+ * Copy the specified `source` overrides into the specified `dest` overrides,
+ * removing any value in dest for which the correspoding `source` value is
+ * `undefined`.
+ *
+ * @param {Object} dest
+ * @param {Object} source
+ */
+function copyOverrides(dest, source) {
+    for (let key in source) {
+        const value = source[key];
+        if (undefined === value) {
+            delete dest[key];
+        }
+        else {
+            dest[key] = value;
+        }
+    }
 }
 
 /**
@@ -352,12 +376,10 @@ function prepareASTArguments(baseAST, rawRepo) {
     Object.assign(resultArgs.notes, rawRepo.notes);
 
     // Copy the index
-
-    Object.assign(resultArgs.index, rawRepo.index);
+    copyOverrides(resultArgs.index, rawRepo.index);
 
     // Copy the workdir
-
-    Object.assign(resultArgs.workdir, rawRepo.workdir);
+    copyOverrides(resultArgs.workdir, rawRepo.workdir);
 
     // Copy and/or update remotes.
 
@@ -798,6 +820,10 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      * @param {Number} end
      */
     function parseRebase(begin, end) {
+        if (begin === end) {
+            rebase = null;
+            return;                                                   // RETURN
+        }
         const rebaseDef = shorthand.substr(begin, end - begin);
         const parts = rebaseDef.split(",");
         assert.equal(parts.length,
@@ -1115,6 +1141,10 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         }
         if (resultArgs.head) {
             includeCommit(resultArgs.head);
+        }
+        if (resultArgs.rebase) {
+            includeCommit(resultArgs.rebase.originalHead);
+            includeCommit(resultArgs.rebase.onto);
         }
         for (let remoteName in resultArgs.remotes) {
             const remote = resultArgs.remotes[remoteName];

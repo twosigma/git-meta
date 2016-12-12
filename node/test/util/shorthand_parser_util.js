@@ -392,6 +392,13 @@ describe("ShorthandParserUtil", function () {
                     index: { x: "y", q: null, z: "r" },
                 }),
             },
+            "index deletion and removal": {
+                i: "S:I x=y,q=~,z=r",
+                e: m({
+                    type: "S",
+                    index: { x: "y", q: undefined, z: "r" },
+                }),
+            },
             "index submodule change": {
                 i: "S:I x=S/x:1",
                 e: m({
@@ -406,11 +413,18 @@ describe("ShorthandParserUtil", function () {
                     workdir: { x: "y" },
                 }),
             },
-            "workdir  deletion and changes": {
+            "workdir deletion and changes": {
                 i: "S:W x=y,q,z=r",
                 e: m({
                     type: "S",
                     workdir: { x: "y", q: null, z: "r" },
+                }),
+            },
+            "workdir removal and changes": {
+                i: "S:W x=y,q=~,z=r",
+                e: m({
+                    type: "S",
+                    workdir: { x: "y", q: undefined, z: "r" },
                 }),
             },
             "workdir submodule change": {
@@ -532,6 +546,13 @@ describe("ShorthandParserUtil", function () {
                 e: m({
                     type: "S",
                     rebase: new RepoAST.Rebase("master", "1", "2"),
+                }),
+            },
+            "rebase null": {
+                i: "S:E",
+                e: m({
+                    type: "S",
+                    rebase: null,
                 }),
             },
         };
@@ -1056,6 +1077,58 @@ describe("ShorthandParserUtil", function () {
                         },
                     }),
                 },
+            },
+            "missing commits in rebase": {
+                i: `
+a=B:C8-1;C9-1;Bmaster=8;Bfoo=9|
+x=S:Efoo,8,9`,
+                e: {
+                    a: B.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message",
+                            }),
+                        },
+                        branches: {
+                            master: "8",
+                            foo: "9",
+                        },
+                    }),
+                    x: S.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message",
+                            }),
+                        },
+                        rebase: new RepoAST.Rebase("foo", "8", "9"),
+                    }),
+                }
             },
         };
         Object.keys(cases).forEach(caseName => {

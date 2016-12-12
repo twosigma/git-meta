@@ -46,14 +46,11 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
+
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
  */
 const setHead = co.wrap(function *(repo, commitSha) {
-    // TODO: use a more "gentle" strategy that won't stomp on untracked files.
-    // The `checkout` function won't work because it doesn't affect
-    // non-conflicting staged changes.
-
     const commit = yield repo.getCommit(commitSha);
     yield GitUtil.setHeadHard(repo, commit);
 });
@@ -84,6 +81,17 @@ const callNext = co.wrap(function *(rebase) {
     }
 });
 
+const cleanupRebaseDir = co.wrap(function *(repo) {
+    const gitDir = repo.path();
+    const rebaseDir = yield RebaseFileUtil.findRebasingDir(gitDir);
+    if (null !== rebaseDir) {
+        const rebasePath = path.join(gitDir, rebaseDir);
+        yield (new Promise(callback => {
+            return rimraf(rebasePath, {}, callback);
+        }));
+    }
+});
+
 /**
  * Finish the specified `rebase` in the specified `repo`.  Note that this
  * method is necessary only as a workaround for:
@@ -96,14 +104,7 @@ const callFinish = co.wrap(function *(repo, rebase) {
     const result = rebase.finish();
     const CLEANUP_FAILURE = -15;
     if (CLEANUP_FAILURE === result) {
-        const gitDir = repo.path();
-        const rebaseDir = yield RebaseFileUtil.findRebasingDir(gitDir);
-        if (null !== rebaseDir) {
-            const rebasePath = path.join(gitDir, rebaseDir);
-            yield (new Promise(callback => {
-                return rimraf(rebasePath, {}, callback);
-            }));
-        }
+        yield cleanupRebaseDir(repo);
     }
 });
 
@@ -563,4 +564,51 @@ Conflict rebasing the submodule ${colors.red(rebaser.path())}.`;
     yield callFinish(metaRepo, rebase);
 
     return result;
+});
+
+/**
+ * Abort the rebase in progress on the specified `repo` and all open
+ * submodules, returning them to their previous heads and checking them out.
+ * The behavior is undefined unless the specified `repo` has a rebase in
+ * progress.
+ *
+ * @param {NodeGit.Repository} repo
+ */
+exports.abort = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const rebase = yield NodeGit.Rebase.open(repo);
+    rebase.abort();
+
+    // This is a little "heavy-handed'.  TODO: abort active rebases in only
+    // those open submodueles whose rebases are associated with the one in the
+    // meta-repo.  It's possible (though unlikely) that the user could have an
+    // independent rebase going in an open submodules.
+
+    const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
+    yield openSubs.map(co.wrap(function *(name) {
+        // TODO: Using `NodeGit.Rebase.abort` to abort rebases in a submodule
+        // causes them to become corrupt.  See:
+        // https://github.com/twosigma/git-meta/issues/151.  Will work around
+        // the problem for now.
+
+        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+        if (!subRepo.isRebasing()) {
+            return;                                                   // RETURN
+        }
+        const rebaseInfo = yield RebaseFileUtil.readRebase(subRepo.path());
+        yield cleanupRebaseDir(subRepo);
+        const originalCommit = yield subRepo.getCommit(
+                                                      rebaseInfo.originalHead);
+        yield NodeGit.Reset.reset(subRepo,
+                                  originalCommit,
+                                  NodeGit.Reset.TYPE.HARD);
+        const branch = yield GitUtil.findBranch(subRepo, rebaseInfo.headName);
+        if (null === branch) {
+            subRepo.detachHead();
+        }
+        else {
+            subRepo.setHead(branch.name());
+        }
+    }));
 });
