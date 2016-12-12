@@ -686,29 +686,13 @@ exports.abort = co.wrap(function *(repo) {
 
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
     yield openSubs.map(co.wrap(function *(name) {
-        // TODO: Using `NodeGit.Rebase.abort` to abort rebases in a submodule
-        // causes them to become corrupt.  See:
-        // https://github.com/twosigma/git-meta/issues/151.  Will work around
-        // the problem for now.
-
         const subRepo = yield SubmoduleUtil.getRepo(repo, name);
         if (!subRepo.isRebasing()) {
             return;                                                   // RETURN
         }
         const rebaseInfo = yield RebaseFileUtil.readRebase(subRepo.path());
-        yield cleanupRebaseDir(subRepo);
-        const originalCommit = yield subRepo.getCommit(
-                                                      rebaseInfo.originalHead);
-        yield NodeGit.Reset.reset(subRepo,
-                                  originalCommit,
-                                  NodeGit.Reset.TYPE.HARD);
-        const branch = yield GitUtil.findBranch(subRepo, rebaseInfo.headName);
-        if (null === branch) {
-            subRepo.detachHead();
-        }
-        else {
-            subRepo.setHead(branch.name());
-        }
+        const subRebase = yield NodeGit.Rebase.open(subRepo);
+        subRebase.abort();
         console.log(`Submodule ${colors.blue(name)}: reset to \
 ${colors.green(rebaseInfo.originalHead)}.`);
     }));
