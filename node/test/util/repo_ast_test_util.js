@@ -80,7 +80,10 @@ const makeClone = co.wrap(function *(repos, maps) {
     const a = repos.a;
     const bPath = yield TestUtil.makeTempDir();
     const aPath = yield fs.realpath(a.workdir());
-    const b = yield NodeGit.Clone.clone(aPath, bPath);
+
+    // Test framework expects a trailing '/' to support relative paths.
+
+    const b = yield NodeGit.Clone.clone(aPath + "/", bPath);
     const sig = b.defaultSignature();
     const head = yield b.getHeadCommit();
     yield b.createBranch("foo", head.id(), 1, sig, "branch commit");
