@@ -37,6 +37,7 @@
 
 const ArgumentParser = require("argparse").ArgumentParser;
 const co             = require("co");
+const fs             = require("fs-promise");
 const mkdirp         = require("mkdirp");
 const path           = require("path");
 const rimraf         = require("rimraf");
@@ -62,6 +63,8 @@ parser.addArgument(["-t", "--target"], {
 parser.addArgument(["shorthand"], {
     type: "string",
     help: "shorthand description of repos",
+    nargs: "?",
+    required: false,
 });
 
 parser.addArgument(["-o", "--overwrite"], {
@@ -71,22 +74,40 @@ parser.addArgument(["-o", "--overwrite"], {
     help: `automatically remove existing directories`,
 });
 
+parser.addArgument(["-f", "--file"], {
+    type: "string",
+    help: "file from which to read string",
+    defaultValue: null,
+    required: false,
+});
+
 const args = parser.parseArgs();
 
 co(function *() {
     try {
         mkdirp.sync(args.target);
-        const shorthand =
-                   ShorthandParserUtil.parseMultiRepoShorthand(args.shorthand);
+        let shorthand;
+        if (args.file) {
+            if (args.shorthand) {
+                console.error("Cannot use FILE and SHORTHAND together.");
+                process.exit(-1);
+            }
+            shorthand = yield fs.readFile(args.file, { encoding: "utf8" });
+        }
+        else if (!args.shorthand) {
+            shorthand = args.shorthand;
+        }
+
+        const ast = ShorthandParserUtil.parseMultiRepoShorthand(shorthand);
         if (args.overwrite) {
-            yield Object.keys(shorthand).map(co.wrap(function *(name) {
+            yield Object.keys(ast).map(co.wrap(function *(name) {
                 const dir = path.join(args.target, name);
                 yield (new Promise(callback => {
                     return rimraf(dir, {}, callback);
                 }));
             }));
         }
-        yield WriteRepoASTUtil.writeMultiRAST(shorthand, args.target);
+        yield WriteRepoASTUtil.writeMultiRAST(ast, args.target);
     }
     catch(e) {
         console.error(e.stack);
