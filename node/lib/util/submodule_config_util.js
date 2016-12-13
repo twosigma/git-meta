@@ -129,7 +129,7 @@ exports.resolveSubmoduleUrl = function (baseUrl, submoduleUrl) {
         assert.isString(baseUrl);
     }
     assert.isString(submoduleUrl);
-    if (submoduleUrl.startsWith("./") || submoduleUrl.startsWith("../")) {
+    if (submoduleUrl.startsWith(".")) {
         if (null === baseUrl) {
             throw new UserError(
       `Attempt to use relative url: ${submoduleUrl}, but no 'origin' remote.`);

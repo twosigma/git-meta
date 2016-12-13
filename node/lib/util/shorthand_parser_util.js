@@ -1255,6 +1255,12 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                 if (openUrl.startsWith("../")) {
                     openUrl = openUrl.substr(3);
                 }
+                else if ("." === openUrl) {
+                    const remotes = rawResult.remotes;
+                    assert.property(remotes, "origin", "dot must have origin");
+                    const origin = remotes.origin;
+                    openUrl = origin.url;
+                }
                 assert.property(result,
                                 openUrl,
 `cannot find url ${openUrl} for submodule ${subName} in repo ${name}.`);
