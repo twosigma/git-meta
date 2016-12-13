@@ -78,6 +78,7 @@ exports.configureParser = function (parser) {
 exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
 
+    const DoWorkQueue      = require("../util/do_work_queue");
     const GitUtil          = require("../util/git_util");
     const Open             = require("../util/open");
     const Status           = require("../util/status");
@@ -100,7 +101,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const head = yield repo.getHeadCommit();
     const fetcher = new SubmoduleFetcher(repo, head);
 
-    const openers = subsToOpen.map(co.wrap(function *(name, index) {
+    const opener = co.wrap(function *(name, index) {
         if (!(name in subs)) {
             errors += `Invalid submodule ${colors.cyan(name)}.\n`;
             return;                                                   // RETURN
@@ -113,10 +114,13 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             errors += `Submodule ${colors.cyan(name)} has been deleted.\n`;
         }
         else {
+            console.log(
+              `Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
             yield Open.openOnCommit(fetcher, name, shas[index]);
+            console.log(`Finished opening ${colors.blue(name)}.`);
         }
-    }));
-    yield openers;
+    });
+    yield DoWorkQueue.doInParallel(subsToOpen, opener);
 
     if ("" !== errors) {
         throw new UserError(errors);
