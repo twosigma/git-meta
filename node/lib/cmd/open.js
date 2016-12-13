@@ -100,7 +100,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const head = yield repo.getHeadCommit();
     const fetcher = new SubmoduleFetcher(repo, head);
 
-    const openers = subsToOpen.map(co.wrap(function *(name, index) {
+    const opener = co.wrap(function *(name, index) {
         if (!(name in subs)) {
             errors += `Invalid submodule ${colors.cyan(name)}.\n`;
             return;                                                   // RETURN
@@ -113,10 +113,21 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             errors += `Submodule ${colors.cyan(name)} has been deleted.\n`;
         }
         else {
+            console.log(
+              `Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
             yield Open.openOnCommit(fetcher, name, shas[index]);
+            console.log(`Finished opening ${colors.blue(name)}.`);
         }
-    }));
-    yield openers;
+    });
+    let done = 0;
+    function makeOpener(name, index) {
+        return opener(name, index + done);
+    }
+    while (0 !== subsToOpen.length) {
+        const next = subsToOpen.splice(0, 50);
+        yield next.map(makeOpener);
+        done += next.length;
+    }
 
     if ("" !== errors) {
         throw new UserError(errors);
