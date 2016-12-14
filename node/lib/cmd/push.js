@@ -94,13 +94,9 @@ if not specified.`,
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const GitUtil = require("../util/git_util");
-    const status = require("../util/status");
     const push = require("../util/push");
 
     const repo = yield GitUtil.getCurrentRepo();
-
-    const repoStatus = yield status.getRepoStatus(repo);
-    status.ensureConsistent(repoStatus);
 
     let strRefspecs = [];
     if (0 === args.refspec.length) {
