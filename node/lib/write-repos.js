@@ -95,6 +95,10 @@ co(function *() {
             shorthand = yield fs.readFile(args.file, { encoding: "utf8" });
         }
         else if (!args.shorthand) {
+            console.error("Missing SHORTHAND.");
+            process.exit(-1);
+        }
+        else {
             shorthand = args.shorthand;
         }
 
