@@ -31,9 +31,7 @@
 "use strict";
 
 // TODO:
-// - commit messages
 // - commit signatures
-// - remotes
 
 const assert   = require("chai").assert;
 const deeper   = require("deeper");
@@ -248,12 +246,14 @@ class AST {
      * - all specified `openSubmodules` exist on HEAD or in the `index`.
      * - If provided, the `onto` and `originalHead` commits in `rebase` exist
      *   in `commits`.
+     * - if 'bare', `index` and `workdir` are empty, and `rebase` is null
      *
      * @param {Object}      args
      * @param {Object}      [args.commits]
      * @param {Object}      [args.branches]
      * @param {Object}      [args.refs]
      * @param {String|null} [args.head]
+     * @param {Boolean}     [args.bare]
      * @param {String|null} [args.currentBranchName]
      * @param {Object}      [args.remotes]
      * @param {Object}      [args.index]
@@ -370,6 +370,12 @@ in commit ${id}.`);
             this.d_head = head;
         }
 
+        this.d_bare = false;
+        if ("bare" in args) {
+            this.d_bare = args.bare;
+            assert.isBoolean(this.d_bare);
+        }
+
         // Validate and copy current branch
 
         this.d_currentBranchName = null;
@@ -411,6 +417,7 @@ in commit ${id}.`);
             const rebase = args.rebase;
             if (null !== rebase) {
                 assert.instanceOf(rebase, Rebase);
+                assert.isFalse(this.d_bare);
                 checkAndTraverse(rebase.originalHead,
                                  "original head of rebase");
                 checkAndTraverse(rebase.onto,
@@ -434,6 +441,7 @@ in commit ${id}.`);
             assert.isObject(index);
             for (let path in index) {
                 assert.isNotNull(this.d_head);
+                assert.isFalse(this.d_bare);
                 const change = index[path];
                 if (!(change instanceof Submodule) && null !== change) {
                     assert.isString(change);
@@ -468,6 +476,7 @@ in commit ${id}.`);
             assert.isObject(workdir);
             for (let path in workdir) {
                 assert.isNotNull(this.d_head);
+                assert.isFalse(this.d_bare);
                 const change = workdir[path];
                 if (null !== change) {
                     assert.isString(change);
@@ -527,8 +536,7 @@ in commit ${id}.`);
     }
 
     /**
-     * @property {String|null} head the current HEAD commit.  A repo is bare
-     * iff `null === head`.
+     * @property {String|null} head the current HEAD commit.
      */
     get head() {
         return this.d_head;
@@ -555,6 +563,13 @@ in commit ${id}.`);
      */
     get index() {
         return Object.assign({}, this.d_index);
+    }
+
+    /**
+     * @property {Boolean} true if repo is bare and false otherwise
+     */
+    get bare() {
+        return this.d_bare;
     }
 
     /**
@@ -599,6 +614,8 @@ in commit ${id}.`);
      * @param {Object} changes path to change
      */
     static accumulateDirChanges(dest, changes) {
+        assert.isObject(dest);
+        assert.isObject(changes);
         for (let path in changes) {
             const change = changes[path];
 
@@ -610,15 +627,6 @@ in commit ${id}.`);
                 dest[path] = change;
             }
         }
-    }
-
-    /**
-     * Return true if this repository is bare and false otherwise.
-     *
-     * @return {Boolean}
-     */
-    isBare() {
-        return null === this.d_head;
     }
 
     /**
@@ -653,6 +661,7 @@ in commit ${id}.`);
             openSubmodules: ("openSubmodules" in args) ?
                 args.openSubmodules : this.d_openSubmodules,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
+            bare: ("bare" in args) ? args.bare : this.d_bare,
         });
     }
 
@@ -708,9 +717,15 @@ in commit ${id}.`);
      * `indexChanges` staged on the commit having the specified `commitId` in
      * the specified `commitMap`.
      *
+     * @param {Object} commitMap    from commit id to `Commit`
+     * @param {String} commitId     id of HEAD commit
+     * @param {Object} indexChanges map from path to content
      * @return {Object} map from path to content (data or `Submodule`)
      */
     static renderIndex(commitMap, commitId, indexChanges) {
+        assert.isObject(commitMap);
+        assert.isString(commitId);
+        assert.isObject(indexChanges);
         let cache = {};
         let fromCommit = AST.renderCommit(cache, commitMap, commitId);
         AST.accumulateDirChanges(fromCommit, indexChanges);

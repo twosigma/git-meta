@@ -234,7 +234,7 @@ exports.readRAST = co.wrap(function *(repo) {
 
     let branchName = null;
     let headCommitId = null;
-    if (!repo.headDetached()) {
+    if (!repo.headDetached() && !repo.isEmpty()) {
         const branch = yield repo.getCurrentBranch();
         branchName = branch.shorthand();
     }
@@ -243,10 +243,14 @@ exports.readRAST = co.wrap(function *(repo) {
 
     let index = {};
     let workdir = {};
-    if (!repo.isBare()) {
-        const headCommit = yield repo.getHeadCommit();
+    const bare = repo.isBare() !== 0;
+    const headCommit = yield repo.getHeadCommit();
+    if (null !== headCommit) {
         yield loadCommit(headCommit.id());
         headCommitId = headCommit.id().tostrS();
+    }
+
+    if (!bare) {
 
         // Process index and workdir changes.
 
@@ -354,7 +358,7 @@ exports.readRAST = co.wrap(function *(repo) {
 
     let openSubmodules = {};
 
-    if (!repo.isBare()) {
+    if (!bare) {
         const subNames = yield repo.getSubmoduleNames();
         for (let i = 0; i < subNames.length; ++i) {
             const subName = subNames[i];
@@ -430,7 +434,6 @@ exports.readRAST = co.wrap(function *(repo) {
         workdir: workdir,
         openSubmodules: openSubmodules,
         rebase: rebase,
+        bare: bare,
     });
 });
-
-

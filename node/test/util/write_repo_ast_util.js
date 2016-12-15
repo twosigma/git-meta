@@ -192,6 +192,10 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q",
                 expected: "\
 S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
             },
+            "headless": {
+                input: new RepoAST(),
+                expected: new RepoAST(),
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
@@ -234,12 +238,18 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
                   "a=S|b=S:I x/y/z=Sa:1,x/y/q=Sa:1;Ox/y/z;Ox/y/q W x=hello",
             "open sub with new commit":
                 "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os Bmaster=2!*=master",
+            "headless": {
+                a: new RepoAST(),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];
             it(caseName, co.wrap(function *() {
-                const inASTs =
+                let inASTs = input;
+                if ("string" === typeof input) {
+                    inASTs =
                             ShorthandParserUtil.parseMultiRepoShorthand(input);
+                }
                 const root = yield TestUtil.makeTempDir();
                 const result = yield WriteRepoASTUtil.writeMultiRAST(inASTs,
                                                                      root);

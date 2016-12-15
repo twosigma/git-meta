@@ -605,6 +605,23 @@ describe("ShorthandParserUtil", function () {
                 i: "B",
                 e: B,
             },
+            "bare with commit": {
+                i: "B:C2-1;Bmaster=2",
+                e: B.copy({
+                    commits: {
+                        "1": B.commits["1"],
+                        "2": new Commit({
+                            changes: { "2": "2" },
+                            message: "message",
+                            parents: ["1"],
+                        }),
+                    },
+                    branches: {
+                        "master": "2",
+                    },
+                    head: "2",
+                }),
+            },
             "A type": {
                 i: "Axyz",
                 e: new RepoAST({
@@ -736,6 +753,25 @@ describe("ShorthandParserUtil", function () {
         const U = ShorthandParserUtil.RepoType.U;
         const cases = {
             "simple": { i: "a=S", e: { a: "S"} },
+            "bare with commit": {
+                i: "a=B:C2-1;Bmaster=2",
+                e: {
+                    a: B.copy({
+                        commits: {
+                            "1": B.commits["1"],
+                            "2": new Commit({
+                                changes: { "2": "2" },
+                                message: "message",
+                                parents: ["1"],
+                            }),
+                        },
+                        branches: {
+                            "master": "2",
+                        },
+                        head: "2",
+                    }),
+                },
+            },
             "simple trimmed": { i: "\n  a=S", e: { a: "S"} },
             "multiple": {
                 i: "a=S|b=S:Bfoo=1",
@@ -1065,6 +1101,7 @@ describe("ShorthandParserUtil", function () {
                             master: "8",
                         },
                         currentBranchName: "master",
+                        head: "8",
                     }),
                     b: U.copy({
                         openSubmodules: {
@@ -1106,6 +1143,7 @@ x=S:Efoo,8,9`,
                             master: "8",
                             foo: "9",
                         },
+                        head: "8",
                     }),
                     x: S.copy({
                         commits: {

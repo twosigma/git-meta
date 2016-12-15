@@ -383,6 +383,17 @@ HEAD is ${colorAct(actual.head)} but expected ${colorExp(expected.head)}`
                    );
     }
 
+    // Check bare
+
+    if (actual.bare !== expected.bare) {
+        if (expected.bare) {
+            result.push(`Expected repository to be bare.`);
+        }
+        else {
+            result.push(`Expected repository not to be bare.`);
+        }
+    }
+
     // Next, the current branch name
 
     if (actual.currentBranchName !== expected.currentBranchName) {
