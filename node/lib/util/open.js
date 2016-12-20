@@ -36,6 +36,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 
 const GitUtil             = require("./git_util");
+const Close               = require("./close");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 
@@ -68,9 +69,17 @@ exports.openOnCommit = co.wrap(function *(fetcher,
                                                                 submoduleName,
                                                                 submoduleUrl);
 
-    // Fetch the needed sha.
+    // Fetch the needed sha.  Close if the fetch fails; otherwise, the
+    // repository ends up in a state where it things the submodule is open, but
+    // it's actually not.
 
-    yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
+    try {
+        yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
+    }
+    catch (e) {
+        yield Close.close(metaRepo, submoduleName);
+        throw e;
+    }
 
     // Check out HEAD
 

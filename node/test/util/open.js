@@ -54,6 +54,12 @@ describe("openOnCommit", function () {
             commitSha: "3",
             expected: "x=E:Os H=3",
         },
+        "revert on bad fetch": {
+            initial: "a=B|b=B|x=Ca:C3-1;C2-1 s=Sb:3;Bmaster=2;Bfoo=3",
+            subName: "s",
+            commitSha: "2",
+            fails: true,
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
@@ -71,7 +77,8 @@ describe("openOnCommit", function () {
             });
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                            c.expected,
-                                                           manipulator);
+                                                           manipulator,
+                                                           c.fails);
         }));
     });
 });
