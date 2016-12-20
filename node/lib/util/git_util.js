@@ -254,7 +254,7 @@ git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
 exports.getCurrentBranchName = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    if (1 !== repo.headDetached()) {
+    if (!repo.isEmpty() && 1 !== repo.headDetached()) {
         const branch = yield repo.getCurrentBranch();
         return branch.shorthand();
     }

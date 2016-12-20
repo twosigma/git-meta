@@ -38,6 +38,7 @@ const os     = require("os");
 const path   = require("path");
 
 const GitUtil             = require("../../lib/util/git_util");
+const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 const TestUtil            = require("../../lib/util/test_util");
@@ -334,11 +335,15 @@ describe("GitUtil", function () {
             "no branch": { input: "S:Bmaster=;*=", expected: null },
             "detached head": { input: "S:*=", expected: null },
             "not master": { input: "S:Bmaster=;Bfoo=1;*=foo", expected: "foo"},
+            "empty": { input: new RepoAST(), expected: null },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
-                const ast = ShorthandParserUtil.parseRepoShorthand(c.input);
+                let ast = c.input;
+                if ("string" === typeof c.input) {
+                    ast = ShorthandParserUtil.parseRepoShorthand(c.input);
+                }
                 const path = yield TestUtil.makeTempDir();
                 const repo =
                             (yield WriteRepoASTUtil.writeRAST(ast, path)).repo;
