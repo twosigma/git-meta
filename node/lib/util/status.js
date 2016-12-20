@@ -447,12 +447,8 @@ exports.getRepoStatus = co.wrap(function *(repo) {
 
     const headCommit = yield repo.getHeadCommit();
 
-    if (null === headCommit) {
-        throw new UserError("No head commit.");
-    }
-
     let args = {
-        headCommit: headCommit.id().tostrS(),
+        headCommit: null === headCommit ? null : headCommit.id().tostrS(),
         currentBranchName: yield GitUtil.getCurrentBranchName(repo),
         staged: {},
         workdir: {},
@@ -472,91 +468,101 @@ exports.getRepoStatus = co.wrap(function *(repo) {
         args.rebase = rebase;
     }
 
-    // Loop through each of the `NodeGit.FileStatus` objects in the repo and
-    // categorize them into `args`.
+    if (!repo.isBare()) {
 
-    const statuses = yield repo.getStatusExt({
-        flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
-            NodeGit.Status.OPT.INCLUDE_UNTRACKED
-    });
-    const FILESTATUS = RepoStatus.FILESTATUS;
-    const STATUS = NodeGit.Status.STATUS;
-    for (let i = 0; i < statuses.length; ++i) {
-        const status = statuses[i];
-        const path = status.path();
+        // Loop through each of the `NodeGit.FileStatus` objects in the repo
+        // and categorize them into `args`.
 
-        // Skip the `.gitmodules` file.
+        const statuses = yield repo.getStatusExt({
+            flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
+                NodeGit.Status.OPT.INCLUDE_UNTRACKED
+        });
+        const FILESTATUS = RepoStatus.FILESTATUS;
+        const STATUS = NodeGit.Status.STATUS;
+        for (let i = 0; i < statuses.length; ++i) {
+            const status = statuses[i];
+            const path = status.path();
 
-        if (SubmoduleConfigUtil.modulesFileName === path) {
-            continue;                                               // CONTINUE
-        }
+            // Skip the `.gitmodules` file.
 
-        const bit = status.statusBit();
+            if (SubmoduleConfigUtil.modulesFileName === path) {
+                continue;                                           // CONTINUE
+            }
 
-        // Index status.
+            const bit = status.statusBit();
 
-        if (bit & STATUS.INDEX_NEW) {
-            args.staged[path] = FILESTATUS.ADDED;
-        }
-        else if (bit & STATUS.INDEX_DELETED) {
-            args.staged[path] = FILESTATUS.REMOVED;
-        }
-        else if (bit & STATUS.INDEX_MODIFIED) {
-            args.staged[path] = FILESTATUS.MODIFIED;
-        }
+            // Index status.
 
-        // Workdir status
+            if (bit & STATUS.INDEX_NEW) {
+                args.staged[path] = FILESTATUS.ADDED;
+            }
+            else if (bit & STATUS.INDEX_DELETED) {
+                args.staged[path] = FILESTATUS.REMOVED;
+            }
+            else if (bit & STATUS.INDEX_MODIFIED) {
+                args.staged[path] = FILESTATUS.MODIFIED;
+            }
 
-        if (bit & STATUS.WT_NEW) {
-            args.workdir[path] = FILESTATUS.ADDED;
-        }
-        else if (bit & STATUS.WT_DELETED) {
-            args.workdir[path] = FILESTATUS.REMOVED;
-        }
-        else if (bit & STATUS.WT_MODIFIED) {
-            args.workdir[path] = FILESTATUS.MODIFIED;
+            // Workdir status
+
+            if (bit & STATUS.WT_NEW) {
+                args.workdir[path] = FILESTATUS.ADDED;
+            }
+            else if (bit & STATUS.WT_DELETED) {
+                args.workdir[path] = FILESTATUS.REMOVED;
+            }
+            else if (bit & STATUS.WT_MODIFIED) {
+                args.workdir[path] = FILESTATUS.MODIFIED;
+            }
         }
     }
 
     // Now do the submodules.  First, list the submodules visible in the head
     // commit and index.
+    //
+    // TODO: For now, we're just not going to return the status of submodules
+    // in a headless repository (which is better than our previous behavior of
+    // crashing); we should fix it so that we can accurately reflect staged
+    // submodules in the index.
 
-    const headSubs =
+    if (null !== headCommit) {
+        const headSubs =
            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, headCommit);
-    const index = yield repo.index();
-    const indexSubs =
+        const index = yield repo.index();
+        const indexSubs =
                  yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
-    const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
-    const openSet = new Set(openArray);
+        const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
+        const openSet = new Set(openArray);
 
-    const commitTree = yield headCommit.getTree();
+        const commitTree = yield headCommit.getTree();
 
-    // Make a list of all subs that exist in either the head commit or the
-    // index.
+        // Make a list of all subs that exist in either the head commit or the
+        // index.
 
-    const allSubNames = Array.from(new Set(
+        const allSubNames = Array.from(new Set(
                         Object.keys(headSubs).concat(Object.keys(indexSubs))));
 
-    // Make a list of promises to read the status for each submodule, then
-    // evaluate them in parallel.
+        // Make a list of promises to read the status for each submodule, then
+        // evaluate them in parallel.
 
-    const subStatMakers = allSubNames.map(name => {
-        return exports.getSubmoduleStatus(name,
-                                          repo,
-                                          indexSubs[name] || null,
-                                          headSubs[name] || null,
-                                          index,
-                                          commitTree,
-                                          openSet.has(name),
-                                          exports.getRepoStatus);
-    });
-    const subStats = yield subStatMakers;
+        const subStatMakers = allSubNames.map(name => {
+            return exports.getSubmoduleStatus(name,
+                                              repo,
+                                              indexSubs[name] || null,
+                                              headSubs[name] || null,
+                                              index,
+                                              commitTree,
+                                              openSet.has(name),
+                                              exports.getRepoStatus);
+        });
+        const subStats = yield subStatMakers;
 
-    // And copy them into the arguments.
+        // And copy them into the arguments.
 
-    allSubNames.forEach((name, i) => {
-        args.submodules[name] = subStats[i];
-    });
+        allSubNames.forEach((name, i) => {
+            args.submodules[name] = subStats[i];
+        });
+    }
 
     return new RepoStatus(args);
 });
