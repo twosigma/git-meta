@@ -390,9 +390,6 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
-    // For now, we care about an explicit headless state, we're not concerned
-    // with empty repos.
-
     it("headless", co.wrap(function *() {
         const path = yield TestUtil.makeTempDir();
         const r = yield NodeGit.Repository.init(path, 0);

@@ -156,7 +156,7 @@ const makeTree = co.wrap(function *(repo, flatTree, getSubmoduleSha) {
         const tempPath = path.join(tempDir, "treeData");
         yield fs.writeFile(tempPath, treeData);
         const makeTreeExecString = `\
-cat '${tempPath}' | git -C ${repo.path()} mktree
+cat '${tempPath}' | git -C '${repo.path()}' mktree
 `;
         return yield doExec(makeTreeExecString);
     });
@@ -630,7 +630,7 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
         // Then set up the rest of the repository.
         yield configureRepo(repo, ast, commitMaps.oldToNew);
         const cleanupString = `\
-git -C ${repo.path()} -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
+git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 -c gc.rerereresolved=0 -c gc.rerereunresolved=0 \
 -c gc.pruneExpire=now gc`;
         yield exec(cleanupString);
