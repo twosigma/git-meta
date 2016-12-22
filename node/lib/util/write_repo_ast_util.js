@@ -423,8 +423,8 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         // didn't seem to work..
 
         const checkoutIndexStr = `\
-git -C ${repo.workdir()} clean -f -d
-git -C ${repo.workdir()} checkout-index -a -f
+git -C '${repo.workdir()}' clean -f -d
+git -C '${repo.workdir()}' checkout-index -a -f
 `;
         yield exec(checkoutIndexStr);
 
