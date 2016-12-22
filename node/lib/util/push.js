@@ -40,6 +40,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 const url     = require("url");
 
+const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -93,24 +94,23 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     // First, push the submodules.
 
     let errorMessage = "";
-    const subRepos = yield SubmoduleUtil.getSubmoduleRepos(repo);
     const shas = yield SubmoduleUtil.getSubmoduleShasForBranch(repo, source);
-    const index = yield repo.index();
-    const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
-    yield subRepos.map(co.wrap(function *(sub) {
-        const subName = sub.name;
+    const annotatedCommit = yield GitUtil.resolveCommitish(repo, source);
+    const commit = yield repo.getCommit(annotatedCommit.id());
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
+                                                                   commit);
 
+    const pushSub = co.wrap(function *(subName) {
         // If no commit for a submodule on this branch, skip it.
         if (!(subName in shas)) {
             return;                                                   // RETURN
         }
-
         // Push to a synthetic branch; first, calculate name.
 
         const sha = shas[subName];
         const syntheticName =
                           SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-        const subRepo = sub.repo;
+        const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
 
         // Resolve the submodule's URL against the URL of the meta-repo,
         // ignoring the remote that is configured in the open submodule.
@@ -129,7 +129,9 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
             errorMessage +=
            `Failed to push submodule ${colors.yellow(subName)}: ${pushResult}`;
         }
-    }));
+    });
+    const subRepos = yield SubmoduleUtil.listOpenSubmodules(repo);
+    yield DoWorkQueue.doInParallel(subRepos, pushSub);
 
     // Throw an error if there were any problems pushing submodules; don't push
     // the meta-repo.
