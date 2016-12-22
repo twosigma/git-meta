@@ -254,7 +254,7 @@ git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
 exports.getCurrentBranchName = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    if (1 !== repo.headDetached()) {
+    if (!repo.isEmpty() && 1 !== repo.headDetached()) {
         const branch = yield repo.getCurrentBranch();
         return branch.shorthand();
     }
@@ -332,7 +332,7 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(remoteName);
 
-    const execString = `git -C '${repo.workdir()}' fetch -q '${remoteName}'`;
+    const execString = `git -C '${repo.path()}' fetch -q '${remoteName}'`;
     try {
         return yield exec(execString);
     }
@@ -364,9 +364,7 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     catch (e) {
     }
 
-    const execString = `\
-git -C ${repo.workdir()} fetch -q '${url}' ${sha}
-`;
+    const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
         return yield exec(execString);
     }

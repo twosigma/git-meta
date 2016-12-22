@@ -90,8 +90,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const index  = yield repo.index();
     const status = yield Status.getRepoStatus(repo);
 
-    let errors = "";
-
     const subs = status.submodules;
 
     const subsToOpen = args.path;
@@ -101,28 +99,51 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const head = yield repo.getHeadCommit();
     const fetcher = new SubmoduleFetcher(repo, head);
 
+    let failed = false;
+
     const opener = co.wrap(function *(name, index) {
         if (!(name in subs)) {
-            errors += `Invalid submodule ${colors.cyan(name)}.\n`;
+            console.error(`Invalid submodule ${colors.cyan(name)}`);
+            failed = true;
             return;                                                   // RETURN
         }
         const sub = subs[name];
         if (null !== sub.repoStatus) {
-            errors += `Submodule ${colors.cyan(name)} is already open.\n`;
+            console.warn(`Submodule ${colors.cyan(name)} is already open.`);
         }
         else if (null === sub.indexSha) {
-            errors += `Submodule ${colors.cyan(name)} has been deleted.\n`;
+            console.error(`Submodule ${colors.cyan(name)} has been deleted.`);
+            failed = true;
         }
         else {
             console.log(
               `Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
-            yield Open.openOnCommit(fetcher, name, shas[index]);
+
+            // If we fail to open due to an expected condition, indicated by
+            // the throwing of a `UserError` object, catch and log the error,
+            // but don't let the exception propagate, or else we'll stop trying
+            // to open other (probably unaffected) repositories.
+
+            try {
+                yield Open.openOnCommit(fetcher, name, shas[index]);
+            }
+            catch (e) {
+                if (e instanceof UserError) {
+                    console.error(`\
+Error opening submodule ${colors.red(name)}:`);
+                    console.error(e.message);
+                    failed = true;
+                }
+                else {
+                    throw e;
+                }
+            }
             console.log(`Finished opening ${colors.blue(name)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(subsToOpen, opener);
 
-    if ("" !== errors) {
-        throw new UserError(errors);
+    if (failed) {
+        process.exit(1);
     }
 });

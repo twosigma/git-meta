@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 
 const Rebase              = require("../../lib/util/rebase");
+const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const RepoStatus          = require("../../lib/util/repo_status");
 const Status              = require("../../lib/util/status");
@@ -709,6 +710,17 @@ describe("Status", function () {
                     currentBranchName: "master",
                     headCommit: "1",
                 }),
+            },
+            "bare": {
+                state: "x=B",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "1",
+                }),
+            },
+            "empty": {
+                state: { x: new RepoAST()},
+                expected: new RepoStatus(),
             },
             "rebase": {
                 state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Erefs/heads/master,2,3",

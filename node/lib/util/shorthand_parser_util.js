@@ -313,6 +313,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         workdir: baseAST.workdir,
         openSubmodules: baseAST.openSubmodules,
         rebase: baseAST.rebase,
+        bare: baseAST.bare,
     };
 
     // Process HEAD.
@@ -1333,7 +1334,8 @@ exports.RepoType = (() => {
     function makeB() {
         const S = makeS();
         return S.copy({
-            head: null
+            bare: true,
+            head: "1",
         });
     }
     function makeU() {

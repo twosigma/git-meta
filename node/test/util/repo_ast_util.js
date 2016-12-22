@@ -161,6 +161,7 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
+                    bare: false,
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
@@ -173,7 +174,13 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
+                    bare: false,
                 }),
+            },
+            "bad bare": {
+                actual: new AST({ bare: true }),
+                expected: new AST({ bare: false }),
+                fails: true,
             },
             "wrong commit": {
                 actual: new AST({

@@ -162,6 +162,7 @@ describe("RepoAST", function () {
                 expected = expected || {};
                 return {
                     input   : input,
+                    ebare   : ("bare" in expected) ? expected.bare : false,
                     ecommits: ("commits" in expected) ? expected.commits: {},
                     ebranches:
                         ("branches" in expected) ? expected.branches : {},
@@ -189,9 +190,29 @@ describe("RepoAST", function () {
                         head: null,
                         currentBranchName: null,
                         rebase: null,
+                        bare: false,
                     },
                     undefined,
                     false),
+                "with bare": m({ bare: true }, { bare: true} , false),
+                "bad bare with index": m({
+                    bare: true,
+                    index: { foo: "bar" },
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
+                "bad bare with workdir": m({
+                    bare: true,
+                    workdir: { foo: "bar" },
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
+                "bad bare with rebase": m({
+                    bare: true,
+                    rebase: new Rebase("foo", "1", "1"),
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
                 "branchCommit": m({
                     commits: {"1":c1, "2": cWithPar},
                     branches: {"master": "2"},
@@ -470,6 +491,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.workdir, c.eworkdir);
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
                     assert.deepEqual(obj.rebase, c.erebase);
+                    assert.equal(obj.bare, c.ebare);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
@@ -480,8 +502,6 @@ describe("RepoAST", function () {
                         assert.notEqual(obj.openSubmodules,
                                         c.input.openSubmodules);
                     }
-
-                    assert.equal(obj.isBare(), (obj.head === null));
                 });
             });
         });
@@ -618,6 +638,7 @@ describe("RepoAST", function () {
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello", "1", "1"),
+                bare: false,
             });
             const newArgs = {
                 commits: { "2": new RepoAST.Commit()},
@@ -629,6 +650,7 @@ describe("RepoAST", function () {
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello world", "2", "2"),
+                bare: false,
             };
             const cases = {
                 "trivial": {
@@ -638,6 +660,22 @@ describe("RepoAST", function () {
                 "all": {
                     i: newArgs,
                     e: new RepoAST(newArgs),
+                },
+                "bare": {
+                    i: {
+                        bare: true,
+                        index: {},
+                        workdir: {},
+                        rebase: null,
+                    },
+                    e: new RepoAST({
+                        commits: { "1": new RepoAST.Commit()},
+                        branches: { "master": "1" },
+                        refs: { "a/b": "1"},
+                        head: "1",
+                        currentBranchName: "master",
+                        bare: true,
+                    }),
                 },
             };
             Object.keys(cases).forEach(caseName => {
@@ -654,6 +692,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.workdir, c.e.workdir);
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                     assert.deepEqual(obj.rebase, c.e.rebase);
+                    assert.equal(obj.bare, c.e.bare);
                 });
             });
         });
@@ -682,9 +721,10 @@ describe("RepoAST", function () {
             Object.keys(cases).forEach(caseName => {
                 const c = cases[caseName];
                 it(caseName, function () {
+                    const index = c.index || {};
                     const result = RepoAST.renderIndex(c.commits,
                                                        c.from,
-                                                       c.index);
+                                                       index);
                     assert.deepEqual(result,
                                      c.expected,
                                      JSON.stringify(result));

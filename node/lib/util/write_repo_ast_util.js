@@ -156,8 +156,7 @@ const makeTree = co.wrap(function *(repo, flatTree, getSubmoduleSha) {
         const tempPath = path.join(tempDir, "treeData");
         yield fs.writeFile(tempPath, treeData);
         const makeTreeExecString = `\
-cd ${repo.path()}
-cat '${tempPath}' | git mktree
+cat '${tempPath}' | git -C '${repo.path()}' mktree
 `;
         return yield doExec(makeTreeExecString);
     });
@@ -335,9 +334,12 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
 
     // Deal with bare repos.
 
-    if (ast.isBare()) {
+    if (ast.bare) {
         if (null !== ast.currentBranchName) {
             repo.setHead("refs/heads/" + ast.currentBranchName);
+        }
+        else {
+            repo.setHeadDetached(newHeadSha);
         }
     }
     else if (null !== ast.currentBranchName) {
@@ -345,7 +347,7 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
                    yield repo.getBranch("refs/heads/" + ast.currentBranchName);
         yield repo.checkoutBranch(currentBranch);
     }
-    else {
+    else if (null !== ast.head) {
         const headCommit = yield repo.getCommit(newHeadSha);
         repo.setHeadDetached(newHeadSha);
         yield NodeGit.Reset.reset(repo, headCommit, NodeGit.Reset.TYPE.HARD);
@@ -362,7 +364,7 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         }
     }
 
-    if (null !== ast.head) {
+    if (!ast.bare) {
 
         let indexHead = ast.head;
 
@@ -401,8 +403,12 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         // Set up the index.  We render the current commit and apply the index
         // on top of it.
 
-        const tree =
-                   yield RepoAST.renderIndex(ast.commits, indexHead, ast.index);
+        let tree = ast.index;
+        if (null !== indexHead) {
+            tree =
+                  yield RepoAST.renderIndex(ast.commits, indexHead, ast.index);
+        }
+
         const treeId = yield makeTree(repo, tree, co.wrap(function *(sha) {
             return yield Promise.resolve(commitMap[sha]);
         }));
@@ -417,9 +423,8 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         // didn't seem to work..
 
         const checkoutIndexStr = `\
-cd ${repo.workdir()}
-git clean -f -d
-git checkout-index -a -f
+git -C '${repo.workdir()}' clean -f -d
+git -C '${repo.workdir()}' checkout-index -a -f
 `;
         yield exec(checkoutIndexStr);
 
@@ -506,7 +511,7 @@ exports.writeRAST = co.wrap(function *(ast, path) {
     assert.isString(path);
     assert.deepEqual(ast.openSubmodules, {}, "open submodules not supported");
 
-    const repo = yield NodeGit.Repository.init(path, ast.isBare() ? 1 : 0);
+    const repo = yield NodeGit.Repository.init(path, ast.bare ? 1 : 0);
 
     yield configRepo(repo);
 
@@ -625,8 +630,7 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
         // Then set up the rest of the repository.
         yield configureRepo(repo, ast, commitMaps.oldToNew);
         const cleanupString = `\
-cd ${repo.path()}
-git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
+git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 -c gc.rerereresolved=0 -c gc.rerereunresolved=0 \
 -c gc.pruneExpire=now gc`;
         yield exec(cleanupString);
@@ -640,7 +644,7 @@ git -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
         const repoPath = repoPaths[repoName];
         const repo = yield NodeGit.Clone.clone(commitRepo.workdir(),
                                                repoPath, {
-            bare: ast.isBare() ? 1 : 0
+            bare: ast.bare ? 1 : 0
         });
         yield configRepo(repo);
         yield writeRepo(repo, ast, repoPath);

@@ -383,9 +383,18 @@ describe("readRAST", function () {
         const expected = new RepoAST({
             commits: commits,
             branches: { "master": commit },
-            head: null,
+            head: commit,
             currentBranchName: "master",
+            bare: true,
         });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
+    it("headless", co.wrap(function *() {
+        const path = yield TestUtil.makeTempDir();
+        const r = yield NodeGit.Repository.init(path, 0);
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const expected = new RepoAST();
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
