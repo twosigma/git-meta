@@ -398,6 +398,37 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
+    it("headless with a commit", co.wrap(function *() {
+        const path = yield TestUtil.makeTempDir();
+        const r = yield NodeGit.Repository.init(path, 1);
+        const sig = r.defaultSignature();
+        const builder = yield NodeGit.Treebuilder.create(r, null);
+        const treeObj = builder.write();
+        const tree = yield r.getTree(treeObj.tostrS());
+        const commitId = yield NodeGit.Commit.create(r,
+                                                     0,
+                                                     sig,
+                                                     sig,
+                                                     0,
+                                                     "message",
+                                                     tree,
+                                                     0,
+                                                     []);
+        yield NodeGit.Reference.create(r, "refs/ref", commitId, 0, "x");
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const commits = {};
+        const sha = commitId.tostrS();
+        commits[sha] = new RepoAST.Commit({
+            message: "message",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            refs: { "ref": sha, },
+            bare: true,
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
     it("remote", co.wrap(function *() {
         const repos = yield TestUtil.createRepoAndRemote();
         const ast = yield ReadRepoASTUtil.readRAST(repos.clone);
