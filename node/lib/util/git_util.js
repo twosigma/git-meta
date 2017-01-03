@@ -203,6 +203,7 @@ exports.getCurrentRepo = function () {
  * `target` branch in the specified `remote` repository.  Return null if the
  * push succeeded and string containing an error message if the push failed.
  * Attempt to allow a non-ffwd push if the specified `force` is `true`.
+ * Silence console output if the specified `quiet` is provided and is true.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -210,9 +211,10 @@ exports.getCurrentRepo = function () {
  * @param {String}             source
  * @param {String}             target
  * @param {String}             force
+ * @param {Boolean}            [quiet]
  * @return {String} [return]
  */
-exports.push = co.wrap(function *(repo, remote, source, target, force) {
+exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     // TODO: this is an awful hack because I can't yet figure out how to get
     // nodegit to work with kerberos.  For now, will shell out and use the
     // 'git' command.
@@ -223,6 +225,13 @@ exports.push = co.wrap(function *(repo, remote, source, target, force) {
     assert.isString(target);
     assert.isBoolean(force);
 
+    if (undefined === quiet) {
+        quiet = false;
+    }
+    else {
+        assert.isBoolean(quiet);
+    }
+
     let forceStr = "";
     if (force) {
         forceStr = "-f";
@@ -232,10 +241,10 @@ exports.push = co.wrap(function *(repo, remote, source, target, force) {
 git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
         const result = yield exec(execString);
-        if (result.stdout) {
+        if (result.stdout && !quiet) {
             console.log(result.stdout);
         }
-        if (result.stderr) {
+        if (result.stderr && !quiet) {
             console.error(result.stderr);
         }
         return null;

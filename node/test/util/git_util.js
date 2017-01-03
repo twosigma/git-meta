@@ -262,7 +262,7 @@ describe("GitUtil", function () {
         // done in terms of `git push`, though eventually it will be through
         // NodeGit.
 
-        function pusher(repoName, origin, local, remote, force) {
+        function pusher(repoName, origin, local, remote, force, quiet) {
             return co.wrap(function *(repos) {
                 force = force || false;
                 const result =
@@ -270,7 +270,8 @@ describe("GitUtil", function () {
                                        origin,
                                        local,
                                        remote,
-                                       force);
+                                       force,
+                                       quiet);
                 if (null !== result) {
                     throw new Error(result);
                 }
@@ -298,6 +299,11 @@ describe("GitUtil", function () {
                 input: "a=S|b=Ca:Bfoo=1",
                 expected: "a=S:Bfoo=1|b=Ca:Bfoo=1",
                 manipulator: pusher("b", "origin", "foo", "foo"),
+            },
+            "quiet push new branch": {
+                input: "a=S|b=Ca:Bfoo=1",
+                expected: "a=S:Bfoo=1|b=Ca:Bfoo=1",
+                manipulator: pusher("b", "origin", "foo", "foo", true),
             },
             "update a branch": {
                 input: "a=B|b=Ca:C2-1;Bmaster=2",

@@ -235,8 +235,19 @@ exports.readRAST = co.wrap(function *(repo) {
     let branchName = null;
     let headCommitId = null;
     if (!repo.headDetached() && !repo.isEmpty()) {
-        const branch = yield repo.getCurrentBranch();
-        branchName = branch.shorthand();
+        // It's possible that the repo may be non-empty, non-head-detached
+        // (because it's bare), and still not have a current branch, in which
+        // case, `getCurrentBranch` will throw.
+
+        let branch = null;
+        try {
+            branch = yield repo.getCurrentBranch();
+        }
+        catch (e) {
+        }
+        if (null !== branch) {
+            branchName = branch.shorthand();
+        }
     }
 
     // If the repo isn't bare, process the index, HEAD, and workdir.
