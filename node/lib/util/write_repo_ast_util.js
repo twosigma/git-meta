@@ -45,6 +45,7 @@ const mkdirp   = require("mkdirp");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
+const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
@@ -52,24 +53,6 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const TestUtil            = require("./test_util");
 
                          // Begin module-local methods
-
-/**
- * Exec the specified `command` and return the result, omitting the "\n" at the
- * end.
- * @async
- * @private
- * @param {String} command
- * @return {String}
- */
-const doExec = co.wrap(function *(command) {
-    try {
-        const result = yield exec(command);
-        return result.stdout.split("\n")[0];
-    }
-    catch (e) {
-        throw e;
-    }
-});
 
 /**
  * Write the specified `data` to the specified `repo` and return its hash
@@ -81,113 +64,10 @@ const doExec = co.wrap(function *(command) {
  * @param {String}             data
  * @return {String}
  */
-const hashObject = co.wrap(function *(repo, data) {
-    const db = yield repo.odb();
+const hashObject = co.wrap(function *(db, data) {
     const BLOB = 3;
     const res = yield db.write(data, data.length, BLOB);
     return res.tostrS();
-});
-
-/**
- * Create and return the id of a `NodeGit.Tree` containing the contents of the
- * specified `flatTree` in the specified `repo`.  Use the specified
- * `getSubmoduleSha` to obtain the sha for any submodule commits.
- *
- * @private
- * @async
- * @param {NodeGit.Repo}     repo
- * @param {Object}           flatTree maps path to data or `RepoAST.Submodule`
- * @param {(sha) => Promise} getSubmoduleSha
- * @return {String}
- */
-const makeTree = co.wrap(function *(repo, flatTree, getSubmoduleSha) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isObject(flatTree);
-    assert.isFunction(getSubmoduleSha);
-
-    // Strategy for making a tree:
-    // - take the flat data in `flatTree` and turn it into a hierarchy with
-    //   `buildDirectoryTree`
-    // - calculate contents of `.gitmodules` file and add to tree
-    // - invoke `writeHierarchy` to generate tree id, it will add a line for
-    //   each entry:
-    // ` - for a file, hash its contents and add a `blob` line
-    //   - for a submodule, add a line indicating its sha
-    //   - for a subtree, recurse and add a line with subtree id
-
-    const writeHierarchy = co.wrap(function *(hierarchy) {
-
-        let treeData = "";
-
-        function addToTree(fileType, dataType, id, path) {
-            if ("" !== treeData) {
-                treeData += "\n";
-            }
-            treeData += `${fileType} ${dataType} ${id}\t${path}`;
-        }
-
-        for (let path in hierarchy) {
-            const change = hierarchy[path];
-            if (change instanceof RepoAST.Submodule) {
-                const newSha = yield getSubmoduleSha(change.sha);
-                addToTree("160000", "commit", newSha, path);
-            }
-            else if ("string" === typeof change) {
-                // A string indicates files data.
-
-                const id = yield hashObject(repo, change);
-                addToTree("100644", "blob", id, path);
-            }
-            else {
-                // If it's not a submodule or a file, it must be a subtree.
-
-                const subTreeId = yield writeHierarchy(change);
-                addToTree("040000", "tree", subTreeId, path);
-            }
-        }
-
-        // If no data, make an empty tree
-        if ("" === treeData ) {
-            const builder = yield NodeGit.Treebuilder.create(repo, null);
-            const treeObj = builder.write();
-            return treeObj.tostrS();                                  // RETURN
-        }
-        const tempDir = yield TestUtil.makeTempDir();
-        const tempPath = path.join(tempDir, "treeData");
-        yield fs.writeFile(tempPath, treeData);
-        const makeTreeExecString = `\
-cat '${tempPath}' | git -C '${repo.path()}' mktree
-`;
-        return yield doExec(makeTreeExecString);
-    });
-
-    let gitModulesData = "";
-
-    // Pre-process submodules to get shas and the data for the .gitmodules
-    // file.
-
-    for (let path in flatTree) {
-        const data = flatTree[path];
-        if (data instanceof RepoAST.Submodule) {
-            const modulesStr = `\
-[submodule "${path}"]
-\tpath = ${path}
-\turl = ${data.url}
-`;
-            gitModulesData += modulesStr;
-        }
-    }
-
-    const directoryTree = exports.buildDirectoryTree(flatTree);
-    assert.notProperty(directoryTree,
-                       SubmoduleConfigUtil.modulesFileName,
-                       "no explicit changes to the git modules file");
-
-    if ("" !== gitModulesData) {
-        directoryTree[SubmoduleConfigUtil.modulesFileName] = gitModulesData;
-    }
-
-    return yield writeHierarchy(directoryTree);
 });
 
 /**
@@ -202,60 +82,214 @@ const configRepo = co.wrap(function *(repo) {
 });
 
 /**
- * Write the specified `commits` map into the specified `repo`.  Return maps
- * from old commit to new and new commit to old.
+ * Return the tree and a map of associated subtrees corresponding to the
+ * specified `flatChanges` in the specified `repo`, and based on the optionally
+ * specified `parent`.  Use the specified `shaMap` to resolve logical shas to
+ * actual written shas (such as for submodule heads).  Use the specified `db`
+ * to write objects.  If the specified `root` is true, generate a `.gitmodules`
+ * file containing an entry for each submodule.
  *
- * @private
  * @async
- * @param {NodeGit.Repository} repo
- * @param {Object}             commits   id to `RepoAST.Commit`
+ * @param {Boolean}               root
+ * @param {NodeGit.Repository}    repo
+ * @param {NodeGit.Odb}           db
+ * @param {Object}                shaMap maps logical to physical ID
+ * @param {Object}                flatChanges map of changes
+ * @param {Object}                [parent]
+ * @param {Object}                parent.subtrees   filename to return value
+ * @param {NodeGit.Tree}          parent.tree       generated tree object
+ * @param {Object}                parent.submodules name to url
  * @return {Object}
- * @return {Object} return.oldToNew  maps original to generated commit id
- * @return {Object} return.newToOld  maps generated to original commit id
+ * @return {Object}       return.submodules
+ * @return {Object}       return.subtrees
+ * @return {NodeGit.Tree} return.tree
  */
-const writeCommits = co.wrap(function *(repo, commits) {
-    let oldCommitMap = {};  // from old to new sha
+const writeTree = co.wrap(function *(root,
+                                     repo,
+                                     db,
+                                     shaMap,
+                                     flatChanges,
+                                     parent) {
+    let subtrees = {};          // will contain written subtree entries
+    let parentSubtrees = {};    // base for each subtree
+    let parentTree = null;      // base root
+    const submodules = {};      // all submodule entries, including children
+
+    // If `parent` is provided, copy values into the above structures.
+
+    if (undefined !== parent) {
+        parentSubtrees = parent.subtrees;
+        parentTree = parent.tree;
+        Object.assign(submodules, parent.submodules);
+    }
+
+    // Map the flat, e.g. `x/y/y -> change` into a tree.
+
+    const changes = exports.buildDirectoryTree(flatChanges);
+
+    // Initialize the builder with the previous tree from which the changes are
+    // derived.
+
+    const builder = yield NodeGit.Treebuilder.create(repo, parentTree);
+
+    const actions = [];  // tree updates to be applied in parallel
+
+    const writeSubtree = co.wrap(function *(filename, entry) {
+        const subtree = yield writeTree(false,
+                                        repo,
+                                        db,
+                                        shaMap,
+                                        entry,
+                                        parentSubtrees[filename]);
+        subtrees[filename] = subtree;
+        yield builder.insert(filename,
+                             subtree.tree.id(),
+                             NodeGit.TreeEntry.FILEMODE.TREE);
+
+        // Reconstitute the submodule path and copy it into the right location.
+
+        for (let subPath in subtree.submodules) {
+            const sub = subtree.submodules[subPath];
+            submodules[path.join(filename, subPath)] = sub;
+        }
+    });
+
+    // Loop through all the changes and store an action to apply them.
+
+    for (let filename in changes) {
+        const entry = changes[filename];
+
+        if (null === entry) {
+            // Null means the entry was deleted.
+
+            builder.remove(filename);
+        }
+        else if ("string" === typeof entry) {
+            // A string is just plain data.
+
+            const id = yield hashObject(db, entry);
+            actions.push(builder.insert(filename,
+                                        id,
+                                        NodeGit.TreeEntry.FILEMODE.BLOB));
+        }
+        else if (entry instanceof RepoAST.Submodule) {
+            // For submodules, we must map the logical sha it contains to the
+            // actual sha that was written for the submodule commit.
+
+            const id = shaMap[entry.sha];
+            actions.push(builder.insert(filename,
+                                        id,
+                                        NodeGit.TreeEntry.FILEMODE.COMMIT));
+            submodules[filename] = entry.url;
+        }
+        else {
+            // Otherwise, we have a directory and must make a subtree.
+
+            actions.push(writeSubtree(filename, entry));
+        }
+    }
+
+    // Apply the operations in parallel.
+
+    yield actions;
+
+    // If this is a "root" tree, and there are submodules, we must write the
+    // `.gitmodules` file.
+
+    if (root) {
+        const subNames = Object.keys(submodules).sort();
+        if (0 !== subNames.length) {
+            let data = "";
+            for (let i = 0; i < subNames.length; ++i) {
+                const filename = subNames[i];
+                const url = submodules[filename];
+                data += `\
+[submodule "${filename}"]
+\tpath = ${filename}
+\turl = ${url}
+`;
+            }
+            const dataId = yield hashObject(db, data);
+            yield builder.insert(SubmoduleConfigUtil.modulesFileName,
+                                 dataId,
+                                 NodeGit.TreeEntry.FILEMODE.BLOB);
+        }
+    }
+    const id = builder.write();
+    const tree = yield repo.getTree(id);
+    return {
+        tree: tree,
+        subtrees: subtrees,
+        submodules: submodules,
+    };
+});
+
+/**
+ * Write the commits having the specified `shas` from the specified `commits`
+ * map into the specified `repo`.  Read and write logical to physical sha
+ * mappings to and from the specified `oldCommitMap`.  Use the specifeid
+ * `treeCache` to store computed directory structures and trees.  Return a map
+ * from new (physical) sha from the original (logical) sha of the commits
+ * written.
+ *
+ * @async
+ * @param {Object} oldCommitMap old to new sha, read/write
+ * @param {Object} treeCache  cache of generated commit trees
+ * @param {NodeGit.Repository} repo
+ * @param {Object}             commits sha to `RepoAST.Commit`
+ * @param {String[]}           shas    array of shas to write
+ * @return {Object} maps generated to original commit id
+ */
+exports.writeCommits = co.wrap(function *(oldCommitMap,
+                                          treeCache,
+                                          repo,
+                                          commits,
+                                          shas) {
+    assert.isObject(oldCommitMap);
+    assert.isObject(treeCache);
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isObject(commits);
+    assert.isArray(shas);
+
+    const db = yield repo.odb();
     let newCommitMap = {};  // from new to old sha
-    let renderCache = {};   // used to render commits
 
     const sig = repo.defaultSignature();
 
-    let commitObjs = {};  // map from new id to `Commit` object
+    const commitObjs = {};  // map from new id to `Commit` object
 
     const writeCommit = co.wrap(function *(sha) {
-        // TODO: extend libgit2 and nodegit to allow submoduel manipulations to
-        // `TreeBuilder`.  For now, we will do this ourselves using the `git`
-        // commandline tool.
-        //
-        // - First, we calculate the tree describred by the commit at `sha`.
-        // - Then, we build a string that describes that as if it were output
-        //   by `ls-tree`.
-        // - Next, we invoke `git-mktree` to create a tree id
-        // - finally, we invoke `git-commit-tree` to create the commit.
-
-        // Bail out if already written.
-
-        if (sha in oldCommitMap) {
-            return oldCommitMap[sha];
-        }
-
-        // Recursively get commit ids for parents.
-
         const commit = commits[sha];
         const parents = commit.parents;
 
+        // Get commit objects for parents.
+
+        let parentTrees;
         let newParents = [];  // Array of commit IDs
         for (let i = 0; i < parents.length; ++i) {
-            let parentSha = yield writeCommit(parents[i]);
-            newParents.push(commitObjs[parentSha]);
+            const parent = parents[i];
+            if (0 === i) {
+                parentTrees = treeCache[parent];
+            }
+            const parentSha = oldCommitMap[parent];
+            const parentCommit = yield repo.getCommit(parentSha);
+            newParents.push(parentCommit);
         }
 
-        // Calculate the tree.  `tree` describes the directory tree specified
-        // by the commit at `sha`.
+        // Calculate the tree.  `trees` describes the directory tree specified
+        // by the commit at `sha` and has caches for subtrees and submodules.
 
-        const tree = RepoAST.renderCommit(renderCache, commits, sha);
-        const treeId = yield makeTree(repo, tree, writeCommit);
-        const treeObj = yield repo.getTree(treeId);
+        const trees = yield writeTree(true,
+                                      repo,
+                                      db,
+                                      oldCommitMap,
+                                      commit.changes,
+                                      parentTrees);
+
+        // Store the returned tree information for potential use by descendants
+        // of this commit.
+
+        treeCache[sha] = trees;
 
         // Make a commit from the tree.
 
@@ -265,21 +299,53 @@ const writeCommits = co.wrap(function *(repo, commits) {
                                                      sig,
                                                      0,
                                                      commit.message,
-                                                     treeObj,
+                                                     trees.tree,
                                                      newParents.length,
                                                      newParents);
         const commitSha = commitId.tostrS();
+
+        // Store bi-directional mappings between generated and logical sha.
+
         oldCommitMap[sha] = commitSha;
         newCommitMap[commitSha] = sha;
         commitObjs[commitSha] = (yield repo.getCommit(commitSha));
         return commitSha;
     });
 
-    for (let sha in commits) {
-        yield writeCommit(sha);
-    }
+    // Calculate the groups of commits that can be computed in parallel.
 
-    return { oldToNew: oldCommitMap, newToOld: newCommitMap };
+    const commitsByLevel = exports.levelizeCommitTrees(commits, shas);
+
+    for (let i = 0; i < commitsByLevel.length; ++i) {
+        const level = commitsByLevel[i];
+        yield DoWorkQueue.doInParallel(level, writeCommit);
+    }
+    return newCommitMap;
+});
+
+/**
+ * Write all of the specified `commits` into the specified `repo`.
+ *
+ * @async
+ * @private
+ * @param {NodeGit.Repository} repo
+ * @param {Object}             commits sha to `RepoAST.Commit`
+ * @param {Object}             treeCache
+ * @return {Object}
+ * @return {Object} return.oldToNew  maps original to generated commit id
+ * @return {Object} return.newToOld  maps generated to original commit id
+ */
+const writeAllCommits = co.wrap(function *(repo, commits, treeCache) {
+    const oldCommitMap = {};
+    const newIds = yield exports.writeCommits(oldCommitMap,
+                                              treeCache,
+                                              repo,
+                                              commits,
+                                              Object.keys(commits));
+    return {
+        newToOld: newIds,
+        oldToNew: oldCommitMap,
+    };
 });
 
 /**
@@ -293,8 +359,9 @@ const writeCommits = co.wrap(function *(repo, commits) {
  * @param {NodeGit.Repository} repo
  * @param {RepoAST}            ast
  * @param {Object}             commitMap  old to new id
+ * @param {Object}             treeCache  map of tree entries
  */
-const configureRepo = co.wrap(function *(repo, ast, commitMap) {
+const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
     const makeRef = co.wrap(function *(name, commit) {
         const newSha = commitMap[commit];
         const newId = NodeGit.Oid.fromString(newSha);
@@ -403,18 +470,19 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap) {
         // Set up the index.  We render the current commit and apply the index
         // on top of it.
 
-        let tree = ast.index;
+        let indexParent;
         if (null !== indexHead) {
-            tree =
-                  yield RepoAST.renderIndex(ast.commits, indexHead, ast.index);
+            indexParent = treeCache[indexHead];
         }
-
-        const treeId = yield makeTree(repo, tree, co.wrap(function *(sha) {
-            return yield Promise.resolve(commitMap[sha]);
-        }));
-
+        const db = yield repo.odb();
+        const trees = yield writeTree(true,
+                                      repo,
+                                      db,
+                                      commitMap,
+                                      ast.index,
+                                      indexParent);
         const index = yield repo.index();
-        const treeObj = yield repo.getTree(treeId);
+        const treeObj = trees.tree;
         yield index.readTree(treeObj);
         yield index.write();
 
@@ -451,6 +519,72 @@ git -C '${repo.workdir()}' checkout-index -a -f
                           // End modue-local methods
 
 /**
+ * Return an array of arrays of commit shas such that the trees of the commits
+ * identified in an array depend only on the commits in previous arrays.  The
+ * tree of one commit depends on another commit (i.e., cannot be created until
+ * that commit exists) if it has a submodule sha referencing that commit.
+ * Until the commit is created, we do not know what its actual sha will be.
+ *
+ * @param {Object} commits map from sha to `RepoAST.Commit`.
+ * @return {[[]] array or arrays of shas
+ */
+exports.levelizeCommitTrees = function (commits, shas) {
+    assert.isObject(commits);
+    assert.isArray(shas);
+
+    const includedShas = new Set(shas);
+
+    let result = [];
+    const commitLevels = {};  // from sha to number
+
+    function computeCommitLevel(sha) {
+        if (sha in commitLevels) {
+            return commitLevels[sha];
+        }
+        const commit = commits[sha];
+        const changes = commit.changes;
+        let level = 0;
+
+        // If this commit has a change that references another commit via a
+        // submodule sha, it must have a level at least one greater than that
+        // commit, if it is also in the set of shas being levelized.
+
+        for (let path in changes) {
+            const change = changes[path];
+            if (change instanceof RepoAST.Submodule) {
+                if (includedShas.has(change.sha)) {
+                    level = Math.max(computeCommitLevel(change.sha) + 1,
+                                     level);
+                }
+            }
+        }
+
+        // Similarly, with parents, a commit's level must be greater than that
+        // of parents that are included.
+
+        const parents = commit.parents;
+        for (let i = 0; i < parents.length; ++i) {
+            const parent = parents[i];
+            if (includedShas.has(parent)) {
+                level = Math.max(level, computeCommitLevel(parent) + 1);
+            }
+        }
+        commitLevels[sha] = level;
+        if (result.length === level) {
+            result.push([]);
+        }
+        result[level].push(sha);
+        return level;
+    }
+
+    for (let i = 0; i < shas.length; ++i) {
+        computeCommitLevel(shas[i]);
+    }
+
+    return result;
+};
+
+/**
  * Return a nested tree mapping the flat structure in the specified `flatTree`,
  * which consists of a map of paths to values, into a hierarchical structure
  * beginning at the root.  For example, if the input is:
@@ -458,11 +592,14 @@ git -C '${repo.workdir()}' checkout-index -a -f
  * the output will be:
  *     { a : { b: { c: 2, d: 3} } }
  *
+ * If `flatTree` contains submodules, render an appropriate `.gitmodules` file.
+ *
  * @param {Object} flatTree
  * @return {Object}
  */
 exports.buildDirectoryTree = function (flatTree) {
     let result = {};
+
     for (let path in flatTree) {
         const paths = path.split("/");
         let tree = result;
@@ -484,8 +621,13 @@ exports.buildDirectoryTree = function (flatTree) {
         }
         const leafPath = paths[paths.length - 1];
         assert.notProperty(tree, leafPath, `duplicate entry for ${path}`);
-        tree[leafPath] = flatTree[path];
+        const data = flatTree[path];
+        tree[leafPath] = data;
     }
+
+    assert.notProperty(result,
+                       SubmoduleConfigUtil.modulesFileName,
+                       "no explicit changes to the git modules file");
     return result;
 };
 
@@ -515,8 +657,13 @@ exports.writeRAST = co.wrap(function *(ast, path) {
 
     yield configRepo(repo);
 
-    const commits = yield writeCommits(repo, ast.commits);
-    const resultRepo = yield configureRepo(repo, ast, commits.oldToNew);
+    const treeCache = {};
+    const commits = yield writeAllCommits(repo, ast.commits, treeCache);
+    const resultRepo = yield configureRepo(repo,
+                                           ast,
+                                           commits.oldToNew,
+                                           treeCache);
+
     return {
         repo: resultRepo,
         commitMap: commits.newToOld,
@@ -592,7 +739,8 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
 
     // Write them:
 
-    const commitMaps = yield writeCommits(commitRepo, commits);
+    const treeCache = {};
+    const commitMaps = yield writeAllCommits(commitRepo, commits, treeCache);
 
     // We make a ref for each commit so that it is pulled down correctly.
 
@@ -628,7 +776,7 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
         yield NodeGit.Remote.delete(repo, "origin");
 
         // Then set up the rest of the repository.
-        yield configureRepo(repo, ast, commitMaps.oldToNew);
+        yield configureRepo(repo, ast, commitMaps.oldToNew, treeCache);
         const cleanupString = `\
 git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 -c gc.rerereresolved=0 -c gc.rerereunresolved=0 \
