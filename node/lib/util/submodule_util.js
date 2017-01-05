@@ -308,48 +308,35 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const diffs = yield commit.getDiffWithOptions({
-        ignoreSubmodules: true
-    });
-    const submoduleNames =
-                        yield exports.getSubmoduleNamesForCommit(repo, commit);
-    const submoduleNameSet = new Set(submoduleNames);
-
-    const GIT_DIFF_FLAG_EXISTS = 1 << 3;
-    const GIT_FILEMODE_COMMIT = 57344;  // from libgit2 include/git2/types.h
-
-
+    const currentSubs = yield exports.getSubmodulesForCommit(repo, commit);
+    let lastSubs = {};
+    if (0 !== commit.parentcount()) {
+        const parents = yield commit.parents();
+        const parentCommit = yield repo.getCommit(parents[0]);
+        lastSubs = yield exports.getSubmodulesForCommit(repo, parentCommit);
+    }
     let result = {
         added  : new Set(),
         changed: new Set(),
         removed: new Set(),
     };
-
-    diffs.forEach(diff => {
-        const numDiffs = diff.numDeltas();
-        for (let i = 0; i < numDiffs; ++i) {
-            let delta = diff.getDelta(i);
-            let newFile = delta.newFile();
-            let path = newFile.path();
-            const inNew = 0 !== (newFile.flags() & GIT_DIFF_FLAG_EXISTS);
-            if (inNew) {
-                if (submoduleNameSet.has(path)) {
-                    const oldFile = delta.oldFile();
-                    const inOld = 0 !==
-                                      (oldFile.flags() & GIT_DIFF_FLAG_EXISTS);
-                    if (!inOld) {
-                        result.added.add(path);
-                    }
-                    else {
-                        result.changed.add(path);
-                    }
-                }
-            }
-            else if (delta.oldFile().mode() === GIT_FILEMODE_COMMIT) {
-                result.removed.add(path);
+    for (let name in currentSubs) {
+        const last = lastSubs[name];
+        if (undefined === last) {
+            result.added.add(name);
+        }
+        else {
+            const current = currentSubs[name];
+            if (current.sha !== last.sha || current.url !== last.url) {
+                result.changed.add(name);
             }
         }
-    });
+    }
+    for (let name in lastSubs) {
+        if (!(name in currentSubs)) {
+            result.removed.add(name);
+        }
+    }
     return result;
 });
 
@@ -363,6 +350,8 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
  * @return {Object} map from submodule name to `Submodule` object
  */
 exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
     const urls =
                yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, commit);
     const names = Object.keys(urls);
