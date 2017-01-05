@@ -64,7 +64,7 @@ exports.configureParser = function (parser) {
 
     parser.addArgument(["path"], {
         type: "string",
-        help: "path of one or more sub-repositories to open",
+        help: "open all submodules at or in 'path'",
         nargs: "+",
     });
 };
@@ -81,65 +81,77 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const DoWorkQueue      = require("../util/do_work_queue");
     const GitUtil          = require("../util/git_util");
     const Open             = require("../util/open");
-    const Status           = require("../util/status");
     const SubmoduleFetcher = require("../util/submodule_fetcher");
     const SubmoduleUtil    = require("../util/submodule_util");
     const UserError        = require("../util/user_error");
 
-    const repo   = yield GitUtil.getCurrentRepo();
-    const index  = yield repo.index();
-    const status = yield Status.getRepoStatus(repo);
+    const repo    = yield GitUtil.getCurrentRepo();
+    const workdir = repo.workdir();
+    const cwd     = process.cwd();
 
-    const subs = status.submodules;
+    const subLists = yield args.path.map(co.wrap(function *(filename) {
+        // Compute the relative path for `filename` from the root of the repo,
+        // and check for invalid values.
+        let relPath;
+        try {
+            relPath = yield GitUtil.resolveRelativePath(workdir,
+                                                        cwd,
+                                                        filename);
+        }
+        catch (e) {
+            if (e instanceof UserError) {
+                console.error(e.message);
+                return;                                               // RETURN
+            }
+            throw e;
+        }
+        const result = yield SubmoduleUtil.getSubmodulesInPath(repo, relPath);
+        if (0 === result.length) {
+            console.warn(`\
+No submodules found from ${colors.orange(filename)}.`);
+        }
+        return result;
+    }));
 
-    const subsToOpen = args.path;
-
-    const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
-                                                             subsToOpen);
+    const subsToOpen = subLists.reduce((a, b) => a.concat(b), []);
+    const index      = yield repo.index();
+    const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
+                                                                   subsToOpen);
     const head = yield repo.getHeadCommit();
     const fetcher = new SubmoduleFetcher(repo, head);
 
     let failed = false;
 
+    const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
+
     const opener = co.wrap(function *(name, index) {
-        if (!(name in subs)) {
-            console.error(`Invalid submodule ${colors.cyan(name)}`);
-            failed = true;
+        if (openSubs.has(name)) {
+            console.warn(`Submodule ${colors.cyan(name)} is already open.`);
             return;                                                   // RETURN
         }
-        const sub = subs[name];
-        if (null !== sub.repoStatus) {
-            console.warn(`Submodule ${colors.cyan(name)} is already open.`);
-        }
-        else if (null === sub.indexSha) {
-            console.error(`Submodule ${colors.cyan(name)} has been deleted.`);
-            failed = true;
-        }
-        else {
-            console.log(
-              `Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
 
-            // If we fail to open due to an expected condition, indicated by
-            // the throwing of a `UserError` object, catch and log the error,
-            // but don't let the exception propagate, or else we'll stop trying
-            // to open other (probably unaffected) repositories.
+        console.log(`\
+Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
 
-            try {
-                yield Open.openOnCommit(fetcher, name, shas[index]);
-            }
-            catch (e) {
-                if (e instanceof UserError) {
-                    console.error(`\
-Error opening submodule ${colors.red(name)}:`);
-                    console.error(e.message);
-                    failed = true;
-                }
-                else {
-                    throw e;
-                }
-            }
-            console.log(`Finished opening ${colors.blue(name)}.`);
+        // If we fail to open due to an expected condition, indicated by
+        // the throwing of a `UserError` object, catch and log the error,
+        // but don't let the exception propagate, or else we'll stop trying
+        // to open other (probably unaffected) repositories.
+
+        try {
+            yield Open.openOnCommit(fetcher, name, shas[index]);
         }
+        catch (e) {
+            if (e instanceof UserError) {
+                console.error(`Error opening submodule ${colors.red(name)}:`);
+                console.error(e.message);
+                failed = true;
+            }
+            else {
+                throw e;
+            }
+        }
+        console.log(`Finished opening ${colors.blue(name)}.`);
     });
     yield DoWorkQueue.doInParallel(subsToOpen, opener);
 

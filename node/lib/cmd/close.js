@@ -52,7 +52,7 @@ exports.configureParser = function (parser) {
 
     parser.addArgument(["path"], {
         type: "string",
-        help: "path of sub-repository to close",
+        help: "close all (open) submodules at or in 'path'",
         nargs: "+",
     });
 
@@ -80,13 +80,46 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const GitUtil       = require("../util/git_util");
     const Close         = require("../util/close");
     const Status        = require("../util/status");
+    const SubmoduleUtil = require("../util/submodule_util");
     const UserError     = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
     const repoStatus = yield Status.getRepoStatus(repo);
     const subStats = repoStatus.submodules;
     let errorMessage = "";
-    const closers = args.path.map(co.wrap(function *(name) {
+
+    const workdir = repo.workdir();
+    const cwd     = process.cwd();
+
+    // This logic is copy and pasted from `open`, but I'm not convinced yet
+    // that it should be refactored; I feel like close/open specific logic may
+    // yet be injected here.
+
+    const subLists = yield args.path.map(co.wrap(function *(filename) {
+        // Compute the relative path for `filename` from the root of the repo,
+        // and check for invalid values.
+        let relPath;
+        try {
+            relPath = yield GitUtil.resolveRelativePath(workdir,
+                                                        cwd,
+                                                        filename);
+        }
+        catch (e) {
+            if (e instanceof UserError) {
+                console.error(e.message);
+                return;                                               // RETURN
+            }
+            throw e;
+        }
+        const result = yield SubmoduleUtil.getSubmodulesInPath(repo, relPath);
+        if (0 === result.length) {
+            console.warn(`\
+No submodules found from ${colors.orange(filename)}.`);
+        }
+        return result;
+    }));
+    const subsToClose = subLists.reduce((a, b) => a.concat(b), []);
+    const closers = subsToClose.map(co.wrap(function *(name) {
         if (!(name in subStats)) {
             errorMessage += `${colors.cyan(name)} is not a valid submodule.\n`;
             return;                                                   // RETURN

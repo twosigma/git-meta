@@ -38,7 +38,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const exec    = require("child-process-promise").exec;
-const fs      = require("fs");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -342,8 +342,8 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 });
 
 /**
- * Fetch the specified `sha` from the specifid `url` into the specified `repo`,
- * if it does not already exist in `repo`.
+ * Fetch the specified `sha` from the specified `url` into the specified
+ * `repo`, if it does not already exist in `repo`.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -581,3 +581,34 @@ exports.parseRefspec = function(str) {
 
     throw new UserError("Refspec must match the format <src>:<dest>.");
 };
+
+/**
+ * Resolve the specified `filename` against the specified `cwd` and return the
+ * relative value for that resulting path to the specified `workdir`.  Throw a
+ * `UserError` if the path lies outsied `workdir` or does not refer to a file
+ * in `workdir`.  Note that if `filename` resolves to `workdir`, the result is
+ * `""`.
+ *
+ * @param {String} workdir
+ * @param {String} cwd
+ * @param {String} dir
+ * @return {String}
+ */
+exports.resolveRelativePath = co.wrap(function *(workdir, cwd, filename) {
+    assert.isString(workdir);
+    assert.isString(cwd);
+    assert.isString(filename);
+
+    const absPath = path.resolve(cwd, filename);
+    try {
+        yield fs.stat(absPath);
+    }
+    catch (e) {
+        throw new UserError(`${colors.red(filename)} does not exist.`);
+    }
+    const relPath = path.relative(workdir, absPath);
+    if ("" !== relPath && "." === relPath[0]) {
+        throw new UserError(`${colors.red(filename)} is outside the workdir.`);
+    }
+    return relPath;
+});
