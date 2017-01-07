@@ -40,7 +40,6 @@ const NodeGit = require("nodegit");
 
 const RepoStatus    = require("./repo_status");
 const SubmoduleUtil = require("./submodule_util");
-const Status        = require("./status");
 
 /**
  * Commit changes in the specified `repo`.  If the specified `doAll` is true,
@@ -115,17 +114,18 @@ const commitRepo = co.wrap(function *(repo,
  * @async
  * @param {NodeGit.Repository} metaRepo
  * @param {Boolean}            all
+ * @param {RepoStatus}         metaStatus
  * @param {String}             message
  * @return {Object|null}
  * @return {String} return.metaCommit
  * @return {Object} submoduleCommits map from submodule name to new commit
  */
-exports.commit = co.wrap(function *(metaRepo, all, message) {
+exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isBoolean(all);
+    assert.instanceOf(metaStatus, RepoStatus);
     assert.isString(message);
 
-    const metaStatus = yield Status.getRepoStatus(metaRepo);
     const submodules = metaStatus.submodules;
 
     // Commit submodules.  If any changes, remember this so we know to generate

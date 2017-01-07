@@ -36,11 +36,11 @@ const Rebase     = require("../../lib/util/rebase");
 const RepoStatus = require("../../lib/util/repo_status");
 
 describe("RepoStatus", function () {
-    describe("Submodule", function () {
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const Submodule = RepoStatus.Submodule;
-        const RELATION = Submodule.COMMIT_RELATION;
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    const Submodule = RepoStatus.Submodule;
+    const RELATION = Submodule.COMMIT_RELATION;
 
+    describe("Submodule", function () {
         function m(args) {
             const result = {
                 indexStatus: null,
@@ -224,11 +224,7 @@ describe("RepoStatus", function () {
         });
     });
 
-    describe("Submodule.isClean", function () {
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const Submodule = RepoStatus.Submodule;
-        const RELATION = Submodule.COMMIT_RELATION;
-
+    describe("Submodule.isIndexClean", function () {
         const cases = {
             "no changes": {
                 input: new Submodule({
@@ -249,11 +245,11 @@ describe("RepoStatus", function () {
                     commitUrl: "a",
                     repoStatus: new RepoStatus({
                         workdir: {
-                            "foo": FILESTATUS.ADDED,
+                            "foo": FILESTATUS.MODIFIED,
                         },
                     }),
                 }),
-                expected: false,
+                expected: true,
             },
             "new commit in open repo": {
                 input: new Submodule({
@@ -277,6 +273,147 @@ describe("RepoStatus", function () {
                 }),
                 expected: false,
             },
+            "different commit": {
+                input: new Submodule({
+                    indexSha: "2",
+                    indexShaRelation: RELATION.BEHIND,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                }),
+                expected: false,
+            },
+        };
+
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isIndexClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("Submodule.isWorkdirClean", function () {
+        const cases = {
+            "no changes": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                }),
+                expected: true,
+            },
+            "new files in open repo": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    repoStatus: new RepoStatus({
+                        workdir: {
+                            "foo": FILESTATUS.ADDED,
+                        },
+                    }),
+                }),
+                expected: true,
+            },
+            "changed files in open repo": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    repoStatus: new RepoStatus({
+                        workdir: {
+                            "foo": FILESTATUS.MODIFIED,
+                        },
+                    }),
+                }),
+                expected: false,
+            },
+            "new commit in open repo": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    workdirShaRelation: RELATION.BEHIND,
+                    repoStatus: new RepoStatus({
+                        headCommit: "2",
+                    }),
+                }),
+                expected: true,
+            },
+            "closed": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    workdirShaRelation: RELATION.BEHIND,
+                    repoStatus: null,
+                }),
+                expected: true,
+            },
+        };
+
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isWorkdirClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("Submodule.isClean", function () {
+        const cases = {
+            "no changes": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                }),
+                expected: true,
+            },
+            "changed files in open repo": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    repoStatus: new RepoStatus({
+                        workdir: {
+                            "foo": FILESTATUS.MODIFIED,
+                        },
+                    }),
+                }),
+                expected: false,
+            },
+            "new commit in open repo": {
+                input: new Submodule({
+                    indexSha: "1",
+                    indexShaRelation: RELATION.SAME,
+                    indexUrl: "a",
+                    commitSha: "1",
+                    commitUrl: "a",
+                    workdirShaRelation: RELATION.BEHIND,
+                    repoStatus: new RepoStatus({
+                        headCommit: "2",
+                    }),
+                }),
+                expected: false,
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
@@ -289,7 +426,6 @@ describe("RepoStatus", function () {
     });
 
     describe("RepoStatus", function () {
-        const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
         function m(args) {
             let result = {
                 currentBranchName: null,
@@ -314,10 +450,10 @@ describe("RepoStatus", function () {
                 args: {
                     currentBranchName: "foo",
                     headCommit: "1",
-                    staged: { "x/y": RepoStatus.FILESTATUS.MODIFIED },
-                    workdir: { "x/z": RepoStatus.FILESTATUS.REMOVED },
+                    staged: { "x/y": FILESTATUS.MODIFIED },
+                    workdir: { "x/z": FILESTATUS.REMOVED },
                     submodules: {
-                        "a": new RepoStatus.Submodule({
+                        "a": new Submodule({
                             indexSha: "1",
                             indexShaRelation: RELATION.SAME,
                             indexUrl: "a",
@@ -330,10 +466,10 @@ describe("RepoStatus", function () {
                 e: m({
                     currentBranchName: "foo",
                     headCommit: "1",
-                    staged: { "x/y": RepoStatus.FILESTATUS.MODIFIED },
-                    workdir: { "x/z": RepoStatus.FILESTATUS.REMOVED },
+                    staged: { "x/y": FILESTATUS.MODIFIED },
+                    workdir: { "x/z": FILESTATUS.REMOVED },
                     submodules: {
-                        "a": new RepoStatus.Submodule({
+                        "a": new Submodule({
                             indexSha: "1",
                             indexShaRelation: RELATION.SAME,
                             indexUrl: "a",
@@ -360,9 +496,165 @@ describe("RepoStatus", function () {
         });
     });
 
-    describe("isClean", function () {
-        const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
-        const FILESTATUS = RepoStatus.FILESTATUS;
+    describe("isIndexClean", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: true,
+            },
+            "all possible and still clean": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: {
+                        foo: FILESTATUS.ADDED,
+                        bar: FILESTATUS.MODIFIED,
+                    },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: {
+                                workdir: { x: "y"},
+                                staged: { q: "r"},
+                            },
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "staged": {
+                input: new RepoStatus({
+                    staged: { x: FILESTATUS.ADDED },
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isIndexClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("isWorkdirClean", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: true,
+            },
+            "all possible and still clean": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    staged: { x: FILESTATUS.MODIFIED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                workdir: { x: FILESTATUS.ADDED },
+                                staged: { q: FILESTATUS.MODIFIED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "workdir": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.MODIFIED },
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isWorkdirClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("isIndexDeepClean", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: true,
+            },
+            "all possible and still clean": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.MODIFIED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                workdir: { foo: FILESTATUS.MODIFIED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "staged": {
+                input: new RepoStatus({
+                    staged: { x: FILESTATUS.ADDED },
+                }),
+                expected: false,
+            },
+            "workdir": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.MODIFIED },
+                }),
+                expected: true,
+            },
+            "dirty sub": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                staged: { x: FILESTATUS.ADDED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isIndexDeepClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("isWorkdirDeepClean", function () {
         const cases = {
             "trivial": {
                 input: new RepoStatus(),
@@ -374,7 +666,7 @@ describe("RepoStatus", function () {
                     headCommit: "1",
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
-                        "a": new RepoStatus.Submodule({
+                        "a": new Submodule({
                             indexSha: "1",
                             indexShaRelation: RELATION.SAME,
                             indexUrl: "a",
@@ -387,13 +679,33 @@ describe("RepoStatus", function () {
             },
             "staged": {
                 input: new RepoStatus({
-                    staged: { x: RepoStatus.FILESTATUS.ADDED },
+                    staged: { x: FILESTATUS.ADDED },
                 }),
-                expected: false,
+                expected: true,
             },
             "workdir": {
                 input: new RepoStatus({
-                    workdir: { x: RepoStatus.FILESTATUS.MODIFIED },
+                    workdir: { x: FILESTATUS.MODIFIED },
+                }),
+                expected: false,
+            },
+            "dirty sub": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                workdir: { x: FILESTATUS.MODIFIED },
+                            }),
+                        }),
+                    },
                 }),
                 expected: false,
             },
@@ -401,9 +713,95 @@ describe("RepoStatus", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isClean();
+                const result = c.input.isWorkdirDeepClean();
                 assert.equal(result, c.expected);
             });
         });
     });
+
+    describe("isDeepClean", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: true,
+            },
+            "all possible and still clean": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "staged": {
+                input: new RepoStatus({
+                    staged: { x: FILESTATUS.ADDED },
+                }),
+                expected: false,
+            },
+            "workdir": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.MODIFIED },
+                }),
+                expected: false,
+            },
+            "dirty sub workdir": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                workdir: { x: FILESTATUS.MODIFIED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+            "dirty sub index": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            indexSha: "1",
+                            indexShaRelation: RELATION.SAME,
+                            indexUrl: "a",
+                            commitSha: "1",
+                            commitUrl: "a",
+                            repoStatus: new RepoStatus({
+                                staged: { x: FILESTATUS.MODIFIED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isDeepClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
 });

@@ -69,7 +69,7 @@ exports.printFileStatuses = function (repoStatus) {
                 return "type changed: ";
         }
     }
-    const innerIndent = "        ";
+    const innerIndent = "\t";
 
     // Print status of staged files first.
 
