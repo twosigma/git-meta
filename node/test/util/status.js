@@ -825,8 +825,56 @@ describe("Status", function () {
             },
             // Submodules are tested earlier, but we need to make sure that
             // they're all included, even if they have been removed in the
-            // index or added in the index.
+            // index or added in the index.  Also, make sure `options`
+            // propagate.
 
+            "sub no show all added": {
+                state: "a=S|x=U:Os W x/y=z",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        "s": new Submodule({
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            commitSha: "1",
+                            commitUrl: "a",
+                            workdirShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    "x/": FILESTATUS.ADDED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+            },
+            "sub show all added": {
+                state: "a=S|x=U:Os W x/y=z",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        "s": new Submodule({
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            commitSha: "1",
+                            commitUrl: "a",
+                            workdirShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    "x/y": FILESTATUS.ADDED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+                options: { showAllUntracked: true, },
+            },
             "sub added to index": {
                 state: "a=S|x=S:I s=Sa:1",
                 expected: new RepoStatus({
@@ -876,12 +924,35 @@ describe("Status", function () {
                     },
                 }),
             },
+            "show root untracked": {
+                state: "x=S:W x/y/z=foo,x/y/q=bar",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "1",
+                    workdir: {
+                        "x/": FILESTATUS.ADDED,
+                    },
+                }),
+            },
+            "show all untracked": {
+                state: "x=S:W x/y/z=foo,x/y/q=bar",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "1",
+                    workdir: {
+                        "x/y/z": FILESTATUS.ADDED,
+                        "x/y/q": FILESTATUS.ADDED,
+                    },
+                }),
+                options: { showAllUntracked: true, },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 const w = yield RepoASTTestUtil.createMultiRepos(c.state);
-                const result = yield Status.getRepoStatus(w.repos.x);
+                const result = yield Status.getRepoStatus(w.repos.x,
+                                                          c.options);
                 assert.instanceOf(result, RepoStatus);
                 const mappedResult = remapRepoStatus(result,
                                                      w.commitMap,
