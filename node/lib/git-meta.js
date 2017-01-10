@@ -37,6 +37,7 @@
 
 const ArgumentParser = require("argparse").ArgumentParser;
 
+const add        = require("./cmd/add");
 const checkout   = require("./cmd/checkout");
 const cherryPick = require("./cmd/cherrypick");
 const close      = require("./cmd/close");
@@ -105,6 +106,7 @@ const parser = new ArgumentParser({
 
 const subParser = parser.addSubparsers({});
 
+configureSubcommand(subParser, "add", add);
 configureSubcommand(subParser, "checkout", checkout);
 configureSubcommand(subParser, "cherry-pick", cherryPick);
 configureSubcommand(subParser, "close", close);
