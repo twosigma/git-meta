@@ -43,6 +43,66 @@ const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("WriteRepoASTUtil", function () {
 
+    describe("levelizeCommitTrees", function () {
+        // We are going to cheat here and use `ShorthandParserUtil` to make it
+        // easy to describe commits, though we'll not use any other part of the
+        // ASTs.  If input is a string, we parse it; otherwise, we consider it
+        // to be a commit map.  We will sort the result vectors returned by
+        // `levelizeCommitTrees`.
+
+        const cases = {
+            "trivial": {
+                input: {},
+                shas: [],
+                expected: []
+            },
+            "simple": {
+                input: "B",
+                shas: ["1"],
+                expected: [["1"]],
+            },
+            "simple -- omitted": {
+                input: "B",
+                shas: [],
+                expected: [],
+            },
+            "multiple": {
+                input: "B:C2-1;Bx=2",
+                shas: ["1", "2"],
+                expected: [["1"], ["2"]],
+            },
+            "one from parent, one from sub": {
+                input: "B:C2-1;C3-1 x=Sa:2;Bx=2;By=3",
+                shas: ["1", "2", "3"],
+                expected: [["1"], ["2"], ["3"]],
+            },
+            "two deep": {
+                input: "B:C3-1;C4-1 x=Sa:1;C2-4 y=Sq:4;Bx=3;By=4;Bz=2",
+                shas: ["1", "3", "4", "2"],
+                expected: [["1"],["3","4"],["2"]],
+            },
+            "skipped sub": {
+                input: "B:C3-1;C4-1 x=Sa:1;C2-4 y=Sq:4;Bx=3;By=4;Bz=2",
+                shas: ["3", "4", "2"],
+                expected: [["3", "4"],["2"]],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, function () {
+                const c = cases[caseName];
+                let input = c.input;
+                if ("string" === typeof input) {
+                    input =
+                         ShorthandParserUtil.parseRepoShorthand(input).commits;
+                }
+                let result = WriteRepoASTUtil.levelizeCommitTrees(input,
+                                                                  c.shas);
+                result = result.map(array => array.sort());
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
     describe("buildDirectoryTree", function () {
         const cases = {
             "trivial": { input: {}, expected: {}, },
@@ -90,6 +150,146 @@ describe("WriteRepoASTUtil", function () {
                 const result = WriteRepoASTUtil.buildDirectoryTree(c.input);
                 assert.deepEqual(result, c.expected);
             });
+        });
+    });
+
+    describe("writeCommits", function () {
+        // TODO: Move unit tests relating to commits from `writeRAST` into this
+        // unit as `writeRAST` is implemented in terms of `writeCommits`.
+
+        const cases = {
+            "trivial": {
+                input: new RepoAST(),
+                shas: [[]],
+            },
+            "don't write any": {
+                input: "B",
+                shas: [[]],
+            },
+            "write one": {
+                input: "B",
+                shas: [["1"]],
+            },
+            "write two": {
+                input: "B:C2-1;Bmaster=2",
+                shas: [["2", "1"]],
+            },
+            "write two in waves": {
+                input: "B:C2;Bmaster=2;Bf=1",
+                shas: [["2"], ["1"]],
+            },
+            "write two connected in waves": {
+                input: "B:C2-1;Bmaster=2;Bf=1",
+                shas: [["1"], ["2"]],
+            },
+            "deleted sub": {
+                input: "B:C2-1 s=Sa:1;C3-2 s;Bmaster=3",
+                shas: [["1", "2", "3"]],
+            },
+            "deep files": {
+                input: "B:C2-1 x/y/z=2,a/b/c=2,a/b/d=1;Bmaster=2",
+                shas: [["1", "2"]],
+            },
+            "deep file with child": {
+                input: "B:C2-1 x/y/z=2;C3-2 x/y/r=3;Bm=3",
+                shas: [["1", "2"], ["3"]],
+            },
+            "deep file with child middle change": {
+                input: "B:C2-1 x/y/z=2;C3-2 x/r/r=3;Bm=3",
+                shas: [["1", "2"], ["3"]],
+            },
+            "deep file with missing change": {
+                input: "B:C2-1 x/y/z=2;C3-2 a=b;C4-3 x/r/r=3;Bm=4",
+                shas: [["1", "2"], ["3"], ["4"]],
+            },
+            "deep sub": {
+                input: "B:C2-1 x/y/qq=Sa:1,aa/bb/cc=Sb:1;Bmaster=2",
+                shas: [["1", "2"]],
+            },
+            "deep sub middle change": {
+                input: "B:C2-1 x/y/qq=Sa:1,x/y/cc=Sb:1;Bmaster=2",
+                shas: [["1", "2"]],
+            },
+            "deep sub with child": {
+                input: `
+B:C2-1 x/y/qq=Sa:1,aa/bb/cc=Sb:1;C3-2 x/y/zz=Sq:1,aa/bb/dd=Sy:1;
+  C4-3 a/b/c=Sq:1,x/y/zy=Si:1;Bm=4`,
+                shas: [["1", "2"], ["3"], ["4"]],
+            },
+            "deep sub with child middle change": {
+                input: `
+B:C2-1 x/y/qq=Sa:1,aa/bb/cc=Sb:1;C3-2 x/y/zz=Sq:1,aa/bb/dd=Sy:1;
+  C4-3 aa/b/c=Sq:1,x/y/zy=Si:1;Bm=4`,
+                shas: [["1", "2"], ["3"], ["4"]],
+            },
+            "deep sub with child missing middle change": {
+                input: `
+B:C2-1 x/y/qq=Sa:1,aa/bb/cc=Sb:1;C3-2 x/y/zz=Sq:1,aa/bb/dd=Sy:1;
+  C4-3 aa/b/c=Sq:1;C5-4 x/r/q=Si:1;C6-5;
+  C7-6 aa/n/q=Spp:1,x/n/q=Sqq:1;Bm=7`,
+                shas: [["1", "2"], ["3"], ["4"], ["5"], ["6"], ["7"]],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                let ast = c.input;
+                if (!(ast instanceof RepoAST)) {
+                    ast = ShorthandParserUtil.parseRepoShorthand(ast);
+                }
+                const path = yield TestUtil.makeTempDir();
+                const repo = yield NodeGit.Repository.init(path, 1);
+                const oldCommitMap = {};
+                const treeCache = {};
+                const inputCommits = ast.commits;
+                const written = new Set();
+                const newCommitMap = {};
+                for (let i = 0; i < c.shas.length; ++i) {
+                    const shas = c.shas[i];
+                    const newToOld = yield WriteRepoASTUtil.writeCommits(
+                                                                  oldCommitMap,
+                                                                  treeCache,
+                                                                  repo,
+                                                                  inputCommits,
+                                                                  shas);
+                    Object.assign(newCommitMap, newToOld);
+
+                    // We have to write a reference for each commit to make
+                    // sure it will be read; `readRAST` loads only reachable
+                    // commits.
+
+                    for (let sha in newToOld) {
+                        const id = NodeGit.Oid.fromString(sha);
+                        yield NodeGit.Reference.create(repo,
+                                                       `refs/reach/${sha}`,
+                                                       id,
+                                                       0,
+                                                       "makde a ref");
+                    }
+
+                    const shasCheck = new Set(shas);
+                    const newAst = yield ReadRepoASTUtil.readRAST(repo);
+
+                    // Same as `ast` but with commit ids remapped to new ids.
+
+                    const mappedNewAst =
+                       RepoASTUtil.mapCommitsAndUrls(newAst, newCommitMap, {});
+
+                    const newCommits = mappedNewAst.commits;
+                    for (let sha in newCommits) {
+                        if (shasCheck.delete(sha)) {
+                            RepoASTUtil.assertEqualCommits(newCommits[sha],
+                                                           inputCommits[sha]);
+                        }
+                        else {
+                            assert(written.has(sha), `\
+${sha} not in written list ${JSON.stringify(written)}`);
+                        }
+                        written.add(sha);
+                    }
+                    assert.equal(shasCheck.size, 0, "all commits written");
+                }
+            }));
         });
     });
 
