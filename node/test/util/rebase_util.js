@@ -233,6 +233,14 @@ Bmaster=31;Bfoo=41;Bold=31",
                 expected: "\
 x=E:C3M-41 q=Sq:1;C31M-3M q=Sr:1;Bmaster=31M",
             },
+            "open sub ffwd'd": {
+                initial: `
+a=B:CX-1;Bmaster=X|
+x=U:C3-2 a=b;C4-2 s=Sa:X;Bmaster=3;Bfoo=4;Bold=3;Os`,
+                rebaser: rebaser("x", "4"),
+                expected: `
+x=E:C3M-4 a=b;Bmaster=3M;Os H=X`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
