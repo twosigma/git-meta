@@ -326,6 +326,7 @@ const driveRebase = co.wrap(function *(metaRepo,
 
     let currentCommit;    // Current NodeGit.Commit being applied
     let fetcher;          // Set to a SubmoduleFetcher bound to currentCommit
+    let shas;             // submodule shas for current commit
 
     /**
      * Return the submodule rebaser for the specified `path`, or null if
@@ -436,7 +437,20 @@ const driveRebase = co.wrap(function *(metaRepo,
             const stage = RepoStatus.getStage(e.flags);
             switch (stage) {
             case RepoStatus.STAGE.NORMAL:
-                // Do nothing; this indicates same both sides.
+                // If this is an unchanged, visible sub, make sure its sha is
+                // in the right place in case it was ffwded.
+
+                if (visibleSubs.has(e.path)) {
+                    const name = e.path; 
+                    const sha = shas[name];
+                    const newSha = id.tostrS();
+                    if (sha !== newSha) {
+                        const subRepo = yield SubmoduleUtil.getRepo(metaRepo,
+                                                                    name);
+                        yield fetcher.fetchSha(subRepo, name, newSha);
+                        yield setHead(subRepo, newSha);
+                    }
+                }
                 break;
             case RepoStatus.STAGE.OURS:
                 const initRebaser = yield getSubmoduleRebaser(e.path);
@@ -548,6 +562,9 @@ There is a conflict in ${colors.red(e.path)}.\n`;
         const rebaseOper = rebase.operationByIndex(idx);
         console.log(`Applying ${colors.green(rebaseOper.id().tostrS())}.`);
         currentCommit = yield metaRepo.getCommit(rebaseOper.id());
+        shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
+                                                             openSubs,
+                                                             currentCommit);
         fetcher = new SubmoduleFetcher(metaRepo, currentCommit);
         yield processRebase(rebaseOper);
         yield callNext(rebase);
@@ -571,9 +588,9 @@ There is a conflict in ${colors.red(e.path)}.\n`;
                                                     currentCommit.id()));
     if (wasFF) {
         fetcher = new SubmoduleFetcher(metaRepo, ontoCommit);
-        const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
-                                                                   openSubs,
-                                                                   ontoCommit);
+        shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
+                                                             openSubs,
+                                                             ontoCommit);
         yield openSubs.map(co.wrap(function *(name) {
             const sha = shas[name];
             if (sha !== subs[name].sha) {
