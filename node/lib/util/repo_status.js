@@ -231,19 +231,47 @@ class Submodule {
      * sha, url, or open repository.
      */
     isClean() {
+        return this.isIndexClean() && this.isWorkdirClean();
+    }
 
-        // if open repo, see if it is clean or its commit is clean
-
+    /**
+     * Return true if the index for this submodules is clean and HEAD is on the
+     * commit indicated by the HEAD of the meta-repo.  We consider commits to
+     * a submodule that are not reflected on HEAD of the meta-repo to be staged
+     * changes.
+     *
+     * @return {Boolean}
+     */
+    isIndexClean() {
         if (this.d_repoStatus) {
-            if (!this.d_repoStatus.isClean() ||
-                this.d_workdirShaRelation !== COMMIT_RELATION.SAME) {
+            if (!this.d_repoStatus.isIndexClean() ||
+                (null !== this.d_workdirShaRelation && 
+                 COMMIT_RELATION.SAME !== this.d_workdirShaRelation)) {
                 return false;                                         // RETURN
             }
+        }
+
+        // Check to see if there is a different sha for this submodule in the
+        // index then what is on HEAD.
+
+        if (COMMIT_RELATION.SAME !== this.d_indexShaRelation) {
+            return false;
         }
 
         // Otherwise, check its index status.
 
         return null === this.d_indexStatus;
+    }
+
+    /**
+     * Return true if this repo is closed or has a clean workdir, and false
+     * otherwise.
+     *
+     * @return {Boolean}
+     */
+    isWorkdirClean() {
+        return null === this.d_repoStatus ||
+            this.d_repoStatus.isWorkdirClean();
     }
 }
 
@@ -350,15 +378,78 @@ class RepoStatus {
      * @return {Boolean}
      */
     isClean() {
-        if (0 === Object.keys(this.d_staged).length) {
-            for (let path in this.d_workdir) {
-                if (FILESTATUS.ADDED !== this.d_workdir[path]) {
-                    return false;
-                }
+        return this.isIndexClean() && this.isWorkdirClean();
+    }
+
+    /**
+     * Return true there are no changes to the index of this repo and false
+     * otherwise.
+     *
+     * @return {Boolean}
+     */
+    isIndexClean() {
+        return 0 === Object.keys(this.d_staged).length;
+    }
+
+    /**
+     * Return true there are no changes to the working directory of this repo
+     * and false otherwise.
+     *
+     * @return {Boolean}
+     */
+    isWorkdirClean() {
+        for (let path in this.d_workdir) {
+            if (FILESTATUS.ADDED !== this.d_workdir[path]) {
+                return false;
             }
-            return true;
         }
-        return false;
+        return true;
+    }
+
+    /**
+     * Return true if `this.isClean()` is true for this repository and all of
+     * its submodules, and false otherwise.
+     *
+     * @return {Boolean}
+     */
+    isDeepClean() {
+        return this.isIndexDeepClean() && this.isWorkdirDeepClean();
+    }
+
+    /**
+     * Return true if `this.isClean()` is true for this repository and all of
+     * its submodules, and false otherwise.
+     *
+     * @return {Boolean}
+     */
+    isIndexDeepClean() {
+        if (!this.isIndexClean()) {
+            return false;
+        }
+        for (let sub in this.d_submodules) {
+            if (!this.d_submodules[sub].isIndexClean()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /*
+     * Return true if `this.isWorkdirClean()` is true for this repository and
+     * all of its submodules, and false otherwise.
+     *
+     * @return {Boolean}
+     */
+    isWorkdirDeepClean() {
+        if (!this.isWorkdirClean()) {
+            return false;
+        }
+        for (let sub in this.d_submodules) {
+            if (!this.d_submodules[sub].isWorkdirClean()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // PROPERTIES

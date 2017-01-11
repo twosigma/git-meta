@@ -67,6 +67,18 @@ exports.configureParser = function (parser) {
     });
 };
 
+// Ignore the line len warning for the next two lines, which cannot be broken.
+/*jshint -W101*/
+// http://stackoverflow.com/questions/25245716/remove-all-ansi-colors-styles-from-strings
+const stripColor = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+/*jshint +W101*/
+
+const commitMessagePrefix = `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+`;
+
 /**
  * Exeucte the `commit` command according to the specified `args`.
  *
@@ -76,15 +88,56 @@ exports.configureParser = function (parser) {
  * @param {String}  [args.message]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const assert = require("chai").assert;
-    const Commit = require("../util/commit");
-    const GitUtil  = require("../util/git_util");
-
-    assert.notEqual(null, args.message, "message prompting not implemented");
+    const Commit     = require("../util/commit");
+    const GitUtil    = require("../util/git_util");
+    const Status     = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const result = yield Commit.commit(repo, args.all, args.message);
-    if (null === result) {
+    const repoStatus = yield Status.getRepoStatus(repo);
+
+    function warnNothing() {
         console.warn("Nothing to commit.");
+    }
+
+    // If there are no staged changes, and we either didn't specify "all" or we
+    // did but there are no working directory changes, warn the user and exit
+    // early.
+
+    if (repoStatus.isIndexDeepClean() &&
+        (!args.all || repoStatus.isWorkdirDeepClean())) {
+        warnNothing();
+        return;
+    }
+
+    if (null === args.message) {
+        let status = Status.printRepoStatus(repoStatus);
+
+        // TODO: in an upcoming change, I'm going to factor this logic out of
+        // the plain `status` code used by `git-meta status` and have
+        // commit-specified formatting so this color stripping will be
+        // unnecessary.
+
+        // Remove color characters.
+
+        status = status.replace(stripColor, "");
+        let lines = status.split("\n");
+        lines = lines.slice(0, lines.length - 1);
+        const commentLines = lines.map(line => "" === line ? "#" : "# " + line);
+        const initialMessage = commitMessagePrefix + commentLines.join("\n");
+        const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
+        args.message = GitUtil.stripMessage(rawMessage);
+    }
+
+    if ("" === args.message) {
+        console.error("Aborting commit due to empty commit message.");
+        process.exit(1);
+    }
+
+    const result = yield Commit.commit(repo,
+                                       args.all,
+                                       repoStatus,
+                                       args.message);
+    if (null === result) {
+        warnNothing();
     }
 });

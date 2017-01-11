@@ -742,4 +742,148 @@ describe("GitUtil", function () {
             }));
         });
     });
+
+    describe("getEditorCommand", function () {
+        // This command is implemented in terms of `git var`, so we just need
+        // to see that it returns a correct result; we're not going to test
+        // `git var`.
+
+        it("breathing", co.wrap(function *() {
+            const editor = "my-crazy-editor";
+            process.env.GIT_EDITOR = editor;
+            const repo = yield TestUtil.createSimpleRepository();
+            const result = yield GitUtil.getEditorCommand(repo);
+            assert.equal(result, editor);
+        }));
+    });
+
+    describe("editMessage", function () {
+        it("breathing", co.wrap(function *() {
+            const cmd = "echo bar >> ";
+            process.env.GIT_EDITOR = cmd;
+            const repo = yield TestUtil.createSimpleRepository();
+            const result = yield GitUtil.editMessage(repo, "foo\n");
+            assert.equal(result, "foo\nbar\n");
+        }));
+    });
+
+    describe("isComment", function () {
+        const cases = {
+            "trivial": {
+                input: "",
+                expected: false,
+            },
+            "no comment": {
+                input: "c",
+                expected: false,
+            },
+            "no comment after space": {
+                input: " c",
+                expected: false,
+            },
+            "comment": {
+                input: "#",
+                expected: true,
+            },
+            "comment not first": {
+                input: " #",
+                expected: true,
+            },
+            "comment with more": {
+                input: " #c",
+                expected: true,
+            },
+            "comment with tab": {
+                input: "\t#",
+                expected: true,
+            },
+            "comment with multi space": {
+                input: " \t# asdf",
+                expected: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = GitUtil.isComment(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("isBlank", function () {
+        const cases = {
+            "trivial": {
+                input: "",
+                expected: true,
+            },
+            "non": {
+                input: "b",
+                expected: false,
+            },
+            "blank before": {
+                input: " b",
+                expected: false,
+            },
+            "blank after": {
+                input: "b ",
+                expected: false,
+            },
+            "blank": {
+                input: " ",
+                expected: true,
+            },
+            "more blank": {
+                input: " \t",
+                expected: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = GitUtil.isBlank(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("stripMessage", function () {
+        const cases = {
+            "trivial": {
+                input: "",
+                expected: "",
+            },
+            "simple": {
+                input: "a",
+                expected: "a\n",
+            },
+            "simple, nl": {
+                input: "a\n",
+                expected: "a\n",
+            },
+            "all blank": {
+                input: "\n\n\n",
+                expected: "",
+            },
+            "all comments": {
+                input: "#\n \n#\n",
+                expected: "",
+            },
+            "lines before": {
+                input: "\n\n\na\n",
+                expected: "a\n",
+            },
+            "lines before no nl": {
+                input: "\n\n\na",
+                expected: "a\n",
+            }
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = GitUtil.stripMessage(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
 });

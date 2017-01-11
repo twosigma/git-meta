@@ -34,13 +34,13 @@
  * This module contains common git utility methods.
  */
 
-const assert  = require("chai").assert;
-const co      = require("co");
-const colors  = require("colors");
-const exec    = require("child-process-promise").exec;
-const fs      = require("fs-promise");
-const NodeGit = require("nodegit");
-const path    = require("path");
+const assert       = require("chai").assert;
+const ChildProcess = require("child-process-promise");
+const co           = require("co");
+const colors       = require("colors");
+const fs           = require("fs-promise");
+const NodeGit      = require("nodegit");
+const path         = require("path");
 
 const UserError = require("../util/user_error");
 
@@ -240,7 +240,7 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     const execString = `\
 git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
-        const result = yield exec(execString);
+        const result = yield ChildProcess.exec(execString);
         if (result.stdout && !quiet) {
             console.log(result.stdout);
         }
@@ -343,7 +343,7 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${remoteName}'`;
     try {
-        return yield exec(execString);
+        return yield ChildProcess.exec(execString);
     }
     catch (e) {
         throw new UserError(e.message);
@@ -375,7 +375,7 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
-        return yield exec(execString);
+        return yield ChildProcess.exec(execString);
     }
     catch (e) {
         throw new UserError(e.message);
@@ -621,3 +621,113 @@ exports.resolveRelativePath = co.wrap(function *(workdir, cwd, filename) {
     }
     return relPath;
 });
+
+/*
+ * Return the editor command to use for the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {String}
+ */
+exports.getEditorCommand = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    // TODO: libgit2 doesn't implement the equivalent of `git var` (or if it
+    // does I can't see where), so rather than code this myself I shell out to
+    // `git`.
+
+    const result =
+             yield ChildProcess.exec(`git -C '${repo.path()}' var GIT_EDITOR`);
+    return result.stdout.split("\n")[0];
+});
+
+/**
+ * Return the raw result of invoking the configured editor for the specified
+ * `repo` with a file containing the specified `initialContents`.  Note that
+ * the result may include `initialContents`; this method does not process the
+ * result in any way.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             initialContents
+ * @return {String}
+ */
+exports.editMessage = co.wrap(function *(repo, initialContents) {
+    const messagePath = path.join(repo.path(), "COMMIT_EDITMSG");
+    yield fs.writeFile(messagePath, initialContents);
+    const editorCommand = yield exports.getEditorCommand(repo);
+
+    // TODO: if we ever need this to work on Windows, we'll need to do
+    // something else.  The `ChildProcess.exec` method doesn't provide for a
+    // way to auto-redirect stdio or I'd use it.
+
+    yield ChildProcess.spawn("/bin/sh",
+                             ["-c", `${editorCommand} '${messagePath}'`], {
+        stdio: "inherit",
+    });
+    const result = yield fs.readFile(messagePath, "utf8");
+    yield fs.unlink(messagePath);
+    return result;
+});
+
+/**
+ * Return true if the specified `line` is a comment and false otherwise.  A
+ * line is a comment if the first non-whitespace character it contains is a
+ * '#'.
+ *
+ * @param {String} line
+ * @return {Boolean}
+ */
+exports.isComment = function (line) {
+    assert.isString(line);
+    return /^\s*#/.test(line);
+};
+
+/**
+ * Return true if the specified `line` contains only whitespace characters and
+ * false otherwise.
+ *
+ * @param {String} line
+ * @return {Boolean
+ */
+exports.isBlank = function (line) {
+    assert.isString(line);
+    return /^\s*$/.test(line);
+};
+
+/**
+ * Return the specified `message` with all comment lines removed (i.e., lines
+ * where the first non-whitepsace character is a '#'), and all leading and
+ * trailing blank (i.e., those containing only whitespace) lines removed.  Note
+ * that any result that is not "" is terminated by a newline.
+ *
+ * @param {String} message
+ * @return {String}
+ */
+exports.stripMessage = function (message) {
+    const lines = message.split("\n");
+
+    // First, remove all lines that are comments.
+
+    const noComments = lines.filter(line => !exports.isComment(line));
+
+    // Next, find the first and last lines in 'noComments' that contain
+    // content, i.e., non-blank lines.
+
+    let firstContent;
+    let lastContent;
+    for (let i = 0; i < noComments.length; ++i) {
+        if (!exports.isBlank(noComments[i])) {
+            firstContent =
+                undefined === firstContent ? i : Math.min(i, firstContent);
+            lastContent =
+                undefined === lastContent ? i : Math.max(i, lastContent);
+        }
+    }
+    if (undefined === firstContent) {
+        return "";
+    }
+
+    // Now, return the result of splicing out the leading and trailing blank
+    // lines.
+
+    return noComments.slice(firstContent, lastContent + 1).join("\n") + "\n";
+};
