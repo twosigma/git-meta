@@ -362,3 +362,48 @@ exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
     });
     return result;
 });
+
+/**
+ * Return the list of submodules that are a descendant of the specified `dir`,
+ * including (potentially) `dir` itself (unless `dir` is suffixed with '/'), in
+ * the specified `repo`.  The behavior is undefined unless `dir` is empty or
+ * refers to a valid path within `repo`.  Note that if `"" === dir`, the result
+ * will be all submodules.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             dir
+ * @return {String[]}
+ */
+exports.getSubmodulesInPath = co.wrap(function *(repo, dir) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(dir);
+    if ("" !== dir) {
+        assert.notEqual("/", dir[0]);
+        assert.notEqual(".", dir[0]);
+    }
+    const subNames = yield exports.getSubmoduleNames(repo);
+    if ("" === dir) {
+        return subNames;
+    }
+    const subs = new Set(subNames);
+    const workdir = repo.workdir();
+    const result = [];
+    const listForFilename = co.wrap(function *(filepath) {
+        if (subs.has(filepath)) {
+            result.push(filepath);
+        }
+        else {
+            const absPath = path.join(workdir, filepath);
+            const stat = yield fs.stat(absPath);
+            if (stat.isDirectory()) {
+                const subdirs = yield fs.readdir(absPath);
+                yield subdirs.map(filename => {
+                    return listForFilename(path.join(filepath, filename));
+                });
+
+            }
+        }
+    });
+    yield listForFilename(dir);
+    return result;
+});

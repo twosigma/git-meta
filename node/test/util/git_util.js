@@ -30,12 +30,13 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
-const fs     = require("fs-promise");
-const NodeGit   = require("nodegit");
-const os     = require("os");
-const path   = require("path");
+const assert  = require("chai").assert;
+const co      = require("co");
+const fs      = require("fs-promise");
+const mkdirp  = require("mkdirp");
+const NodeGit = require("nodegit");
+const os      = require("os");
+const path    = require("path");
 
 const GitUtil             = require("../../lib/util/git_util");
 const RepoAST             = require("../../lib/util/repo_ast");
@@ -661,6 +662,84 @@ describe("GitUtil", function () {
                     assert(true === cases[str].fail);
                 }
             });
+        });
+    });
+
+    describe("resolveRelativePath", function () {
+        // We don't need to test this exhaustively -- the hard work is done by
+        // `fs` and `path` -- just that we're calling the APIs correctly and
+        // throwing the right errors.
+
+        const cases = {
+            trivial: {
+                paths: ["a"],
+                workdir: "a",
+                cwd: "a",
+                filename: ".",
+                expected: "",
+            },
+            "outside": {
+                paths: ["a"],
+                workdir: "a",
+                cwd: "a",
+                filename: "/",
+                fails: true,
+            },
+            "invalid": {
+                paths: ["a"],
+                workdir: "a",
+                cwd: "a",
+                filename: "b",
+                fails: true,
+            },
+            "inside": {
+                paths: ["a/b/c"],
+                workdir: "a",
+                cwd: "a",
+                filename: "b",
+                expected: "b",
+            },
+            "inside with trail": {
+                paths: ["a/b/c"],
+                workdir: "a",
+                cwd: "a",
+                filename: "b/",
+                expected: "b",
+            },
+            "inside and up": {
+                paths: ["a/b/c", "a/b/d"],
+                workdir: "a",
+                cwd: "a/b/c",
+                filename: "../d",
+                expected: "b/d",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const tempDir = yield TestUtil.makeTempDir();
+                c.paths.map(filename => {
+                    const dir = path.join(tempDir, filename);
+                    mkdirp.sync(dir);
+                });
+                const workdir = path.join(tempDir, c.workdir);
+                const cwd = path.join(tempDir, c.cwd);
+                let result;
+                try {
+                    result = yield GitUtil.resolveRelativePath(workdir,
+                                                               cwd,
+                                                               c.filename);
+                }
+                catch (e) {
+                    if (!c.fails) {
+                        throw e;
+                    }
+                    assert.instanceOf(e, UserError);
+                    return;
+                }
+                assert(!c.fails, "should fail");
+                assert.equal(result, c.expected);
+            }));
         });
     });
 });

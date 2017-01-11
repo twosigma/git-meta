@@ -485,5 +485,121 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
+    describe("getSubmodulesForPath", function () {
+        // We'll run this with 
+        const cases = {
+            "trivial": {
+                state: "x=S",
+                path: "",
+                expected: [],
+            },
+            "non sm": {
+                state: "x=S",
+                path: "README.md",
+                expected: [],
+            },
+            "non sm dir": {
+                state: "x=S:C2-1 a/b/c=2;Bmaster=2",
+                path: "a/b",
+                expected: [],
+            },
+            "all subs": {
+                state: "a=B|x=U",
+                path: "",
+                expected: ["s"],
+            },
+            "all subs, explicit": {
+                state: "a=B|x=U",
+                path: "s",
+                expected: ["s"],
+            },
+            "all subs, explicit and open": {
+                state: "a=B|x=U:Os",
+                path: "s",
+                expected: ["s"],
+            },
+            "all subs, explicit and excluded": {
+                state: "a=B|x=U",
+                path: "s/",
+                expected: [],
+            },
+            "multiple subs": {
+                state: "a=B|x=U:C3-2 t=Sa:1;Bmaster=3",
+                path: "",
+                expected: ["s","t"],
+            },
+            "deep sub": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1;Bmaster=2",
+                path: "",
+                expected: ["x/y/z"],
+            },
+            "deep sub, mid ref": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1;Bmaster=2",
+                path: "x",
+                expected: ["x/y/z"],
+            },
+            "deep sub, mid ref with slash": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1;Bmaster=2",
+                path: "x/",
+                expected: ["x/y/z"],
+            },
+            "deep sub, mid ref two prefix": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1;Bmaster=2",
+                path: "x/y",
+                expected: ["x/y/z"],
+            },
+            "deep sub, direct ref": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1;Bmaster=2",
+                path: "x/y/z",
+                expected: ["x/y/z"],
+            },
+            "multiple deeps": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,a/b/c=Sa:1;Bmaster=2",
+                path: "",
+                expected: ["x/y/z", "a/b/c"],
+            },
+            "multiple deeps, one excluded": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,a/b/c=Sa:1;Bmaster=2",
+                path: "a",
+                expected: ["a/b/c"],
+            },
+            "multiple deeps in same subdir": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,x/q/c=Sa:1,x/r=1;Bmaster=2",
+                path: "",
+                expected: ["x/y/z", "x/q/c"],
+            },
+            "multiple deeps with both inc": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,x/q/c=Sa:1,x/r=1;Bmaster=2",
+                path: "x",
+                expected: ["x/y/z", "x/q/c"],
+            },
+            "multiple deeps with one inc": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,x/q/c=Sa:1,x/r=1;Bmaster=2",
+                path: "x/y",
+                expected: ["x/y/z"],
+            },
+            "multiple deeps both ex": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,x/q/c=Sa:1,x/r=1;Bmaster=2",
+                path: "x/r",
+                expected: [],
+            },
+            "multiple deeps both ex above": {
+                state: "a=B|x=S:C2-1 x/y/z=Sa:1,x/q/c=Sa:1,x/r=1;Bmaster=2",
+                path: "README.md",
+                expected: [],
+            }
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.state);
+                const x = written.repos.x;
+                const result = yield SubmoduleUtil.getSubmodulesInPath(x,
+                                                                       c.path);
+                assert.deepEqual(result.sort(), c.expected.sort());
+            }));
+        });
+    });
 });
 
