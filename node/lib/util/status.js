@@ -438,10 +438,24 @@ ${colors.red(name)}.`);
  *
  * @async
  * @param {NodeGit.Repository} repo
+ * @param {Object}             [options]
+ * @param {Boolean}            [options.showAllUntracked]  i.e., not just root
  * @return {RepoStatus}
  */
-exports.getRepoStatus = co.wrap(function *(repo) {
+exports.getRepoStatus = co.wrap(function *(repo, options) {
     assert.instanceOf(repo, NodeGit.Repository);
+    if (undefined === options) {
+        options = {};
+    }
+    else {
+        assert.isObject(options);
+    }
+    if (undefined === options.showAllUntracked) {
+        options.showAllUntracked = false;
+    }
+    else {
+        assert.isBoolean(options.showAllUntracked);
+    }
 
     // TODO: show renamed from and to instead of just to.
 
@@ -472,10 +486,13 @@ exports.getRepoStatus = co.wrap(function *(repo) {
 
         // Loop through each of the `NodeGit.FileStatus` objects in the repo
         // and categorize them into `args`.
-
+        let flags = NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
+                    NodeGit.Status.OPT.INCLUDE_UNTRACKED;
+        if (options.showAllUntracked) {
+            flags = flags | NodeGit.Status.OPT.RECURSE_UNTRACKED_DIRS;
+        }
         const statuses = yield repo.getStatusExt({
-            flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
-                NodeGit.Status.OPT.INCLUDE_UNTRACKED
+            flags: flags,
         });
         const FILESTATUS = RepoStatus.FILESTATUS;
         const STATUS = NodeGit.Status.STATUS;
@@ -547,13 +564,13 @@ exports.getRepoStatus = co.wrap(function *(repo) {
 
         const subStatMakers = allSubNames.map(name => {
             return exports.getSubmoduleStatus(name,
-                                              repo,
-                                              indexSubs[name] || null,
-                                              headSubs[name] || null,
-                                              index,
-                                              commitTree,
-                                              openSet.has(name),
-                                              exports.getRepoStatus);
+                                 repo,
+                                 indexSubs[name] || null,
+                                 headSubs[name] || null,
+                                 index,
+                                 commitTree,
+                                 openSet.has(name),
+                                 repo => exports.getRepoStatus(repo, options));
         });
         const subStats = yield subStatMakers;
 
