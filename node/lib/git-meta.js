@@ -49,6 +49,7 @@ const pull       = require("./cmd/pull");
 const push       = require("./cmd/push");
 const rebase     = require("./cmd/rebase");
 const reset      = require("./cmd/reset");
+const submodule  = require("./cmd/submodule");
 const status     = require("./cmd/status");
 const UserError  = require("./util/user_error");
 const version    = require("./cmd/version");
@@ -117,6 +118,7 @@ configureSubcommand(subParser, "pull", pull);
 configureSubcommand(subParser, "push", push);
 configureSubcommand(subParser, "rebase", rebase);
 configureSubcommand(subParser, "reset", reset);
+configureSubcommand(subParser, "submodule", submodule);
 configureSubcommand(subParser, "status", status);
 configureSubcommand(subParser, "version", version);
 

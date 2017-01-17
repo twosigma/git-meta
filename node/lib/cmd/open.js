@@ -88,6 +88,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd     = process.cwd();
+    const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
     const subLists = yield args.path.map(co.wrap(function *(filename) {
         // Compute the relative path for `filename` from the root of the repo,
@@ -105,7 +106,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             }
             throw e;
         }
-        const result = yield SubmoduleUtil.getSubmodulesInPath(repo, relPath);
+        const result = yield SubmoduleUtil.getSubmodulesInPath(workdir,
+                                                               relPath,
+                                                               subs);
         if (0 === result.length) {
             console.warn(`\
 No submodules found from ${colors.orange(filename)}.`);

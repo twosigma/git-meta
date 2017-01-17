@@ -145,7 +145,11 @@ remapRepoStatus = function (status, commitMap, urlMap) {
 };
 
 describe("Status", function () {
-
+    const FILESTATUS       = RepoStatus.FILESTATUS;
+    const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
+    const StatusDescriptor = Status.StatusDescriptor;
+    const Submodule        = RepoStatus.Submodule;
+ 
     describe("test.remapSubmodule", function () {
         const Submodule = RepoStatus.Submodule;
         const RELATION  = Submodule.COMMIT_RELATION;
@@ -290,228 +294,779 @@ describe("Status", function () {
         });
     });
 
-    describe("printFileStatuses", function () {
-        // I don't want to try to test for the specific format, just that we
-        // mention changed files.
+    describe("StatusDescriptor", function () {
+        describe("constructor", function () {
+            it("breathing", function () {
+                const descriptor = new StatusDescriptor(FILESTATUS.ADDED,
+                                                        "foo",
+                                                        "bar");
+                assert.equal(descriptor.status, FILESTATUS.ADDED);
+                assert.equal(descriptor.path, "foo");
+                assert.equal(descriptor.detail, "bar");
+            });
+        });
+        describe("print", function () {
+            const cases = {
+                "basic": {
+                    des: new StatusDescriptor(FILESTATUS.ADDED, "foo", "bar"),
+                    check: /foo.*bar/,
+                },
+                "added": {
+                    des: new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    check: /^new file/,
+                },
+                "modified": {
+                    des: new StatusDescriptor(FILESTATUS.MODIFIED, "x", "y"),
+                    check: /^modified/,
+                },
+                "deleted": {
+                    des: new StatusDescriptor(FILESTATUS.REMOVED, "x", "y"),
+                    check: /^deleted/,
+                },
+                "conflicted": {
+                    des: new StatusDescriptor(FILESTATUS.CONFLICTED, "x", "y"),
+                    check: /^conflicted/,
+                },
+                "renamed": {
+                    des: new StatusDescriptor(FILESTATUS.RENAMED, "x", "y"),
+                    check: /^renamed/,
+                },
+                "type changed": {
+                    des: new StatusDescriptor(FILESTATUS.TYPECHANGED,
+                                              "x",
+                                              "y"),
+                    check: /^type changed/,
+                },
+                "with color": {
+                    des: new StatusDescriptor(FILESTATUS.TYPECHANGED,
+                                              "x",
+                                              "y"),
+                    color: text => `RED${text}RED`,
+                    check: /RED.*RED/,
+                },
+                "with cwd": {
+                    des: new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    cwd: "q",
+                    check: /\.\.\/x/,
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                it(caseName, function () {
+                    let color = c.color;
+                    if (undefined === color) {
+                        color = x => x;
+                    }
+                    let cwd = c.cwd;
+                    if (undefined === cwd) {
+                        cwd = "";
+                    }
+                    const result = c.des.print(color, cwd);
+                    assert.match(result, c.check);
+                });
+            });
+        });
+    });
 
-        const STAT = RepoStatus.FILESTATUS;
-
+    describe("sortDescriptorsByPath", function () {
         const cases = {
-            "trivial": { input: new RepoStatus(), empty: true, },
-            "with current branch": {
-                input: new RepoStatus({ currentBranchName: "foo" }),
-                empty: true,
+            "trivial": {
+                input: [],
+                expected: [],
             },
-            "with head": {
-                input: new RepoStatus({headCommit: "1"}),
-                empty: true,
+            "one": {
+                input: [new StatusDescriptor(FILESTATUS.ADDED, "x", "y")],
+                expected: [new StatusDescriptor(FILESTATUS.ADDED, "x", "y")],
             },
-            "with staged": {
-                input: new RepoStatus({
-                    staged: { "foo": STAT.ADDED },
-                }),
-                regex: /foo/,
-            },
-            "with workdir": {
-                input: new RepoStatus({
-                    workdir: { foobar: STAT.REMOVED },
-                }),
-                regex: /foobar/,
-            },
-            "with untracked": {
-                input: new RepoStatus({
-                    workdir: { uuuu: STAT.ADDED },
-                }),
-                regex: /uuuu/,
+            "a few": {
+                input: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s"),
+                ],
+                expected: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z"),
+                ],
             },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = Status.printFileStatuses(c.input);
-                if (c.empty) {
-                    assert.equal(result, "");
+                const result = Status.sortDescriptorsByPath(c.input);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
+    describe("printStatusDescriptors", function () {
+        // This function is implemented in terms of `StatusDescriptor.print`,
+        // so we just need to test a few things: basic function, sorting, and
+        // coloring.
+
+        const cases = {
+            "trivial": {
+                descriptors: [],
+                check: /^$/
+            },
+            "one": {
+                descriptors: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                ],
+                check: /new.*x.*y.*\n$/,
+            },
+            "color": {
+                descriptors: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                ],
+                color: x => `BLUE${x}BLUE`,
+                check: /BLUE/,
+            },
+            "order": {
+                descriptors: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "Z", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "X", "y"),
+                ],
+                check: /X.*\n.*Z/,
+            },
+            "cwd": {
+                descriptors: [
+                    new StatusDescriptor(FILESTATUS.ADDED, "Z/q", "y"),
+                ],
+                cwd: "Z",
+                check: /\sq/,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const color = c.color || (x => x);
+                const cwd = c.cwd || "";
+                const result = Status.printStatusDescriptors(c.descriptors,
+                                                             color,
+                                                             cwd);
+                assert.match(result, c.check);
+            });
+        });
+    });
+
+    describe("printUntrackedFiles", function () {
+        const cases = {
+            "trivial": {
+                input: [],
+                check: /^$/,
+            },
+            "one": {
+                input: ["foo"],
+                check: /\tfoo\n/,
+            },
+            "two": {
+                input: ["foo", "bar"],
+                check: /\tbar\n\tfoo\n/,
+            },
+            "in color": {
+                input: ["foo"],
+                color: (x => `a${x}b`),
+                check: /\tafoob\n/,
+            },
+            "relative": {
+                input: ["foo"],
+                cwd: "bar",
+                check: /\t\.\.\/foo\n/,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const cwd = c.cwd || "";
+                const color = c.color || (x => x);
+                const result = Status.printUntrackedFiles(c.input, color, cwd);
+                assert.match(result, c.check);
+            });
+        });
+    });
+
+    describe("listSubmoduleDescriptors", function () {
+        const cases = {
+            "trivial": {
+                status: new RepoStatus(),
+                expected: [],
+            },
+            "deleted": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.REMOVED,
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.REMOVED, "x", "submodule"),
+                ],
+            },
+            "new url": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "y",
+                            indexShaRelation: RELATION.SAME,
+                            commitUrl: "a",
+                            indexUrl: "b",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, new url"),
+                ],
+            },
+            "new commits in index and new url": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "z",
+                            indexShaRelation: RELATION.AHEAD,
+                            commitUrl: "a",
+                            indexUrl: "b",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, new commits, new url"),
+                ],
+            },
+            "new commits in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "z",
+                            indexShaRelation: RELATION.AHEAD,
+                            commitUrl: "a",
+                            indexUrl: "a",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, new commits"),
+                ],
+            },
+            "new commits in workdir": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "y",
+                            indexShaRelation: RELATION.SAME,
+                            commitUrl: "a",
+                            indexUrl: "a",
+                            workdirShaRelation: RELATION.AHEAD,
+                            repoStatus: new RepoStatus({
+                                head: "z",
+                            }),
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, new commits"),
+                ],
+            },
+            "behind in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "z",
+                            indexShaRelation: RELATION.BEHIND,
+                            commitUrl: "a",
+                            indexUrl: "a",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, on old commit"),
+                ],
+            },
+            "unrelated in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "z",
+                            indexShaRelation: RELATION.UNRELATED,
+                            commitUrl: "a",
+                            indexUrl: "a",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, on unrelated commit"),
+                ],
+            },
+            "unknown in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexSha: "y",
+                            commitSha: "z",
+                            indexShaRelation: RELATION.UNKNOWN,
+                            commitUrl: "a",
+                            indexUrl: "a",
+                        }),
+                    },
+                }),
+                expected: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, on unknown commit"),
+                ],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Status.listSubmoduleDescriptors(c.status);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
+    describe("accumulateStatus", function () {
+        const Desc = StatusDescriptor;
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: {
+                    staged: [],
+                    workdir: [],
+                    untracked: [],
+                },
+            },
+            "staged": {
+                input: new RepoStatus({
+                    staged: { x: FILESTATUS.REMOVED },
+                }),
+                expected: {
+                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "") ],
+                    workdir: [],
+                    untracked: [],
+                },
+            },
+            "workdir": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.MODIFIED},
+                }),
+                expected: {
+                    staged: [],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "x", "")],
+                    untracked: [],
+                },
+            },
+            "untracked": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.ADDED},
+                }),
+                expected: {
+                    staged: [],
+                    workdir: [],
+                    untracked: ["x"],
+                },
+            },
+            "all": {
+                input: new RepoStatus({
+                    staged: { x: FILESTATUS.REMOVED },
+                    workdir: { 
+                        y: FILESTATUS.MODIFIED,
+                        z: FILESTATUS.ADDED,
+                    },
+                }),
+                expected: {
+                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "") ],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "y", "")],
+                    untracked: ["z"],
+                },
+            },
+            "submodule-specific": {
+                input: new RepoStatus({
+                    submodules: {
+                        s: new Submodule({
+                            commitUrl: "foo",
+                            indexUrl: "bar",
+                        }),
+                    },
+                }),
+                expected: {
+                    staged: [
+                        new Desc(FILESTATUS.MODIFIED,
+                                 "s",
+                                 "submodule, new url"),
+                    ],
+                    workdir: [],
+                    untracked: [],
+                },
+            },
+            "submodule rollup": {
+                input: new RepoStatus({
+                    submodules: {
+                        s: new Submodule({
+                            repoStatus: new RepoStatus({
+                                staged: { x: FILESTATUS.REMOVED },
+                                workdir: { 
+                                    y: FILESTATUS.MODIFIED,
+                                    z: FILESTATUS.ADDED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+                expected: {
+                    staged: [ new Desc(FILESTATUS.REMOVED, "s/x", "") ],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "s/y", "")],
+                    untracked: ["s/z"],
+                },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Status.accumulateStatus(c.input);
+                const sort = Status.sortDescriptorsByPath;
+                const sortedResult = {
+                    staged: sort(result.staged),
+                    workdir: sort(result.workdir),
+                    untracked: result.untracked.sort(),
+                };
+                assert.deepEqual(sortedResult, c.expected);
+            });
+        });
+    });
+
+    describe("printRebase", function () {
+        const cases = {
+            "basic": {
+                input: new Rebase("master", "xxx", "ffffffffffffffff"),
+                check: /rebase in progress/
+            },
+            "branch": {
+                input: new Rebase("master", "xxx", "ffffffffffffffff"),
+                check: /master/
+            },
+            "sha": {
+                input: new Rebase("master", "xxx", "ffffffffffffffff"),
+                check: /ffff/,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Status.printRebase(c.input);
+                assert.match(result, c.check);
+            });
+        });
+    });
+
+    describe("printCurrentBranch", function () {
+        const cases = {
+            "normal": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "aaaaaaaaaaaaaaaa",
+                }),
+                check: /master/,
+            },
+            "detached": {
+                input: new RepoStatus({
+                    headCommit: "aaaaaaaaaaaaaaaa",
+                }),
+                check: /aaaa/,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Status.printCurrentBranch(c.input);
+                assert.match(result, c.check);
+            });
+        });
+    });
+
+    describe("printRepoStatus", function () {
+        // Most of the logic for this method is implemented in terms of
+        // other methods that are already tested; we just need to validate that
+        // the results are chained together.
+
+        // TODO: more testing here
+
+        // We'll use repo `x` for printing.
+
+        const cases = {
+            "trivial": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                }),
+                regex: /On branch.*master.*\n.*nothing to commit.*/,
+            },
+            "rebase": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    rebase: new Rebase("x", "y", "z"),
+                }),
+                regex: /rebas/,
+            },
+            "detached": {
+                input: new RepoStatus({
+                    headCommit: "ffffaaaaffffaaaa",
+                }),
+                regex: /detached/,
+            },
+            "dirty meta": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        qrst: FILESTATUS.ADDED,
+                    },
+                }),
+                regex: /.*qrst/,
+            },
+            "dirty sub": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    submodules: {
+                        qrst: new Submodule({
+                            repoStatus: new RepoStatus({
+                                staged: {
+                                    "x/y/z": FILESTATUS.MODIFIED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+                regex: /qrst\/x\/y\/z/,
+            },
+            "cwd": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        qrst: FILESTATUS.ADDED,
+                    },
+                }),
+                cwd: "u/v",
+                regex: /\.\.\/\.\.\/qrst/,
+            },
+            "untracked": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    workdir: { foo: FILESTATUS.ADDED },
+                }),
+                regex: /foo/,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const cwd = c.cwd || "";
+                const result = Status.printRepoStatus(c.input, cwd);
+                if (c.inverse) {
+                    assert.notMatch(result, c.regex);
                 }
                 else {
-                    assert.notEqual(result, "");
                     assert.match(result, c.regex);
                 }
             });
         });
     });
 
-    describe("printSubmoduleStatus", function () {
-        // I don't want to try to test for the specific format, just that we
-        // mention changes.
-
-        const Submodule = RepoStatus.Submodule;
-        const RELATION = Submodule.COMMIT_RELATION;
-        const STAT = RepoStatus.FILESTATUS;
-
+    describe("getChanges", function () {
         const cases = {
-            "unchanged": { 
-                input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                }),
-                regex: null,
+            "trivial": {
+                state: "x=S",
             },
-            "removed": { 
-                input: new Submodule({
-                    indexStatus: STAT.REMOVED,
-                    commitSha: "1",
-                    commitUrl: "a",
-                }),
-                regex: /Removed/,
+            "index - modified": {
+                state: "x=S:I README.md=hhh",
+                staged: { "README.md": FILESTATUS.MODIFIED },
             },
-            "added": {
-                input: new Submodule({
-                    indexStatus: STAT.ADDED,
-                    indexUrl: "xyz",
-                    indexSha: "1",
-                }),
-                regex: /Added.*xyz/,
+            "index - modified deep": {
+                state: "x=S:C2 x/y/z=a;I x/y/z=b;H=2",
+                staged: { "x/y/z": FILESTATUS.MODIFIED },
             },
-            "changed url": {
-                input: new Submodule({
-                    indexStatus: STAT.MODIFIED,
-                    indexUrl: "qrs",
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    commitUrl: "xyz",
-                    commitSha: "1",
-                }),
-                regex: /Staged change to URL.*qrs/,
+            "index - added": {
+                state: "x=S:I x=y",
+                staged: { x: FILESTATUS.ADDED },
             },
-            "new commit staged": {
-                input: new Submodule({
-                    indexStatus: STAT.MODIFIED,
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.AHEAD,
-                    commitUrl: "x",
-                    commitSha: "1",
-                }),
-                regex: /New commit/,
+            "index - added deep": {
+                state: "x=S:I x/y=y",
+                staged: { "x/y": FILESTATUS.ADDED },
             },
-            "old commit staged": {
-                input: new Submodule({
-                    indexStatus: STAT.MODIFIED,
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.BEHIND,
-                    commitUrl: "x",
-                    commitSha: "1",
-                }),
-                regex: /Reset to old commit/,
+            "index - removed": {
+                state: "x=S:I README.md",
+                staged: { "README.md": FILESTATUS.REMOVED},
             },
-            "unrelated staged": {
-                input: new Submodule({
-                    indexStatus: STAT.MODIFIED,
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.UNRELATED,
-                    commitUrl: "x",
-                    commitSha: "1",
-                }),
-                regex: /Changed to unrelated commit/,
+            "index - removed deep": {
+                state: "x=S:C2 x/y/z=a;I x/y/z;H=2",
+                staged: { "x/y/z": FILESTATUS.REMOVED},
             },
-            "unknown staged": {
-                input: new Submodule({
-                    indexStatus: STAT.MODIFIED,
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.UNKNOWN,
-                    commitUrl: "x",
-                    commitSha: "1",
-                }),
-                regex: /cannot find previous commit/,
+            "workdir - modified": {
+                state: "x=S:W README.md=hhh",
+                workdir: { "README.md": FILESTATUS.MODIFIED },
             },
-            "new head commit": {
-                input: new Submodule({
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    commitUrl: "x",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.AHEAD,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                    }),
-                }),
-                regex: /New commit/
+            "workdir - modified deep": {
+                state: "x=S:C2 x/y/z=a;W x/y/z=b;H=2",
+                workdir: { "x/y/z": FILESTATUS.MODIFIED },
             },
-            "new head commit in new submodule": {
-                input: new Submodule({
-                    indexStatus: STAT.ADDED,
-                    indexUrl: "x",
-                    indexSha: "2",
-                    workdirShaRelation: RELATION.AHEAD,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                    }),
-                }),
-                regex: /New commit/
+            "workdir - added": {
+                state: "x=S:W x=y",
+                workdir: { x: FILESTATUS.ADDED },
             },
-            "behind head commit": {
-                input: new Submodule({
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    commitUrl: "x",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                    }),
-                }),
-                regex: /Open repo has old commit/
+            "workdir - added deep": {
+                state: "x=S:W x/y=y",
+                workdir: { "x/": FILESTATUS.ADDED },
             },
-            "unrelated head commit": {
-                input: new Submodule({
-                    indexUrl: "x",
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    commitUrl: "x",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.UNRELATED,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                    }),
-                }),
-                regex: /Open repo has unrelated commit/
+            "workdir - added deep all untracked": {
+                state: "x=S:W x/y=y",
+                allUntracked: true,
+                workdir: { "x/y": FILESTATUS.ADDED },
             },
-            "file statuses": {
-                // We forward this, just validate that it does so.
-                input: new Submodule({
-                    indexStatus: STAT.ADDED,
-                    indexSha: "1",
-                    indexUrl: "a",
-                    workdirShaRelation: RELATION.SAME,
-                    repoStatus: new RepoStatus({
-                        headCommit: "1",
-                        staged: { foo: STAT.ADDED },
-                    })
-                }),
-                regex: /foo/,
+            "workdir - removed": {
+                state: "x=S:W README.md",
+                workdir: { "README.md": FILESTATUS.REMOVED},
+            },
+            "workdir - removed deep": {
+                state: "x=S:C2 x/y/z=a;W x/y/z;H=2",
+                workdir: { "x/y/z": FILESTATUS.REMOVED},
+            },
+            "modified workdir and index": {
+                state: "x=S:I README.md=aaa;W README.md=bbb",
+                staged: { "README.md": FILESTATUS.MODIFIED },
+                workdir: { "README.md": FILESTATUS.MODIFIED },
+            },
+            "index path restriction": {
+                state: "x=S:I README.md=aaa,foo=a",
+                paths: [ "foo" ],
+                staged: { foo: FILESTATUS.ADDED },
+            },
+            "index dir path": {
+                state: "x=S:I x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x" ],
+                staged: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED
+                },
+            },
+            "index dir paths": {
+                state: "x=S:I x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x/y", "x/r" ],
+                staged: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED
+                },
+            },
+            "index all paths": {
+                state: "x=S:I x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x/y/z", "x/r/z", "README.md" ],
+                staged: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.REMOVED,
+                },
+            },
+            "workdir path restriction": {
+                state: "x=S:W README.md=aaa,foo=a",
+                paths: [ "foo" ],
+                workdir: { foo: FILESTATUS.ADDED },
+            },
+            "workdir dir path": {
+                state: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x" ],
+                allUntracked: true,
+                workdir: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED
+                },
+            },
+            "workdir dir paths": {
+                state: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x/y", "x/r" ],
+                allUntracked: true,
+                workdir: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED
+                },
+            },
+            "workdir all paths": {
+                state: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
+                paths: [ "x/y/z", "x/r/z", "README.md" ],
+                allUntracked: true,
+                workdir: {
+                    "x/y/z": FILESTATUS.ADDED,
+                    "x/r/z": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.REMOVED,
+                },
+            },
+            "many changes": {
+                state: `
+x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
+                allUntracked: true,
+                workdir: {
+                    "a/b": FILESTATUS.ADDED,
+                    "a/c": FILESTATUS.MODIFIED,
+                    "a/y": FILESTATUS.ADDED,
+                    "f": FILESTATUS.REMOVED,
+                },
+                staged: {
+                    "a/b": FILESTATUS.REMOVED,
+                    "a/q": FILESTATUS.ADDED,
+                    "f": FILESTATUS.ADDED,
+                },
+            },
+            "many changes with path": {
+                state: `
+x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
+                allUntracked: true,
+                paths: ["f"],
+                workdir: {
+                    "f": FILESTATUS.REMOVED,
+                },
+                staged: {
+                    "f": FILESTATUS.ADDED,
+                },
             },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
-            it(caseName, function () {
-                const branch = c.branch || null;
-                const result = Status.printSubmoduleStatus(branch, c.input);
-                if (c.regex) {
-                    assert.notEqual(result, "");
-                    assert.match(result, c.regex);
-               }
-                else {
-                    assert.equal(result, "");
-                }
-            });
+            it(caseName, co.wrap(function *() {
+                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = w.repos.x;
+                const paths = c.paths || [];
+                const allUntracked = c.allUntracked || false;
+                const result = yield Status.getChanges(repo,
+                                                       paths,
+                                                       allUntracked);
+                const expected = {
+                    staged: c.staged || {},
+                    workdir: c.workdir || {},
+                };
+                assert.deepEqual(result, expected);
+            }));
         });
     });
 
@@ -696,14 +1251,100 @@ describe("Status", function () {
         });
     });
 
-    describe("getRepoStatus", function () {
-        // We will get the status of the repo named `x`.
-
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const Submodule  = RepoStatus.Submodule;
-        const RELATION   = Submodule.COMMIT_RELATION;
+    describe("getSubmoduleStatusPaths", function () {
+        // Work off of 'x'.
 
         const cases = {
+            "trivial": {
+                state: "x=S",
+                paths: [],
+                open: [],
+                expected: {},
+            },
+            "got by path": {
+                state: "a=B|x=U",
+                paths: ["s"],
+                open: [],
+                expected: { "s": [] },
+            },
+            "inside path": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md"],
+                open: ["s"],
+                expected: { "s": ["README.md"]},
+            },
+            "inside but not listed": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md"],
+                open: [],
+                expected: {},
+            },
+            "two inside": {
+                state: "a=B|x=U:Os I x/y=a,a/b=b",
+                paths: ["s/x", "s/a"],
+                open: ["s"],
+                expected: { s: ["x","a"]},
+            },
+            "inside path, trumped by full path": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md", "s"],
+                open: ["s"],
+                expected: { "s": []},
+            },
+            "two contained": {
+                state: "a=B|x=S:I a/b=Sa:1,a/c=Sa:1",
+                paths: ["a"],
+                open: [],
+                expected: {
+                    "a/b": [],
+                    "a/c": [],
+                },
+            },
+            "two specified": {
+                state: "a=B|x=S:I a/b=Sa:1,a/c=Sa:1",
+                paths: ["a/b", "a/c"],
+                open: [],
+                expected: {
+                    "a/b": [],
+                    "a/c": [],
+                },
+            },
+            "path not in sub": {
+                state: "a=B|x=U:Os",
+                paths: ["README.md"],
+                open: ["s"],
+                expected: {},
+            },
+            "filename starts with subname but not in it": {
+                state: "a=B|x=U:I sam=3;Os",
+                paths: ["sam"],
+                open: ["s"],
+                expected: {},
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = w.repos.x;
+                const workdir = repo.workdir();
+                const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
+                const result = yield Status.getSubmoduleStatusPaths(workdir,
+                                                                    c.paths,
+                                                                    subs,
+                                                                    c.open);
+                assert.deepEqual(result, c.expected);
+            }));
+        });
+    });
+
+    describe("getRepoStatus", function () {
+        // The logic for reading individual files is tested by `getChanges`, so
+        // we don't need to do exhaustive testing on that here.
+        //
+        // We will get the status of the repo named `x`.
+
+       const cases = {
             "trivial": {
                 state: "x=S",
                 expected: new RepoStatus({
@@ -737,96 +1378,100 @@ describe("Status", function () {
                     staged: { "README.md": FILESTATUS.MODIFIED },
                 }),
             },
-            "staged addition": {
-                state: "x=S:I foo=bar",
+            "show all untracked": {
+                state: "x=S:W x/y/z=foo,x/y/q=bar",
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "1",
-                    staged: { foo: FILESTATUS.ADDED },
-                }),
-            },
-            "staged additions": {
-                state: "x=S:I f=b,y=z",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    staged: {
-                        f: FILESTATUS.ADDED,
-                        y: FILESTATUS.ADDED,
+                    workdir: {
+                        "x/y/z": FILESTATUS.ADDED,
+                        "x/y/q": FILESTATUS.ADDED,
                     },
                 }),
+                options: { showAllUntracked: true, },
             },
-            "staged deletion": {
-                state: "x=S:I README.md",
+            "ignore meta": {
+                state: "x=S:I README.md=whoohoo",
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "1",
-                    staged: { "README.md": FILESTATUS.REMOVED },
-                })
-            },
-            "workdir file addition": {
-                state: "x=S:W x=y",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    workdir: { "x": FILESTATUS.ADDED },
+                    staged: {},
                 }),
+                options: { showMetaChanges: false },
             },
-            "workdir path addition": {
-                state: "x=S:W x/z=y",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    workdir: { "x/": FILESTATUS.ADDED },
-                }),
-            },
-            "workdir path modification": {
-                state: "x=S:W README.md=aaa",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    workdir: { "README.md": FILESTATUS.MODIFIED }
-                }),
-            },
-            "workdir path deletion": {
-                state: "x=S:W README.md",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    workdir: { "README.md": FILESTATUS.REMOVED }
-                }),
-            },
-            "staged addition, workdir deletion": {
-                state: "x=S:I x=y;W x",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    staged: { "x": FILESTATUS.ADDED },
-                    workdir: { "x": FILESTATUS.REMOVED },
-                }),
-            },
-            "staged deletion, workdir addition": {
-                state: "x=S:I README.md;W README.md=foo",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                    staged: { "README.md": FILESTATUS.REMOVED },
-                    workdir: { "README.md": FILESTATUS.ADDED },
-                }),
-            },
-            "index and workdir mod": {
-                state: "x=S:I README.md=2;W README.md=foo",
+
+            // The logic for filtering is tested earlier; here, we just need to
+            // validate that the option is propagated properly.
+
+            "path filtered out in meta": {
+                state: "x=S:I x/y=a,README.md=sss",
+                options: {
+                    paths: ["README.md"],
+                },
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "1",
                     staged: { "README.md": FILESTATUS.MODIFIED },
-                    workdir: { "README.md": FILESTATUS.MODIFIED },
                 }),
             },
-            // Submodules are tested earlier, but we need to make sure that
-            // they're all included, even if they have been removed in the
-            // index or added in the index.
 
+            // Submodules are tested earlier, but we need to test a few
+            // concerns:
+            //
+            // - make sure that they're included, even if they have been
+            //   removed in the index or added in the index
+            // - `showAllUntracked` propagates
+            // - path filtering works
+            // - `options.includClosedSubmodules` works
+            // - filtering works in conjunction with `includeClosedSubmodules`
+
+            "sub no show all added": {
+                state: "a=S|x=U:Os W x/y=z",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        "s": new Submodule({
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            commitSha: "1",
+                            commitUrl: "a",
+                            workdirShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    "x/": FILESTATUS.ADDED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+            },
+            "sub show all added": {
+                state: "a=S|x=U:Os W x/y=z",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        "s": new Submodule({
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            commitSha: "1",
+                            commitUrl: "a",
+                            workdirShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    "x/y": FILESTATUS.ADDED,
+                                },
+                            }),
+                        }),
+                    },
+                }),
+                options: { showAllUntracked: true, },
+            },
             "sub added to index": {
                 state: "a=S|x=S:I s=Sa:1",
                 expected: new RepoStatus({
@@ -876,114 +1521,161 @@ describe("Status", function () {
                     },
                 }),
             },
-        };
+            "show root untracked": {
+                state: "x=S:W x/y/z=foo,x/y/q=bar",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "1",
+                    workdir: {
+                        "x/": FILESTATUS.ADDED,
+                    },
+                }),
+            },
+            "filtered out": {
+                state: "a=B|x=U",
+                options: {
+                    paths: ["README.md"],
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                }),
+            },
+            "filtered in": {
+                state: "a=B|x=U",
+                options: {
+                    paths: ["s"],
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        s: new Submodule({
+                            commitSha: "1",
+                            commitUrl: "a",
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                        }),
+                    },
+                }),
+            },
+            "skipped because closed not included": {
+                state: "a=B|x=U",
+                options: {
+                    includeClosedSubmodules: false,
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                }),
+            },
+            "skipped because closed not included, even when filtered in": {
+                state: "a=B|x=U",
+                options: {
+                    includeClosedSubmodules: false,
+                    paths: ["s"],
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                }),
+            },
+            "no include closed doesn't affect open": {
+                state: "a=B|x=U:Os",
+                options: {
+                    includeClosedSubmodules: false,
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        s: new Submodule({
+                            commitSha: "1",
+                            commitUrl: "a",
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                            }),
+                            workdirShaRelation: RELATION.SAME,
+                        }),
+                    },
+                }),
+            },
+            "no include closed doesn't affect open, even if filtered": {
+                state: "a=B|x=U:Os",
+                options: {
+                    includeClosedSubmodules: false,
+                    paths: ["s"],
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                    submodules: {
+                        s: new Submodule({
+                            commitSha: "1",
+                            commitUrl: "a",
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                            }),
+                            workdirShaRelation: RELATION.SAME,
+                        }),
+                    },
+                }),
+            },
+            "filter works on open subs": {
+                state: "a=B|x=U:Os",
+                options: {
+                    includeClosedSubmodules: false,
+                    paths: ["README.md"],
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                }),
+            },
+            "deep filter": {
+                state: `a=B|x=S:C2-1 s=Sa:1,t=Sa:1;Os I a/b/c=x,a/d/c=y;H=2`,
+                options: {
+                    paths: ["s/a/b"],
+                },
+                expected: new RepoStatus({
+                    headCommit: "2",
+                    submodules: {
+                        s: new Submodule({
+                            commitSha: "1",
+                            commitUrl: "a",
+                            indexSha: "1",
+                            indexUrl: "a",
+                            indexShaRelation: RELATION.SAME,
+                            repoStatus: new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    "a/b/c": FILESTATUS.ADDED,
+                                },
+                            }),
+                            workdirShaRelation: RELATION.SAME,
+                        }),
+                    },
+                }),
+            },
+       };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 const w = yield RepoASTTestUtil.createMultiRepos(c.state);
-                const result = yield Status.getRepoStatus(w.repos.x);
+                const result = yield Status.getRepoStatus(w.repos.x,
+                                                          c.options);
                 assert.instanceOf(result, RepoStatus);
                 const mappedResult = remapRepoStatus(result,
                                                      w.commitMap,
                                                      w.urlMap);
                 assert.deepEqual(mappedResult, c.expected);
-            }));
-        });
-    });
-
-    describe("printSubmodulesStatus", function () {
-        // The implementation of this method is mostely deferred to
-        // `getRepoStatus` and `printSubmoduleStatus`; we'll do some basic
-        // testing by validating output vs. regular expressions.
-
-        // We'll check status of the repo named `x`.
-        const cases = {
-            "tivial": {
-                state: "x=S",
-                names: [],
-                regex: /^$/,
-            },
-            "bad": {
-                state: "x=S",
-                names: ["foo"],
-                regex: /.*foo.*\n.*not the name/,
-            },
-            "no changes": {
-                state:
-                    "a=S|x=S:C2-1 xyz=Sa:1;Bmaster=2;Oxyz Bmaster=1!*=master",
-                names: ["xyz"],
-                regex: /.*xyz.*\nno changes/,
-            },
-            "there, but not visible": {
-                state: "a=S|x=S:C2-1 xyz=Sa:1;Bmaster=2",
-                names: ["xyz"],
-                regex: /.*xyz.*\nnot visible/,
-            },
-            "some changes": {
-                state: "a=S|x=S:I xyz=Sa:1",
-                names: ["xyz"],
-                regex: /.*xyz.*\n.*Added.*/,
-            },
-        };
-
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, co.wrap(function *() {
-                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
-                const x = w.repos.x;
-                const result = yield Status.printSubmodulesStatus(x, c.names);
-                assert.match(result, c.regex);
-            }));
-        });
-    });
-
-    describe("printRepoStatus", function () {
-        // We don't need to test the logic that reads status, just that we've
-        // printed in appropriate conditions.
-        // TODO: more fine-grained testing of output.
-
-        // We'll use repo `x` for printing.
-
-        const cases = {
-            "trivial": {
-                state: "x=S",
-                regex: /On branch.*master.*\n.*nothing to commit.*/,
-            },
-            "rebase": {
-                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Efoo,2,3",
-                regex: /rebas/,
-            },
-            "detached": {
-                state: "x=S:*=",
-                regex: /On detached/,
-            },
-            "dirty meta": {
-                state: "x=S:I qrst=foo",
-                regex: /.*qrst/,
-            },
-            "clean sub": {
-                state: "a=S|x=S:C2-1 qrts=Sa:1;Bmaster=2",
-                regex: /qrst/,
-                inverse: true,
-            },
-            "dirty sub": {
-                state: "a=S|x=S:I qrst=Sa:1",
-                regex: /qrst/,
-            }
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, co.wrap(function *() {
-                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
-                const x = w.repos.x;
-                const status = yield Status.getRepoStatus(x);
-                const result = Status.printRepoStatus(status);
-                if (c.inverse) {
-                    assert.notMatch(result, c.regex);
-                }
-                else {
-                    assert.match(result, c.regex);
-                }
             }));
         });
     });

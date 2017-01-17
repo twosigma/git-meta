@@ -38,7 +38,9 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const GitUtil       = require("./git_util");
 const RepoStatus    = require("./repo_status");
+const Status        = require("./status");
 const SubmoduleUtil = require("./submodule_util");
 
 /**
@@ -102,6 +104,60 @@ const commitRepo = co.wrap(function *(repo,
     }
     return null;
 });
+
+/**
+ * Return a string describing the specified `status` that is appropriate as a
+ * description in the editor prompting for a commit message; adjust paths to be
+ * relative to the specified `cwd`.  Show that everything (other than
+ * untracked) will be committed if the specified `all` is true.
+ *
+ * @param {RepoStatus} status
+ * @param {String}     cwd
+ * @param {Boolean}    all
+ * @return {String}
+ */
+exports.formatEditorPrompt  = function (status, cwd, all) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(cwd);
+    assert.isBoolean(all);
+
+    let result = `\
+Please enter the commit message for your changes. Lines starting
+with '#' will be ignored, and an empty message aborts the commit.
+`;
+    if (null !== status.currentBranchName) {
+        result += `On branch ${status.currentBranchName}.\n`;
+    }
+    else {
+        result += `On detached head ${GitUtil.shortSha(status.headCommit)}.\n`;
+    }
+
+    // If `all` is true, roll the workdir changes into the staged changes.
+
+    const statuses = Status.accumulateStatus(status);
+    if (all) {
+        statuses.staged = statuses.staged.concat(statuses.workdir);
+        statuses.workdir = [];
+    }
+
+    result += `Changes to be committed:\n`;
+    result += Status.printStatusDescriptors(statuses.staged, x => x, cwd);
+
+    if (0 !== statuses.workdir.length) {
+        result += "\n";
+        result += `Changes not staged for commit:\n`;
+        result += Status.printStatusDescriptors(statuses.workdir,
+                                                x => x,
+                                                cwd);
+    }
+    if (0 !== statuses.untracked.length) {
+        result += "\n";
+        result += "Untracked files:\n";
+        result += Status.printUntrackedFiles(statuses.untracked, x => x, cwd);
+    }
+    const prefixed = result.replace(/^/mg, "# ").replace(/^# $/mg, "#");
+    return "\n" + prefixed + "\n";
+};
 
 /**
  * Create a commit across modified repositories and the specified `metaRepo`

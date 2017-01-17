@@ -595,8 +595,11 @@ describe("SubmoduleUtil", function () {
                 const written =
                                yield RepoASTTestUtil.createMultiRepos(c.state);
                 const x = written.repos.x;
-                const result = yield SubmoduleUtil.getSubmodulesInPath(x,
-                                                                       c.path);
+                const subs = yield SubmoduleUtil.getSubmoduleNames(x);
+                const result = yield SubmoduleUtil.getSubmodulesInPath(
+                                                                   x.workdir(),
+                                                                   c.path,
+                                                                   subs);
                 assert.deepEqual(result.sort(), c.expected.sort());
             }));
         });

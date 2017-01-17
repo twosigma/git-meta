@@ -50,7 +50,6 @@ meta-repository to point to these new commits.`;
  * @param {ArgumentParser} parser
  */
 exports.configureParser = function (parser) {
-
     parser.addArgument(["-a", "--all"], {
         defaultValue: false,
         required: false,
@@ -58,26 +57,30 @@ exports.configureParser = function (parser) {
         constant: true,
         help: "commit all changed files",
     });
-
     parser.addArgument(["-m", "--message"], {
         type: "string",
         defaultValue: null,
         required: false,
         help: "commit message; if not specified will prompt"
     });
+    parser.addArgument(["--meta"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `
+Include changes to the meta-repo; disabled by default to prevent mistakes.`,
+        defaultValue: false,
+    });
+    parser.addArgument(["--closed"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `
+Include changes to the index for closed submodules, a very rare situation \
+that is expensive to check.`,
+        defaultValue: false,
+    });
 };
-
-// Ignore the line len warning for the next two lines, which cannot be broken.
-/*jshint -W101*/
-// http://stackoverflow.com/questions/25245716/remove-all-ansi-colors-styles-from-strings
-const stripColor = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
-/*jshint +W101*/
-
-const commitMessagePrefix = `\
-
-# Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
-`;
 
 /**
  * Exeucte the `commit` command according to the specified `args`.
@@ -88,15 +91,23 @@ const commitMessagePrefix = `\
  * @param {String}  [args.message]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
+    const path = require("path");
+
     const Commit     = require("../util/commit");
     const GitUtil    = require("../util/git_util");
     const Status     = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const repoStatus = yield Status.getRepoStatus(repo);
+    const cwd = process.cwd();
+    const workdir = repo.workdir();
+    const relCwd = path.relative(workdir, cwd);
+    const repoStatus = yield Status.getRepoStatus(repo, {
+        showMetaChanges: args.meta,
+        includeClosedSubmodules: args.closed,
+    });
 
     function warnNothing() {
-        console.warn("Nothing to commit.");
+        process.stdout.write(Status.printRepoStatus(repoStatus, relCwd));
     }
 
     // If there are no staged changes, and we either didn't specify "all" or we
@@ -110,20 +121,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
 
     if (null === args.message) {
-        let status = Status.printRepoStatus(repoStatus);
-
-        // TODO: in an upcoming change, I'm going to factor this logic out of
-        // the plain `status` code used by `git-meta status` and have
-        // commit-specified formatting so this color stripping will be
-        // unnecessary.
-
-        // Remove color characters.
-
-        status = status.replace(stripColor, "");
-        let lines = status.split("\n");
-        lines = lines.slice(0, lines.length - 1);
-        const commentLines = lines.map(line => "" === line ? "#" : "# " + line);
-        const initialMessage = commitMessagePrefix + commentLines.join("\n");
+        const initialMessage = Commit.formatEditorPrompt(repoStatus,
+                                                         cwd,
+                                                         args.all);
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
         args.message = GitUtil.stripMessage(rawMessage);
     }
@@ -133,11 +133,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         process.exit(1);
     }
 
-    const result = yield Commit.commit(repo,
-                                       args.all,
-                                       repoStatus,
-                                       args.message);
-    if (null === result) {
-        warnNothing();
-    }
+    yield Commit.commit(repo, args.all, repoStatus, args.message);
 });

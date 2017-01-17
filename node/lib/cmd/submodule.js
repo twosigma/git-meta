@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Two Sigma Open Source
+ * Copyright (c) 2017, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,55 +33,56 @@
 const co = require("co");
 
 /**
- * This module contains methods for pulling.
+ * This module contains the command entry point for direct interactions with
+ * submodules.
  */
 
 /**
- * help text for the `pull` command
+ * help text for the `submodule` command
  * @property {String}
  */
-exports.helpText = `Show the working tree status.`;
+exports.helpText = `Submodule-specific commands.`;
 
 /**
- * description of the `pull` command
+ * description of the `submodule` command
  * @property {String}
  */
 exports.description =`
-Displays paths that have differences between the index file and the current
-HEAD commit, paths that have differences between the working tree and the
-index file, and paths in the working tree that are not tracked. The first are
-what you would commit by running git commit; the second and third are what you
-could commit by running git add before running git commit.  Output is grouped
-sub-repo.  Also show diagnostic information if the repository is in consistent
-state, e.g., when a sub-repo is on a different branch than the meta-repo.`;
+Provide commands pertaining to submodules that are not provided, easily or
+efficiently by 'git submodule'.`;
 
 exports.configureParser = function (parser) {
-    parser.addArgument(["--meta"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the meta-repo; disabled by default to improve performance.`,
-        defaultValue: false,
+
+    const subParsers = parser.addSubparsers({
+        dest: "command",
     });
-    parser.addArgument(["--closed"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the index for closed submodules, a very rare situation \
-that is expensive to check.`,
-        defaultValue: false,
+
+    const statusParser = subParsers.addParser("status", {
+        help: "show information about submodules",
+        description: `
+The default behavior is to show a one-line summary of each open submodule: the
+current SHA-1 for that submodule followed by its name.`,
     });
-    parser.addArgument(["path"], {
+
+    statusParser.addArgument(["path"], {
         type: "string",
-        help: "paths to inspect for changes",
+        help: "show information about only the submodules in these paths",
         nargs: "*",
+    });
+
+    statusParser.addArgument(["-v", "--verbose"], {
+        defaultValue: false,
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `show one-line summary of each submodule: a '-' if the \
+submodule is closed, followed by the current SHA-1 for \
+that submodule, followed by its name. `
     });
 };
 
 /**
- * Execute the pull command according to the specified `args`.
+ * Execute the `submodule` command according to the specified `args`.
  *
  * @async
  * @param {Object}  args
@@ -90,10 +91,14 @@ that is expensive to check.`,
  * @param {String}  [source]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const path = require("path");
+    // TODO: right now, there is only one sub-command, "status".  Later we will
+    // have to split this out.
 
-    const GitUtil = require("../util/git_util");
-    const Status  = require("../util/status");
+    const colors = require("colors");
+    const path   = require("path");
+
+    const GitUtil       = require("../util/git_util");
+    const Status        = require("../util/status");
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -102,16 +107,31 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
     const repoStatus = yield Status.getRepoStatus(repo, {
-        showMetaChanges: args.meta,
-        includeClosedSubmodules: args.closed,
         paths: paths,
+        showMetaChanges: false,
+        includeClosedSubmodules: args.verbose,
     });
-
-    // Compute the current directory relative to the working directory of the
-    // repo.
-
+    const subStats = repoStatus.submodules;
     const relCwd = path.relative(workdir, cwd);
+    function doSummary(showClosed) {
+        Object.keys(subStats).forEach(name => {
+            const relName = path.relative(relCwd, name);
+            const sub = subStats[name];
+            const isVis = null !== sub.repoStatus;
+            const visStr = isVis ? " " : "-";
+            const sha = sub.indexSha || "<deleted>";
+            if (isVis || showClosed) {
+                console.log(`${visStr} ${sha}  ${colors.cyan(relName)}`);
+            }
+        });
+    }
 
-    const text = Status.printRepoStatus(repoStatus, relCwd);
-    process.stdout.write(text);
+    if (args.verbose) {
+        console.log(`${colors.grey("All submodules: ")}`);
+        doSummary(true);
+    }
+    else {
+        console.log(`${colors.grey("Open submodules: ")}`);
+        doSummary(false);
+    }
 });
