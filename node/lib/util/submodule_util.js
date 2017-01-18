@@ -372,21 +372,21 @@ exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             dir
+ * @param {String []}          indexSubNames
  * @return {String[]}
  */
-exports.getSubmodulesInPath = co.wrap(function *(repo, dir) {
-    assert.instanceOf(repo, NodeGit.Repository);
+exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
+    assert.isString(workdir);
     assert.isString(dir);
+    assert.isArray(indexSubNames);
     if ("" !== dir) {
         assert.notEqual("/", dir[0]);
         assert.notEqual(".", dir[0]);
     }
-    const subNames = yield exports.getSubmoduleNames(repo);
     if ("" === dir) {
-        return subNames;
+        return indexSubNames;
     }
-    const subs = new Set(subNames);
-    const workdir = repo.workdir();
+    const subs = new Set(indexSubNames);
     const result = [];
     const listForFilename = co.wrap(function *(filepath) {
         if (subs.has(filepath)) {

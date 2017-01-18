@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Two Sigma Open Source
+ * Copyright (c) 2017, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,27 +33,31 @@
 const co = require("co");
 
 /**
- * This module contains methods for pulling.
+ * This module contains methods for implementing the `add` command.
  */
 
 /**
- * help text for the `pull` command
+ * help text for the `add` command
  * @property {String}
  */
-exports.helpText = `Show the working tree status.`;
+exports.helpText = `Add file contents to the index of the mono-repo.`;
 
 /**
- * description of the `pull` command
+ * description of the `add` command
  * @property {String}
  */
 exports.description =`
-Displays paths that have differences between the index file and the current
-HEAD commit, paths that have differences between the working tree and the
-index file, and paths in the working tree that are not tracked. The first are
-what you would commit by running git commit; the second and third are what you
-could commit by running git add before running git commit.  Output is grouped
-sub-repo.  Also show diagnostic information if the repository is in consistent
-state, e.g., when a sub-repo is on a different branch than the meta-repo.`;
+This command updates the (logical) mono-repo index using the current content
+found in the working tree, to prepare the content staged for the next commit.
+If a path is specified, this command will stage all modified content in the
+meta-repo and submodules rooted in that path.  Note that the index of a
+mono-repo is a logical construct derived from the state of the indices of its
+meta-repo and open submodules.  Thus, content that is staged in a submodule
+is added to the index for that submodule; the index of the meta-repo is not
+affected.  Note also that from the perspective of the mono-repo, the status of
+a submodule in the index is irrelevant: 'git meta commit' always stages changes
+to submodules with new commits in their working directories.
+`;
 
 exports.configureParser = function (parser) {
     parser.addArgument(["--meta"], {
@@ -61,57 +65,34 @@ exports.configureParser = function (parser) {
         action: "storeConst",
         constant: true,
         help: `
-Include changes to the meta-repo; disabled by default to improve performance.`,
+Include changes to the meta-repo; disabled by default to improve performance \
+and avoid accidental changes to the meta-repo.`,
         defaultValue: false,
     });
-    parser.addArgument(["--closed"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the index for closed submodules, a very rare situation \
-that is expensive to check.`,
-        defaultValue: false,
-    });
-    parser.addArgument(["path"], {
+    parser.addArgument(["paths"], {
+        nargs: "+",
         type: "string",
-        help: "paths to inspect for changes",
-        nargs: "*",
+        help: "the paths to add",
     });
 };
 
 /**
- * Execute the pull command according to the specified `args`.
+ * Execute the `add` command according to the specified `args`.
  *
  * @async
- * @param {Object}  args
- * @param {Boolean} args.any
- * @param {String}  repository
- * @param {String}  [source]
+ * @param {Object}   args
+ * @param {String[]} args.paths
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const path = require("path");
-
+    const Add     = require("../util/add");
     const GitUtil = require("../util/git_util");
-    const Status  = require("../util/status");
 
-    const repo = yield GitUtil.getCurrentRepo();
+    const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
-    const cwd = process.cwd();
-    const paths = yield args.path.map(filename => {
-        return GitUtil.resolveRelativePath(workdir, cwd, filename);
+    const cwd     = process.cwd();
+
+    const paths = yield args.paths.map(filename => {
+        return  GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    const repoStatus = yield Status.getRepoStatus(repo, {
-        showMetaChanges: args.meta,
-        includeClosedSubmodules: args.closed,
-        paths: paths,
-    });
-
-    // Compute the current directory relative to the working directory of the
-    // repo.
-
-    const relCwd = path.relative(workdir, cwd);
-
-    const text = Status.printRepoStatus(repoStatus, relCwd);
-    process.stdout.write(text);
+    yield Add.stagePaths(repo, paths, args.meta);
 });

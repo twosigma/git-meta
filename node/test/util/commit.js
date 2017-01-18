@@ -30,10 +30,12 @@
  */
 "use strict";
 
+const assert = require("chai").assert;
 const co     = require("co");
 
 const Commit          = require("../../lib/util/commit");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const RepoStatus      = require("../../lib/util/repo_status");
 const Status          = require("../../lib/util/status");
 
 
@@ -59,131 +61,253 @@ const committer = co.wrap(function *(doAll, message, repos) {
     };
 });
 
-describe("commit", function () {
-    function makeCommitter(doAll, message) {
-        return function (repos, maps) {
-            return committer(doAll, message, repos, maps);
+describe("Commit", function () {
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    describe("formatEditorPrompt", function () {
+        // Most of the work in this method is pass-through; just need to check
+        // that it's all wired up.
+
+        const cases = {
+            "one change": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                }),
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# On branch master.
+# Changes to be committed:
+# \tnew file:     foo
+#
+`,
+            },
+            "detached head": {
+                status: new RepoStatus({
+                    currentBranchName: null,
+                    headCommit: "afafafafafafafafafafafafaf",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                }),
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# On detached head afafaf.
+# Changes to be committed:
+# \tnew file:     foo
+#
+`,
+            },
+            "workdir": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                    workdir: {
+                        "bar": FILESTATUS.MODIFIED,
+                    },
+                }),
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# On branch master.
+# Changes to be committed:
+# \tnew file:     foo
+#
+# Changes not staged for commit:
+# \tmodified:     bar
+#
+`,
+            },
+            "untracked": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                    workdir: {
+                        "bar": FILESTATUS.ADDED,
+                    },
+                }),
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# On branch master.
+# Changes to be committed:
+# \tnew file:     foo
+#
+# Untracked files:
+# \tbar
+#
+`,
+            },
+            "workdir rollup": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    workdir: {
+                        "bar": FILESTATUS.MODIFIED,
+                    },
+                }),
+                all: true,
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+# On branch master.
+# Changes to be committed:
+# \tmodified:     bar
+#
+`,
+            },
         };
-    }
-    const cases = {
-        "simple nothing": {
-            initial: "x=S",
-            doAll: false,
-            message: "",
-            expected: {},
-        },
-        "nothing with all": {
-            initial: "x=S",
-            doAll: true,
-            message: "",
-            expected: {},
-        },
-        "staged addition": {
-            initial: "x=S:I a=b",
-            doAll: true,
-            message: "hello",
-            expected: "x=S:Chello#x-1 a=b;Bmaster=x",
-        },
-        "staged deletion": {
-            initial: "x=S:I README.md",
-            doAll: true,
-            message: "message",
-            expected: "x=S:Cx-1 README.md;Bmaster=x",
-        },
-        "staged modification": {
-            initial: "x=S:I README.md=yyy",
-            doAll: false,
-            message: "message",
-            expected: "x=S:Cx-1 README.md=yyy;Bmaster=x",
-        },
-        "unstaged addition": {
-            initial: "x=S:W a=b",
-            message: "foo",
-            doAll: false,
-            expected: {},
-        },
-        "unstaged addition, auto-stage": {
-            initial: "x=S:W a=b",
-            message: "foo",
-            doAll: true,
-            expected: {},
-        },
-        "unstaged deletion": {
-            initial: "x=S:W README.md",
-            message: "foo",
-            doAll: false,
-            expected: {},
-        },
-        "unstaged deletion, auto-stage": {
-            initial: "x=S:W README.md",
-            message: "message",
-            doAll: true,
-            expected: "x=S:Cx-1 README.md;Bmaster=x",
-        },
-        "unstaged modification": {
-            initial: "x=S:W README.md=foo",
-            message: "foo",
-            doAll: false,
-            expected: {},
-        },
-        "unstaged modification, auto-stage": {
-            initial: "x=S:W README.md=foo",
-            message: "message",
-            doAll: true,
-            expected: "x=S:Cx-1 README.md=foo;Bmaster=x",
-        },
-        "new submodule": {
-            initial: "a=S|x=S:I s=Sa:1",
-            message: "message",
-            doAll: false,
-            expected: "x=S:Cx-1 s=Sa:1;Bmaster=x",
-        },
-        "deleted submodule": {
-            initial: "a=S|x=U:I s",
-            message: "message",
-            doAll: false,
-            expected: "x=U:Cx-2 s;Bmaster=x",
-        },
-        "changed submodule url": {
-            initial: "b=Aq|a=S|x=U:I s=Sb:q",
-            message: "message",
-            doAll: false,
-            expected: "x=U:Cx-2 s=Sb:q;Bmaster=x",
-        },
-        "staged change in submodule": {
-            initial: "a=S|x=U:Os I u=v",
-            doAll: false,
-            message: "message",
-            expected:
-                "x=U:Cx-2 s=Sa:s;Os Cs-1 u=v!H=s;Bmaster=x",
-        },
-        "wd change in submodule": {
-            initial: "a=S|x=U:Os W README.md=bar",
-            message: "foo",
-            doAll: false,
-            expected: {},
-        },
-        "wd change in submodule -- auto-stage": {
-            initial: "a=S|x=U:Os W README.md=bar",
-            message: "message",
-            doAll: true,
-            expected: "x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x",
-        },
-        "wd addition in submodule -- auto-stage": {
-            initial: "a=S|x=U:Os W foo=baz",
-            message: "foo",
-            doAll: true,
-            expected: {},
-        },
-    };
-    Object.keys(cases).forEach(caseName => {
-        const c = cases[caseName];
-        it(caseName, co.wrap(function *() {
-            const manipulator = makeCommitter(c.doAll, c.message);
-            yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
-                                                           c.expected,
-                                                           manipulator,
-                                                           c.fails);
-        }));
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const cwd = c.cwd || "";
+                const all = c.all || false;
+                const result = Commit.formatEditorPrompt(c.status, cwd, all);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
+
+    describe("commit", function () {
+        function makeCommitter(doAll, message) {
+            return function (repos, maps) {
+                return committer(doAll, message, repos, maps);
+            };
+        }
+        const cases = {
+            "simple nothing": {
+                initial: "x=S",
+                doAll: false,
+                message: "",
+                expected: {},
+            },
+            "nothing with all": {
+                initial: "x=S",
+                doAll: true,
+                message: "",
+                expected: {},
+            },
+            "staged addition": {
+                initial: "x=S:I a=b",
+                doAll: true,
+                message: "hello",
+                expected: "x=S:Chello#x-1 a=b;Bmaster=x",
+            },
+            "staged deletion": {
+                initial: "x=S:I README.md",
+                doAll: true,
+                message: "message",
+                expected: "x=S:Cx-1 README.md;Bmaster=x",
+            },
+            "staged modification": {
+                initial: "x=S:I README.md=yyy",
+                doAll: false,
+                message: "message",
+                expected: "x=S:Cx-1 README.md=yyy;Bmaster=x",
+            },
+            "unstaged addition": {
+                initial: "x=S:W a=b",
+                message: "foo",
+                doAll: false,
+                expected: {},
+            },
+            "unstaged addition, auto-stage": {
+                initial: "x=S:W a=b",
+                message: "foo",
+                doAll: true,
+                expected: {},
+            },
+            "unstaged deletion": {
+                initial: "x=S:W README.md",
+                message: "foo",
+                doAll: false,
+                expected: {},
+            },
+            "unstaged deletion, auto-stage": {
+                initial: "x=S:W README.md",
+                message: "message",
+                doAll: true,
+                expected: "x=S:Cx-1 README.md;Bmaster=x",
+            },
+            "unstaged modification": {
+                initial: "x=S:W README.md=foo",
+                message: "foo",
+                doAll: false,
+                expected: {},
+            },
+            "unstaged modification, auto-stage": {
+                initial: "x=S:W README.md=foo",
+                message: "message",
+                doAll: true,
+                expected: "x=S:Cx-1 README.md=foo;Bmaster=x",
+            },
+            "new submodule": {
+                initial: "a=S|x=S:I s=Sa:1",
+                message: "message",
+                doAll: false,
+                expected: "x=S:Cx-1 s=Sa:1;Bmaster=x",
+            },
+            "deleted submodule": {
+                initial: "a=S|x=U:I s",
+                message: "message",
+                doAll: false,
+                expected: "x=U:Cx-2 s;Bmaster=x",
+            },
+            "changed submodule url": {
+                initial: "b=Aq|a=S|x=U:I s=Sb:q",
+                message: "message",
+                doAll: false,
+                expected: "x=U:Cx-2 s=Sb:q;Bmaster=x",
+            },
+            "staged change in submodule": {
+                initial: "a=S|x=U:Os I u=v",
+                doAll: false,
+                message: "message",
+                expected:
+                    "x=U:Cx-2 s=Sa:s;Os Cs-1 u=v!H=s;Bmaster=x",
+            },
+            "wd change in submodule": {
+                initial: "a=S|x=U:Os W README.md=bar",
+                message: "foo",
+                doAll: false,
+                expected: {},
+            },
+            "wd change in submodule -- auto-stage": {
+                initial: "a=S|x=U:Os W README.md=bar",
+                message: "message",
+                doAll: true,
+                expected: `
+x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x`,
+            },
+            "wd addition in submodule -- auto-stage": {
+                initial: "a=S|x=U:Os W foo=baz",
+                message: "foo",
+                doAll: true,
+                expected: {},
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const manipulator = makeCommitter(c.doAll, c.message);
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                               c.expected,
+                                                               manipulator,
+                                                               c.fails);
+            }));
+        });
     });
 });

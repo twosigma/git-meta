@@ -29,10 +29,20 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 "use strict";
+
+/**
+ * This module provides utilities for loading and displaying `RepoStatus`
+ * objects.
+ *
+ * TODO: this module should be split into two: one for reading status and one
+ * for displaying.
+ */
+
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors/safe");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const GitUtil             = require("../util/git_util");
 const UserError           = require("../util/user_error");
@@ -43,235 +53,410 @@ const SubmoduleUtil       = require("../util/submodule_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
 
 /**
- * Return a string describing the file changes in the specified `repoStatus` or
- * an empty string if there are no changes.
+ * This value-semantic class describes a line entry to be printed in a status
+ * message.
+ */
+class StatusDescriptor {
+    /**
+     * @param {RepoStatus.FILESTATUS} status
+     * @param {String}                path
+     * @param {String}                detail
+     */
+    constructor(status, path, detail) {
+        this.status = status;
+        this.path = path;
+        this.detail = detail;
+    }
+
+    /**
+     * Return a description of this object using the specified `color` function
+     * to apply color and displaying `this.path` relative to the specified
+     * `cwd`.
+     *
+     * @param {Function} color
+     * @return {String}
+     */
+    print(color, cwd) {
+        let result = "";
+        const FILESTATUS = RepoStatus.FILESTATUS;
+        switch(this.status) {
+            case FILESTATUS.ADDED:
+                result += "new file:     ";
+                break;
+            case FILESTATUS.MODIFIED:
+                result += "modified:     ";
+                break;
+            case FILESTATUS.REMOVED:
+                result += "deleted:      ";
+                break;
+            case FILESTATUS.CONFLICTED:
+                result += "conflicted:   ";
+                break;
+            case FILESTATUS.RENAMED:
+                result += "renamed:      ";
+                break;
+            case FILESTATUS.TYPECHANGED:
+                result += "type changed: ";
+                break;
+        }
+        result += path.relative(cwd, this.path);
+        result = color(result);
+        if ("" !== this.detail) {
+            result += ` (${this.detail})`;
+        }
+        return result;
+    }
+}
+
+exports.StatusDescriptor = StatusDescriptor;
+
+/**
+ * Return the specified `descriptors` sorted by path.
  *
- * @param {RepoStatus} repoStatus
+ * @param {StatusDescriptor []} descriptors
+ * @return {StatusDescriptor []}
+ */
+exports.sortDescriptorsByPath = function (descriptors) {
+    return descriptors.sort((l, r) => {
+        const lPath = l.path;
+        const rPath = r.path;
+        return lPath === rPath ? 0 : (lPath < rPath ? -1 : 1);
+    });
+};
+
+/**
+ * Return a string describing the specified `statuses`, using the specified
+ * `color` function to apply color, printing paths relative to the specified
+ * `cwd`.
+ *
+ * @param {StatusDescriptor []} statuses
+ * @param {Function}            color
  * @return {String}
  */
-exports.printFileStatuses = function (repoStatus) {
-    assert.instanceOf(repoStatus, RepoStatus);
+exports.printStatusDescriptors = function (statuses, color, cwd) {
+    assert.isArray(statuses);
+    assert.isFunction(color);
+    if (0 === statuses.length) {
+        return "";                                                    // RETURN
+    }
+    const sorted = exports.sortDescriptorsByPath(statuses);
+    const lines = sorted.map(status => "\t" + status.print(color, cwd));
+    return lines.join("\n") + "\n";
+};
+
+/**
+ * Return a string describing the specified `untracked` files, using the
+ * specified `color` function to apply color and displaying the path relative
+ * to the specified `cwd`.
+ *
+ * @param {String []} untracked
+ * @param {Function}  color
+ * @param {String}    cwd
+ * @return {String}
+ */
+exports.printUntrackedFiles = function (untracked, color, cwd) {
+    assert.isArray(untracked);
+    assert.isFunction(color);
+    assert.isString(cwd);
     let result = "";
-    const FILESTATUS = RepoStatus.FILESTATUS;
-    function statusDescription(status) {
-        switch(status) {
-            case FILESTATUS.ADDED:
-                return "new file:     ";
-            case FILESTATUS.MODIFIED:
-                return "modified:     ";
-            case FILESTATUS.REMOVED:
-                return "deleted:      ";
-            case FILESTATUS.CONFLICTED:
-                return "conflicted:   ";
-            case FILESTATUS.RENAMED:
-                return "renamed:      ";
-            case FILESTATUS.TYPECHANGED:
-                return "type changed: ";
-        }
-    }
-    const innerIndent = "\t";
-
-    // Print status of staged files first.
-
-    if (0 !== Object.keys(repoStatus.staged).length) {
-        if ("" !== result) {
-            result += "\n";
-        }
-        result += "Changes staged to be commited:\n\n";
-        Object.keys(repoStatus.staged).sort().forEach(fileName => {
-            result += innerIndent;
-            const status = repoStatus.staged[fileName];
-            result += colors.green(statusDescription(status));
-            result += colors.green(fileName);
-            result += "\n";
-        });
-    }
-
-    // Split up unstaged changes by modified and untracked; we'll print them
-    // separately.
-
-    let changed = [];
-    let untracked = [];
-    Object.keys(repoStatus.workdir).sort().forEach(fileName => {
-        const status = repoStatus.workdir[fileName];
-        if (FILESTATUS.ADDED === status) {
-            untracked.push(fileName);
-        }
-        else {
-            changed.push(fileName);
-        }
+    untracked.sort().forEach(filename => {
+        result += "\t" + color(path.relative(cwd, filename)) + "\n";
     });
-
-    // Then, print status of files that have been modified but not staged.
-
-    if (0 !== changed.length) {
-        if ("" !== result) {
-            result += "\n";
-        }
-        result += "Changes not staged for commit:\n\n";
-        changed.forEach(fileName => {
-            const status = repoStatus.workdir[fileName];
-            if (FILESTATUS.ADDED !== status) {
-                result += innerIndent;
-                result += colors.red(statusDescription(status));
-                result += colors.red(fileName);
-                result += "\n";
-            }
-        });
-    }
-
-    // Finally, print the names of newly added files.
-
-    if (0 !== untracked.length) {
-        if ("" !== result) {
-            result += "\n";
-        }
-        result += "Untracked files:\n\n";
-        untracked.forEach(fileName => {
-            result += innerIndent;
-            result += colors.red(fileName);
-            result += "\n";
-        });
-    }
     return result;
 };
 
 /**
- * Return a string describing the specified submodule `status`, displaying a
- * message if `status` does not have the specified `expectedBranchName` and it
- * is non-null, if there are staged changes to the submodule`s sha or url, or
- * if the submodule is open and has modifications to its index or working
- * directory -- other than untracked files.  Return an empty string otherwise.
+ * Return a list of status descriptors for the submodules in the specified
+ * `status` that have status changes.
  *
- * @param {String}               [expectedBranchName]
- * @param {RepoStatus.Submodule} status
+ * @param {RepoStatus} status
+ * @return {StatusDescriptor []}
+ */
+exports.listSubmoduleDescriptors = function (status) {
+    assert.instanceOf(status, RepoStatus);
+    const result = [];
+    const subs = status.submodules;
+    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    Object.keys(subs).forEach(subName => {
+        let detail = "";
+        const sub = subs[subName];
+
+        // If workdir or index are on different commit, add a description to
+        // detail.
+
+        const commitRelation = (null === sub.repoStatus) ?
+                               sub.indexShaRelation :
+                               sub.workdirShaRelation;
+        switch (commitRelation) {
+        case RELATION.AHEAD:
+            detail += ", new commits";
+            break;
+        case RELATION.BEHIND:
+            detail += ", on old commit";
+            break;
+        case RELATION.UNRELATED:
+            detail += ", on unrelated commit";
+            break;
+        case RELATION.UNKNOWN:
+            detail += ", on unknown commit";
+            break;
+        }
+
+        // Check if sha has changed.  If it's null, then this submodule is
+        // deleted in the index and will show that way.
+
+        if (null !== sub.indexUrl && sub.commitUrl !== sub.indexUrl) {
+            detail += ", new url";
+        }
+
+        // If there is detail or a non-null indexStatus, we have something to
+        // report, add it to the list.
+
+        if (null !== sub.indexStatus || "" !== detail) {
+            result.push(new StatusDescriptor(
+                sub.indexStatus === null ?
+                    RepoStatus.FILESTATUS.MODIFIED :
+                    sub.indexStatus,
+                subName,
+                "submodule" + detail));
+        }
+    });
+    return result;
+};
+
+/**
+ * Return the status descriptors and untracked files for the meta repo and
+ * acculuated from submodules in the specified `status`.
+ *
+ * @param {RepoStatus} status
+ * @return {Object}
+ * @return {StatusDescriptor []} return.staged
+ * @return {StatusDescriptor []} return.workdir
+ * @return {String []}           return.untracked
+ */
+exports.accumulateStatus = function (status) {
+    const staged = exports.listSubmoduleDescriptors(status);
+    const workdir = [];
+    const untracked = [];
+
+    function accumulateStaged(prefixPath, stagedFiles) {
+        Object.keys(stagedFiles).forEach(filename => {
+            staged.push(new StatusDescriptor(stagedFiles[filename],
+                                             path.join(prefixPath, filename),
+                                             ""));
+        });
+    }
+
+    function accumulateWorkdir(prefixPath, workdirFiles) {
+        Object.keys(workdirFiles).forEach(filename => {
+            const status = workdirFiles[filename];
+            const fullPath = path.join(prefixPath, filename);
+            if (RepoStatus.FILESTATUS.ADDED === status) {
+                untracked.push(fullPath);
+            }
+            else {
+                workdir.push(new StatusDescriptor(status, fullPath, ""));
+            }
+        });
+    }
+
+    accumulateStaged("", status.staged);
+    accumulateWorkdir("", status.workdir);
+
+    // Accumulate data for the submodules.
+
+    const subs = status.submodules;
+    Object.keys(subs).forEach(subName => {
+        const sub = subs[subName];
+        if(null !== sub.repoStatus) {
+            const subRepo = sub.repoStatus;
+            accumulateStaged(subName, subRepo.staged);
+            accumulateWorkdir(subName, subRepo.workdir);
+        }
+    });
+
+    return {
+        staged: staged,
+        workdir: workdir,
+        untracked: untracked,
+    };
+};
+
+/**
+ * Return a message describing the specified `rebase`.
+ *
+ * @param {Rebase}
  * @return {String}
  */
-exports.printSubmoduleStatus = function (expectedBranchName, status) {
-    if (null !== expectedBranchName) {
-        assert.isString(expectedBranchName);
+exports.printRebase = function (rebase) {
+    assert.instanceOf(rebase, Rebase);
+    const shortSha = GitUtil.shortSha(rebase.onto);
+    return `${colors.red("rebase in progress; onto ", shortSha)}
+You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
+  (fix conflicts and then run "git meta rebase --continue")
+  (use "git meta rebase --skip" to skip this patch)
+  (use "git meta rebase --abort" to check out the original branch)
+`;
+};
+
+/**
+ * Return a message describing the state of the current branch in the specified
+ * `status`.
+ *
+ * @param {RepoStatus} status
+ * @return {String>
+ */
+exports.printCurrentBranch = function (status) {
+    if (null !== status.currentBranchName) {
+        return `On branch ${colors.green(status.currentBranchName)}.\n`;
     }
-    assert.instanceOf(status, RepoStatus.Submodule);
+    return `\
+On detached head ${colors.red(GitUtil.shortSha(status.headCommit))}.\n`;
+};
+
+/**
+ * Return a description of the specified `status`, displaying paths relative to
+ * the specified `cwd`.  Note that a value of "" for `cwd` indicates the root
+ * of the repository.
+ *
+ * @param {RepoStatus} status
+ * @param {String}     cwd
+ */
+exports.printRepoStatus = function (status, cwd) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(cwd);
 
     let result = "";
 
-    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
-    const FILESTATUS = RepoStatus.FILESTATUS;
-
-    // We'll work back from the index in the main repo to the workdir of the
-    // subrepo.
-
-    // First, check to see if there are staged changes to this submodule in the
-    // index of the main repo.
-
-    if (status.indexStatus !== null) {
-        switch (status.indexStatus) {
-            case FILESTATUS.ADDED:
-                result += `\
-Added referencing url ${colors.green(status.indexUrl)} at commit \
-${colors.green(status.indexSha)}.
-`;
-                break;
-            case FILESTATUS.REMOVED:
-                result += colors.red("Removed\n");
-                break;
-            case FILESTATUS.MODIFIED:
-                if (status.indexUrl !== status.commitUrl) {
-                    result += `
-Staged change to URL from ${colors.green(status.commitUrl)} to \
-${colors.green(status.indexUrl)}.
-`;
-                }
-                switch (status.indexShaRelation) {
-                    case RELATION.SAME:
-                        break;
-                    case RELATION.AHEAD:
-                        result += `
-New commit staged from ${colors.green(GitUtil.shortSha(status.commitSha))} to \
-${colors.green(GitUtil.shortSha(status.indexSha))}.
-`;
-                        break;
-                    case RELATION.BEHIND:
-                        result += `
-Reset to old commit ${colors.yellow(GitUtil.shortSha(status.indexSha))} from \
-${colors.yellow(GitUtil.shortSha(status.commitSha))}.
-`;
-                        break;
-                    case RELATION.UNRELATED:
-                        result += `
-Changed to unrelated commit  ${colors.red(GitUtil.shortSha(status.indexSha))} \
-from ${colors.red(GitUtil.shortSha(status.commitSha))}.
-`;
-                        break;
-                    case RELATION.UNKNOWN:
-                        // TODO: when we have an appropriate command, such as
-                        // `git meta fetch`, recommend using it here instead of
-                        // giving this obtuse diagnosis.
-
-                        result += `
-Change staged to commit ${colors.yellow(GitUtil.shortSha(status.indexSha))} \
-but cannot find previous commit \
-${colors.yellow(GitUtil.shortSha(status.commitSha))} to compare to.
-`;
-                }
-                break;
-
-            default:
-                assert(false, `TODO: status: ${status.indexStatus}`);
-                break;
-        }
+    if (null !== status.rebase) {
+        result += exports.printRebase(status.rebase);
     }
 
-    // At this point, return if the repo is not open, i.e., there is no
-    // repoStatus.
+    result += exports.printCurrentBranch(status);
 
-    if (null === status.repoStatus) {
-        return result;                                                // RETURN
+    let changes = "";
+    const fileStatuses = exports.accumulateStatus(status);
+    const staged = fileStatuses.staged;
+    if (0 !== staged.length) {
+        changes += `\
+Changes to be committed:
+  (use "git meta reset HEAD <file>..." to unstage)
+
+`;
+        changes += exports.printStatusDescriptors(staged, colors.green, cwd);
+        changes += "\n";
+    }
+    const workdir = fileStatuses.workdir;
+    if (0 !== workdir.length) {
+        changes += `\
+Changes not staged for commit:
+  (use "git meta add <file>..." to update what will be committed)
+  (use "git meta checkout -- <file>..." to discard changes in working \
+directory)
+  (commit or discard the untracked or modified content in submodules)
+
+`;
+        changes += exports.printStatusDescriptors(workdir, colors.red, cwd);
+        changes += "\n";
+    }
+    const untracked = fileStatuses.untracked;
+    if (0 !== untracked.length) {
+        changes += `\
+Untracked files:
+  (use "git meta add <file>..." to include in what will be committed)
+
+`;
+        changes += exports.printUntrackedFiles(untracked, colors.red, cwd);
+        changes += "\n";
     }
 
-    // Then, the head commit of the submodule's repo.
-
-    switch (status.workdirShaRelation) {
-        case RELATION.SAME:
-            break;
-        case RELATION.AHEAD:
-            result += `
-New commit ${colors.green(GitUtil.shortSha(status.repoStatus.headCommit))} in \
-open repo.
-`;
-            break;
-        case RELATION.BEHIND:
-            result += `
-Open repo has old commit \
-${colors.red(GitUtil.shortSha(status.repoStatus.headCommit))} on head.
-`;
-            break;
-        case RELATION.UNRELATED:
-            result += `
-Open repo has unrelated commit \
-${colors.red(GitUtil.shortSha(status.repoStatus.headCommit))} on head.
-`;
-            break;
-        case RELATION.UNKNOWN:
-            // TODO: when we have an appropriate command, such as
-            // `git meta fetch`, recommend using it here instead of
-            // giving this obtuse diagnosis.
-
-            result += `\
-New commit in working directory \
-${colors.yellow(GitUtil.shortSha(status.repoStatus.headCommit))} \
-but cannot find previous commit \
-${colors.yellow(GitUtil.shortSha(status.indexSha))} to compare to.
-`;
-            break;
-
+    if ("" === changes) {
+        result += "nothing to commit, working tree clean\n";
+    }
+    else {
+        result += changes;
     }
 
-    // Finally, check the state of the index and workdir of the open repo.
-
-    result += exports.printFileStatuses(status.repoStatus);
     return result;
 };
+
+/**
+ * Return status changes for the specified `paths` in the specified `repo`.  If
+ * the specified `allUntracked` is true, include all untracked files rather
+ * than accumulating them by directory.  If `paths` is empty, check the entire
+ * `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String []} paths
+ * @param {Boolean} allUntracked
+ * @return {Object}
+ * @return {Object} return.staged path to FILESTATUS of staged changes
+ * @return {Object} return.workdir path to FILESTATUS of workdir changes
+ */
+exports.getChanges = co.wrap(function *(repo, paths, allUntracked) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isArray(paths);
+    assert.isBoolean(allUntracked);
+
+    const result = {
+        staged: {},
+        workdir: {},
+    };
+
+    // Loop through each of the `NodeGit.FileStatus` objects in the repo and
+    // categorize them into `result`.
+
+    const options = {
+        flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
+               NodeGit.Status.OPT.INCLUDE_UNTRACKED,
+        pathspec: paths,
+    };
+    if (allUntracked) {
+        options.flags = options.flags |
+                        NodeGit.Status.OPT.RECURSE_UNTRACKED_DIRS;
+    }
+    const statuses = yield repo.getStatusExt(options);
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    const STATUS = NodeGit.Status.STATUS;
+    for (let i = 0; i < statuses.length; ++i) {
+        const status = statuses[i];
+        const path = status.path();
+
+        // Skip the `.gitmodules` file.
+
+        if (SubmoduleConfigUtil.modulesFileName === path) {
+            continue;                                           // CONTINUE
+        }
+
+        const bit = status.statusBit();
+
+        // Index status.
+
+        if (bit & STATUS.INDEX_NEW) {
+            result.staged[path] = FILESTATUS.ADDED;
+        }
+        else if (bit & STATUS.INDEX_DELETED) {
+            result.staged[path] = FILESTATUS.REMOVED;
+        }
+        else if (bit & STATUS.INDEX_MODIFIED) {
+            result.staged[path] = FILESTATUS.MODIFIED;
+        }
+
+        // Workdir status
+
+        if (bit & STATUS.WT_NEW) {
+            result.workdir[path] = FILESTATUS.ADDED;
+        }
+        else if (bit & STATUS.WT_DELETED) {
+            result.workdir[path] = FILESTATUS.REMOVED;
+        }
+        else if (bit & STATUS.WT_MODIFIED) {
+            result.workdir[path] = FILESTATUS.MODIFIED;
+        }
+    }
+    return result;
+});
+
 
 /**
  * Return the `RepoStatus.Submodule` for the submodule having the specified
@@ -434,16 +619,133 @@ ${colors.red(name)}.`);
 });
 
 /**
- * Return a description of the status of changes to the specified `repo`.
+ * Return a map from submodule name to an array of paths (relative to the root
+ * of each submodule) identified by the specified `paths` relative to the root
+ * of the specified `workdir`, indicating one of the submodule names in the
+ * specified `indexSubNames`.  Check each path to see if it points into one of
+ * the specified `openSubmodules`, and add the relative offset to the paths for
+ * that submodule if it does.  If any path in `paths` contains a submodule
+ * entirely (as opposed to a sub-path within it), it will be mappped to an
+ * empty array (regardless of whether or not any sub-path in that submodule is
+ * identified).
+ *
+ * @param {String}    workdir
+ * @param {String []} paths
+ * @param {String []} indexSubNames
+ * @param {String []} openSubmodules
+ * @return {Object} map from submodule name to array of paths
+ */
+exports.getSubmoduleStatusPaths = co.wrap(function *(workdir,
+                                                     paths,
+                                                     indexSubNames,
+                                                     openSubmodules) {
+    assert.isString(workdir);
+    assert.isArray(paths);
+    assert.isArray(indexSubNames);
+    assert.isArray(openSubmodules);
+
+    const result = {};
+
+    // First, populate 'result' with all the subs that are completely
+    // contained.
+
+    yield paths.map(co.wrap(function *(path) {
+        const subs = yield SubmoduleUtil.getSubmodulesInPath(workdir,
+                                                             path,
+                                                             indexSubNames);
+        subs.forEach(subName => result[subName] = []);
+    }));
+
+    // Now check to see which paths refer to a path inside a submodule.
+    // Checking each file against the name of each open submodule has
+    // potentially N^2 behavior, but it will be unlikely to be an issue unless
+    // there are both a large number of paths specifically identified, and a
+    // large number of open submodules, in which case I imagine that the cost
+    // of this check will not be the bottleneck anyway.
+
+    // First, filter out subs that are already completely contained.
+
+    const subsToCheck = openSubmodules.filter(subName => {
+        return !(subName in result);
+    });
+
+    for (let i = 0; i < paths.length; ++i) {
+        const filename = paths[i];
+        for (let j = 0;  j < subsToCheck.length; ++j) {
+            const subName = subsToCheck[j];
+            if (filename.startsWith(subName + "/")) {
+                const pathInSub = filename.slice(subName.length + 1,
+                                                 filename.length);
+                const subPaths = result[subName];
+                if (undefined === subPaths) {
+                    result[subName] = [pathInSub];
+                }
+                else {
+                    subPaths.push(pathInSub);
+                }
+            }
+        }
+    }
+
+    return result;
+});
+
+/**
+ * Return a description of the status of changes to the specified `repo`.  If
+ * the optionally specified `options.showAllUntracked` is true (default false),
+ * return each untracked file individually rather than rolling up to the
+ * directory.  If the optionally specified `options.paths` is non-empty
+ * (default []), list the status only of the files contained in `paths`.  If
+ * the optionally specified `options.showMetaChanges` is provided (default
+ * true), return the status of changes in `repo`; otherwise, show only changes
+ * in submobules.  If the optionally specified
+ * `options.includeClosedSubmodules` is provided (default true), include the
+ * index status of closed submodules.
  *
  * @async
  * @param {NodeGit.Repository} repo
+ * @param {Object}             [options]
+ * @param {Boolean}            [options.showAllUntracked]
+ * @param {String []}          [options.paths]
+ * @param {Boolean}            [options.showMetaChanges]
+ * @param {Boolean}            [options.includeClosedSubmodules]
  * @return {RepoStatus}
  */
-exports.getRepoStatus = co.wrap(function *(repo) {
+exports.getRepoStatus = co.wrap(function *(repo, options) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    // TODO: show renamed from and to instead of just to.
+    // validate and fill in optional parameters
+
+    if (undefined === options) {
+        options = {};
+    }
+    else {
+        assert.isObject(options);
+    }
+    if (undefined === options.showAllUntracked) {
+        options.showAllUntracked = false;
+    }
+    else {
+        assert.isBoolean(options.showAllUntracked);
+    }
+    if (undefined === options.paths) {
+        options.paths = [];
+    }
+    else {
+        assert.isArray(options.paths);
+    }
+    if (undefined === options.showMetaChanges) {
+        options.showMetaChanges = true;
+    }
+    else {
+        assert.isBoolean(options.showMetaChanges);
+    }
+    if (undefined === options.includeClosedSubmodules) {
+        options.includeClosedSubmodules = true;
+    }
+    else {
+        assert.isBoolean(options.includeClosedSubmodules);
+    }
 
     const headCommit = yield repo.getHeadCommit();
 
@@ -468,53 +770,12 @@ exports.getRepoStatus = co.wrap(function *(repo) {
         args.rebase = rebase;
     }
 
-    if (!repo.isBare()) {
-
-        // Loop through each of the `NodeGit.FileStatus` objects in the repo
-        // and categorize them into `args`.
-
-        const statuses = yield repo.getStatusExt({
-            flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
-                NodeGit.Status.OPT.INCLUDE_UNTRACKED
-        });
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const STATUS = NodeGit.Status.STATUS;
-        for (let i = 0; i < statuses.length; ++i) {
-            const status = statuses[i];
-            const path = status.path();
-
-            // Skip the `.gitmodules` file.
-
-            if (SubmoduleConfigUtil.modulesFileName === path) {
-                continue;                                           // CONTINUE
-            }
-
-            const bit = status.statusBit();
-
-            // Index status.
-
-            if (bit & STATUS.INDEX_NEW) {
-                args.staged[path] = FILESTATUS.ADDED;
-            }
-            else if (bit & STATUS.INDEX_DELETED) {
-                args.staged[path] = FILESTATUS.REMOVED;
-            }
-            else if (bit & STATUS.INDEX_MODIFIED) {
-                args.staged[path] = FILESTATUS.MODIFIED;
-            }
-
-            // Workdir status
-
-            if (bit & STATUS.WT_NEW) {
-                args.workdir[path] = FILESTATUS.ADDED;
-            }
-            else if (bit & STATUS.WT_DELETED) {
-                args.workdir[path] = FILESTATUS.REMOVED;
-            }
-            else if (bit & STATUS.WT_MODIFIED) {
-                args.workdir[path] = FILESTATUS.MODIFIED;
-            }
-        }
+    if (options.showMetaChanges && !repo.isBare()) {
+        const status = yield exports.getChanges(repo,
+                                                options.paths,
+                                                options.showAllUntracked);
+        args.staged = status.staged;
+        args.workdir = status.workdir;
     }
 
     // Now do the submodules.  First, list the submodules visible in the head
@@ -526,146 +787,86 @@ exports.getRepoStatus = co.wrap(function *(repo) {
     // submodules in the index.
 
     if (null !== headCommit) {
-        const headSubs =
-           yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, headCommit);
-        const index = yield repo.index();
-        const indexSubs =
-                 yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+        // Now we need to figure out which subs to list, and what paths to
+        // inspect in them.
+
         const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
         const openSet = new Set(openArray);
+        const index = yield repo.index();
+        const indexUrls =
+                 yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+        const indexNames = Object.keys(indexUrls);
+        const headUrls =
+           yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, headCommit);
 
+
+        // No paths specified, so we'll do all submodules, restricing to open
+        // ones based on options.
+
+        let filterPaths; // map from sub name to paths to use
+        let subsToList;  // array of subs that will be in result
+        const filtering = 0 !== options.paths.length;
+        if (filtering) {
+            filterPaths = yield exports.getSubmoduleStatusPaths(repo.workdir(),
+                                                                options.paths,
+                                                                indexNames,
+                                                                openArray);
+            subsToList = Object.keys(filterPaths);
+            // If we're not including closed submodules, filter them out.
+            if (!options.includeClosedSubmodules) {
+                subsToList = subsToList.filter(name => openSet.has(name));
+            }
+        }
+        else {
+
+            // If we're not including closed subs, then the open submodules are
+            // the only ones to inspect.
+
+            if (!options.includeClosedSubmodules) {
+                subsToList = openArray;
+            }
+            else {
+                // Otherwise, compute the list by joining the list of
+                // submodules listed in the index and on head.
+                subsToList = Array.from(new Set(
+                        Object.keys(headUrls).concat(indexNames)));
+            }
+        }
         const commitTree = yield headCommit.getTree();
 
-        // Make a list of all subs that exist in either the head commit or the
-        // index.
-
-        const allSubNames = Array.from(new Set(
-                        Object.keys(headSubs).concat(Object.keys(indexSubs))));
 
         // Make a list of promises to read the status for each submodule, then
         // evaluate them in parallel.
 
-        const subStatMakers = allSubNames.map(name => {
+        const getSubRepo = function (subName, subRepo) {
+            const paths = filtering ? filterPaths[subName] : [];
+            return exports.getRepoStatus(subRepo, {
+                paths: paths,
+                showAllUntracked: options.showAllUntracked,
+            });
+        };
+
+        const subStatMakers = subsToList.map(name => {
             return exports.getSubmoduleStatus(name,
                                               repo,
-                                              indexSubs[name] || null,
-                                              headSubs[name] || null,
+                                              indexUrls[name] || null,
+                                              headUrls[name] || null,
                                               index,
                                               commitTree,
                                               openSet.has(name),
-                                              exports.getRepoStatus);
+                                              repo => getSubRepo(name, repo));
         });
         const subStats = yield subStatMakers;
 
         // And copy them into the arguments.
 
-        allSubNames.forEach((name, i) => {
+        subsToList.forEach((name, i) => {
             args.submodules[name] = subStats[i];
         });
     }
 
     return new RepoStatus(args);
 });
-
-/**
- * Return a string describing the status of the submodules in the specified
- * `submoduleNames` in the specified `metaRepo`.
- *
- * @async
- * @param {NodeGit.Repository} metaRepo
- * @param {String[]}           requestedNames
- * @return {String}
- */
-exports.printSubmodulesStatus = co.wrap(function *(metaRepo, requestedNames) {
-    assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.isArray(requestedNames);
-    requestedNames.forEach(name => assert.isString(name));
-
-    // TODO: if it starts to look slow, we could optimize to load only the
-    // status for the submodules in `submoduleNames`.
-
-    const repoStat = yield exports.getRepoStatus(metaRepo);
-
-    let result = "";
-
-    const subs = repoStat.submodules;
-
-    requestedNames.forEach((name, i) => {
-        if (0 !== i) {
-            result += "\n";
-        }
-        result += `${colors.cyan(name)}\n`;
-        const stat = subs[name];
-        if (!stat) {
-            result += "not the name of a submodule\n";
-            return;                                                   // RETURN
-        }
-        const statResult =
-               exports.printSubmoduleStatus(repoStat.currentBranchName, stat);
-        result += statResult;
-        if ("" === statResult) {
-            if (null === stat.repoStatus) {
-                result += "not visible, and no changes in index\n";
-            }
-            else {
-                result += "no changes\n";
-            }
-        }
-    });
-    return result;
-});
-
-/**
- * Return a description of the specified `metaStatus`.
- *
- * @param {RepoStatus} metaStatus
- */
-exports.printRepoStatus = function (metaStatus) {
-    let result = "";
-
-    if (null !== metaStatus.rebase) {
-        const rb = metaStatus.rebase;
-        const shortSha = GitUtil.shortSha(rb.onto);
-        result += `${colors.red("rebase in progress; onto ", shortSha)}
-You are currently rebasing branch '${rb.headName}' on '${shortSha}'.
-  (fix conflicts and then run "git meta rebase --continue")
-  (use "git meta rebase --skip" to skip this patch)
-  (use "git meta rebase --abort" to check out the original branch)
-`;
-    }
-
-    if (null !== metaStatus.currentBranchName) {
-        result += `On branch ${colors.green(metaStatus.currentBranchName)}.\n`;
-    }
-    else {
-        result += `\
-On detached head ${colors.red(GitUtil.shortSha(metaStatus.headCommit))}.`;
-    }
-    const metaStatusDesc = exports.printFileStatuses(metaStatus);
-    result += metaStatusDesc;
-    if ("" === metaStatusDesc) {
-        result += "  nothing to commit, working directory clean\n";
-    }
-
-    let submodulesText = "";
-    const subs = metaStatus.submodules;
-    Object.keys(subs).forEach(name => {
-        const status = subs[name];
-        const subResult = exports.printSubmoduleStatus(
-                                                  metaStatus.currentBranchName,
-                                                  status);
-        if ("" !== subResult) {
-            submodulesText += colors.cyan(name) + "\n";
-            submodulesText += subResult;
-        }
-    });
-
-    if ("" !== submodulesText) {
-        result += "Submodules:\n";
-        result += submodulesText;
-    }
-    return result;
-};
 
 /**
  * Do nothing if the specified `metaStatus` indicates a clean meta-repository

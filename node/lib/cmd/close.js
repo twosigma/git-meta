@@ -90,6 +90,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const workdir = repo.workdir();
     const cwd     = process.cwd();
+    const subs    = yield SubmoduleUtil.getSubmoduleNames(repo);
 
     // This logic is copy and pasted from `open`, but I'm not convinced yet
     // that it should be refactored; I feel like close/open specific logic may
@@ -111,7 +112,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             }
             throw e;
         }
-        const result = yield SubmoduleUtil.getSubmodulesInPath(repo, relPath);
+        const result = yield SubmoduleUtil.getSubmodulesInPath(workdir,
+                                                               relPath,
+                                                               subs);
         if (0 === result.length) {
             console.warn(`\
 No submodules found from ${colors.orange(filename)}.`);
@@ -140,7 +143,7 @@ No submodules found from ${colors.orange(filename)}.`);
                                    0 !== Object.keys(subRepo.workdir).length) {
                 errorMessage += `\
 Could not close ${colors.cyan(name)} because it is not clean:
-${Status.printFileStatuses(subRepo)}.
+${Status.printFileStatuses(subRepo.staged, subRepo.workdir)}.
 Pass ${colors.magenta("--force")} to close it anyway.
 `;
                 return;                                               // RETURN
