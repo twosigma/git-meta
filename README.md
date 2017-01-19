@@ -66,6 +66,45 @@ $ cd git-meta/node
 $ npm install -g
 ```
 
+## Quick Start / Basic Usage
+
+### Clone
+
+Clone your organization's meta-repository as you normally would with Git:
+
+```bash
+$ git clone http://example.com/my-meta-repo.git meta
+$ cd meta
+````
+
+At this point, your working directory is likely full of empty directories where
+sub-repos are mounted.  Open the one(s) you're interested in working on and
+create out a feature branch to work on:
+
+```bash
+$ git meta open my-repo
+$ git meta checkout -b my-feature
+```
+
+Now, change a file:
+
+```bash
+$ cd my-repo
+$ echo "new work" >> some-file
+```
+
+Make a commit:
+
+```bash
+$ git meta commit -a -m "I made a change."
+```
+
+And push your change back upstream:
+
+```bash
+$ git meta push origin my-feature
+```
+
 # Documentation
 
 ## User Guide
