@@ -117,7 +117,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                                subs);
         if (0 === result.length) {
             console.warn(`\
-No submodules found from ${colors.orange(filename)}.`);
+No submodules found from ${colors.yellow(filename)}.`);
         }
         return result;
     }));
