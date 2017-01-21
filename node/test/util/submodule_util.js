@@ -604,5 +604,93 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
+
+    describe("resolvePaths", function () {
+        // Work off of 'x'.
+
+        const cases = {
+            "trivial": {
+                state: "x=S",
+                paths: [],
+                open: [],
+                expected: {},
+            },
+            "got by path": {
+                state: "a=B|x=U",
+                paths: ["s"],
+                open: [],
+                expected: { "s": [] },
+            },
+            "inside path": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md"],
+                open: ["s"],
+                expected: { "s": ["README.md"]},
+            },
+            "inside but not listed": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md"],
+                open: [],
+                expected: {},
+            },
+            "two inside": {
+                state: "a=B|x=U:Os I x/y=a,a/b=b",
+                paths: ["s/x", "s/a"],
+                open: ["s"],
+                expected: { s: ["x","a"]},
+            },
+            "inside path, trumped by full path": {
+                state: "a=B|x=U:Os",
+                paths: ["s/README.md", "s"],
+                open: ["s"],
+                expected: { "s": []},
+            },
+            "two contained": {
+                state: "a=B|x=S:I a/b=Sa:1,a/c=Sa:1",
+                paths: ["a"],
+                open: [],
+                expected: {
+                    "a/b": [],
+                    "a/c": [],
+                },
+            },
+            "two specified": {
+                state: "a=B|x=S:I a/b=Sa:1,a/c=Sa:1",
+                paths: ["a/b", "a/c"],
+                open: [],
+                expected: {
+                    "a/b": [],
+                    "a/c": [],
+                },
+            },
+            "path not in sub": {
+                state: "a=B|x=U:Os",
+                paths: ["README.md"],
+                open: ["s"],
+                expected: {},
+            },
+            "filename starts with subname but not in it": {
+                state: "a=B|x=U:I sam=3;Os",
+                paths: ["sam"],
+                open: ["s"],
+                expected: {},
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = w.repos.x;
+                const workdir = repo.workdir();
+                const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
+                const result = yield SubmoduleUtil.resolvePaths(workdir,
+                                                                c.paths,
+                                                                subs,
+                                                                c.open);
+                assert.deepEqual(result, c.expected);
+            }));
+        });
+    });
+
 });
 
