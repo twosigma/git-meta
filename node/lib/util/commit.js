@@ -188,8 +188,9 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     // a commit in the meta-repo whether or not the meta-repo has its own
     // workdir changes.
 
-    let subsChanged = false;
-    let subCommits = {};
+    let subsChanged = false;  // set to true to force a meta-repo commit
+    const subCommits = {};    // maps submodule to generated commit
+    const subsToStage = [];   // array of subs needing to be staged
     const commitSubmodule = co.wrap(function *(name) {
         const status = submodules[name];
         const repoStatus = status.repoStatus;
@@ -206,12 +207,24 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
             subCommits[name] = committed.tostrS();
         }
 
-        // Record a change if we made a commit, or if there was already a
-        // change staged for this submodule.
+        // Remember to stage, in the meta-repo index, submodules that already
+        // had (unstaged) commits or those for which we make commits.
 
-        subsChanged = subsChanged ||
-                      null !== committed ||
-                      null !== status.indexStatus;
+        if (null !== committed ||
+            (null !== repoStatus &&
+             status.indexSha !== repoStatus.headCommit)) {
+            subsToStage.push(name);
+
+            // Remember that we've changed a submodule.
+
+            subsChanged = true;
+        }
+        else if (null !== status.indexStatus) {
+            // Also record that a change has been made if there was already a
+            // staged commit for this submodule.
+
+            subsChanged = true;
+        }
     });
 
     const subCommitters = Object.keys(submodules).map(commitSubmodule);
@@ -219,11 +232,9 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
 
     // If submodule commits were created, we need to stage them.
 
-    if (0 !== Object.keys(subCommits).length) {
+    if (0 !== subsToStage.length) {
         const index = yield metaRepo.index();
-        for (let name in subCommits) {
-            yield index.addByPath(name);
-        }
+        yield subsToStage.map(subName => index.addByPath(subName));
         yield index.write();
     }
 
