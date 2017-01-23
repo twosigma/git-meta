@@ -38,7 +38,6 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
-const url     = require("url");
 
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
@@ -115,7 +114,8 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
         // Resolve the submodule's URL against the URL of the meta-repo,
         // ignoring the remote that is configured in the open submodule.
 
-        const subUrl = url.resolve(remoteUrl, urls[subName]);
+        const subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(remoteUrl,
+                                                               urls[subName]);
 
         // Always force push synthetic refs.  It should not be necessary, but
         // if something does go wrong forcing will allow us to auto-correct.

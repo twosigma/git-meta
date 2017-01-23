@@ -266,6 +266,25 @@ a=E:Bfoo=2|\
 b=E:Fcommits/3=3|\
 x=E:Rorigin=a master=1,foo=2;Ob Rorigin=c",
         },
+        "open submodule meta remote is sub remote": {
+            initial: `
+a=B|
+x=S:Rorigin=a;C2-1 b=S.:x;Bmaster=2;Ob Cx-1!H=x!Rorigin=a`,
+            manipulator: pusher("x", "origin", "master", "foo"),
+            expected: `
+a=E:Bfoo=2;Fcommits/x=x|
+x=E:Rorigin=a foo=2`,
+        },
+        "open submodule meta remote is sub remote, ignore origin": {
+            initial: `
+a=B|
+b=B|
+x=S:Rorigin=a;C2-1 b=S.:x;Bmaster=2;Ob Cx-1!H=x!Rorigin=b`,
+            manipulator: pusher("x", "origin", "master", "foo"),
+            expected: `
+a=E:Bfoo=2;Fcommits/x=x|
+x=E:Rorigin=a foo=2`,
+        },
     };
 
     Object.keys(cases).forEach(caseName => {
