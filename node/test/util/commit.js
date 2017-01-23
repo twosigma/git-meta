@@ -298,6 +298,12 @@ x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x`,
                 doAll: true,
                 expected: {},
             },
+            "unstaged commit in sub repo": {
+                initial: "a=S|x=U:Os Ca-1!H=a",
+                message: "message",
+                doAll: false,
+                expected: `x=E:Cx-2 s=Sa:a;Bmaster=x`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
