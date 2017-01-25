@@ -122,6 +122,9 @@ class Submodule {
      * @param {RepoStatus}            [repoStatus]
      */
     constructor(status) {
+        if (undefined === status) {
+            status = {};
+        }
         assert.isObject(status);
         this.d_indexStatus        = null;
         this.d_indexSha           = null;
@@ -258,9 +261,32 @@ class Submodule {
             return false;
         }
 
-        // Otherwise, check its index status.
+        // Finally, we're clean if there is no change to our index status,
+        // which would indicate a URL change.
 
         return null === this.d_indexStatus;
+    }
+
+    /**
+     * Return true if this submodule has been added.
+     * @return {Boolean}
+     */
+    isNew() {
+        return FILESTATUS.ADDED === this.d_indexStatus;
+    }
+
+    /**
+     * Return true if this submodule can be committed, either being not new, or
+     * having some staged changes or commits.
+     *
+     * @return {Boolean}
+     */
+    isCommittable () {
+        return !(this.isNew() &&
+            null === this.d_indexSha &&
+            (null === this.d_repoStatus ||
+             (null === this.d_repoStatus.headCommit &&
+             this.d_repoStatus.isIndexClean())));
     }
 
     /**
@@ -450,6 +476,16 @@ class RepoStatus {
             }
         }
         return true;
+    }
+
+    /*
+     * Return true if there are new submodules that are uncommittable.
+     */
+    areUncommittableSubmodules() {
+        return -1 !== Object.keys(this.d_submodules).findIndex(subName => {
+            const sub = this.d_submodules[subName];
+            return !sub.isCommittable();
+        });
     }
 
     // PROPERTIES
