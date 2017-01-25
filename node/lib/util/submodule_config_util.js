@@ -273,7 +273,8 @@ exports.getConfigLines = function (name, url) {
 /**
  * Write the entry to set up the the submodule having the specified `name` to
  * and `url` to the `.git/config` file for the repo at the specified
- * `repoPath`.
+ * `repoPath`.  The behavior is undefined if there is already an entry for
+ * `name` in the config file.
  *
  * @async
  * @param {NodeGit.Repository} repo
