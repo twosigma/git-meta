@@ -165,7 +165,8 @@ with '#' will be ignored, and an empty message aborts the commit.
  * is provided.  If the specified `all` is provided, automatically stage
  * modified files.  If a commit is generated, return an object that lists the
  * sha of the created meta-repo commit and the shas of any commits generated in
- * submodules.
+ * submodules. The behavior is undefined if there are entries in `.gitmodules`
+ * for submodules having no commits.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
@@ -182,20 +183,24 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     assert.instanceOf(metaStatus, RepoStatus);
     assert.isString(message);
 
+    if (metaStatus.isIndexDeepClean() &&
+        (!all || metaStatus.isWorkdirDeepClean())) {
+        return null;                                                  // RETURN
+    }
+
     const submodules = metaStatus.submodules;
 
     // Commit submodules.  If any changes, remember this so we know to generate
     // a commit in the meta-repo whether or not the meta-repo has its own
     // workdir changes.
 
-    let subsChanged = false;  // set to true to force a meta-repo commit
-    const subCommits = {};    // maps submodule to generated commit
-    const subsToStage = [];   // array of subs needing to be staged
+    const subCommits = {};
+    const subsToStage = [];
     const commitSubmodule = co.wrap(function *(name) {
         const status = submodules[name];
         const repoStatus = status.repoStatus;
         let committed = null;
-        if (null !== repoStatus) {
+        if (null !== status.repoStatus) {
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
             committed = yield commitRepo(subRepo,
                                          repoStatus,
@@ -207,23 +212,15 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
             subCommits[name] = committed.tostrS();
         }
 
-        // Remember to stage, in the meta-repo index, submodules that already
-        // had (unstaged) commits or those for which we make commits.
+        // Note that we need to stage the submodule in the meta-repo if:
+        // - we made a commit
+        // - its index status has changed
+        // - it's new and has a workdir commit
 
         if (null !== committed ||
             (null !== repoStatus &&
-             status.indexSha !== repoStatus.headCommit)) {
+             (repoStatus.headCommit !== status.indexSha))) {
             subsToStage.push(name);
-
-            // Remember that we've changed a submodule.
-
-            subsChanged = true;
-        }
-        else if (null !== status.indexStatus) {
-            // Also record that a change has been made if there was already a
-            // staged commit for this submodule.
-
-            subsChanged = true;
         }
     });
 
@@ -234,7 +231,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
 
     if (0 !== subsToStage.length) {
         const index = yield metaRepo.index();
-        yield subsToStage.map(subName => index.addByPath(subName));
+        yield subsToStage.map(name => index.addByPath(name));
         yield index.write();
     }
 
@@ -242,7 +239,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
                                         metaStatus,
                                         all,
                                         message,
-                                        subsChanged);
+                                        true);
 
     if (null !== metaResult) {
         return {

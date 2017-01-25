@@ -64,15 +64,6 @@ exports.configureParser = function (parser) {
 Include changes to the meta-repo; disabled by default to improve performance.`,
         defaultValue: false,
     });
-    parser.addArgument(["--closed"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the index for closed submodules, a very rare situation \
-that is expensive to check.`,
-        defaultValue: false,
-    });
     parser.addArgument(["path"], {
         type: "string",
         help: "paths to inspect for changes",
@@ -103,7 +94,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     });
     const repoStatus = yield Status.getRepoStatus(repo, {
         showMetaChanges: args.meta,
-        includeClosedSubmodules: args.closed,
         paths: paths,
     });
 

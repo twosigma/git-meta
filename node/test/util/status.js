@@ -497,17 +497,18 @@ describe("Status", function () {
         const cases = {
             "trivial": {
                 status: new RepoStatus(),
-                expected: [],
             },
             "deleted": {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
+                            commitUrl: "a",
+                            commitSha: "1",
                             indexStatus: FILESTATUS.REMOVED,
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.REMOVED, "x", "submodule"),
                 ],
             },
@@ -523,7 +524,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, new url"),
@@ -541,7 +542,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, new commits, new url"),
@@ -559,7 +560,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, new commits"),
@@ -581,7 +582,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, new commits"),
@@ -599,7 +600,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, on old commit"),
@@ -617,7 +618,7 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, on unrelated commit"),
@@ -635,18 +636,77 @@ describe("Status", function () {
                         }),
                     },
                 }),
-                expected: [
+                staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, on unknown commit"),
                 ],
             },
+            "new sub, no commit": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.ADDED,
+                        }),
+                    },
+                }),
+                workdir: [
+                    new StatusDescriptor(
+                                  FILESTATUS.ADDED,
+                                  "x",
+                                  "submodule, create commit or stage changes"),
+                ],
+            },
+            "new sub, no commit, open": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.ADDED,
+                            repoStatus: new RepoStatus(),
+                        }),
+                    },
+                }),
+                workdir: [
+                    new StatusDescriptor(
+                                  FILESTATUS.ADDED,
+                                  "x",
+                                  "submodule, create commit or stage changes"),
+                ],
+            },
+            "new sub, no commit but staged": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.ADDED,
+                            repoStatus: new RepoStatus({
+                                staged: { foo: FILESTATUS.ADDED },
+                            }),
+                        }),
+                    },
+                }),
+                staged: [
+                    new StatusDescriptor(
+                                  FILESTATUS.ADDED,
+                                  "x",
+                                  "submodule, newly created"),
+                ],
+            },
+//            "new sub staged and good": {
+//                status
+//            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
+                const staged = c.staged || [];
+                const workdir = c.workdir || [];
+                const untracked = c.untracked || [];
                 const result = Status.listSubmoduleDescriptors(c.status);
-                assert.deepEqual(result, c.expected);
+                assert.deepEqual(result, {
+                    staged: staged,
+                    workdir: workdir,
+                    untracked: untracked,
+                });
             });
         });
     });
@@ -711,6 +771,7 @@ describe("Status", function () {
                     submodules: {
                         s: new Submodule({
                             commitUrl: "foo",
+                            commitSha: "a",
                             indexUrl: "bar",
                         }),
                     },
@@ -729,6 +790,8 @@ describe("Status", function () {
                 input: new RepoStatus({
                     submodules: {
                         s: new Submodule({
+                            commitUrl: "1",
+                            commitSha: "2",
                             repoStatus: new RepoStatus({
                                 staged: { x: FILESTATUS.REMOVED },
                                 workdir: { 
@@ -1335,8 +1398,6 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
             //   removed in the index or added in the index
             // - `showAllUntracked` propagates
             // - path filtering works
-            // - `options.includClosedSubmodules` works
-            // - filtering works in conjunction with `includeClosedSubmodules`
 
             "sub no show all added": {
                 state: "a=S|x=U:Os W x/y=z",
@@ -1471,85 +1532,6 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                             indexShaRelation: RELATION.SAME,
                         }),
                     },
-                }),
-            },
-            "skipped because closed not included": {
-                state: "a=B|x=U",
-                options: {
-                    includeClosedSubmodules: false,
-                },
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "2",
-                }),
-            },
-            "skipped because closed not included, even when filtered in": {
-                state: "a=B|x=U",
-                options: {
-                    includeClosedSubmodules: false,
-                    paths: ["s"],
-                },
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "2",
-                }),
-            },
-            "no include closed doesn't affect open": {
-                state: "a=B|x=U:Os",
-                options: {
-                    includeClosedSubmodules: false,
-                },
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "2",
-                    submodules: {
-                        s: new Submodule({
-                            commitSha: "1",
-                            commitUrl: "a",
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
-                                headCommit: "1",
-                            }),
-                            workdirShaRelation: RELATION.SAME,
-                        }),
-                    },
-                }),
-            },
-            "no include closed doesn't affect open, even if filtered": {
-                state: "a=B|x=U:Os",
-                options: {
-                    includeClosedSubmodules: false,
-                    paths: ["s"],
-                },
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "2",
-                    submodules: {
-                        s: new Submodule({
-                            commitSha: "1",
-                            commitUrl: "a",
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
-                                headCommit: "1",
-                            }),
-                            workdirShaRelation: RELATION.SAME,
-                        }),
-                    },
-                }),
-            },
-            "filter works on open subs": {
-                state: "a=B|x=U:Os",
-                options: {
-                    includeClosedSubmodules: false,
-                    paths: ["README.md"],
-                },
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "2",
                 }),
             },
             "deep filter": {

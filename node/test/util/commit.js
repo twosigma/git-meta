@@ -298,11 +298,24 @@ x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x`,
                 doAll: true,
                 expected: {},
             },
-            "unstaged commit in sub repo": {
-                initial: "a=S|x=U:Os Ca-1!H=a",
-                message: "message",
+
+            // Note that Git will put the first commit on branch `master`
+            // without being asked to.  I don't think this behavior is onerous
+            // enought to code around it; instead, we will account for it in
+            // our test case.
+
+            "new sub no commits, stage": {
+                initial: "a=B|x=S:I s=Sa:;Os I q=r",
                 doAll: false,
-                expected: `x=E:Cx-2 s=Sa:a;Bmaster=x`,
+                message: "message",
+                expected: `
+x=E:Cx-1 s=Sa:s;I s=~;Os Cs q=r!*=master!Bmaster=s;Bmaster=x`,
+            },
+            "new sub with commits": {
+                initial: "a=B|x=Ca:I s=S.:;Os Cz!H=z",
+                doAll: false,
+                message: "message",
+                expected: `x=E:Cx-1 s=S.:z;Bmaster=x;I s=~`,
             },
         };
         Object.keys(cases).forEach(caseName => {

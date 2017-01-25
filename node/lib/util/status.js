@@ -170,21 +170,37 @@ exports.printUntrackedFiles = function (untracked, color, cwd) {
  * `status` that have status changes.
  *
  * @param {RepoStatus} status
- * @return {StatusDescriptor []}
+ * @return {Object}
+ * @return {StatusDescriptor []} return.staged
+ * @return {StatusDescriptor []} return.workdir
+ * @return {String []}           return.untracked
  */
 exports.listSubmoduleDescriptors = function (status) {
     assert.instanceOf(status, RepoStatus);
-    const result = [];
+    const staged = [];
+    const workdir = [];
+    const untracked = [];
     const subs = status.submodules;
     const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
     Object.keys(subs).forEach(subName => {
         let detail = "";
         const sub = subs[subName];
+        const subRepo = sub.repoStatus;
+
+        // Check for new submodule with no commit.
+
+        if (!sub.isCommittable()) {
+            workdir.push(new StatusDescriptor(
+                                 RepoStatus.FILESTATUS.ADDED,
+                                 subName,
+                                 "submodule, create commit or stage changes"));
+            return;                                                   // RETURN
+        }
 
         // If workdir or index are on different commit, add a description to
         // detail.
 
-        const commitRelation = (null === sub.repoStatus) ?
+        const commitRelation = (null === subRepo) ?
                                sub.indexShaRelation :
                                sub.workdirShaRelation;
         switch (commitRelation) {
@@ -202,10 +218,16 @@ exports.listSubmoduleDescriptors = function (status) {
             break;
         }
 
+        // Check to see if new submodule.
+
+        if (sub.isNew()) {
+            detail += ", newly created";
+        }
+
         // Check if sha has changed.  If it's null, then this submodule is
         // deleted in the index and will show that way.
 
-        if (null !== sub.indexUrl && sub.commitUrl !== sub.indexUrl) {
+        else if (null !== sub.indexUrl && sub.commitUrl !== sub.indexUrl) {
             detail += ", new url";
         }
 
@@ -213,15 +235,26 @@ exports.listSubmoduleDescriptors = function (status) {
         // report, add it to the list.
 
         if (null !== sub.indexStatus || "" !== detail) {
-            result.push(new StatusDescriptor(
-                sub.indexStatus === null ?
-                    RepoStatus.FILESTATUS.MODIFIED :
-                    sub.indexStatus,
-                subName,
-                "submodule" + detail));
+            let status;
+            if (sub.isNew()) {
+                status = RepoStatus.FILESTATUS.ADDED;
+            }
+            else if (null === sub.indexStatus) {
+                status = RepoStatus.FILESTATUS.MODIFIED;
+            }
+            else {
+                status = sub.indexStatus;
+            }
+            staged.push(new StatusDescriptor(status,
+                                             subName,
+                                             "submodule" + detail));
         }
     });
-    return result;
+    return {
+        staged: staged,
+        workdir: workdir,
+        untracked: untracked,
+    };
 };
 
 /**
@@ -235,9 +268,10 @@ exports.listSubmoduleDescriptors = function (status) {
  * @return {String []}           return.untracked
  */
 exports.accumulateStatus = function (status) {
-    const staged = exports.listSubmoduleDescriptors(status);
-    const workdir = [];
-    const untracked = [];
+    const result = exports.listSubmoduleDescriptors(status);
+    const staged = result.staged;
+    const workdir = result.workdir;
+    const untracked = result.untracked;
 
     function accumulateStaged(prefixPath, stagedFiles) {
         Object.keys(stagedFiles).forEach(filename => {
@@ -524,9 +558,7 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
             args.indexSha = entry.id.tostrS();
         }
         else {
-            throw new UserError(`\
-Misconfigured repo; no commit specified in index for submodule \
-${colors.red(name)}.`);
+            args.indexSha = null;
         }
     }
 
@@ -626,9 +658,7 @@ ${colors.red(name)}.`);
  * (default []), list the status only of the files contained in `paths`.  If
  * the optionally specified `options.showMetaChanges` is provided (default
  * true), return the status of changes in `repo`; otherwise, show only changes
- * in submobules.  If the optionally specified
- * `options.includeClosedSubmodules` is provided (default true), include the
- * index status of closed submodules.
+ * in submobules.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -636,7 +666,6 @@ ${colors.red(name)}.`);
  * @param {Boolean}            [options.showAllUntracked]
  * @param {String []}          [options.paths]
  * @param {Boolean}            [options.showMetaChanges]
- * @param {Boolean}            [options.includeClosedSubmodules]
  * @return {RepoStatus}
  */
 exports.getRepoStatus = co.wrap(function *(repo, options) {
@@ -667,12 +696,6 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     }
     else {
         assert.isBoolean(options.showMetaChanges);
-    }
-    if (undefined === options.includeClosedSubmodules) {
-        options.includeClosedSubmodules = true;
-    }
-    else {
-        assert.isBoolean(options.includeClosedSubmodules);
     }
 
     const headCommit = yield repo.getHeadCommit();
@@ -740,25 +763,12 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
                                                            indexNames,
                                                            openArray);
             subsToList = Object.keys(filterPaths);
-            // If we're not including closed submodules, filter them out.
-            if (!options.includeClosedSubmodules) {
-                subsToList = subsToList.filter(name => openSet.has(name));
-            }
         }
         else {
-
-            // If we're not including closed subs, then the open submodules are
-            // the only ones to inspect.
-
-            if (!options.includeClosedSubmodules) {
-                subsToList = openArray;
-            }
-            else {
-                // Otherwise, compute the list by joining the list of
-                // submodules listed in the index and on head.
-                subsToList = Array.from(new Set(
-                        Object.keys(headUrls).concat(indexNames)));
-            }
+            // Compute the list by joining the list of submodules listed in the
+            // index and on head.
+            subsToList = Array.from(new Set(
+                                    Object.keys(headUrls).concat(indexNames)));
         }
         const commitTree = yield headCommit.getTree();
 

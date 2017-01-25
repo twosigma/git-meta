@@ -91,7 +91,8 @@ that is expensive to check.`,
  * @param {String}  [args.message]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const path = require("path");
+    const colors = require("colors");
+    const path   = require("path");
 
     const Commit     = require("../util/commit");
     const GitUtil    = require("../util/git_util");
@@ -106,8 +107,22 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         includeClosedSubmodules: args.closed,
     });
 
-    function warnNothing() {
-        process.stdout.write(Status.printRepoStatus(repoStatus, relCwd));
+    // Abort if there are uncommittable submodules; we don't want to commit a
+    // .gitmodules file with references to a submodule that doesn't have a
+    // commit.
+    //
+    // TODO: potentially do somthing more intelligent like committing a
+    // different versio of .gitmodules than what is on disk to omit
+    // "uncommittable" submodules.  Considering that this situation should be
+    // relatively rare, I don't think it's worth the additional complexity at
+    // this time.
+
+    if (repoStatus.areUncommittableSubmodules()) {
+        process.stderr.write(Status.printRepoStatus(repoStatus, relCwd));
+        console.error(`\
+${colors.yellow("Please stage changes in new submodules before committing.")}\
+`);
+        process.exit(1);
     }
 
     // If there are no staged changes, and we either didn't specify "all" or we
@@ -116,7 +131,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     if (repoStatus.isIndexDeepClean() &&
         (!args.all || repoStatus.isWorkdirDeepClean())) {
-        warnNothing();
+        process.stdout.write(Status.printRepoStatus(repoStatus, relCwd));
         return;
     }
 
