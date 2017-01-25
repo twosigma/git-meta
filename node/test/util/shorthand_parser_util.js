@@ -555,6 +555,18 @@ describe("ShorthandParserUtil", function () {
                     rebase: null,
                 }),
             },
+            "new submodule": {
+                i: "S:I x=Sfoo:;Ox",
+                e: m({
+                    type: "S",
+                    index: {
+                        x: new Submodule("foo", null),
+                    },
+                    openSubmodules: {
+                        x: m({ type: null }),
+                    },
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -1167,6 +1179,42 @@ x=S:Efoo,8,9`,
                         rebase: new RepoAST.Rebase("foo", "8", "9"),
                     }),
                 }
+            },
+            "new open sub": {
+                i: "a=B|x=S:I s=Sa:;Os",
+                e: {
+                    a: B,
+                    x: S.copy({
+                        index: {
+                            s: new RepoAST.Submodule("a", null)
+                        },
+                        openSubmodules: {
+                            s: new RepoAST({
+                                remotes: {
+                                    origin: new RepoAST.Remote("a"),
+                                },
+                            }),
+                        },
+                    }),
+                },
+            },
+            "sub with '.' origin and parent having remote from base": {
+                i: "a=B|x=Ca:I s=S.:;Os",
+                e: {
+                    a: B,
+                    x: RepoASTUtil.cloneRepo(B, "a").copy({
+                        index: {
+                            s: new RepoAST.Submodule(".", null),
+                        },
+                        openSubmodules: {
+                            s: new RepoAST({
+                                remotes: {
+                                    origin: new RepoAST.Remote("a"),
+                                },
+                            }),
+                        },
+                    }),
+                },
             },
         };
         Object.keys(cases).forEach(caseName => {

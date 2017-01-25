@@ -68,7 +68,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *                  [' '<change>(',\s*'<change>*)]
  * change         = path ['=' <submodule> | "~" | <data>]
  * path           = (<alpha numeric>|'/')+
- * submodule      = Surl:<commit>
+ * submodule      = Surl:[<commit>]
  * data           = ('0-9'|'a-z'|'A-Z'|' ')*    basically non-delimiter ascii
  * remote         = R<name>=[<url>]
  *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
@@ -256,16 +256,16 @@ function parseChangeData(commitData) {
     // Must have room for 'S', ':', and at least one char for the url and
     // commit id
 
-    assert(commitData.length > 3, `Invalid submodule ${commitData}`);
     const urlBegin = 1;
     const urlEnd = findChar(commitData, ":", urlBegin, end);
     assert.isNotNull(urlEnd);
     const commitIdBegin = urlEnd + 1;
-    assert.notEqual(commitIdBegin, end);
+    const sha = (commitIdBegin === end) ?
+                null :
+                commitData.substr(commitIdBegin, end - commitIdBegin);
     return new RepoAST.Submodule(commitData.substr(urlBegin,
                                                    urlEnd - urlBegin),
-                                 commitData.substr(commitIdBegin,
-                                                   end - commitIdBegin));
+                                 sha);
 }
 
 /**
@@ -1228,6 +1228,7 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (!(name in rawRepos)) {
             return;                                                   // RETURN
         }
+        const repo = result[name];
         const rawResult = rawRepos[name];
         const openSubNames = Object.keys(rawResult.openSubmodules);
         if (0 !== openSubNames.length) {
@@ -1257,7 +1258,7 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                     openUrl = openUrl.substr(3);
                 }
                 else if ("." === openUrl) {
-                    const remotes = rawResult.remotes;
+                    const remotes = repo.remotes;
                     assert.property(remotes, "origin", "dot must have origin");
                     const origin = remotes.origin;
                     openUrl = origin.url;
@@ -1287,7 +1288,9 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                 }
 
                 let subCommits = {};
-                copyCommitAndParents(subCommits, commits, head);
+                if (null !== head) {
+                    copyCommitAndParents(subCommits, commits, head);
+                }
 
                 const baseSubAST = clone.copy({
                     branches: {},
