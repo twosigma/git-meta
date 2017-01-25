@@ -44,6 +44,10 @@ describe("RepoAST", function () {
             assert.equal(s.url, "foo");
             assert.equal(s.sha, "bar");
         });
+        it("null sha", function () {
+            const s = new RepoAST.Submodule("foo", null);
+            assert.isNull(s.sha);
+        });
     });
 
     describe("Commit", function () {
