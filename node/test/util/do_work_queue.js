@@ -35,9 +35,9 @@ const co     = require("co");
 
 const DoWorkQueue = require("../../lib/util/do_work_queue");
 
-function nextTick() {
+function waitSomeTime(time) {
     return new Promise(callback => {
-        process.nextTick(callback);
+        setTimeout(callback, time);
     });
 }
 
@@ -53,11 +53,35 @@ describe("DoWorkQueue", function () {
         function getWork(i, index) {
             assert.equal(i, index);
             return co(function *() {
-                yield nextTick();
+                yield waitSomeTime((i % 10));
                 return i * 2;
             });
         }
         const result = yield DoWorkQueue.doInParallel(work, getWork);
+        assert.equal(result.length, NUM_TO_DO);
+        assert.deepEqual(result, expected);
+    }));
+
+    it("max one", co.wrap(function *() {
+        let work = [];
+        let expected = [];
+        const NUM_TO_DO = 60;
+        let inProgress = false;
+        for (let i = 0; i < NUM_TO_DO; ++i) {
+            work.push(i);
+            expected.push(i * 2);
+        }
+        function getWork(i, index) {
+            assert.equal(i, index);
+            return co(function *() {
+                assert(!inProgress, "multiple in progress!");
+                inProgress = true;
+                yield waitSomeTime(i % 10);
+                inProgress = false;
+                return i * 2;
+            });
+        }
+        const result = yield DoWorkQueue.doInParallel(work, getWork, 1);
         assert.equal(result.length, NUM_TO_DO);
         assert.deepEqual(result, expected);
     }));

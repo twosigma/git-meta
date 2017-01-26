@@ -36,18 +36,26 @@ const co     = require("co");
 /**
  * Call the specified `getWork` function to create a promise to do work for
  * each element in the specified `queue`, limiting the amount of parallel work
- * in progress to an unspecified internal limit.  Return an array containing
- * the result of the work *in the order that it was received*, which may not be
- * the same as the order in which the work was completed.
+ * to the optionally specified `limit`, if provided, or 20 otherwise.  Return
+ * an array containing the result of the work *in the order that it was
+ * received*, which may not be the same as the order in which the work was
+ * completed.
  *
  * @async
  * @param {Array}                  queue
  * @param {(_, Number) => Promise} getWork
+ * @param {Number}                 [limit]
+ * @param {Array}
  */
-exports.doInParallel = co.wrap(function *(queue, getWork) {
+exports.doInParallel = co.wrap(function *(queue, getWork, limit) {
     assert.isArray(queue);
     assert.isFunction(getWork);
-
+    if (undefined === limit) {
+        limit = 20;
+    }
+    else {
+        assert.isNumber(limit);
+    }
 
     const total = queue.length;
     const result = new Array(total);
@@ -69,8 +77,7 @@ exports.doInParallel = co.wrap(function *(queue, getWork) {
     // as it is probably high enough to get most possible benefit from
     // parallelism while being low enough to avoid hitting resources limits.
 
-    const MAX_WORK = 100;
-    for (let i = 0; i < MAX_WORK; ++i) {
+    for (let i = 0; i < limit; ++i) {
         work.push(doWork());
     }
     yield work;
