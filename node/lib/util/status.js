@@ -619,78 +619,6 @@ ${colors.red(name)}.`);
 });
 
 /**
- * Return a map from submodule name to an array of paths (relative to the root
- * of each submodule) identified by the specified `paths` relative to the root
- * of the specified `workdir`, indicating one of the submodule names in the
- * specified `indexSubNames`.  Check each path to see if it points into one of
- * the specified `openSubmodules`, and add the relative offset to the paths for
- * that submodule if it does.  If any path in `paths` contains a submodule
- * entirely (as opposed to a sub-path within it), it will be mappped to an
- * empty array (regardless of whether or not any sub-path in that submodule is
- * identified).
- *
- * @param {String}    workdir
- * @param {String []} paths
- * @param {String []} indexSubNames
- * @param {String []} openSubmodules
- * @return {Object} map from submodule name to array of paths
- */
-exports.getSubmoduleStatusPaths = co.wrap(function *(workdir,
-                                                     paths,
-                                                     indexSubNames,
-                                                     openSubmodules) {
-    assert.isString(workdir);
-    assert.isArray(paths);
-    assert.isArray(indexSubNames);
-    assert.isArray(openSubmodules);
-
-    const result = {};
-
-    // First, populate 'result' with all the subs that are completely
-    // contained.
-
-    yield paths.map(co.wrap(function *(path) {
-        const subs = yield SubmoduleUtil.getSubmodulesInPath(workdir,
-                                                             path,
-                                                             indexSubNames);
-        subs.forEach(subName => result[subName] = []);
-    }));
-
-    // Now check to see which paths refer to a path inside a submodule.
-    // Checking each file against the name of each open submodule has
-    // potentially N^2 behavior, but it will be unlikely to be an issue unless
-    // there are both a large number of paths specifically identified, and a
-    // large number of open submodules, in which case I imagine that the cost
-    // of this check will not be the bottleneck anyway.
-
-    // First, filter out subs that are already completely contained.
-
-    const subsToCheck = openSubmodules.filter(subName => {
-        return !(subName in result);
-    });
-
-    for (let i = 0; i < paths.length; ++i) {
-        const filename = paths[i];
-        for (let j = 0;  j < subsToCheck.length; ++j) {
-            const subName = subsToCheck[j];
-            if (filename.startsWith(subName + "/")) {
-                const pathInSub = filename.slice(subName.length + 1,
-                                                 filename.length);
-                const subPaths = result[subName];
-                if (undefined === subPaths) {
-                    result[subName] = [pathInSub];
-                }
-                else {
-                    subPaths.push(pathInSub);
-                }
-            }
-        }
-    }
-
-    return result;
-});
-
-/**
  * Return a description of the status of changes to the specified `repo`.  If
  * the optionally specified `options.showAllUntracked` is true (default false),
  * return each untracked file individually rather than rolling up to the
@@ -807,10 +735,10 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         let subsToList;  // array of subs that will be in result
         const filtering = 0 !== options.paths.length;
         if (filtering) {
-            filterPaths = yield exports.getSubmoduleStatusPaths(repo.workdir(),
-                                                                options.paths,
-                                                                indexNames,
-                                                                openArray);
+            filterPaths = yield SubmoduleUtil.resolvePaths(repo.workdir(),
+                                                           options.paths,
+                                                           indexNames,
+                                                           openArray);
             subsToList = Object.keys(filterPaths);
             // If we're not including closed submodules, filter them out.
             if (!options.includeClosedSubmodules) {
