@@ -94,15 +94,16 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
     const path   = require("path");
 
-    const Commit     = require("../util/commit");
-    const GitUtil    = require("../util/git_util");
-    const Status     = require("../util/status");
+    const Commit          = require("../util/commit");
+    const GitUtil         = require("../util/git_util");
+    const PrintStatusUtil = require("../util/print_status_util");
+    const StatusUtil      = require("../util/status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
-    const repoStatus = yield Status.getRepoStatus(repo, {
+    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
         includeClosedSubmodules: args.closed,
     });
@@ -118,7 +119,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // this time.
 
     if (repoStatus.areUncommittableSubmodules()) {
-        process.stderr.write(Status.printRepoStatus(repoStatus, relCwd));
+        process.stderr.write(PrintStatusUtil.printRepoStatus(repoStatus,
+                                                             relCwd));
         console.error(`\
 ${colors.yellow("Please stage changes in new submodules before committing.")}\
 `);
@@ -131,7 +133,8 @@ ${colors.yellow("Please stage changes in new submodules before committing.")}\
 
     if (repoStatus.isIndexDeepClean() &&
         (!args.all || repoStatus.isWorkdirDeepClean())) {
-        process.stdout.write(Status.printRepoStatus(repoStatus, relCwd));
+        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
+                                                             relCwd));
         return;
     }
 

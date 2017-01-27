@@ -34,7 +34,7 @@ const assert    = require("chai").assert;
 const co        = require("co");
 const NodeGit   = require("nodegit");
 
-const Status        = require("./status");
+const StatusUtil    = require("./status_util");
 const SubmoduleUtil = require("./submodule_util");
 
 /**
@@ -54,7 +54,7 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges) {
     assert.isArray(paths);
     assert.isBoolean(stageMetaChanges);
 
-    const repoStatus = yield Status.getRepoStatus(repo, {
+    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,
         includeClosedSubmodules: false,
         paths: paths,

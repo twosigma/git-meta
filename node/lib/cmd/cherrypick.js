@@ -78,13 +78,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const CherryPick = require("../util/cherrypick");
-    const GitUtil    = require("../util/git_util");
-    const Status     = require("../util/status");
+    const CherryPick      = require("../util/cherrypick");
+    const GitUtil         = require("../util/git_util");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const status = yield Status.getRepoStatus(repo);
-    Status.ensureCleanAndConsistent(status);
 
     for (let i = 0; i < args.commits.length; ++i) {
         let commitish = args.commits[i];

@@ -77,14 +77,14 @@ unpushed or uncommitted changes. This flag disables those checks.`
 exports.executeableSubcommand = co.wrap(function *(args) {
     const colors        = require("colors");
 
-    const GitUtil       = require("../util/git_util");
-    const Close         = require("../util/close");
-    const Status        = require("../util/status");
-    const SubmoduleUtil = require("../util/submodule_util");
-    const UserError     = require("../util/user_error");
+    const GitUtil         = require("../util/git_util");
+    const Close           = require("../util/close");
+    const StatusUtil      = require("../util/status_util");
+    const SubmoduleUtil   = require("../util/submodule_util");
+    const UserError       = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const repoStatus = yield Status.getRepoStatus(repo);
+    const repoStatus = yield StatusUtil.getRepoStatus(repo);
     const subStats = repoStatus.submodules;
     let errorMessage = "";
 
@@ -111,8 +111,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             if (!subRepo.isClean() ||
                                    0 !== Object.keys(subRepo.workdir).length) {
                 errorMessage += `\
-Could not close ${colors.cyan(name)} because it is not clean:
-${Status.printRepoStatus(subRepo, "")}.
+Could not close ${colors.cyan(name)} because it is not clean.
 Pass ${colors.magenta("--force")} to close it anyway.
 `;
                 return;                                               // RETURN

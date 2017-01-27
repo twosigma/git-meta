@@ -36,7 +36,7 @@ const co     = require("co");
 const Commit          = require("../../lib/util/commit");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const RepoStatus      = require("../../lib/util/repo_status");
-const Status          = require("../../lib/util/status");
+const StatusUtil      = require("../../lib/util/status_util");
 
 
 // We'll always commit the repo named 'x'.  If a new commit is created ni the
@@ -45,7 +45,7 @@ const Status          = require("../../lib/util/status");
 
 const committer = co.wrap(function *(doAll, message, repos) {
     const x = repos.x;
-    const status = yield Status.getRepoStatus(x);
+    const status = yield StatusUtil.getRepoStatus(x);
     const result = yield Commit.commit(x, doAll, status, message);
     if (null === result) {
         return undefined;                                             // RETURN

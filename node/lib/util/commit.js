@@ -38,10 +38,10 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const GitUtil       = require("./git_util");
-const RepoStatus    = require("./repo_status");
-const Status        = require("./status");
-const SubmoduleUtil = require("./submodule_util");
+const GitUtil         = require("./git_util");
+const RepoStatus      = require("./repo_status");
+const PrintStatusUtil = require("./print_status_util");
+const SubmoduleUtil   = require("./submodule_util");
 
 /**
  * Commit changes in the specified `repo`.  If the specified `doAll` is true,
@@ -134,26 +134,30 @@ with '#' will be ignored, and an empty message aborts the commit.
 
     // If `all` is true, roll the workdir changes into the staged changes.
 
-    const statuses = Status.accumulateStatus(status);
+    const statuses = PrintStatusUtil.accumulateStatus(status);
     if (all) {
         statuses.staged = statuses.staged.concat(statuses.workdir);
         statuses.workdir = [];
     }
 
     result += `Changes to be committed:\n`;
-    result += Status.printStatusDescriptors(statuses.staged, x => x, cwd);
+    result += PrintStatusUtil.printStatusDescriptors(statuses.staged,
+                                                     x => x,
+                                                     cwd);
 
     if (0 !== statuses.workdir.length) {
         result += "\n";
         result += `Changes not staged for commit:\n`;
-        result += Status.printStatusDescriptors(statuses.workdir,
-                                                x => x,
-                                                cwd);
+        result += PrintStatusUtil.printStatusDescriptors(statuses.workdir,
+                                                         x => x,
+                                                         cwd);
     }
     if (0 !== statuses.untracked.length) {
         result += "\n";
         result += "Untracked files:\n";
-        result += Status.printUntrackedFiles(statuses.untracked, x => x, cwd);
+        result += PrintStatusUtil.printUntrackedFiles(statuses.untracked,
+                                                      x => x,
+                                                      cwd);
     }
     const prefixed = result.replace(/^/mg, "# ").replace(/^# $/mg, "#");
     return "\n" + prefixed + "\n";

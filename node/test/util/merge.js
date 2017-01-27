@@ -35,7 +35,7 @@ const co     = require("co");
 
 const Merge           = require("../../lib//util/merge");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const Status          = require("../../lib/util/status");
+const StatusUtil      = require("../../lib/util/status_util");
 
 describe("merge", function () {
     // Will do merge from repo `x`.  A merge commit in the meta-repo will be
@@ -49,7 +49,7 @@ describe("merge", function () {
                                        repos,
                                        maps) {
         const x = repos.x;
-        const status = yield Status.getRepoStatus(x);
+        const status = yield StatusUtil.getRepoStatus(x);
         const commitMap = maps.commitMap;
         const reverseCommitMap = maps.reverseCommitMap;
         assert.property(reverseCommitMap, fromCommit);

@@ -35,14 +35,14 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil             = require("./git_util");
-const Open                = require("./open");
-const RepoStatus          = require("./repo_status");
-const Status              = require("./status");
+const GitUtil          = require("./git_util");
+const Open             = require("./open");
+const RepoStatus       = require("./repo_status");
+const StatusUtil       = require("./status_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
-const SubmoduleFetcher    = require("./submodule_fetcher");
-const SubmoduleUtil       = require("./submodule_util");
-const UserError           = require("./user_error");
+const SubmoduleFetcher = require("./submodule_fetcher");
+const SubmoduleUtil    = require("./submodule_util");
+const UserError        = require("./user_error");
 
 /**
  * @enum {MODE}
@@ -59,9 +59,7 @@ exports.MODE = MODE;
 /**
  * Merge the specified `commit` in the specified `metaRepo` having the
  * specified `metaRepoStatus`, using the specified `mode` to control whether or
- * not a merge commit will be generated.  The behavior is undefined unless the
- * `metaRepo` is in a consistent state according to
- * `Status.ensureCleanAndConsistent`.  The specified `commitMessage` will be
+ * not a merge commit will be generated.  The specified `commitMessage` will be
  * recorded as the message for merge commits.  Throw a `UserError` exception if
  * a fast-forward merge is requested and cannot be completed.
  *
@@ -205,7 +203,7 @@ ${colors.red(commitSha)}.`);
                                               path,
                                               subHeadSha,
                                               templatePath);
-            subRepoStatus = yield Status.getRepoStatus(subRepo);
+            subRepoStatus = yield StatusUtil.getRepoStatus(subRepo);
         }
         else {
             subRepo = yield SubmoduleUtil.getRepo(metaRepo, path);

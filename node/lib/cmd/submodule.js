@@ -112,8 +112,8 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     const colors = require("colors");
     const path   = require("path");
 
-    const GitUtil = require("../util/git_util");
-    const Status  = require("../util/status");
+    const GitUtil       = require("../util/git_util");
+    const StatusUtil    = require("../util/status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -121,7 +121,7 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     paths = yield paths.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    const repoStatus = yield Status.getRepoStatus(repo, {
+    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         paths: paths,
         showMetaChanges: false,
         includeClosedSubmodules: verbose,
