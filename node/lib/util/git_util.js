@@ -732,3 +732,22 @@ exports.stripMessage = function (message) {
 
     return noComments.slice(firstContent, lastContent + 1).join("\n") + "\n";
 };
+
+/**
+ * Return the (left) parent `NodeGit.Commit` object for the specified `commit`
+ * in the specified `repo`, or null if `commit` has no parent.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit} commit
+ * @return {NodeGit.Commit|null}
+ */
+exports.getParentCommit = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    if (0 === commit.parentcount()) {
+        return null;                                                  // RETURN
+    }
+    const parentId = commit.parentId(0);
+    return  yield repo.getCommit(parentId);
+});

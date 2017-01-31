@@ -886,4 +886,27 @@ describe("GitUtil", function () {
             });
         });
     });
+
+    describe("getParentCommit", function () {
+        it("no parent", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const head = yield repo.getHeadCommit();
+            const result = yield GitUtil.getParentCommit(repo, head);
+            assert.isNull(result);
+        }));
+
+        it("a parent", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const head = yield repo.getHeadCommit();
+            yield fs.appendFile(path.join(repo.workdir(), "README.md"), "foo");
+            const sig = repo.defaultSignature();
+            const newCommitId = yield repo.createCommitOnHead(["README.md"],
+                                                              sig,
+                                                              sig,
+                                                              "hello");
+            const newCommit = yield repo.getCommit(newCommitId);
+            const result = yield GitUtil.getParentCommit(repo, newCommit);
+            assert.equal(result.id().tostrS(), head.id().tostrS());
+        }));
+    });
 });
