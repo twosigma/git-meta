@@ -30,13 +30,19 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
+const assert  = require("chai").assert;
+const co      = require("co");
+const fs      = require("fs-promise");
+const NodeGit = require("nodegit");
+const path    = require("path");
 
 const Commit          = require("../../lib/util/commit");
+const GitUtil         = require("../../lib/util/git_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const RepoStatus      = require("../../lib/util/repo_status");
 const StatusUtil      = require("../../lib/util/status_util");
+const SubmoduleUtil   = require("../../lib/util/submodule_util");
+const TestUtil        = require("../../lib/util/test_util");
 
 
 // We'll always commit the repo named 'x'.  If a new commit is created ni the
@@ -63,6 +69,70 @@ const committer = co.wrap(function *(doAll, message, repos) {
 
 describe("Commit", function () {
     const FILESTATUS = RepoStatus.FILESTATUS;
+    describe("formatStatus", function () {
+        const cases = {
+            "workdir": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                    workdir: {
+                        "bar": FILESTATUS.MODIFIED,
+                    },
+                }),
+                expected: `\
+Changes to be committed:
+\tnew file:     foo
+
+Changes not staged for commit:
+\tmodified:     bar
+`,
+            },
+            "untracked": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    staged: {
+                        "foo": FILESTATUS.ADDED,
+                    },
+                    workdir: {
+                        "bar": FILESTATUS.ADDED,
+                    },
+                }),
+                expected: `\
+Changes to be committed:
+\tnew file:     foo
+
+Untracked files:
+\tbar
+`,
+            },
+            "workdir rollup": {
+                status: new RepoStatus({
+                    currentBranchName: "master",
+                    workdir: {
+                        "bar": FILESTATUS.MODIFIED,
+                    },
+                }),
+                all: true,
+                expected: `\
+Changes to be committed:
+\tmodified:     bar
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const cwd = c.cwd || "";
+                const all = c.all || false;
+                const result = Commit.formatStatus(c.status, cwd, all);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
     describe("formatEditorPrompt", function () {
         // Most of the work in this method is pass-through; just need to check
         // that it's all wired up.
@@ -100,70 +170,6 @@ describe("Commit", function () {
 # On detached head afafaf.
 # Changes to be committed:
 # \tnew file:     foo
-#
-`,
-            },
-            "workdir": {
-                status: new RepoStatus({
-                    currentBranchName: "master",
-                    staged: {
-                        "foo": FILESTATUS.ADDED,
-                    },
-                    workdir: {
-                        "bar": FILESTATUS.MODIFIED,
-                    },
-                }),
-                expected: `\
-
-# Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
-# On branch master.
-# Changes to be committed:
-# \tnew file:     foo
-#
-# Changes not staged for commit:
-# \tmodified:     bar
-#
-`,
-            },
-            "untracked": {
-                status: new RepoStatus({
-                    currentBranchName: "master",
-                    staged: {
-                        "foo": FILESTATUS.ADDED,
-                    },
-                    workdir: {
-                        "bar": FILESTATUS.ADDED,
-                    },
-                }),
-                expected: `\
-
-# Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
-# On branch master.
-# Changes to be committed:
-# \tnew file:     foo
-#
-# Untracked files:
-# \tbar
-#
-`,
-            },
-            "workdir rollup": {
-                status: new RepoStatus({
-                    currentBranchName: "master",
-                    workdir: {
-                        "bar": FILESTATUS.MODIFIED,
-                    },
-                }),
-                all: true,
-                expected: `\
-
-# Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
-# On branch master.
-# Changes to be committed:
-# \tmodified:     bar
 #
 `,
             },
@@ -327,6 +333,750 @@ x=E:Cx-1 s=Sa:s;I s=~;Os Cs q=r!*=master!Bmaster=s;Bmaster=x`,
                                                                manipulator,
                                                                c.fails);
             }));
+        });
+    });
+
+    describe("getAmendStatusForRepo", function () {
+        const FILESTATUS = RepoStatus.FILESTATUS;
+        const cases = {
+            "first commit": {
+                input: "x=S",
+                staged: { "README.md": FILESTATUS.ADDED},
+            },
+            "added": {
+                input: "x=S:W foo=bar",
+                staged: { "README.md": FILESTATUS.ADDED},
+                workdir: { foo: FILESTATUS.ADDED },
+            },
+            "modified, not all": {
+                input: "x=S:C2-1;W README.md=3;Bmaster=2",
+                staged: { "2": FILESTATUS.ADDED },
+                workdir: { "README.md": FILESTATUS.MODIFIED },
+            },
+            "staged modified": {
+                input: "x=S:C2-1;W README.md=3;Bmaster=2",
+                staged: { "2": FILESTATUS.ADDED },
+                workdir: { "README.md": FILESTATUS.MODIFIED },
+                all: true,
+            },
+            "changed in index": {
+                input: "x=S:C2-1;I README.md=3;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.MODIFIED,
+                },
+            },
+            "added in index": {
+                input: "x=S:C2-1;I foo=3;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                    "foo": FILESTATUS.ADDED,
+                },
+            },
+            "removed in index": {
+                input: "x=S:C2-1;I README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.REMOVED,
+                },
+            },
+            "removed in index with all": {
+                input: "x=S:C2-1;I README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.REMOVED,
+                },
+                all: true,
+            },
+            "removed in workdir": {
+                input: "x=S:C2-1;W README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                },
+                workdir: {
+                    "README.md": FILESTATUS.REMOVED,
+                },
+            },
+            "removed in workdir with all": {
+                input: "x=S:C2-1;W README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                },
+                workdir: {
+                    "README.md": FILESTATUS.REMOVED,
+                },
+                all: true,
+            },
+            "ignore submodule add": {
+                input: `
+a=B:Ca-1;Bmaster=a|
+x=S:C2-1 s=Sa:1;Bmaster=2`,
+            },
+            "ignore submodule change": {
+                input: `
+a=B:Ca-1;Bmaster=a|
+x=S:C2-1 s=Sa:1;C3-2 s=Sa:a;Bmaster=3`,
+            },
+            "ignore submodule deletion": {
+                input: `
+a=B:Ca-1;Bmaster=a|
+x=S:C2-1 s=Sa:1;C3-2 s;Bmaster=3`,
+            },
+            "unmodified": {
+                input: `
+x=S:C2-1 README.md=3;W README.md=hello world;Bmaster=2`,
+                all: true,
+            },
+            "changed in index, rm'd in workdir": {
+                input: "x=S:C2-1;I README.md=3;W README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                    "README.md": FILESTATUS.MODIFIED
+                },
+                workdir: {
+                    "README.md": FILESTATUS.REMOVED,
+                },
+            },
+            "changed in index, rm'd in workdir, all": {
+                input: "x=S:C2-1;I README.md=3;W README.md;Bmaster=2",
+                staged: {
+                    "2": FILESTATUS.ADDED,
+                },
+                workdir: {
+                    "README.md": FILESTATUS.REMOVED,
+                },
+                all: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.input);
+                const repos = written.repos;
+                const repo = repos.x;
+                const status = yield StatusUtil.getRepoStatus(repo, {
+                    showMetaChanges: true,
+                    includeClosedSubmodules: true,
+                });
+                const head = yield repo.getHeadCommit();
+                let tree = null;
+                if (0 !== head.parentcount()) {
+                    const parent = yield head.parent(0);
+                    const treeId = parent.treeId();
+                    tree = yield NodeGit.Tree.lookup(repo, treeId);
+                }
+                const result = yield Commit.getAmendStatusForRepo(
+                                                               repo,
+                                                               status,
+                                                               tree,
+                                                               c.all || false);
+                const expected = {
+                    staged: c.staged || {},
+                    workdir: c.workdir || {},
+                };
+                assert.deepEqual(result, expected);
+            }));
+        });
+    });
+
+    describe("sameCommitInstance", function () {
+        const cases = {
+            "same weird": {
+                xName: "foo",
+                xEmail: "foo@bar",
+                xMessage: "because",
+                yName: "foo",
+                yEmail: "foo@bar",
+                yMessage: "because",
+                expected: true,
+            },
+            "diff name": {
+                xName: "baz",
+                xEmail: "foo@bar",
+                xMessage: "because",
+                yName: "foo",
+                yEmail: "foo@bar",
+                yMessage: "because",
+                expected: false,
+            },
+            "diff email": {
+                xName: "foo",
+                xEmail: "foo@baz",
+                xMessage: "because",
+                yName: "foo",
+                yEmail: "foo@bar",
+                yMessage: "because",
+                expected: false,
+            },
+            "diff message": {
+                xName: "foo",
+                xEmail: "foo@bar",
+                xMessage: "because",
+                yName: "foo",
+                yEmail: "foo@bar",
+                yMessage: "why",
+                expected: false,
+            },
+            "all different": {
+                xName: "bar",
+                xEmail: "bam@bar",
+                xMessage: "because",
+                yName: "foo",
+                yEmail: "foo@bar",
+                yMessage: "why",
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const repo = yield TestUtil.createSimpleRepository();
+                const readmePath = path.join(repo.workdir(), "README.md");
+                const makeCommit = co.wrap(function *(name, email, message) {
+                    yield fs.appendFile(readmePath, "foo");
+                    const sig = NodeGit.Signature.now(name, email);
+                    return yield repo.createCommitOnHead(["README.md"],
+                                                         sig,
+                                                         sig,
+                                                         message);
+                });
+                const xCommitId = yield makeCommit(c.xName,
+                                                   c.xEmail,
+                                                   c.xMessage);
+                const yCommitId = yield makeCommit(c.yName,
+                                                   c.yEmail,
+                                                   c.yMessage);
+                const xCommit = yield repo.getCommit(xCommitId);
+                const yCommit = yield repo.getCommit(yCommitId);
+                const result = Commit.sameCommitInstance(xCommit, yCommit);
+                assert.equal(result, c.expected);
+            }));
+        });
+    });
+
+    describe("checkIfRepoIsAmendable", function () {
+        const cases = {
+            "trivial, no subs": {
+                input: "x=S",
+            },
+            "ok, new sub": {
+                input: "a=B|x=U",
+            },
+            "sub with good commit": {
+                input: "a=B:Ca-1;Bf=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+            },
+            "sub with good commit, need to open": {
+                input: "a=B:Ca-1;Bf=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+            },
+            "sub with new commit in index": {
+                input: `
+a=B:Ca-1;Cb-a;Bf=b|
+x=U:C3-2 s=Sa:a;Bmaster=3;I s=Sa:b`,
+                newCommits: ["s"],
+            },
+            "sub with new commit in workdir": {
+                input: `
+a=B:Ca-1;Cb-a;Bf=b|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os H=b`,
+                newCommits: ["s"],
+            },
+            "sub with bad commit": {
+                input: "a=B:Ca message#a-1;Bf=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+                mismatchCommits: ["s"],
+            },
+            "bad, mismatch, and good": {
+                input: `
+a=B:Ca-1;Cb-a;Ccommit me#c-b;Bf=c|
+x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
+                mismatchCommits: ["u"],
+                newCommits: ["t"],
+                newStatusSubs: ["s", "u"],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.input);
+                const repos = written.repos;
+                const repo = repos.x;
+                const status = yield StatusUtil.getRepoStatus(repo, {
+                    showMetaChanges: true,
+                    includeClosedSubmodules: true,
+                });
+                const head = yield repo.getHeadCommit();
+                let oldSubs = {};
+                const parent = yield GitUtil.getParentCommit(repo, head);
+                if (null !== parent) {
+                    oldSubs =
+                      yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+                }
+                const result = yield Commit.checkIfRepoIsAmendable(repo,
+                                                                   status,
+                                                                   oldSubs);
+                assert.deepEqual(result.newCommits.sort(),
+                                 c.newCommits || [],
+                                 "newCommits");
+                assert.deepEqual(result.mismatchCommits.sort(),
+                                 c.mismatchCommits || [],
+                                 "mismatchCommits");
+                let subs = status.submodules;
+                const newSubs = c.newStatusSubs || [];
+                newSubs.forEach(name => {
+                    subs[name] = subs[name].open();
+                });
+                const newStatus = status.copy({ submodules: subs });
+                const remappedResult = StatusUtil.remapRepoStatus(
+                                                             result.status,
+                                                             written.commitMap,
+                                                             written.urlMap);
+                const remappedExpected = StatusUtil.remapRepoStatus(
+                                                             newStatus,
+                                                             written.commitMap,
+                                                             written.urlMap);
+                assert.deepEqual(remappedResult, remappedExpected);
+            }));
+        });
+    });
+
+    describe("getAmendChanges", function () {
+        // The logic for actually reading the repo is tested under
+        // `getAmendStatusForRepo`.  Here we just need to verify that the
+        // parameters are passed correctly, and most importantly, that we
+        // handle submodules correctly.
+
+        const cases = {
+            "trivial, no meta": {
+                input: "x=S",
+            },
+            "meta with no parent": {
+                input: "x=S",
+                includeMeta: true,
+                staged: { "README.md": FILESTATUS.ADDED },
+            },
+            "meta without all": {
+                input: "x=S:C2-1;Bmaster=2;W 2=3",
+                includeMeta: true,
+                staged: { "2": FILESTATUS.ADDED},
+                workdir: { "2": FILESTATUS.MODIFIED },
+            },
+            "meta with all": {
+                input: "x=S:C2-1;Bmaster=2;W README.md=hi",
+                staged: { "2": FILESTATUS.ADDED},
+                all: true,
+                includeMeta: true,
+                workdir: { "README.md": FILESTATUS.MODIFIED, },
+            },
+            "meta with new sub": {
+                input: "x=U",
+            },
+            "meta with deleted sub": {
+                input: "x=U:C3-2 s;Bmaster=3",
+            },
+            "meta with unchanged sub": {
+                input: "x=U:C3-2;Bmaster=3",
+            },
+            "meta with open unchanged sub": {
+                input: "a=B|x=U:C3-2;Bmaster=3;Os",
+            },
+            "sub with new commit, no parent": {
+                input: "a=B:Ca;Bmaster=a;Bx=1|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+                submodulesToAmend: {
+                    "s": {
+                        staged: { "a": FILESTATUS.ADDED},
+                        workdir: {},
+                    },
+                },
+            },
+            "sub with new commit": {
+                input: "a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+                submodulesToAmend: {
+                    "s": {
+                        staged: { "a": FILESTATUS.ADDED},
+                        workdir: {},
+                    },
+                },
+            },
+            "sub with new commit, modification, no all": {
+                input: `
+a=B:Ca-1;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
+                submodulesToAmend: {
+                    "s": {
+                        staged: { "a": FILESTATUS.ADDED},
+                        workdir: { "README.md": FILESTATUS.MODIFIED },
+                    },
+                },
+            },
+            "sub with new commit, modification, all": {
+                input: `
+a=B:Ca-1;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
+                submodulesToAmend: {
+                    "s": {
+                        staged: { "a": FILESTATUS.ADDED},
+                        workdir: { "README.md": FILESTATUS.MODIFIED, },
+                    },
+                },
+                all: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.input);
+                const repos = written.repos;
+                const repo = repos.x;
+                const includeMeta = c.includeMeta || false;
+                const all = c.all || false;
+                const status = yield StatusUtil.getRepoStatus(repo, {
+                    showMetaChanges: includeMeta,
+                    includeClosedSubmodules: true,
+                });
+                const head = yield repo.getHeadCommit();
+                let oldSubs = {};
+                const parent = yield GitUtil.getParentCommit(repo, head);
+                if (null !== parent) {
+                    oldSubs =
+                      yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+                }
+                const result = yield Commit.getAmendChanges(repo,
+                                                            oldSubs,
+                                                            status,
+                                                            includeMeta,
+                                                            all);
+                // Translate the test case data into expected data:
+                // 1. generate a list of expected sub names from the submodule
+                //    changes listed in the test case
+                // 2. recreate the submodule in status with the staged/workdir
+                //    changes listed in the test case
+                // 3. remap both result and expected status based on commit/url
+                //    remappings so the diff will make sense
+
+                const staged = c.staged || {};
+                const workdir = c.workdir || {};
+                const submodulesToAmend = c.submodulesToAmend || {};
+                const expectedSubNames = [];
+                const expectedSubmodules = status.submodules;
+                Object.keys(submodulesToAmend).forEach(subName => {
+                    expectedSubNames.push(subName);
+                    const expected = submodulesToAmend[subName];
+                    const sub = expectedSubmodules[subName];
+                    expectedSubmodules[subName] = sub.copy({
+                        repoStatus: sub.repoStatus.copy({
+                            staged: expected.staged,
+                            workdir: expected.workdir,
+                        }),
+                    });
+                });
+                const expected = status.copy({
+                    staged: staged,
+                    workdir: workdir,
+                    submodules: expectedSubmodules,
+                });
+                const mappedExpected = StatusUtil.remapRepoStatus(
+                                                             expected,
+                                                             written.commitMap,
+                                                             written.urlMap);
+                const mappedResult= StatusUtil.remapRepoStatus(
+                                                             result.status,
+                                                             written.commitMap,
+                                                             written.urlMap);
+                assert.deepEqual(result.subsToAmend.sort(),
+                                 expectedSubNames.sort());
+                assert.deepEqual(mappedResult, mappedExpected);
+            }));
+        });
+    });
+
+    describe("amendRepo", function () {
+        const cases = {
+            "trivial": {
+                input: "x=S",
+                message: "foo",
+                expected: `
+x=N:Cfoo#x README.md=hello world;*=master;Bmaster=x`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const amend = co.wrap(function *(repos) {
+                    const repo = repos.x;
+                    const newSha = yield Commit.amendRepo(repo, c.message);
+                    const commitMap = {};
+                    commitMap[newSha] = "x";
+                    return { commitMap: commitMap };
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               amend,
+                                                               c.fails);
+            }));
+        });
+    });
+
+    describe("amendMetaRepo", function () {
+        // Most of the logic surrounding committing is handled in previously
+        // tested codepaths.  We need to verify that it's all tied together
+        // properly, that submodules are properly staged, and that when there
+        // is no difference between the current state and the base commit, we
+        // strip the last commit.
+
+        // We'll use the repo `x` and name created commits as `am` for the
+        // meta-repo and `a<sub name>` for commits in submodules.
+
+        const cases = {
+            "trivial": {
+                input: "x=N:Cm#1;H=1",
+                expected: "x=N:Cam 1=1;H=am",
+            },
+            "meta change": {
+                input: "x=S:C2-1;Bmaster=2;I README.md=3",
+                expected: "x=S:Cam-1 README.md=3,2=2;Bmaster=am",
+            },
+            "meta staged": {
+                input: "x=S:C2-1;Bmaster=2;W README.md=3",
+                expected: "x=S:Cam-1 README.md=3,2=2;Bmaster=am",
+                all: true,
+            },
+            "repo with new sha in index": {
+                input: "a=B:Ca-1;Bmaster=a|x=U:C3-2;I s=Sa:a;Bmaster=3",
+                expected: "x=U:Cam-2 3=3,s=Sa:a;Bmaster=am",
+            },
+            "repo with new head in workdir": {
+                input: "a=B:Ca-1;Bmaster=a|x=U:C3-2;Bmaster=3;Os H=a",
+                expected: "x=U:Cam-2 3=3,s=Sa:a;Bmaster=am;Os",
+            },
+            "repo with staged workdir changes": {
+                input: "a=B|x=U:C3-2;Bmaster=3;Os I x=x",
+                expected: `x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 x=x!H=as`,
+            },
+            "repo with unstaged workdir changes": {
+                input: "a=B|x=U:C3-2;Bmaster=3;Os W README.md=3",
+                expected: `
+x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 README.md=3!H=as`,
+                all: true,
+            },
+            "repo with staged and unstaged workdir changes": {
+                input: "a=B|x=U:C3-2;Bmaster=3;Os I a=b!W README.md=3",
+                expected: `
+x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 a=b,README.md=3!H=as`,
+                all: true,
+            },
+            "amended subrepo": {
+                input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a!H=as`,
+            },
+            "amended subrepo with index change": {
+                input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os I q=4",
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a,q=4!H=as`,
+            },
+            "amended subrepo with unstaged change": {
+                input: `
+a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a!H=as!W README.md=2`,
+            },
+            "amended subrepo with change to stage": {
+                input: `
+a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a,README.md=2!H=as`,
+                all: true,
+            },
+            "strip submodule commit": {
+                input: `
+a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a;Bmaster=3`,
+                message: "foo",
+                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os`,
+            },
+            "strip submodule commit, leave untracked": {
+                input: `
+a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W x=y;Bmaster=3`,
+                message: "foo",
+                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os W x=y`,
+            },
+            "strip submodule commit, leave modified": {
+                input: `
+a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W README.md=2;Bmaster=3`,
+                message: "foo",
+                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os W README.md=2`,
+            },
+            "strip submodule commit unchange from index": {
+                input: `
+a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os I a=a;Bmaster=3`,
+                message: "foo",
+                expected: `x=U:Cfoo#am-2 3=3,s=Sa:a;Bmaster=am;Os`
+            },
+            "not strip submodule commit unchange from workdir": {
+                input: `
+a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
+                message: "foo",
+                expected: `
+x=U:Cfoo#am-2 3=3,s=Sa:as;Bmaster=am;Os Cfoo#as-a a=9!W a=a`
+            },
+            "strip submodule commit unchange from workdir, when all": {
+                input: `
+a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
+                message: "foo",
+                expected: `x=U:Cfoo#am-2 3=3,s=Sa:a;Bmaster=am;Os`,
+                all: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const amender = co.wrap(function *(repos) {
+                    const repo = repos.x;
+                    const status = yield StatusUtil.getRepoStatus(repo, {
+                        showMetaChanges: true,
+                        includeClosedSubmodules: true,
+                    });
+                    const head = yield repo.getHeadCommit();
+                    let oldSubs = {};
+                    const parent = yield GitUtil.getParentCommit(repo, head);
+                    if (null !== parent) {
+                        oldSubs = yield SubmoduleUtil.getSubmodulesForCommit(
+                                                                       repo,
+                                                                       parent);
+                    }
+                    const all = c.all || false;
+
+                    // We're going to give "true" for including meta changes.
+                    // It's not a flag that goes to the method we're testing,
+                    // so we can control it by whether or not we have things to
+                    // commit in the meta-repo.
+
+                    const amend = yield Commit.getAmendChanges(repo,
+                                                               oldSubs,
+                                                               status,
+                                                               true,
+                                                               all);
+                    const message = c.message || "message";
+                    const result = yield Commit.amendMetaRepo(
+                                                             repo,
+                                                             amend.status,
+                                                             amend.subsToAmend,
+                                                             all,
+                                                             message);
+                    const commitMap = {};
+                    commitMap[result.meta] = "am";
+                    Object.keys(result.subs).forEach(subName => {
+                        commitMap[result.subs[subName]] = "a" + subName;
+                    });
+                    return { commitMap: commitMap, };
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               amender,
+                                                               c.fails);
+            }));
+        });
+    });
+
+    describe("formatAmendEditorPrompt", function () {
+        // Mostly, this method chains some other methods together.  We just
+        // need to do a couple of tests to validate that things are hooked up,
+        // and that it omits the author when it's unchanged between the current
+        // and previous signatures.
+
+        const defaultSig = NodeGit.Signature.now("bob", "bob@bob");
+
+        const cases = {
+            "change to meta": {
+                status: new RepoStatus({
+                    currentBranchName: "a-branch",
+                    staged: {
+                        "bam/baz": FILESTATUS.ADDED,
+                    },
+                }),
+                date: "NOW",
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      NOW
+#
+# On branch a-branch.
+# Changes to be committed:
+# \tnew file:     bam/baz
+#
+`,
+            },
+            "change to meta, different author": {
+                status: new RepoStatus({
+                    currentBranchName: "a-branch",
+                    staged: {
+                        "bam/baz": FILESTATUS.ADDED,
+                    },
+                }),
+                date: "NOW",
+                commitSig: NodeGit.Signature.now("jill", "jill@jill"),
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Author:    jill <jill@jill>
+# Date:      NOW
+#
+# On branch a-branch.
+# Changes to be committed:
+# \tnew file:     bam/baz
+#
+`,
+            },
+            "different cwd": {
+                status: new RepoStatus({
+                    currentBranchName: "a-branch",
+                    staged: {
+                        "bam/baz": FILESTATUS.ADDED,
+                    },
+                }),
+                cwd: "bam",
+                date: "NOW",
+                expected: `\
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      NOW
+#
+# On branch a-branch.
+# Changes to be committed:
+# \tnew file:     baz
+#
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const all = c.all || false;
+                const commitSig = c.commitSig || defaultSig;
+                const repoSig = c.repoSig || defaultSig;
+                const cwd = c.cwd || "";
+                const result = Commit.formatAmendEditorPrompt(commitSig,
+                                                              repoSig,
+                                                              c.status,
+                                                              cwd,
+                                                              all,
+                                                              c.date);
+
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
         });
     });
 });

@@ -371,6 +371,89 @@ $ git add my-sub-repo
 $ git commit -m "Added a new file"
 ```
 
+#### Amending Changes
+
+The `git meta commit --amend` command is used to adjust the most recent commit.
+As will be seen below, it handles several different scenarios so that the
+mono-repo can be amended like a single repo.
+
+```bash
+$ echo >> my-sub-repo/README.md
+$ git meta commit -a -m "I made a change"
+$ touch my-sub-repo/a-new-file
+$ git meta add .
+$ git meta commit --amend -m "I made a change"
+```
+
+Note that `amend` will operate only if, for each submodule updated in the HEAD
+commit of the meta-repo, the following holds:
+
+- the signature of that commit (author and message) in the submodule is the
+  same as the signature of the HEAD commit of the meta-repo
+- the HEAD of the submodule is the commit indicated in the HEAD commit of the
+  meta-repo, i.e., no new commits have been made
+
+The amend commit above could have been done using plain Git:
+
+```bash
+$ cd my-sub-repo
+$ git commit --amend -m "I made a change"
+$ cd ..
+$ git add my-sub-repo
+$ git commit --amend -m "I made a change"
+```
+
+If you have changes in another submodule, the amend operation will generate a
+new (i.e., not amended) commit in that submodule:
+
+```bash
+$ echo >> sub-repo-a/README.md
+$ git meta commit -a -m "updated a README.md"
+$ echo >> sub-repo-b/README.md
+$ git meta commit -a --amend -m "updated READMEs"
+```
+
+is the equivalent of
+
+```bash
+$ echo >> sub-repo-a/README.md
+$ cd sub-repo-a
+$ git commit -a -m "updated a README.md"
+$ cd ..
+$ git commit -a -m "updated a README.md"
+$ echo >> sub-repo-b/README.md
+$ cd sub-repo-a
+$ git commit --amend -m "updated READMEs"
+$ cd ../sub-repo-b
+$ git commit -a -m "updated READMEs"
+$ cd ..
+$ git commit -a -m "updated READMEs"
+```
+
+If you undo a change, `git meta commit --amend` will remove the unneeded
+(empty) commit:
+
+```bash
+$ echo >> sub-repo-a/README.md
+$ touch >> sub-repo-b/a-new-file.cpp
+$ git meta add .
+$ git meta commit -m changes
+$ rm sub-repo-b/a-new-file.cpp
+$ git meta commit -a --amend -m "fewer changes"
+```
+
+with plain Git, the same amend would be done like:
+
+```bash
+$ rm sub-repo-b/a-new-file.cpp
+$ cd sub-repo-b
+$ git commit --amend -m "fewer changes"
+$ cd sub-repo-b
+$ git reset HEAD^
+$ cd ..
+$ git commit -a --amend -m "fewer changes"
+```
+
 ### Pushing Changes
 
 Use `git meta push` as you would `git push`:
