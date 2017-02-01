@@ -609,6 +609,10 @@ describe("ShorthandParserUtil", function () {
                 i: "S",
                 e: S
             },
+            "null": {
+                i: "N",
+                e: new RepoAST(),
+            },
             "simple trimmed": {
                 i: "\n  S",
                 e: S
