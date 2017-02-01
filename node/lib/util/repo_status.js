@@ -299,6 +299,40 @@ class Submodule {
         return null === this.d_repoStatus ||
             this.d_repoStatus.isWorkdirClean();
     }
+
+    /**
+     * Return a new `Submodule` object having the same value as this one, but
+     * with replacing properties defined in the specified `args`.
+     *
+     * @param {Object} args
+     * @return {Submodule}
+     */
+    copy(args) {
+        if (undefined === args) {
+            args = {};
+        }
+        else {
+            assert.isObject(args);
+        }
+        return new Submodule({
+            indexStatus: ("indexStatus" in args) ?
+                args.indexStatus : this.d_indexStatus,
+            indexSha: ("indexSha" in args) ?
+                args.indexSha : this.d_indexSha,
+            indexShaRelation: ("indexShaRelation" in args) ?
+                args.indexShaRelation : this.d_indexShaRelation,
+            indexUrl: ("indexUrl" in args) ?
+                args.indexUrl : this.d_indexUrl,
+            commitSha: ("commitSha" in args) ?
+                args.commitSha : this.d_commitSha,
+            commitUrl: ("commitUrl" in args) ?
+                args.commitUrl : this.d_commitUrl,
+            workdirShaRelation: ("workdirShaRelation" in args) ?
+                args.workdirShaRelation : this.d_workdirShaRelation,
+            repoStatus: ("repoStatus" in args) ?
+                args.repoStatus : this.d_repoStatus,
+        });
+    }
 }
 
 /**
@@ -533,6 +567,33 @@ class RepoStatus {
      */
     get rebase() {
         return this.d_rebase;
+    }
+
+    /**
+     * Return a new `RepoStatus` object having the same value as this one, but
+     * with replacing properties defined in the specified `args`.
+     *
+     * @param {Object} args
+     * @return {RepoStatus}
+     */
+    copy(args) {
+        if (undefined === args) {
+            args = {};
+        }
+        else {
+            assert.isObject(args);
+        }
+        return new RepoStatus({
+            currentBranchName: ("currentBranchName" in args) ?
+                args.currentBranchName : this.d_currentBranchName,
+            headCommit: ("headCommit" in args) ?
+                args.headCommit: this.d_headCommit,
+            staged: ("staged" in args) ? args.staged : this.d_staged,
+            submodules: ("submodules" in args) ?
+                args.submodules: this.d_submodules,
+            workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
+            rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
+        });
     }
 }
 
