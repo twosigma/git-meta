@@ -884,6 +884,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         workdir: workdir,
         openSubmodules: openSubmodules,
     };
+    if (undefined === head && undefined !== currentBranchName) {
+        head = branches[currentBranchName];
+    }
     if (undefined !== head) {
         result.head = head;
     }
