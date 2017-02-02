@@ -125,7 +125,9 @@ class Submodule {
         if (undefined === status) {
             status = {};
         }
-        assert.isObject(status);
+        else {
+            assert.isObject(status);
+        }
         this.d_indexStatus        = null;
         this.d_indexSha           = null;
         this.d_indexShaRelation   = null;
