@@ -43,112 +43,12 @@ const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 
 // test utilities
 
-/**
- * Return a new `RepoStatus` object having the same value as the specified
- * `status` but with all commit shas replaced by commits in the specified
- * `comitMap` and all urls replaced by the values in the specified `urlMap`.
- *
- * @param {RepoStatus} status
- * @param {Object}     commitMap
- * @param {Object}     urlMap
- * @return {RepoStatus}
- */
-let remapRepoStatus;
-
-/**
- * Return a new `RepoStatus.Submodule` object having the same value as the
- * specified `sub` but with all commit shas replaced by commits in the
- * specified `commitMap` and all urls replaced by the values in the specified
- * `urlMap`.
- *
- * @param {RepoStatus.Submodule} sub
- * @param {Object}               commitMap from sha to sha
- * @param {Object}               urlMap    from url to url
- * @return {RepoStatus.Submodule}
- */
-function remapSubmodule(sub, commitMap, urlMap) {
-    assert.instanceOf(sub, RepoStatus.Submodule);
-    assert.isObject(commitMap);
-    assert.isObject(urlMap);
-
-    function mapSha(sha) {
-        return sha && (commitMap[sha] || sha);
-    }
-
-    function mapUrl(url) {
-        return url && (urlMap[url] || url);
-    }
-
-    return new RepoStatus.Submodule({
-        indexStatus: sub.indexStatus,
-        indexSha: mapSha(sub.indexSha),
-        indexShaRelation: sub.indexShaRelation,
-        indexUrl: mapUrl(sub.indexUrl),
-        commitSha: mapSha(sub.commitSha),
-        commitUrl: mapUrl(sub.commitUrl),
-        workdirShaRelation: sub.workdirShaRelation,
-        repoStatus: sub.repoStatus &&
-                            remapRepoStatus(sub.repoStatus, commitMap, urlMap),
-    });
-}
-
-/**
- * Return a new `Rebase` object having the same value as the specified `rebase`
- * but with commit shas being replaced by commits in the specified `commitMap`.
- *
- * @param {Rebase} rebase
- * @param {Object} commitMap from sha to sha
- */
-function remapRebase(rebase, commitMap) {
-    assert.instanceOf(rebase, Rebase);
-    assert.isObject(commitMap);
-
-    let originalHead = rebase.originalHead;
-    let onto = rebase.onto;
-    if (originalHead in commitMap) {
-        originalHead = commitMap[originalHead];
-    }
-    if (onto in commitMap) {
-        onto = commitMap[onto];
-    }
-    return new Rebase(rebase.headName, originalHead, onto);
-}
-
-
-remapRepoStatus = function (status, commitMap, urlMap) {
-    assert.instanceOf(status, RepoStatus);
-    assert.isObject(commitMap);
-    assert.isObject(urlMap);
-
-    function mapSha(sha) {
-        return sha && (commitMap[sha] || sha);
-    }
-
-    let submodules = {};
-    const baseSubmods = status.submodules;
-    Object.keys(baseSubmods).forEach(name => {
-        submodules[name] = remapSubmodule(baseSubmods[name],
-                                          commitMap,
-                                          urlMap);
-    });
-
-    return new RepoStatus({
-        currentBranchName: status.currentBranchName,
-        headCommit: mapSha(status.headCommit),
-        staged: status.staged,
-        submodules: submodules,
-        workdir: status.workdir,
-        rebase: status.rebase === null ? null : remapRebase(status.rebase,
-                                                            commitMap),
-    });
-};
-
-describe("StatusUti", function () {
+describe("StatusUtil", function () {
     const FILESTATUS       = RepoStatus.FILESTATUS;
     const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
     const Submodule        = RepoStatus.Submodule;
  
-    describe("test.remapSubmodule", function () {
+    describe("remapSubmodule", function () {
         const Submodule = RepoStatus.Submodule;
         const RELATION  = Submodule.COMMIT_RELATION;
         const FILESTATUS = RepoStatus.FILESTATUS;
@@ -189,15 +89,15 @@ describe("StatusUti", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = remapSubmodule(c.input,
-                                              c.commitMap,
-                                              c.urlMap);
+                const result = StatusUtil.remapSubmodule(c.input,
+                                                         c.commitMap,
+                                                         c.urlMap);
                 assert.deepEqual(result, c.expected);
             });
         });
     });
 
-    describe("test.remapRepoStatus", function () {
+    describe("remapRepoStatus", function () {
         const FILESTATUS = RepoStatus.FILESTATUS;
         const Submodule = RepoStatus.Submodule;
         const RELATION = Submodule.COMMIT_RELATION;
@@ -286,7 +186,8 @@ describe("StatusUti", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = remapRepoStatus(c.input, c.commitMap, c.urlMap);
+                const result =
+                    StatusUtil.remapRepoStatus(c.input, c.commitMap, c.urlMap);
                 assert.deepEqual(result, c.expected);
             });
         });
@@ -640,9 +541,9 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                                                                 isVisible,
                                                                 getRepoStatus);
                 assert.instanceOf(result, RepoStatus.Submodule);
-                const mappedResult = remapSubmodule(result,
-                                                    w.commitMap,
-                                                    w.urlMap);
+                const mappedResult = StatusUtil.remapSubmodule(result,
+                                                               w.commitMap,
+                                                               w.urlMap);
                 assert.deepEqual(mappedResult, c.expected);
             }));
         });
@@ -901,9 +802,9 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                 const result = yield StatusUtil.getRepoStatus(w.repos.x,
                                                               c.options);
                 assert.instanceOf(result, RepoStatus);
-                const mappedResult = remapRepoStatus(result,
-                                                     w.commitMap,
-                                                     w.urlMap);
+                const mappedResult = StatusUtil.remapRepoStatus(result,
+                                                                w.commitMap,
+                                                                w.urlMap);
                 assert.deepEqual(mappedResult, c.expected);
             }));
         });

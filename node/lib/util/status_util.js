@@ -48,6 +48,103 @@ const SubmoduleUtil       = require("../util/submodule_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
 
 /**
+ * Return a new `RepoStatus.Submodule` object having the same value as the
+ * specified `sub` but with all commit shas replaced by commits in the
+ * specified `commitMap` and all urls replaced by the values in the specified
+ * `urlMap`.
+ *
+ * @param {RepoStatus.Submodule} sub
+ * @param {Object}               commitMap from sha to sha
+ * @param {Object}               urlMap    from url to url
+ * @return {RepoStatus.Submodule}
+ */
+exports.remapSubmodule = function (sub, commitMap, urlMap) {
+    assert.instanceOf(sub, RepoStatus.Submodule);
+    assert.isObject(commitMap);
+    assert.isObject(urlMap);
+
+    function mapSha(sha) {
+        return sha && (commitMap[sha] || sha);
+    }
+
+    function mapUrl(url) {
+        return url && (urlMap[url] || url);
+    }
+
+    return new RepoStatus.Submodule({
+        indexStatus: sub.indexStatus,
+        indexSha: mapSha(sub.indexSha),
+        indexShaRelation: sub.indexShaRelation,
+        indexUrl: mapUrl(sub.indexUrl),
+        commitSha: mapSha(sub.commitSha),
+        commitUrl: mapUrl(sub.commitUrl),
+        workdirShaRelation: sub.workdirShaRelation,
+        repoStatus: sub.repoStatus &&
+                    exports.remapRepoStatus(sub.repoStatus, commitMap, urlMap),
+    });
+};
+
+/**
+ * Return a new `Rebase` object having the same value as the specified `rebase`
+ * but with commit shas being replaced by commits in the specified `commitMap`.
+ *
+ * @param {Rebase} rebase
+ * @param {Object} commitMap from sha to sha
+ */
+function remapRebase(rebase, commitMap) {
+    assert.instanceOf(rebase, Rebase);
+    assert.isObject(commitMap);
+
+    let originalHead = rebase.originalHead;
+    let onto = rebase.onto;
+    if (originalHead in commitMap) {
+        originalHead = commitMap[originalHead];
+    }
+    if (onto in commitMap) {
+        onto = commitMap[onto];
+    }
+    return new Rebase(rebase.headName, originalHead, onto);
+}
+
+/**
+ * Return a new `RepoStatus` object having the same value as the specified
+ * `status` but with all commit shas replaced by commits in the specified
+ * `comitMap` and all urls replaced by the values in the specified `urlMap`.
+ *
+ * @param {RepoStatus} status
+ * @param {Object}     commitMap
+ * @param {Object}     urlMap
+ * @return {RepoStatus}
+ */
+exports.remapRepoStatus = function (status, commitMap, urlMap) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isObject(commitMap);
+    assert.isObject(urlMap);
+
+    function mapSha(sha) {
+        return sha && (commitMap[sha] || sha);
+    }
+
+    let submodules = {};
+    const baseSubmods = status.submodules;
+    Object.keys(baseSubmods).forEach(name => {
+        submodules[name] = exports.remapSubmodule(baseSubmods[name],
+                                                  commitMap,
+                                                  urlMap);
+    });
+
+    return new RepoStatus({
+        currentBranchName: status.currentBranchName,
+        headCommit: mapSha(status.headCommit),
+        staged: status.staged,
+        submodules: submodules,
+        workdir: status.workdir,
+        rebase: status.rebase === null ? null : remapRebase(status.rebase,
+                                                            commitMap),
+    });
+};
+
+/**
  * Return status changes for the specified `paths` in the specified `repo`.  If
  * the specified `allUntracked` is true, include all untracked files rather
  * than accumulating them by directory.  If `paths` is empty, check the entire
