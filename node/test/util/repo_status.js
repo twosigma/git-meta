@@ -554,6 +554,24 @@ describe("RepoStatus", function () {
         });
     });
 
+    describe("Submodule.open", function () {
+        it("breathing", function () {
+            const sub = new Submodule({
+                commitSha: "1",
+            });
+            const opened = sub.open();
+            assert.deepEqual(opened, new Submodule({
+                commitSha: "1",
+                indexSha: "1",
+                indexShaRelation: RELATION.SAME,
+                workdirShaRelation: RELATION.SAME,
+                repoStatus: new RepoStatus({
+                    headCommit: "1",
+                }),
+            }));
+        });
+    });
+
     describe("RepoStatus", function () {
         function m(args) {
             let result = {

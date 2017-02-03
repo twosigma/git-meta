@@ -335,6 +335,25 @@ class Submodule {
                 args.repoStatus : this.d_repoStatus,
         });
     }
+
+    /**
+     * Return a new `Submodule` object having the same value as this one with a
+     * newly opened repository.  The behavior is undefined unless
+     * `null === this.repoStatus`.
+     *
+     * @return {Submodule}
+     */
+    open() {
+        assert.isNull(this.d_repoStatus);
+        const RepoStatus = module.exports;
+        return this.copy({
+            indexSha: this.d_commitSha,
+            indexShaRelation: COMMIT_RELATION.SAME,
+            workdirShaRelation: COMMIT_RELATION.SAME,
+            repoStatus:
+                new RepoStatus({ headCommit: this.d_commitSha, }),
+        });
+    }
 }
 
 /**
