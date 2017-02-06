@@ -44,7 +44,6 @@ describe("synthetic-branch", function () {
     const syntheticBranch = co.wrap(function *(repos, maps) {
         const x = repos.x;
         const config = yield x.config();
-        yield config.setString("gitmeta.subrepourlbase", "");
         yield config.setString("gitmeta.subreporootpath", "../../");
 
         const head = yield x.getHeadCommit();
@@ -132,6 +131,15 @@ describe("synthetic-branch", function () {
             expected: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
                 "y=S:C4-1;Bmaster=4;BmetaTEST=4",
+        },
+        "with a change to a submodule which was deleted on master": {
+            input: "x=S:C2-1 s=S/s:1;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
+                ";BmetaTEST=4" +
+                "|s=S:C8-7;C7-1;Bmaster=8",
+            expected: "x=S:C2-1 s=S/s:1;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
+                ";BmetaTEST=4" +
+                "|s=S:C8-7;C7-1;Bmaster=8",
+            fails: true
         },
         "with a submodule in a subdir, at meta commit": {
             input: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3|" +
