@@ -66,8 +66,6 @@ function *urlToLocalPath(repo, url) {
     assert.isString(url);
 
     const config = yield repo.config();
-    const subrepoUrlBase =
-        yield config.getStringBuf("gitmeta.subrepourlbase");
     const subrepoRootPath =
         yield config.getStringBuf("gitmeta.subreporootpath");
     let subrepoSuffix = "";
@@ -77,13 +75,7 @@ function *urlToLocalPath(repo, url) {
         //It's OK for this to be missing, but nodegit lacks an
         //API that expresses this.
     }
-    if (!url.startsWith(subrepoUrlBase)) {
-        throw "Your git configuration gitmeta.subrepoUrlBase, '" +
-            subrepoUrlBase + "', must be a prefix of all submodule " +
-            "urls.  Submodule url '" + url + "' fails.";
-    }
-    const remotePath = url.slice(subrepoUrlBase.length);
-    const localPath = path.join(subrepoRootPath, remotePath + subrepoSuffix);
+    const localPath = path.join(subrepoRootPath, url + subrepoSuffix);
     if (localPath[0] === "/") {
         return localPath;
     } else {
@@ -99,13 +91,15 @@ function *urlToLocalPath(repo, url) {
  * @param {NodeGit.TreeEntry} submoduleEntry the submodule's tree entry
  * in the meta tree.
  */
-function* checkSubmodule(repo, submoduleEntry) {
+function* checkSubmodule(repo, metaCommit, submoduleEntry) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(submoduleEntry, NodeGit.TreeEntry);
 
     const submodulePath = submoduleEntry.path();
-    const submodule = yield NodeGit.Submodule.lookup(repo, submodulePath);
-    const url = submodule.url();
+
+    const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
+                                                                  metaCommit);
+    const url = submodules[submodulePath].url;
     const localPath = yield *urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
     const submoduleCommitId = submoduleEntry.id();
@@ -130,8 +124,7 @@ function* checkSubmodules(repo, commit) {
     const result = allChanges.map(function *(changeSet) {
         const result = Array.from(changeSet).map(function *(path) {
             const entry = yield commit.getEntry(path);
-            return yield *checkSubmodule(repo, entry);
-
+            return yield *checkSubmodule(repo, commit, entry);
         });
         return (yield result).every(identity);
     });
