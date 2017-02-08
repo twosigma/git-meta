@@ -90,33 +90,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const cwd     = process.cwd();
     const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
-    const subLists = yield args.path.map(co.wrap(function *(filename) {
-        // Compute the relative path for `filename` from the root of the repo,
-        // and check for invalid values.
-        let relPath;
-        try {
-            relPath = yield GitUtil.resolveRelativePath(workdir,
-                                                        cwd,
-                                                        filename);
-        }
-        catch (e) {
-            if (e instanceof UserError) {
-                console.error(e.message);
-                return;                                               // RETURN
-            }
-            throw e;
-        }
-        const result = yield SubmoduleUtil.getSubmodulesInPath(workdir,
-                                                               relPath,
-                                                               subs);
-        if (0 === result.length) {
-            console.warn(`\
-No submodules found from ${colors.yellow(filename)}.`);
-        }
-        return result;
-    }));
-
-    const subsToOpen = subLists.reduce((a, b) => a.concat(b), []);
+    const subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
+                                                                 cwd,
+                                                                 subs,
+                                                                 args.path);
     const index      = yield repo.index();
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
                                                                    subsToOpen);
