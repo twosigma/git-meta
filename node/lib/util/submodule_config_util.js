@@ -407,7 +407,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     }
     if (null !== origin) {
         if (realUrl !== origin.url()) {
-            yield NodeGit.Remote.setUrl(result, "origin", realUrl);
+            NodeGit.Remote.setUrl(result, "origin", realUrl);
         }
     }
     else {

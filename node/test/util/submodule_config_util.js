@@ -491,6 +491,26 @@ foo
             yield runTest(repo, subRootRepo, subRootRepo.workdir(), "foo");
         }));
 
+        it("reset URL", co.wrap(function *() {
+            const repo        = yield TestUtil.createSimpleRepository();
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            const url = subRootRepo.workdir();
+            yield runTest(repo, subRootRepo, url, "foo");
+            const sub = yield NodeGit.Submodule.lookup(repo, "foo");
+            const subRepo = yield sub.open();
+            NodeGit.Remote.setUrl(subRepo, "origin", "/bar");
+            yield Close.close(repo, "foo");
+            const newSub =
+                yield SubmoduleConfigUtil.initSubmoduleAndRepo("",
+                                                               repo,
+                                                               "foo",
+                                                               url,
+                                                               null);
+            const remote = yield newSub.getRemote("origin");
+            const newUrl = remote.url();
+            assert.equal(newUrl, url);
+        }));
+
         it("deep name", co.wrap(function *() {
             const repo        = yield TestUtil.createSimpleRepository();
             const subRootRepo = yield TestUtil.createSimpleRepository();
