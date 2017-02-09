@@ -44,18 +44,26 @@ const SubmoduleFetcher    = require("./submodule_fetcher");
  * Open the submodule having the specified `submoduleName` in the meta-repo
  * associated with the specified `fetcher`; fetch the specified `submoduleSha`
  * using `fetcher` and set HEAD to point to it.  Configure the "origin" remote
- * to the `url` configured in the meta-repo.
+ * to the `url` configured in the meta-repo.  If the specified `templatePath`
+ * is provided, use it to configure the newly-opened submodule's repository.
  *
  * @async
  * @param {SubmoduleFetcher} fetcher
  * @param {String}           submoduleName
  * @param {String}           submoduleSha
+ * @param {String|null}      templatePath
  * @return {NodeGit.Repository}
  */
 exports.openOnCommit = co.wrap(function *(fetcher,
                                           submoduleName,
-                                          submoduleSha) {
+                                          submoduleSha,
+                                          templatePath) {
     assert.instanceOf(fetcher, SubmoduleFetcher);
+    assert.isString(submoduleName);
+    assert.isString(submoduleSha);
+    if (null !== templatePath) {
+        assert.isString(templatePath);
+    }
 
     const metaRepoUrl = yield fetcher.getMetaOriginUrl();
     const metaRepo = fetcher.repo;
@@ -67,7 +75,8 @@ exports.openOnCommit = co.wrap(function *(fetcher,
                                                                 metaRepoUrl,
                                                                 metaRepo,
                                                                 submoduleName,
-                                                                submoduleUrl);
+                                                                submoduleUrl,
+                                                                templatePath);
 
     // Fetch the needed sha.  Close if the fetch fails; otherwise, the
     // repository ends up in a state where it things the submodule is open, but

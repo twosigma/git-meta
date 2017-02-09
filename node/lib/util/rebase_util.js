@@ -328,6 +328,8 @@ const driveRebase = co.wrap(function *(metaRepo,
     let fetcher;          // Set to a SubmoduleFetcher bound to currentCommit
     let shas;             // submodule shas for current commit
 
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
+
     /**
      * Return the submodule rebaser for the specified `path`, or null if
      * `path` does not correspond to a submodule.  Open the subodule if it is
@@ -355,7 +357,10 @@ const driveRebase = co.wrap(function *(metaRepo,
             }
             else { 
                 console.log(`Submodule ${colors.blue(path)}: opening`);
-                repo = yield Open.openOnCommit(fetcher, path, submodule.sha);
+                repo = yield Open.openOnCommit(fetcher,
+                                               path,
+                                               submodule.sha,
+                                               templatePath);
             }
             return new SubmoduleRebaser(path,
                                         repo,

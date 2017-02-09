@@ -78,12 +78,13 @@ exports.configureParser = function (parser) {
 exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
 
-    const DoWorkQueue      = require("../util/do_work_queue");
-    const GitUtil          = require("../util/git_util");
-    const Open             = require("../util/open");
-    const SubmoduleFetcher = require("../util/submodule_fetcher");
-    const SubmoduleUtil    = require("../util/submodule_util");
-    const UserError        = require("../util/user_error");
+    const DoWorkQueue         = require("../util/do_work_queue");
+    const GitUtil             = require("../util/git_util");
+    const Open                = require("../util/open");
+    const SubmoduleConfigUtil = require("../util/submodule_config_util");
+    const SubmoduleFetcher    = require("../util/submodule_fetcher");
+    const SubmoduleUtil       = require("../util/submodule_util");
+    const UserError           = require("../util/user_error");
 
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -127,6 +128,8 @@ No submodules found from ${colors.yellow(filename)}.`);
 
     const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
 
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
+
     const opener = co.wrap(function *(name, index) {
         if (openSubs.has(name)) {
             console.warn(`Submodule ${colors.cyan(name)} is already open.`);
@@ -142,7 +145,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         // to open other (probably unaffected) repositories.
 
         try {
-            yield Open.openOnCommit(fetcher, name, shas[index]);
+            yield Open.openOnCommit(fetcher, name, shas[index], templatePath);
         }
         catch (e) {
             if (e instanceof UserError) {
@@ -156,7 +159,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         }
         console.log(`Finished opening ${colors.blue(name)}.`);
     });
-    yield DoWorkQueue.doInParallel(subsToOpen, opener);
+    yield DoWorkQueue.doInParallel(subsToOpen, opener, 30);
 
     if (failed) {
         process.exit(1);

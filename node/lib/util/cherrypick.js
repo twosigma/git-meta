@@ -36,6 +36,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const Open                = require("../util/open");
+const SubmoduleConfigUtil = require("../util/submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("../util/submodule_util");
 const UserError           = require("../util/user_error");
@@ -93,6 +94,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
 
     let submoduleCommits = {};
     const subFetcher = new SubmoduleFetcher(metaRepo, commit);
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
 
     const picker = co.wrap(function *(subName, headSha, commitSha) {
         let commitMap = {};
@@ -105,7 +107,8 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
             console.log(`Opening ${colors.blue(subName)}.`);
             repo = yield Open.openOnCommit(subFetcher,
                                            subName,
-                                           headSubs[subName].sha);
+                                           headSubs[subName].sha,
+                                           templatePath);
         }
         else {
             repo = yield SubmoduleUtil.getRepo(metaRepo, subName);

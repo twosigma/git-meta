@@ -839,7 +839,8 @@ git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
                                                                 originUrl,
                                                                 repo,
                                                                 subName,
-                                                                sub.url);
+                                                                sub.url,
+                                                                null);
             // Pull in commits from the commits repo, but remove the remote
             // when done.
 
