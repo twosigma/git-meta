@@ -115,10 +115,10 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
         }
 
         const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
-        subRepos.push(repo);
         const sha = shas[name];
         yield subFetcher.fetchSha(repo, name, sha);
         const commit = yield repo.getCommit(sha);
+        subRepos.push(repo);
         subCommits.push(commit);
         const error = yield dryRun(repo, commit);
         if (null !== error) {
