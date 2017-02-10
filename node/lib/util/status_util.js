@@ -40,12 +40,13 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const GitUtil             = require("../util/git_util");
-const Rebase              = require("../util/rebase");
-const RebaseFileUtil      = require("../util/rebase_file_util");
-const RepoStatus          = require("../util/repo_status");
-const SubmoduleUtil       = require("../util/submodule_util");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const DiffUtil            = require("./diff_util");
+const GitUtil             = require("./git_util");
+const Rebase              = require("./rebase");
+const RebaseFileUtil      = require("./rebase_file_util");
+const RepoStatus          = require("./repo_status");
+const SubmoduleUtil       = require("./submodule_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Return a new `RepoStatus.Submodule` object having the same value as the
@@ -143,84 +144,6 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
                                                             commitMap),
     });
 };
-
-/**
- * Return status changes for the specified `paths` in the specified `repo`.  If
- * the specified `allUntracked` is true, include all untracked files rather
- * than accumulating them by directory.  If `paths` is empty, check the entire
- * `repo`.
- *
- * @param {NodeGit.Repository} repo
- * @param {String []} paths
- * @param {Boolean} allUntracked
- * @return {Object}
- * @return {Object} return.staged path to FILESTATUS of staged changes
- * @return {Object} return.workdir path to FILESTATUS of workdir changes
- */
-exports.getChanges = co.wrap(function *(repo, paths, allUntracked) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isArray(paths);
-    assert.isBoolean(allUntracked);
-
-    const result = {
-        staged: {},
-        workdir: {},
-    };
-
-    // Loop through each of the `NodeGit.FileStatus` objects in the repo and
-    // categorize them into `result`.
-
-    const options = {
-        flags: NodeGit.Status.OPT.EXCLUDE_SUBMODULES |
-               NodeGit.Status.OPT.INCLUDE_UNTRACKED,
-        pathspec: paths,
-    };
-    if (allUntracked) {
-        options.flags = options.flags |
-                        NodeGit.Status.OPT.RECURSE_UNTRACKED_DIRS;
-    }
-    const statuses = yield repo.getStatusExt(options);
-    const FILESTATUS = RepoStatus.FILESTATUS;
-    const STATUS = NodeGit.Status.STATUS;
-    for (let i = 0; i < statuses.length; ++i) {
-        const status = statuses[i];
-        const path = status.path();
-
-        // Skip the `.gitmodules` file.
-
-        if (SubmoduleConfigUtil.modulesFileName === path) {
-            continue;                                           // CONTINUE
-        }
-
-        const bit = status.statusBit();
-
-        // Index status.
-
-        if (bit & STATUS.INDEX_NEW) {
-            result.staged[path] = FILESTATUS.ADDED;
-        }
-        else if (bit & STATUS.INDEX_DELETED) {
-            result.staged[path] = FILESTATUS.REMOVED;
-        }
-        else if (bit & STATUS.INDEX_MODIFIED) {
-            result.staged[path] = FILESTATUS.MODIFIED;
-        }
-
-        // Workdir status
-
-        if (bit & STATUS.WT_NEW) {
-            result.workdir[path] = FILESTATUS.ADDED;
-        }
-        else if (bit & STATUS.WT_DELETED) {
-            result.workdir[path] = FILESTATUS.REMOVED;
-        }
-        else if (bit & STATUS.WT_MODIFIED) {
-            result.workdir[path] = FILESTATUS.MODIFIED;
-        }
-    }
-    return result;
-});
-
 
 /**
  * Return the `RepoStatus.Submodule` for the submodule having the specified
@@ -452,9 +375,17 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     }
 
     if (options.showMetaChanges && !repo.isBare()) {
-        const status = yield exports.getChanges(repo,
-                                                options.paths,
-                                                options.showAllUntracked);
+        const head = yield repo.getHeadCommit();
+        let tree = null;
+        if (null !== head) {
+            const treeId = head.treeId();
+            tree = yield NodeGit.Tree.lookup(repo, treeId);
+        }
+        const status = yield DiffUtil.getRepoStatus(repo,
+                                                    tree,
+                                                    options.paths,
+                                                    false,
+                                                    options.showAllUntracked);
         args.staged = status.staged;
         args.workdir = status.workdir;
     }

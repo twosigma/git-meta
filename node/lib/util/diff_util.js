@@ -31,9 +31,11 @@
 "use strict";
 
 const assert  = require("chai").assert;
+const co      = require("co");
 const NodeGit = require("nodegit");
 
-const RepoStatus = require("./repo_status");
+const RepoStatus          = require("./repo_status");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Return the `RepoStatus.FILESTATUS` value that corresponds to the specified
@@ -62,3 +64,117 @@ exports.convertDeltaFlag = function (flag) {
     }
     assert(`Unrecognized DELTA type: ${flag}.`);
 };
+
+function readDiff(diff) {
+    const result = {};
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    const numDeltas = diff.numDeltas();
+    for (let i = 0;  i < numDeltas; ++i) {
+        const delta = diff.getDelta(i);
+        const diffStatus = delta.status();
+        const fileStatus = exports.convertDeltaFlag(diffStatus);
+        const file = FILESTATUS.REMOVED === fileStatus ?
+                     delta.oldFile() :
+                     delta.newFile();
+        const path = file.path();
+
+        // Skip the .gitmodules file and all submodule changes; they're handled
+        // separately.
+
+        if (SubmoduleConfigUtil.modulesFileName !== path &&
+            NodeGit.TreeEntry.FILEMODE.COMMIT !== file.mode()) {
+            result[path] = fileStatus;
+        }
+    }
+    return result;
+}
+
+/**
+ * Return differences for the specified `paths` in the specified `repo` between
+ * the current index and working directory, and the specified `tree`, if
+ * not null.  If the specified `allUntracked` is true, include all untracked
+ * files rather than accumulating them by directory.  If `paths` is empty,
+ * check the entire `repo`.  If the specified `workdirToTree` is true,
+ * calculate workdir differences from the `tree`; otherwise, calculate
+ * them between the workdir and the index of `repo`.  When calculating a diff
+ * to compute changes to stage with a `-a` option (stage modified files), for
+ * example, you need to `workdirToTree` to be true.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Tree|null} tree
+ * @param {String []} paths
+ * @param {Boolean} workdirToTree
+ * @param {Boolean} allUntracked
+ * @return {Object}
+ * @return {Object} return.staged path to FILESTATUS of staged changes
+ * @return {Object} return.workdir path to FILESTATUS of workdir changes
+ */
+exports.getRepoStatus = co.wrap(function *(repo,
+                                           tree,
+                                           paths,
+                                           workdirToTree,
+                                           allUntracked) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    if (null !== tree) {
+        assert.instanceOf(tree, NodeGit.Tree);
+    }
+    assert.isArray(paths);
+    assert.isBoolean(workdirToTree);
+    assert.isBoolean(allUntracked);
+
+    const options = {
+        ignoreSubmodules: 1,
+        flags: NodeGit.Diff.OPTION.INCLUDE_UNTRACKED |
+               NodeGit.Diff.OPTION.EXCLUDE_SUBMODULES,
+    };
+    if (0 !== paths.length) {
+        options.pathspec = paths;
+    }
+    if (allUntracked) {
+        options.flags = options.flags |
+                        NodeGit.Diff.OPTION.RECURSE_UNTRACKED_DIRS;
+    }
+    const indexDiff =
+               yield NodeGit.Diff.treeToIndex(repo, tree, null, options);
+    const indexStatus = readDiff(indexDiff);
+    const index = yield repo.index();
+    const workdirToIndexDiff =
+                       yield NodeGit.Diff.indexToWorkdir(repo, index, options);
+    const workdirToIndexStatus = readDiff(workdirToIndexDiff);
+    if (!workdirToTree) {
+        return {
+            staged: indexStatus,
+            workdir: workdirToIndexStatus,
+        };
+    }
+    const workdirDiff =
+                   yield NodeGit.Diff.treeToWorkdir(repo, tree, options);
+    const workdirFiles = readDiff(workdirDiff);
+    const staged = {};
+    const workdir = {};
+
+    // When doing all, the algorithm is to use the index status only for files
+    // that have no workdir change -- unless the workdir change is an addition.
+
+    const ADDED = RepoStatus.FILESTATUS.ADDED;
+
+    Object.keys(indexStatus).forEach(path => {
+        const workdir = workdirToIndexStatus[path];
+        if (undefined === workdir || ADDED === workdir) {
+            staged[path] = indexStatus[path];
+        }
+    });
+
+    Object.keys(workdirFiles).forEach(path => {
+        const status = workdirToIndexStatus[path];
+        if (undefined !== status) {
+            workdir[path] = workdirFiles[path];
+        }
+    });
+
+    return {
+        staged: staged,
+        workdir: workdir,
+    };
+
+});
