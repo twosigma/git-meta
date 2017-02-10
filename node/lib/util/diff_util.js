@@ -53,6 +53,12 @@ exports.convertDeltaFlag = function (flag) {
         case DELTA.CONFLICTED: return FILESTATUS.CONFLICTED;
         case DELTA.RENAMED: return FILESTATUS.RENAMED;
         case DELTA.TYPECHANGE: return FILESTATUS.TYPECHANGED;
+
+        // Status changes in `RepoStatus` objects are separated into `staged`
+        // and `workdir` maps.  Files that are "added" in the workdir are
+        // implicitly untracked.
+
+        case DELTA.UNTRACKED: return FILESTATUS.ADDED;
     }
     assert(`Unrecognized DELTA type: ${flag}.`);
 };

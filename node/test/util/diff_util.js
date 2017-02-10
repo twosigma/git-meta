@@ -65,6 +65,10 @@ describe("DiffUtil", function () {
                 input: DELTA.TYPECHANGE,
                 expected: FILESTATUS.TYPECHANGED,
             },
+            "untracked": {
+                input: DELTA.UNTRACKED,
+                expected: FILESTATUS.ADDED,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
