@@ -134,41 +134,37 @@ exports.getRepoStatus = co.wrap(function *(repo,
         options.flags = options.flags |
                         NodeGit.Diff.OPTION.RECURSE_UNTRACKED_DIRS;
     }
-    const indexDiff =
-               yield NodeGit.Diff.treeToIndex(repo, tree, null, options);
-    const indexStatus = readDiff(indexDiff);
     const index = yield repo.index();
     const workdirToIndexDiff =
                        yield NodeGit.Diff.indexToWorkdir(repo, index, options);
     const workdirToIndexStatus = readDiff(workdirToIndexDiff);
     if (!workdirToTree) {
+        const indexToTreeDiff =
+            yield NodeGit.Diff.treeToIndex(repo, tree, null, options);
+        const indexToTreeStatus = readDiff(indexToTreeDiff);
         return {
-            staged: indexStatus,
+            staged: indexToTreeStatus,
             workdir: workdirToIndexStatus,
         };
     }
-    const workdirDiff =
+    const workdirToTreeDiff =
                    yield NodeGit.Diff.treeToWorkdir(repo, tree, options);
-    const workdirFiles = readDiff(workdirDiff);
+    const workdirToTreeStatus = readDiff(workdirToTreeDiff);
     const staged = {};
     const workdir = {};
 
-    // When doing all, the algorithm is to use the index status only for files
-    // that have no workdir change -- unless the workdir change is an addition.
+    // `workdirToTreeStatus` contains all differences between the working
+    // directory and `tree`: staged and unstaged.  We characterize files having
+    // no change between the workdir and the index as being staged, and all
+    // else as workdir.
 
-    const ADDED = RepoStatus.FILESTATUS.ADDED;
-
-    Object.keys(indexStatus).forEach(path => {
-        const workdir = workdirToIndexStatus[path];
-        if (undefined === workdir || ADDED === workdir) {
-            staged[path] = indexStatus[path];
+    Object.keys(workdirToTreeStatus).forEach(path => {
+        const change = workdirToTreeStatus[path];
+        if (!(path in workdirToIndexStatus)) {
+            staged[path] = change;
         }
-    });
-
-    Object.keys(workdirFiles).forEach(path => {
-        const status = workdirToIndexStatus[path];
-        if (undefined !== status) {
-            workdir[path] = workdirFiles[path];
+        else {
+            workdir[path] = change;
         }
     });
 
@@ -176,5 +172,4 @@ exports.getRepoStatus = co.wrap(function *(repo,
         staged: staged,
         workdir: workdir,
     };
-
 });

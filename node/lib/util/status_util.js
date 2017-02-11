@@ -311,7 +311,10 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
  * (default []), list the status only of the files contained in `paths`.  If
  * the optionally specified `options.showMetaChanges` is provided (default
  * true), return the status of changes in `repo`; otherwise, show only changes
- * in submobules.
+ * in submobules.  If the optionally specified `workdirToTree` is specified,
+ * calculate the status matching the workdir to the underlying commit rather
+ * than against the index, typically to calculate the status relevant to an
+ * `commit -a`.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -319,6 +322,7 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
  * @param {Boolean}            [options.showAllUntracked]
  * @param {String []}          [options.paths]
  * @param {Boolean}            [options.showMetaChanges]
+ * @param {Boolean}            [options.workdirToTree]
  * @return {RepoStatus}
  */
 exports.getRepoStatus = co.wrap(function *(repo, options) {
@@ -349,6 +353,12 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     }
     else {
         assert.isBoolean(options.showMetaChanges);
+    }
+    if (undefined === options.workdirToTree) {
+        options.workdirToTree = false;
+    }
+    else {
+        assert.isBoolean(options.workdirToTree);
     }
 
     const headCommit = yield repo.getHeadCommit();
@@ -384,7 +394,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         const status = yield DiffUtil.getRepoStatus(repo,
                                                     tree,
                                                     options.paths,
-                                                    false,
+                                                    options.workdirToTree,
                                                     options.showAllUntracked);
         args.staged = status.staged;
         args.workdir = status.workdir;
@@ -442,6 +452,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
             return exports.getRepoStatus(subRepo, {
                 paths: paths,
                 showAllUntracked: options.showAllUntracked,
+                workdirToTree: options.workdirToTree,
             });
         };
 

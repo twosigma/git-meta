@@ -146,6 +146,30 @@ describe("DiffUtil", function () {
                 staged: { "README.md": FILESTATUS.MODIFIED },
                 workdir: { "README.md": FILESTATUS.MODIFIED },
             },
+            "modified workdir and index -a": {
+                input: "x=S:I README.md=aaa;W README.md=bbb",
+                workdir: { "README.md": FILESTATUS.MODIFIED },
+                workdirToTree: true,
+            },
+            "added index, rm workdir": {
+                input: "x=S:I x=y;W x",
+                staged: { x: FILESTATUS.ADDED },
+                workdir: { x: FILESTATUS.REMOVED },
+            },
+            "added index, rm workdir -a": {
+                input: "x=S:I x=y;W x",
+                workdirToTree: true,
+            },
+            "modified index, rm workdir": {
+                input: "x=S:I README.md=3;W README.md",
+                staged: { "README.md": FILESTATUS.MODIFIED },
+                workdir: { "README.md": FILESTATUS.REMOVED },
+            },
+            "modified index, rm workdir, -a": {
+                input: "x=S:I README.md=3;W README.md",
+                workdir: { "README.md": FILESTATUS.REMOVED },
+                workdirToTree: true,
+            },
             "index path restriction": {
                 input: "x=S:I README.md=aaa,foo=a",
                 paths: [ "foo" ],
