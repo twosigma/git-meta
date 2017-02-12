@@ -65,6 +65,126 @@ const getSubmodules = co.wrap(function *(repo, urls, commit) {
 });
 
 /**
+ * Return the state of the index and working directory of the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit|null} headCommit
+ * @return {Object}
+ * @return {Object} return.index path to content
+ * @return {Object} return.workdir path to content
+ */
+const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
+    // Process index and workdir changes.
+
+    const repoIndex = yield repo.index();
+    const index = {};
+    const workdir = {};
+
+    const submodules =
+         yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, repoIndex);
+
+    const referencedSubmodules = new Set();  // set of changed submodules
+
+    const STATUS = NodeGit.Status.STATUS;
+
+    const stats = yield repo.getStatusExt();
+    for (let i = 0; i < stats.length; ++i) {
+        const stat = stats[i].statusBit();
+        let filePath = stats[i].path();
+
+        // If the path ends with a slash, knock it off so we'll be able to
+        // match it to submodules.
+
+        if (filePath.endsWith("/")) {
+            filePath = filePath.slice(0, filePath.length - 1);
+        }
+
+        // skip the modules file
+
+        if (SubmoduleConfigUtil.modulesFileName === filePath) {
+            continue;
+        }
+
+        // Check index.
+
+        if (stat & STATUS.INDEX_DELETED) {
+            index[filePath] = null;
+        }
+        else if (stat & STATUS.INDEX_NEW || stat & STATUS.INDEX_MODIFIED) {
+
+            // If the path indicates a submodule, we have to load its sha
+            // separately, and use the url from the modules file.
+
+            if (filePath in submodules) {
+                const url = submodules[filePath];
+                const entry = repoIndex.getByPath(filePath, 0);
+                const sha = entry.id.tostrS();
+                index[filePath] = new RepoAST.Submodule(url, sha);
+                referencedSubmodules.add(filePath);
+            }
+            else {
+
+                // Otherwise, read the blob for the file from the index.
+
+                const entry = repoIndex.getByPath(filePath, 0);
+                const oid = entry.id;
+                const blob = yield repo.getBlob(oid);
+                const data = blob.toString();
+                index[filePath] = data;
+            }
+        }
+
+        // Check workdir
+
+        if (stat & STATUS.WT_DELETED) {
+            workdir[filePath] = null;
+        }
+        else if (stat & STATUS.WT_NEW || stat & STATUS.WT_MODIFIED) {
+            if (!(filePath in submodules)) {
+                const absPath = path.join(repo.workdir(), filePath);
+                const data = yield fs.readFile(absPath, {
+                    encoding: "utf8"
+                });
+                workdir[filePath] = data;
+            }
+        }
+    }
+
+    // Check for changes to submodules not reflected in the index (other
+    // than via .gitmodules file), i.e.: submodules with just URL changes
+    // or those added but with no index entry yet.  We're not (yet) looking
+    // for truly kooky situations such as the user manually deleting the
+    // entry for a submodule in the index.
+
+    let commitSubmodules = {};  // map from subname to URL for base commit
+    if (null !== headCommit) {
+        commitSubmodules =
+            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
+                                                              headCommit);
+    }
+
+    for (let subName in submodules) {
+        const indexUrl = submodules[subName];
+        if (!referencedSubmodules.has(subName) &&
+            (!(subName in commitSubmodules) ||
+              indexUrl !== commitSubmodules[subName])) {
+            let sha = null;
+            try {
+                sha = repoIndex.getByPath(subName, 0).id.tostrS();
+            }
+            catch (e) {
+                // doesn't have an entry
+            }
+            index[subName] = new RepoAST.Submodule(indexUrl, sha);
+        }
+    }
+    return {
+        index: index,
+        workdir: workdir,
+    };
+});
+
+/**
  * Return a representation of the specified `repo` encoded in an `AST` object.
  *
  * @async
@@ -262,68 +382,9 @@ exports.readRAST = co.wrap(function *(repo) {
     }
 
     if (!bare) {
-
-        // Process index and workdir changes.
-
-        const repoIndex = yield repo.index();
-        const submodules =
-             yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, repoIndex);
-
-        const STATUS = NodeGit.Status.STATUS;
-
-        const stats = yield repo.getStatusExt();
-        for (let i = 0; i < stats.length; ++i) {
-            const stat = stats[i].statusBit();
-            const filePath = stats[i].path();
-
-            // skip the modules file
-
-            if (SubmoduleConfigUtil.modulesFileName === filePath) {
-                continue;
-            }
-
-            // Check index.
-
-            if (stat & STATUS.INDEX_DELETED) {
-                index[filePath] = null;
-            }
-            else if (stat & STATUS.INDEX_NEW || stat & STATUS.INDEX_MODIFIED) {
-
-                // If the path indicates a submodule, we have to load its sha
-                // separately, and use the url from the modules file.
-
-                if (filePath in submodules) {
-                    const url = submodules[filePath];
-                    const entry = repoIndex.getByPath(filePath, 0);
-                    const sha = entry.id.tostrS();
-                    index[filePath] = new RepoAST.Submodule(url, sha);
-                }
-                else {
-
-                    // Otherwise, read the blob for the file from the index.
-
-                    const entry = repoIndex.getByPath(filePath, 0);
-                    const oid = entry.id;
-                    const blob = yield repo.getBlob(oid);
-                    const data = blob.toString();
-                    index[filePath] = data;
-                }
-            }
-            // Check workdir
-
-            if (stat & STATUS.WT_DELETED) {
-                workdir[filePath] = null;
-            }
-            else if (stat & STATUS.WT_NEW || stat & STATUS.WT_MODIFIED) {
-                if (!(filePath in submodules)) {
-                    const absPath = path.join(repo.workdir(), filePath);
-                    const data = yield fs.readFile(absPath, {
-                        encoding: "utf8"
-                    });
-                    workdir[filePath] = data;
-                }
-            }
-        }
+        const current = yield loadIndexAndWorkdir(repo, headCommit);
+        index = current.index;
+        workdir = current.workdir;
     }
 
     // Now we can actually build the remote objects.

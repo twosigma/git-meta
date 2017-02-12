@@ -158,6 +158,7 @@ exports.getOriginUrl = co.wrap(function *(repo) {
  * @param {NodeGit.Repository} repo
  * @param {String}             remoteName
  * @param {String}             branchName
+ * @return {NodeGit.Reference|null}
  */
 exports.findRemoteBranch = co.wrap(function *(repo, remoteName, branchName) {
     assert.instanceOf(repo, NodeGit.Repository);

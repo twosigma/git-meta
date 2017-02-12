@@ -600,7 +600,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
             url = urlMap[url];
         }
         let sha = submodule.sha;
-        if (sha in commitMap) {
+        if (null !== sha && (sha in commitMap)) {
             sha = commitMap[sha];
         }
         return new RepoAST.Submodule(url, sha);

@@ -41,6 +41,7 @@ const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
+const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 
                                // Test utilities
@@ -516,6 +517,56 @@ describe("readRAST", function () {
             branches: { master: commit.id().tostrS() },
             currentBranchName: "master",
             head: commit.id().tostrS(),
+        });
+        const actual = yield ReadRepoASTUtil.readRAST(repo);
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
+
+    it("submodule URL change on index", co.wrap(function *() {
+
+        const repo = yield TestUtil.createSimpleRepository();
+        const headCommit = yield repo.getHeadCommit();
+        const baseSubRepo = yield TestUtil.createSimpleRepository();
+        const baseSubPath = baseSubRepo.workdir();
+        const subHead = yield baseSubRepo.getHeadCommit();
+        yield addSubmodule(repo,
+                           baseSubPath,
+                           "x/y",
+                           subHead.id().tostrS());
+
+        const commit = yield TestUtil.makeCommit(repo,
+                                                 ["x/y", ".gitmodules"]);
+        yield fs.writeFile(path.join(repo.workdir(), ".gitmodules"), `\
+[submodule "x/y"]
+\tpath = x/y
+\turl = /foo
+`);
+        const index = yield repo.index();
+        yield index.addByPath(".gitmodules");
+        yield index.write();
+        yield Close.close(repo, "x/y");
+        let commits = {};
+        commits[headCommit.id().tostrS()] = new Commit({
+            changes: {"README.md":""},
+            message: "first commit",
+        });
+        commits[commit.id().tostrS()] = new Commit({
+            parents: [headCommit.id().tostrS()],
+            changes: {
+                "x/y": new RepoAST.Submodule(baseSubPath,
+                                             subHead.id().tostrS()),
+            },
+            message: "message",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { master: commit.id().tostrS() },
+            currentBranchName: "master",
+            head: commit.id().tostrS(),
+            index: {
+                "x/y": new RepoAST.Submodule("/foo",
+                                             subHead.id().tostrS()),
+            },
         });
         const actual = yield ReadRepoASTUtil.readRAST(repo);
         RepoASTUtil.assertEqualASTs(actual, expected);
@@ -1392,5 +1443,105 @@ describe("readRAST", function () {
         const ast = yield ReadRepoASTUtil.readRAST(repo);
         assert.deepEqual(ast, expected);
     }));
+
+    it("new sub, no sha", co.wrap(function *() {
+        // Going to initialize a submodule with a URL, but not assign it a SHA.
+
+        const r = yield TestUtil.createSimpleRepository();
+        const modulesPath = path.join(r.workdir(),
+                                      SubmoduleConfigUtil.modulesFileName);
+        fs.appendFileSync(modulesPath, `\
+[submodule "x"]
+    path = x
+    url = foo
+`);
+        const index = yield r.index();
+        yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
+        yield index.write();
+        yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar", r, "x", "foo");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": ""},
+            message: "first commit",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": commit },
+            head: commit,
+            currentBranchName: "master",
+            index: { x: new RepoAST.Submodule("foo", null) },
+            openSubmodules: {
+                x: new RepoAST({
+                    remotes: {
+                        origin: new RepoAST.Remote("foo"),
+                    },
+                }),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
+    it("new sub, new HEAD in WD", co.wrap(function *() {
+        // Going to initialize a submodule with a URL, but not assign it a SHA.
+
+        const r = yield TestUtil.createSimpleRepository();
+        const modulesPath = path.join(r.workdir(),
+                                      SubmoduleConfigUtil.modulesFileName);
+        fs.appendFileSync(modulesPath, `\
+[submodule "x"]
+    path = x
+    url = foo
+`);
+        const index = yield r.index();
+        yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
+        yield index.write();
+        const subRepo =
+          yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar", r, "x", "foo");
+        const subCommit = yield TestUtil.generateCommit(subRepo);
+        yield NodeGit.Checkout.tree(subRepo, subCommit, {
+            checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
+        });
+        subRepo.setHeadDetached(subCommit);
+        const branch = yield subRepo.getBranch("master");
+        NodeGit.Branch.delete(branch);
+        const subCommits = {
+        };
+        subCommits[subCommit.id().tostrS()] = new RepoAST.Commit({
+            changes: {
+                "README.md": "data",
+            },
+            message: "message",
+        });
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": ""},
+            message: "first commit",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": commit },
+            head: commit,
+            currentBranchName: "master",
+            index: { x: new RepoAST.Submodule("foo", null) },
+            openSubmodules: {
+                x: new RepoAST({
+                    commits: subCommits,
+                    remotes: {
+                        origin: new RepoAST.Remote("foo"),
+                    },
+                    head: subCommit.id().tostrS(),
+                }),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
 });
 

@@ -179,10 +179,13 @@ const writeTree = co.wrap(function *(root,
             // For submodules, we must map the logical sha it contains to the
             // actual sha that was written for the submodule commit.
 
-            const id = shaMap[entry.sha];
-            actions.push(builder.insert(filename,
-                                        id,
-                                        NodeGit.TreeEntry.FILEMODE.COMMIT));
+            if(null !== entry.sha) {
+                const id = shaMap[entry.sha];
+                actions.push(builder.insert(
+                                           filename,
+                                           id,
+                                           NodeGit.TreeEntry.FILEMODE.COMMIT));
+            }
             submodules[filename] = entry.url;
             isSubmodule = true;
         }

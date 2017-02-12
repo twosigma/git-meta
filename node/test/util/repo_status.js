@@ -265,6 +265,16 @@ describe("RepoStatus", function () {
                 }),
                 expected: false,
             },
+            "new commit in open repo, new sub": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                    indexUrl: "a",
+                    repoStatus: new RepoStatus({
+                        headCommit: "2",
+                    }),
+                }),
+                expected: false,
+            },
             "change in index": {
                 input: new Submodule({
                     indexSha: "1",
@@ -420,6 +430,81 @@ describe("RepoStatus", function () {
             const c = cases[caseName];
             it(caseName, function () {
                 const result = c.input.isClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("Submodule.isNew", function () {
+        const cases = {
+            "not new": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.MODIFIED,
+                }),
+                expected: false,
+            },
+            "new": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                }),
+                expected: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isNew();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("Submodule.isCommittable", function () {
+        const cases = {
+            "not new": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.MODIFIED,
+                }),
+                expected: true,
+            },
+            "new but staged commit": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                    indexSha: "3",
+                }),
+                expected: true,
+            },
+            "new but new commit in repo": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                    repoStatus: new RepoStatus({
+                        headCommit: "3"
+                    }),
+                }),
+                expected: true,
+            },
+            "new but staged file": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                    repoStatus: new RepoStatus({
+                        staged: {
+                            foo: FILESTATUS.ADDED,
+                        },
+                    }),
+                }),
+                expected: true,
+            },
+            "new and no good": {
+                input: new Submodule({
+                    indexStatus: FILESTATUS.ADDED,
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isCommittable();
                 assert.equal(result, c.expected);
             });
         });
@@ -714,6 +799,53 @@ describe("RepoStatus", function () {
             const c = cases[caseName];
             it(caseName, function () {
                 const result = c.input.isWorkdirDeepClean();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    describe("areUncommittableSubmodules", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: false,
+            },
+            "good sub": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule(),
+                    },
+                }),
+                expected: false,
+            },
+            "bad sub": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.ADDED,
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "added but staged": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            indexStatus: FILESTATUS.ADDED,
+                            repoStatus: new RepoStatus({
+                                staged: { x: FILESTATUS.ADDED },
+                            }),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.areUncommittableSubmodules();
                 assert.equal(result, c.expected);
             });
         });

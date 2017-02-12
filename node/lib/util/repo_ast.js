@@ -47,15 +47,19 @@ const Rebase = require("./rebase");
 class Submodule {
 
     /**
-     * Create a `Submodule` having the specified `url` and `sha`.
+     * Create a `Submodule` having the specified `url` and `sha`.  A null sha
+     * indicates that the repo does not have an object entry for this
+     * submodule; it's probably new.
      *
      * @constructor
      * @param {String} url
-     * @param {String} sha
+     * @param {String} [sha]
      */
     constructor(url, sha) {
         assert.isString(url);
-        assert.isString(sha);
+        if (null !== sha) {
+            assert.isString(sha);
+        }
         this.d_url = url;
         this.d_sha = sha;
         Object.freeze(this);
@@ -74,7 +78,7 @@ class Submodule {
 }
 
 Submodule.prototype.toString = function () {
-    return `Submodule(url=${this.d_url}, sha=${this.d_sha})`;
+    return `Submodule(url=${this.d_url}, sha=${this.d_sha || ""})`;
 };
 
 
@@ -440,7 +444,6 @@ in commit ${id}.`);
             const index = args.index;
             assert.isObject(index);
             for (let path in index) {
-                assert.isNotNull(this.d_head);
                 assert.isFalse(this.d_bare);
                 const change = index[path];
                 if (!(change instanceof Submodule) && null !== change) {

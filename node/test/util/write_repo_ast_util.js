@@ -441,6 +441,7 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
             "headless": {
                 a: new RepoAST(),
             },
+            "new sub open w/o SHA": "a=B|x=S:I s=Sa:;Os",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];
