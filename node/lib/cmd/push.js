@@ -109,10 +109,24 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     yield strRefspecs.map(co.wrap(function *(strRefspec) {
         const refspec = GitUtil.parseRefspec(strRefspec);
-        yield push.push(repo,
-            args.repository,
-            refspec.src,
-            refspec.dst,
-            args.force || refspec.force || false);
+        const force = args.force || refspec.force || false;
+
+        // If 'src' is empty, this is a deletion.  Do not use the normal meta
+        // push; there is no need to, e.g., push submodules, in this case.
+
+        if ("" !== refspec.src) {
+            yield push.push(repo,
+                            args.repository,
+                            refspec.src,
+                            refspec.dst,
+                            force);
+        }
+        else {
+            yield GitUtil.push(repo,
+                               args.repository,
+                               "",
+                               refspec.dst,
+                               force);
+        }
     }));
 });
