@@ -300,13 +300,34 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
 });
 
 /**
+ * Return the configured template path, from which to copy files into
+ * newly-opened submodules, for the specified `repo`, or null if no such path
+ * is configured.
+ *
+ * @async
+ * @param {NodeGit.Repository} templatePath
+ * @return {String | null}
+ */
+exports.getTemplatePath = co.wrap(function *(repo) {
+    const config = yield repo.config();
+    try {
+        return yield config.getString("meta.submoduleTemplatePath");
+    }
+    catch (e) {
+        return null;
+    }
+});
+
+/**
  * Open the submodule having the specified `name` and `url` for the `metaRepo`.
  * Configure the repository for this submodule to have `url` as its remote,
  * unless `url` is relative, in which case resolve `url` against the specified
  * `repoUrl`.  Throw a `UserError` if `null === repoUrl` and `url` is relative.
  * Return the newly opened repository.  Note that this command does not fetch
  * any refs from the remote for this submodule, and while its repo can be
- * opened it will be empty.
+ * opened it will be empty.  If the specified `templatePath` is provided,
+ * use it as a template from which to copy files in to the `.git` directory of
+ * the newly-opened repo.
  *
  * This method is largely needed to workaround deficiences in
  * `NodeGit.Submodule`, for example, it cannot be used to initialize a repo
@@ -317,18 +338,23 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
  * @param {NodeGit.Repository} metaRepo
  * @param {String}             name
  * @param {String}             url
+ * @param {String|null}        templatePath
  * @return {NodeGit.Repository}
  */
 exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
                                                   metaRepo,
                                                   name,
-                                                  url) {
+                                                  url,
+                                                  templatePath) {
     if (null !== repoUrl) {
         assert.isString(repoUrl);
     }
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(name);
     assert.isString(url);
+    if (null !== templatePath) {
+        assert.isString(templatePath);
+    }
 
     // Update the `.git/config` file.
 
@@ -339,19 +365,6 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     // flags so that it will set it up as a git link.
 
     const subRepoDir = path.join(repoPath, ".git", "modules", name);
-
-    // If there is a `submodule_template` directory in the git folder, copy its
-    // contents into the new `.git` directory for this submodule.
-
-    // Try to get configuration entry for template path.
-
-    const config = yield metaRepo.config();
-    let templatePath = null;
-    try {
-        templatePath = yield config.getString("meta.submoduleTemplatePath");
-    }
-    catch (e) {
-    }
 
     const FLAGS = NodeGit.Repository.INIT_FLAG;
 
@@ -395,7 +408,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     }
     if (null !== origin) {
         if (realUrl !== origin.url()) {
-            yield NodeGit.Remote.setUrl(result, "origin", realUrl);
+            NodeGit.Remote.setUrl(result, "origin", realUrl);
         }
     }
     else {

@@ -413,6 +413,21 @@ foo
         }));
     });
 
+    describe("getTemplatePath", function () {
+        it("no path", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const result = yield SubmoduleConfigUtil.getTemplatePath(repo);
+            assert.isNull(result);
+        }));
+        it("a path", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const config = yield repo.config();
+            yield config.setString("meta.submoduleTemplatePath", "foo");
+            const result = yield SubmoduleConfigUtil.getTemplatePath(repo);
+            assert.equal(result, "foo");
+        }));
+    });
+
     describe("initSubmoduleAndRepo", function () {
 
         const runTest = co.wrap(function *(repo,
@@ -447,7 +462,8 @@ foo
                                                                      originUrl,
                                                                      repo,
                                                                      subName,
-                                                                     url);
+                                                                     url,
+                                                                     null);
             assert.instanceOf(result, NodeGit.Repository);
             assert(TestUtil.isSameRealPath(result.workdir(),
                                            path.join(repoPath, subName)));
@@ -473,6 +489,26 @@ foo
             const repo        = yield TestUtil.createSimpleRepository();
             const subRootRepo = yield TestUtil.createSimpleRepository();
             yield runTest(repo, subRootRepo, subRootRepo.workdir(), "foo");
+        }));
+
+        it("reset URL", co.wrap(function *() {
+            const repo        = yield TestUtil.createSimpleRepository();
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            const url = subRootRepo.workdir();
+            yield runTest(repo, subRootRepo, url, "foo");
+            const sub = yield NodeGit.Submodule.lookup(repo, "foo");
+            const subRepo = yield sub.open();
+            NodeGit.Remote.setUrl(subRepo, "origin", "/bar");
+            yield Close.close(repo, "foo");
+            const newSub =
+                yield SubmoduleConfigUtil.initSubmoduleAndRepo("",
+                                                               repo,
+                                                               "foo",
+                                                               url,
+                                                               null);
+            const remote = yield newSub.getRemote("origin");
+            const newUrl = remote.url();
+            assert.equal(newUrl, url);
         }));
 
         it("deep name", co.wrap(function *() {
@@ -505,8 +541,6 @@ foo
         it("with template", co.wrap(function *() {
             const templateDir = yield TestUtil.makeTempDir();
             const repo        = yield TestUtil.createSimpleRepository();
-            const config = yield repo.config();
-            yield config.setString("meta.submoduleTemplatePath", templateDir);
             const subDir = "bar";
             const subPath = path.join(templateDir, subDir);
             yield fs.mkdir(subPath);
@@ -545,7 +579,8 @@ foo
             yield SubmoduleConfigUtil.initSubmoduleAndRepo(url,
                                                            repo,
                                                            "foo",
-                                                           url);
+                                                           url,
+                                                           templateDir);
 
             const copiedPath = path.join(repo.path(),
                                          "modules",

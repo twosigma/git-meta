@@ -35,13 +35,14 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil          = require("./git_util");
-const Open             = require("./open");
-const RepoStatus       = require("./repo_status");
-const Status           = require("./status");
-const SubmoduleFetcher = require("./submodule_fetcher");
-const SubmoduleUtil    = require("./submodule_util");
-const UserError        = require("./user_error");
+const GitUtil             = require("./git_util");
+const Open                = require("./open");
+const RepoStatus          = require("./repo_status");
+const Status              = require("./status");
+const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const SubmoduleFetcher    = require("./submodule_fetcher");
+const SubmoduleUtil       = require("./submodule_util");
+const UserError           = require("./user_error");
 
 /**
  * @enum {MODE}
@@ -160,6 +161,7 @@ ${colors.red(commitSha)}.`);
     const subs = metaRepoStatus.submodules;
 
     const subFetcher = new SubmoduleFetcher(metaRepo, commit);
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
 
     const mergeEntry = co.wrap(function *(entry) {
         const path = entry.path;
@@ -199,7 +201,10 @@ ${colors.red(commitSha)}.`);
             // If this submodule's not open, open it.
 
             console.log(`Opening ${colors.blue(path)}.`);
-            subRepo = yield Open.openOnCommit(subFetcher, path, subHeadSha);
+            subRepo = yield Open.openOnCommit(subFetcher,
+                                              path,
+                                              subHeadSha,
+                                              templatePath);
             subRepoStatus = yield Status.getRepoStatus(subRepo);
         }
         else {

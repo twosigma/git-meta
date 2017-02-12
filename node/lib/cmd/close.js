@@ -100,7 +100,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         const sub = subStats[name];
         const subRepo = sub.repoStatus;
         if (null === subRepo) {
-            errorMessage += `${colors.cyan(name)} is not open.\n`;
             return;                                                   // RETURN
         }
 
@@ -113,7 +112,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                    0 !== Object.keys(subRepo.workdir).length) {
                 errorMessage += `\
 Could not close ${colors.cyan(name)} because it is not clean:
-${Status.printFileStatuses(subRepo.staged, subRepo.workdir)}.
+${Status.printRepoStatus(subRepo, "")}.
 Pass ${colors.magenta("--force")} to close it anyway.
 `;
                 return;                                               // RETURN

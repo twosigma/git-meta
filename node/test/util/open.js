@@ -40,6 +40,8 @@ const SubmoduleFetcher = require("../../lib/util/submodule_fetcher");
 
 describe("openOnCommit", function () {
     // Assumption is that 'x' is the target repo.
+    // TODO: test for template path usage.  We're just passing it through but
+    // should verify that.
 
     const cases = {
         "simple": {
@@ -72,7 +74,8 @@ describe("openOnCommit", function () {
                 const fetcher = new SubmoduleFetcher(x, head);
                 const result = yield Open.openOnCommit(fetcher,
                                                        c.subName,
-                                                       commit);
+                                                       commit,
+                                                       null);
                 assert.instanceOf(result, NodeGit.Repository);
             });
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,

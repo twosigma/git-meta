@@ -154,12 +154,13 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
 const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {
     const colors = require("colors");
 
-    const GitUtil          = require("../util/git_util");
-    const LogUtil          = require("../util/log_util");
-    const Open             = require("../util/open");
-    const SubmoduleFetcher = require("../util/submodule_fetcher");
-    const SubmoduleUtil    = require("../util/submodule_util");
-    const UserError        = require("../util/user_error");
+    const GitUtil             = require("../util/git_util");
+    const LogUtil             = require("../util/log_util");
+    const Open                = require("../util/open");
+    const SubmoduleConfigUtil = require("../util/submodule_config_util");
+    const SubmoduleFetcher    = require("../util/submodule_fetcher");
+    const SubmoduleUtil       = require("../util/submodule_util");
+    const UserError           = require("../util/user_error");
 
     // We need to resolve and validate the committishes and submodule path
     // before calling `findMetaCommit` to do the real work.
@@ -215,7 +216,11 @@ Could not find ${colors.red(metaCommittish)} in the meta-repo.`);
                                                                    [subName],
                                                                    head);
         const subSha = shas[subName];
-        subRepo = yield Open.openOnCommit(fetcher, subName, subSha);
+        const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
+        subRepo = yield Open.openOnCommit(fetcher,
+                                          subName,
+                                          subSha,
+                                          templatePath);
     }
     else {
         subRepo = yield SubmoduleUtil.getRepo(repo, subName);
