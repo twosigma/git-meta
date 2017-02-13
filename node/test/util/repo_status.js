@@ -510,6 +510,68 @@ describe("RepoStatus", function () {
         });
     });
 
+    describe("Submodule.copy", function () {
+        const sub = new Submodule({
+            indexStatus: RepoStatus.FILESTATUS.ADDED,
+            indexSha: "1",
+            indexShaRelation: RepoStatus.Submodule.COMMIT_RELATION.SAME,
+            indexUrl: "/a",
+            commitSha: "2",
+            commitUrl: "/b",
+            workdirShaRelation: RepoStatus.Submodule.COMMIT_RELATION.AHEAD,
+            repoStatus: new RepoStatus({ headCommit: "3"}),
+        });
+        const anotherSub = new Submodule({
+            indexStatus: RepoStatus.FILESTATUS.REMOVED,
+            indexSha: "2",
+            indexShaRelation: RepoStatus.Submodule.COMMIT_RELATION.AHEAD,
+            indexUrl: "/c",
+            commitSha: "4",
+            commitUrl: "/e",
+            workdirShaRelation: RepoStatus.Submodule.COMMIT_RELATION.BEHIND,
+            repoStatus: new RepoStatus({ headCommit: "5"}),
+        });
+        it("simple, no args", function () {
+            const newSub = sub.copy();
+            assert.deepEqual(newSub, sub);
+        });
+        it("simple, empty args", function () {
+            const newSub = sub.copy({});
+            assert.deepEqual(newSub, sub);
+        });
+        it("copy it all", function () {
+            const newSub = sub.copy({
+                indexStatus: anotherSub.indexStatus,
+                indexSha: anotherSub.indexSha,
+                indexShaRelation: anotherSub.indexShaRelation,
+                indexUrl: anotherSub.indexUrl,
+                commitSha: anotherSub.commitSha,
+                commitUrl: anotherSub.commitUrl,
+                workdirShaRelation: anotherSub.workdirShaRelation,
+                repoStatus: anotherSub.repoStatus,
+            });
+            assert.deepEqual(newSub, anotherSub);
+        });
+    });
+
+    describe("Submodule.open", function () {
+        it("breathing", function () {
+            const sub = new Submodule({
+                commitSha: "1",
+            });
+            const opened = sub.open();
+            assert.deepEqual(opened, new Submodule({
+                commitSha: "1",
+                indexSha: "1",
+                indexShaRelation: RELATION.SAME,
+                workdirShaRelation: RELATION.SAME,
+                repoStatus: new RepoStatus({
+                    headCommit: "1",
+                }),
+            }));
+        });
+    });
+
     describe("RepoStatus", function () {
         function m(args) {
             let result = {
@@ -936,4 +998,45 @@ describe("RepoStatus", function () {
         });
     });
 
+    describe("copy", function () {
+        const stat = new RepoStatus({
+            currentBranchName: "foo",
+            headCommit: "1",
+            staged: { foo: FILESTATUS.ADDED },
+            submodules: {
+                s: new RepoStatus.Submodule({ "indexSha": "3", }),
+            },
+            workdir: { x: FILESTATUS.MODIFIED },
+            rebase: new Rebase("2", "4", "b"),
+        });
+        const anotherStat = new RepoStatus({
+            currentBranchName: "fo",
+            headCommit: "2",
+            staged: { foo: FILESTATUS.MODIFIED },
+            submodules: {
+                s: new RepoStatus.Submodule({ "indexSha": "4", }),
+            },
+            workdir: { x: FILESTATUS.ADDED },
+            rebase: new Rebase("a", "4", "b"),
+        });
+        it("simple, no args", function () {
+            const newStat = stat.copy();
+            assert.deepEqual(newStat, stat);
+        });
+        it("simple, empty args", function () {
+            const newStat = stat.copy({});
+            assert.deepEqual(newStat, stat);
+        });
+        it("copy it all", function () {
+            const newStat = stat.copy({
+                currentBranchName: anotherStat.currentBranchName,
+                headCommit: anotherStat.headCommit,
+                staged: anotherStat.staged,
+                submodules: anotherStat.submodules,
+                workdir: anotherStat.workdir,
+                rebase: anotherStat.rebase,
+            });
+            assert.deepEqual(newStat, anotherStat);
+        });
+    });
 });

@@ -54,7 +54,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * The shorthand syntax for describing a repository:
  *
  * shorthand      = <base repo type> [':'<override>(';\s*'<override>)*]
- * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit>
+ * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
  *                  <note> | <rebase>
@@ -87,6 +87,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *        same name as the commit and that name as its data.
  * - U -- like `S`, but with a second commit `2` introducing a submodule named
  *        "s" with a url of "a" on commit `1`
+ * - N -- for "null", a completely empty repo
  *
  * Whitespace is skipped at the beginning of shorthanad, and also after some,
  * but not all delimitors.  We can't skip it in places where the space
@@ -883,6 +884,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         workdir: workdir,
         openSubmodules: openSubmodules,
     };
+    if (undefined === head && undefined !== currentBranchName) {
+        head = branches[currentBranchName];
+    }
     if (undefined !== head) {
         result.head = head;
     }
@@ -1369,5 +1373,6 @@ exports.RepoType = (() => {
         S: makeS(),  // simple repo
         B: makeB(),  // bare repo
         U: makeU(),  // repo with a submodule named s pointing to a
+        N: new RepoAST(),
     };
 })();

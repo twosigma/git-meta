@@ -31,21 +31,16 @@
 "use strict";
 
 /**
- * This module provides utilities for loading and displaying `RepoStatus`
- * objects.
+ * This module provides utilities for reading `RepoStatus` objects --
+ * describing state changes -- from a repository.
  *
- * TODO: this module should be split into two: one for reading status and one
- * for displaying.
  */
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("colors/safe");
 const NodeGit = require("nodegit");
-const path    = require("path");
 
 const GitUtil             = require("../util/git_util");
-const UserError           = require("../util/user_error");
 const Rebase              = require("../util/rebase");
 const RebaseFileUtil      = require("../util/rebase_file_util");
 const RepoStatus          = require("../util/repo_status");
@@ -53,365 +48,100 @@ const SubmoduleUtil       = require("../util/submodule_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
 
 /**
- * This value-semantic class describes a line entry to be printed in a status
- * message.
+ * Return a new `RepoStatus.Submodule` object having the same value as the
+ * specified `sub` but with all commit shas replaced by commits in the
+ * specified `commitMap` and all urls replaced by the values in the specified
+ * `urlMap`.
+ *
+ * @param {RepoStatus.Submodule} sub
+ * @param {Object}               commitMap from sha to sha
+ * @param {Object}               urlMap    from url to url
+ * @return {RepoStatus.Submodule}
  */
-class StatusDescriptor {
-    /**
-     * @param {RepoStatus.FILESTATUS} status
-     * @param {String}                path
-     * @param {String}                detail
-     */
-    constructor(status, path, detail) {
-        this.status = status;
-        this.path = path;
-        this.detail = detail;
+exports.remapSubmodule = function (sub, commitMap, urlMap) {
+    assert.instanceOf(sub, RepoStatus.Submodule);
+    assert.isObject(commitMap);
+    assert.isObject(urlMap);
+
+    function mapSha(sha) {
+        return sha && (commitMap[sha] || sha);
     }
 
-    /**
-     * Return a description of this object using the specified `color` function
-     * to apply color and displaying `this.path` relative to the specified
-     * `cwd`.
-     *
-     * @param {Function} color
-     * @return {String}
-     */
-    print(color, cwd) {
-        let result = "";
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        switch(this.status) {
-            case FILESTATUS.ADDED:
-                result += "new file:     ";
-                break;
-            case FILESTATUS.MODIFIED:
-                result += "modified:     ";
-                break;
-            case FILESTATUS.REMOVED:
-                result += "deleted:      ";
-                break;
-            case FILESTATUS.CONFLICTED:
-                result += "conflicted:   ";
-                break;
-            case FILESTATUS.RENAMED:
-                result += "renamed:      ";
-                break;
-            case FILESTATUS.TYPECHANGED:
-                result += "type changed: ";
-                break;
-        }
-        result += path.relative(cwd, this.path);
-        result = color(result);
-        if ("" !== this.detail) {
-            result += ` (${this.detail})`;
-        }
-        return result;
+    function mapUrl(url) {
+        return url && (urlMap[url] || url);
     }
+
+    return new RepoStatus.Submodule({
+        indexStatus: sub.indexStatus,
+        indexSha: mapSha(sub.indexSha),
+        indexShaRelation: sub.indexShaRelation,
+        indexUrl: mapUrl(sub.indexUrl),
+        commitSha: mapSha(sub.commitSha),
+        commitUrl: mapUrl(sub.commitUrl),
+        workdirShaRelation: sub.workdirShaRelation,
+        repoStatus: sub.repoStatus &&
+                    exports.remapRepoStatus(sub.repoStatus, commitMap, urlMap),
+    });
+};
+
+/**
+ * Return a new `Rebase` object having the same value as the specified `rebase`
+ * but with commit shas being replaced by commits in the specified `commitMap`.
+ *
+ * @param {Rebase} rebase
+ * @param {Object} commitMap from sha to sha
+ */
+function remapRebase(rebase, commitMap) {
+    assert.instanceOf(rebase, Rebase);
+    assert.isObject(commitMap);
+
+    let originalHead = rebase.originalHead;
+    let onto = rebase.onto;
+    if (originalHead in commitMap) {
+        originalHead = commitMap[originalHead];
+    }
+    if (onto in commitMap) {
+        onto = commitMap[onto];
+    }
+    return new Rebase(rebase.headName, originalHead, onto);
 }
 
-exports.StatusDescriptor = StatusDescriptor;
-
 /**
- * Return the specified `descriptors` sorted by path.
- *
- * @param {StatusDescriptor []} descriptors
- * @return {StatusDescriptor []}
- */
-exports.sortDescriptorsByPath = function (descriptors) {
-    return descriptors.sort((l, r) => {
-        const lPath = l.path;
-        const rPath = r.path;
-        return lPath === rPath ? 0 : (lPath < rPath ? -1 : 1);
-    });
-};
-
-/**
- * Return a string describing the specified `statuses`, using the specified
- * `color` function to apply color, printing paths relative to the specified
- * `cwd`.
- *
- * @param {StatusDescriptor []} statuses
- * @param {Function}            color
- * @return {String}
- */
-exports.printStatusDescriptors = function (statuses, color, cwd) {
-    assert.isArray(statuses);
-    assert.isFunction(color);
-    if (0 === statuses.length) {
-        return "";                                                    // RETURN
-    }
-    const sorted = exports.sortDescriptorsByPath(statuses);
-    const lines = sorted.map(status => "\t" + status.print(color, cwd));
-    return lines.join("\n") + "\n";
-};
-
-/**
- * Return a string describing the specified `untracked` files, using the
- * specified `color` function to apply color and displaying the path relative
- * to the specified `cwd`.
- *
- * @param {String []} untracked
- * @param {Function}  color
- * @param {String}    cwd
- * @return {String}
- */
-exports.printUntrackedFiles = function (untracked, color, cwd) {
-    assert.isArray(untracked);
-    assert.isFunction(color);
-    assert.isString(cwd);
-    let result = "";
-    untracked.sort().forEach(filename => {
-        result += "\t" + color(path.relative(cwd, filename)) + "\n";
-    });
-    return result;
-};
-
-/**
- * Return a list of status descriptors for the submodules in the specified
- * `status` that have status changes.
+ * Return a new `RepoStatus` object having the same value as the specified
+ * `status` but with all commit shas replaced by commits in the specified
+ * `comitMap` and all urls replaced by the values in the specified `urlMap`.
  *
  * @param {RepoStatus} status
- * @return {Object}
- * @return {StatusDescriptor []} return.staged
- * @return {StatusDescriptor []} return.workdir
- * @return {String []}           return.untracked
+ * @param {Object}     commitMap
+ * @param {Object}     urlMap
+ * @return {RepoStatus}
  */
-exports.listSubmoduleDescriptors = function (status) {
+exports.remapRepoStatus = function (status, commitMap, urlMap) {
     assert.instanceOf(status, RepoStatus);
-    const staged = [];
-    const workdir = [];
-    const untracked = [];
-    const subs = status.submodules;
-    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
-    Object.keys(subs).forEach(subName => {
-        let detail = "";
-        const sub = subs[subName];
-        const subRepo = sub.repoStatus;
+    assert.isObject(commitMap);
+    assert.isObject(urlMap);
 
-        // Check for new submodule with no commit.
-
-        if (!sub.isCommittable()) {
-            workdir.push(new StatusDescriptor(
-                                 RepoStatus.FILESTATUS.ADDED,
-                                 subName,
-                                 "submodule, create commit or stage changes"));
-            return;                                                   // RETURN
-        }
-
-        // If workdir or index are on different commit, add a description to
-        // detail.
-
-        const commitRelation = (null === subRepo) ?
-                               sub.indexShaRelation :
-                               sub.workdirShaRelation;
-        switch (commitRelation) {
-        case RELATION.AHEAD:
-            detail += ", new commits";
-            break;
-        case RELATION.BEHIND:
-            detail += ", on old commit";
-            break;
-        case RELATION.UNRELATED:
-            detail += ", on unrelated commit";
-            break;
-        case RELATION.UNKNOWN:
-            detail += ", on unknown commit";
-            break;
-        }
-
-        // Check to see if new submodule.
-
-        if (sub.isNew()) {
-            detail += ", newly created";
-        }
-
-        // Check if sha has changed.  If it's null, then this submodule is
-        // deleted in the index and will show that way.
-
-        else if (null !== sub.indexUrl && sub.commitUrl !== sub.indexUrl) {
-            detail += ", new url";
-        }
-
-        // If there is detail or a non-null indexStatus, we have something to
-        // report, add it to the list.
-
-        if (null !== sub.indexStatus || "" !== detail) {
-            let status;
-            if (sub.isNew()) {
-                status = RepoStatus.FILESTATUS.ADDED;
-            }
-            else if (null === sub.indexStatus) {
-                status = RepoStatus.FILESTATUS.MODIFIED;
-            }
-            else {
-                status = sub.indexStatus;
-            }
-            staged.push(new StatusDescriptor(status,
-                                             subName,
-                                             "submodule" + detail));
-        }
-    });
-    return {
-        staged: staged,
-        workdir: workdir,
-        untracked: untracked,
-    };
-};
-
-/**
- * Return the status descriptors and untracked files for the meta repo and
- * acculuated from submodules in the specified `status`.
- *
- * @param {RepoStatus} status
- * @return {Object}
- * @return {StatusDescriptor []} return.staged
- * @return {StatusDescriptor []} return.workdir
- * @return {String []}           return.untracked
- */
-exports.accumulateStatus = function (status) {
-    const result = exports.listSubmoduleDescriptors(status);
-    const staged = result.staged;
-    const workdir = result.workdir;
-    const untracked = result.untracked;
-
-    function accumulateStaged(prefixPath, stagedFiles) {
-        Object.keys(stagedFiles).forEach(filename => {
-            staged.push(new StatusDescriptor(stagedFiles[filename],
-                                             path.join(prefixPath, filename),
-                                             ""));
-        });
+    function mapSha(sha) {
+        return sha && (commitMap[sha] || sha);
     }
 
-    function accumulateWorkdir(prefixPath, workdirFiles) {
-        Object.keys(workdirFiles).forEach(filename => {
-            const status = workdirFiles[filename];
-            const fullPath = path.join(prefixPath, filename);
-            if (RepoStatus.FILESTATUS.ADDED === status) {
-                untracked.push(fullPath);
-            }
-            else {
-                workdir.push(new StatusDescriptor(status, fullPath, ""));
-            }
-        });
-    }
-
-    accumulateStaged("", status.staged);
-    accumulateWorkdir("", status.workdir);
-
-    // Accumulate data for the submodules.
-
-    const subs = status.submodules;
-    Object.keys(subs).forEach(subName => {
-        const sub = subs[subName];
-        if(null !== sub.repoStatus) {
-            const subRepo = sub.repoStatus;
-            accumulateStaged(subName, subRepo.staged);
-            accumulateWorkdir(subName, subRepo.workdir);
-        }
+    let submodules = {};
+    const baseSubmods = status.submodules;
+    Object.keys(baseSubmods).forEach(name => {
+        submodules[name] = exports.remapSubmodule(baseSubmods[name],
+                                                  commitMap,
+                                                  urlMap);
     });
 
-    return {
-        staged: staged,
-        workdir: workdir,
-        untracked: untracked,
-    };
-};
-
-/**
- * Return a message describing the specified `rebase`.
- *
- * @param {Rebase}
- * @return {String}
- */
-exports.printRebase = function (rebase) {
-    assert.instanceOf(rebase, Rebase);
-    const shortSha = GitUtil.shortSha(rebase.onto);
-    return `${colors.red("rebase in progress; onto ", shortSha)}
-You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
-  (fix conflicts and then run "git meta rebase --continue")
-  (use "git meta rebase --skip" to skip this patch)
-  (use "git meta rebase --abort" to check out the original branch)
-`;
-};
-
-/**
- * Return a message describing the state of the current branch in the specified
- * `status`.
- *
- * @param {RepoStatus} status
- * @return {String>
- */
-exports.printCurrentBranch = function (status) {
-    if (null !== status.currentBranchName) {
-        return `On branch ${colors.green(status.currentBranchName)}.\n`;
-    }
-    return `\
-On detached head ${colors.red(GitUtil.shortSha(status.headCommit))}.\n`;
-};
-
-/**
- * Return a description of the specified `status`, displaying paths relative to
- * the specified `cwd`.  Note that a value of "" for `cwd` indicates the root
- * of the repository.
- *
- * @param {RepoStatus} status
- * @param {String}     cwd
- */
-exports.printRepoStatus = function (status, cwd) {
-    assert.instanceOf(status, RepoStatus);
-    assert.isString(cwd);
-
-    let result = "";
-
-    if (null !== status.rebase) {
-        result += exports.printRebase(status.rebase);
-    }
-
-    result += exports.printCurrentBranch(status);
-
-    let changes = "";
-    const fileStatuses = exports.accumulateStatus(status);
-    const staged = fileStatuses.staged;
-    if (0 !== staged.length) {
-        changes += `\
-Changes to be committed:
-  (use "git meta reset HEAD <file>..." to unstage)
-
-`;
-        changes += exports.printStatusDescriptors(staged, colors.green, cwd);
-        changes += "\n";
-    }
-    const workdir = fileStatuses.workdir;
-    if (0 !== workdir.length) {
-        changes += `\
-Changes not staged for commit:
-  (use "git meta add <file>..." to update what will be committed)
-  (use "git meta checkout -- <file>..." to discard changes in working \
-directory)
-  (commit or discard the untracked or modified content in submodules)
-
-`;
-        changes += exports.printStatusDescriptors(workdir, colors.red, cwd);
-        changes += "\n";
-    }
-    const untracked = fileStatuses.untracked;
-    if (0 !== untracked.length) {
-        changes += `\
-Untracked files:
-  (use "git meta add <file>..." to include in what will be committed)
-
-`;
-        changes += exports.printUntrackedFiles(untracked, colors.red, cwd);
-        changes += "\n";
-    }
-
-    if ("" === changes) {
-        result += "nothing to commit, working tree clean\n";
-    }
-    else {
-        result += changes;
-    }
-
-    return result;
+    return new RepoStatus({
+        currentBranchName: status.currentBranchName,
+        headCommit: mapSha(status.headCommit),
+        staged: status.staged,
+        submodules: submodules,
+        workdir: status.workdir,
+        rebase: status.rebase === null ? null : remapRebase(status.rebase,
+                                                            commitMap),
+    });
 };
 
 /**
@@ -805,76 +535,3 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 
     return new RepoStatus(args);
 });
-
-/**
- * Do nothing if the specified `metaStatus` indicates a clean meta-repository
- * having clean submodules, having no staged or unstaged changes.  Otherwise,
- * throw a `UserError` object with diagnostic information.
- *
- * @param {RepoStatus} metaStatus
- */
-exports.ensureClean = function (metaStatus) {
-    assert.instanceOf(metaStatus, RepoStatus);
-    let error = "";
-
-    if (!metaStatus.isClean()) {
-        error += "The meta-repository is not clean.\n";
-    }
-
-    const subs = metaStatus.submodules;
-    Object.keys(subs).forEach(subName => {
-        const sub = subs[subName];
-        if (!sub.isClean()) {
-            error += `Submodule ${colors.cyan(subName)} is not clean.\n`;
-        }
-    });
-    if ("" !== error) {
-        throw new UserError(error);
-    }
-};
-
-/**
- * Do nothing if the specified `metastatus` indicates a consistent state; Throw
- * a `UserError` object otherwise.  The `metaRepo` is in a consistent state if
- * the HEAD of each submodule points to a descendant of the commit indicated in
- * the HEAD of the meta-repo commit (or that commit).
- *
- * @param {RepoStatus} metaStatus
- */
-exports.ensureConsistent = function (metaStatus) {
-    assert.instanceOf(metaStatus, RepoStatus);
-
-    let error = "";
-
-    const subs = metaStatus.submodules;
-    const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
-    Object.keys(subs).forEach(subName => {
-        const sub = subs[subName];
-        if (null !== sub.indexStatus) {
-            error += `\
-Submodule ${colors.cyan(subName)} is changed in index.\n`;
-        }
-        else if (null !== sub.workdirShaRelation &&
-                 SAME !== sub.workdirShaRelation) {
-            error += `\
-Submodule ${colors.cyan(subName)} has new commit\n`;
-        }
-    });
-
-    if ("" !== error) {
-        throw new UserError(error);
-    }
-};
-
-/**
- * Throw a `UserError` object unless the specified `status` is clean
- * according to the method `ensureClean` and consistent according to the method
- * `ensureConsistend`.
- *
- * @param {RepoStatus} status
- */
-exports.ensureCleanAndConsistent = function (status) {
-    assert.instanceOf(status, RepoStatus);
-    exports.ensureConsistent(status);
-    exports.ensureClean(status);
-};

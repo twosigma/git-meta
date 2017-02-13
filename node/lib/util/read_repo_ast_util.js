@@ -263,8 +263,7 @@ exports.readRAST = co.wrap(function *(repo) {
                     if (SubmoduleConfigUtil.modulesFileName === path) {
                         continue;
                     }
-                    const DELETED = 2;
-                    if (DELETED === delta.status()) {
+                    if (NodeGit.Diff.DELTA.DELETED === delta.status()) {
                         changes[path] = null;
                     }
                     else if (!(path in submodules)) {

@@ -270,9 +270,13 @@ exports.testMultiRepoManipulator =
 
     if (undefined !== manipulated) {
         if ("commitMap" in manipulated) {
-            assert.isObject(manipulated.commitMap);
+            assert.isObject(manipulated.commitMap,
+                            "manipulator must return object");
             for (let commit in manipulated.commitMap) {
-                assert.notProperty(commitMap, commit);
+                assert.notProperty(
+                              commitMap,
+                              commit,
+                             `commit already mapped to ${commitMap[commit]}.`);
                 commitMap[commit] = manipulated.commitMap[commit];
             }
         }

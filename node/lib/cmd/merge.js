@@ -95,10 +95,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const Merge     = require("../util/merge");
-    const GitUtil   = require("../util/git_util");
-    const Status    = require("../util/status");
-    const UserError = require("../util/user_error");
+    const Merge      = require("../util/merge");
+    const GitUtil    = require("../util/git_util");
+    const StatusUtil = require("../util/status_util");
+    const UserError  = require("../util/user_error");
 
     const MODE = Merge.MODE;
     let mode = MODE.NORMAL;
@@ -123,8 +123,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
 
     const repo = yield GitUtil.getCurrentRepo();
-    const status = yield Status.getRepoStatus(repo);
-    Status.ensureCleanAndConsistent(status);
+    const status = yield StatusUtil.getRepoStatus(repo);
 
     const commitish = yield GitUtil.resolveCommitish(repo, args.commit);
     if (null === commitish) {

@@ -109,12 +109,14 @@ as specified by the selected commit.`
  * @param {Boolean} args.mixed
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors    = require("colors");
+    const colors = require("colors");
+    const path   = require("path");
 
-    const GitUtil   = require("../util/git_util");
-    const Reset     = require("../util/reset");
-    const UserError = require("../util/user_error");
-    const Status    = require("../util/status");
+    const GitUtil         = require("../util/git_util");
+    const Reset           = require("../util/reset");
+    const UserError       = require("../util/user_error");
+    const StatusUtil      = require("../util/status_util");
+    const PrintStatusUtil = require("../util/print_status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
 
@@ -155,7 +157,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     // Then print out the new status.
 
-    const repoStatus = yield Status.getRepoStatus(repo);
-    const statusText = Status.printRepoStatus(repoStatus);
+    const repoStatus = yield StatusUtil.getRepoStatus(repo);
+    const cwd = process.cwd();
+    const relCwd = path.relative(repo.workdir(), cwd);
+    const statusText = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
     process.stdout.write(statusText);
 });

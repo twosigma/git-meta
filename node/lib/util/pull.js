@@ -36,7 +36,7 @@ const NodeGit = require("nodegit");
 
 const GitUtil       = require("../util/git_util");
 const RebaseUtil    = require("../util/rebase_util");
-const Status        = require("../util/status");
+const StatusUtil    = require("../util/status");
 const UserError     = require("../util/user_error");
 
 /**
@@ -67,8 +67,7 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
         throw new UserError(`Invalid remote name ${colors.red(remoteName)}.`);
     }
 
-    const status = yield Status.getRepoStatus(metaRepo);
-    Status.ensureCleanAndConsistent(status);
+    const status = yield StatusUtil.getRepoStatus(metaRepo);
 
     // Just fetch the meta-repo; rebase will trigger necessary fetches in
     // sub-repos.

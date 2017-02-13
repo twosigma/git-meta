@@ -609,6 +609,28 @@ describe("ShorthandParserUtil", function () {
                 i: "S",
                 e: S
             },
+            "null": {
+                i: "N",
+                e: new RepoAST(),
+            },
+            "current implies head": {
+                i: "N:C1;Bx=1;*=x",
+                e: new RepoAST({
+                    commits: {
+                        "1": new Commit({
+                            changes: {
+                                "1": "1",
+                            },
+                            message: "message",
+                        }),
+                    },
+                    head: "1",
+                    currentBranchName: "x",
+                    branches: {
+                        x: "1",
+                    },
+                }),
+            },
             "simple trimmed": {
                 i: "\n  S",
                 e: S

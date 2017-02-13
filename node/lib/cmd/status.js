@@ -83,8 +83,9 @@ Include changes to the meta-repo; disabled by default to improve performance.`,
 exports.executeableSubcommand = co.wrap(function *(args) {
     const path = require("path");
 
-    const GitUtil = require("../util/git_util");
-    const Status  = require("../util/status");
+    const GitUtil         = require("../util/git_util");
+    const PrintStatusUtil = require("../util/print_status_util");
+    const StatusUtil      = require("../util/status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -92,7 +93,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const paths = yield args.path.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    const repoStatus = yield Status.getRepoStatus(repo, {
+    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
         paths: paths,
     });
@@ -102,6 +103,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const relCwd = path.relative(workdir, cwd);
 
-    const text = Status.printRepoStatus(repoStatus, relCwd);
+    const text = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
     process.stdout.write(text);
 });
