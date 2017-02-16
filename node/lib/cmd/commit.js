@@ -117,6 +117,7 @@ const doCommit = co.wrap(function *(args) {
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
         includeClosedSubmodules: args.closed,
+        workdirToTree: args.all,
     });
 
     // Abort if there are uncommittable submodules; we don't want to commit a
