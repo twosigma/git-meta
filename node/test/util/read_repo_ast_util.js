@@ -1458,7 +1458,11 @@ describe("readRAST", function () {
         const index = yield r.index();
         yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
         yield index.write();
-        yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar", r, "x", "foo");
+        yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar",
+                                                       r,
+                                                       "x",
+                                                       "foo",
+                                                       null);
 
         const ast = yield ReadRepoASTUtil.readRAST(r);
         const headId = yield r.getHeadCommit();
@@ -1500,7 +1504,11 @@ describe("readRAST", function () {
         yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
         yield index.write();
         const subRepo =
-          yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar", r, "x", "foo");
+          yield SubmoduleConfigUtil.initSubmoduleAndRepo("bar",
+                                                         r,
+                                                         "x",
+                                                         "foo",
+                                                         null);
         const subCommit = yield TestUtil.generateCommit(subRepo);
         yield NodeGit.Checkout.tree(subRepo, subCommit, {
             checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
