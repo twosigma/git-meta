@@ -71,10 +71,13 @@ exports.newSubmodule = co.wrap(function *(repo, filename, importArg) {
     yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
     yield index.write();
     const metaUrl = yield GitUtil.getOriginUrl(repo);
-    const subRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(metaUrl,
-                                                                repo,
-                                                                filename,
-                                                                ".");
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
+    const subRepo = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
+                                                                 metaUrl,
+                                                                 repo,
+                                                                 filename,
+                                                                 ".",
+                                                                 templatePath);
     if (null === importArg) {
         return subRepo;                                               // RETURN
     }

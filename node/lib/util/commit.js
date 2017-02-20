@@ -45,6 +45,7 @@ const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 
 /**
@@ -231,6 +232,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
 
     const subCommits = {};
     const subsToStage = [];
+    let subsChanged = false;
     const commitSubmodule = co.wrap(function *(name) {
         const status = submodules[name];
         const repoStatus = status.repoStatus;
@@ -257,6 +259,10 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
             (null !== repoStatus &&
              (repoStatus.headCommit !== status.indexSha))) {
             subsToStage.push(name);
+            subsChanged = true;
+        }
+        else if (status.indexUrl !== status.commitUrl) {
+            subsChanged = true;
         }
     });
 
@@ -275,7 +281,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
                                         metaStatus,
                                         all,
                                         message,
-                                        true,
+                                        subsChanged,
                                         signature);
 
     if (null !== metaResult) {
@@ -332,6 +338,7 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
     const subFetcher = new SubmoduleFetcher(repo, head);
     const currentSubs = status.submodules;
     const submodules = status.submodules;
+    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
     const getSubRepo = co.wrap(function *(name) {
         const subStatus = currentSubs[name];
         if (null === subStatus.repoStatus) {
@@ -341,7 +348,8 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
             submodules[name] = subStatus.open();
             return yield Open.openOnCommit(subFetcher,
                                            name,
-                                           subStatus.indexSha);
+                                           subStatus.indexSha,
+                                           templatePath);
         }
         return yield SubmoduleUtil.getRepo(repo, name);
     });
