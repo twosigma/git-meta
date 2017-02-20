@@ -71,17 +71,23 @@ exports.remapSubmodule = function (sub, commitMap, urlMap) {
     function mapUrl(url) {
         return url && (urlMap[url] || url);
     }
+    const Submodule = RepoStatus.Submodule;
+
+    const commit = sub.commit &&
+          new Submodule.Commit(mapSha(sub.commit.sha), mapUrl(sub.commit.url));
+    const index = sub.index && new Submodule.Index(mapSha(sub.index.sha),
+                                                   mapUrl(sub.index.url),
+                                                   sub.index.relation);
+    const workdir = sub.workdir &&
+        new Submodule.Workdir(exports.remapRepoStatus(sub.workdir.status,
+                                                      commitMap,
+                                                      urlMap),
+                              sub.workdir.relation);
 
     return new RepoStatus.Submodule({
-        indexStatus: sub.indexStatus,
-        indexSha: mapSha(sub.indexSha),
-        indexShaRelation: sub.indexShaRelation,
-        indexUrl: mapUrl(sub.indexUrl),
-        commitSha: mapSha(sub.commitSha),
-        commitUrl: mapUrl(sub.commitUrl),
-        workdirShaRelation: sub.workdirShaRelation,
-        repoStatus: sub.repoStatus &&
-                    exports.remapRepoStatus(sub.repoStatus, commitMap, urlMap),
+        commit: commit,
+        index: index,
+        workdir: workdir,
     });
 };
 
@@ -180,66 +186,56 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
                                                 commitTree,
                                                 isVisible,
                                                 readRepoStatus) {
-    const args = {
-        indexUrl: indexUrl,
-        commitUrl: commitUrl,
-    };
-
-    const FILESTATUS = RepoStatus.FILESTATUS;
-    const COMMIT_RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    const Submodule = RepoStatus.Submodule;
+    const COMMIT_RELATION = Submodule.COMMIT_RELATION;
 
     // If we have a null commitUrl, it means that the submodule exists in the
     // commit but not on the index; set index status to added.  Otherwise, load
     // up the commit sha.
 
-    if (null === commitUrl) {
-        args.indexStatus = FILESTATUS.ADDED;
-    }
-    else {
-        args.commitSha = (yield commitTree.entryByPath(name)).sha();
+    let commit = null;
+    if (null !== commitUrl) {
+        const commitSha = (yield commitTree.entryByPath(name)).sha();
+        commit = new Submodule.Commit(commitSha, commitUrl);
     }
 
-    // A null indexUrl indicates that the submodule was removed.  Otherwise,
-    // load up the sha in the index.
+    // A null indexUrl indicates that the submodule was removed.  If that is
+    // the case, we're done.
 
     if (null === indexUrl) {
-        args.indexStatus = FILESTATUS.REMOVED;
-    }
-    else {
-        const entry = index.getByPath(name);
-        if (entry) {
-            args.indexSha = entry.id.tostrS();
-        }
-        else {
-            args.indexSha = null;
-        }
+        return new Submodule({ commit: commit });                     // RETURN
     }
 
-    // If we have both an index and commit url, then we should have shas for
-    // both; if that is the case, set the status to MODIFIED if they are
-    // different.
+    let indexSha = null;
+    const entry = index.getByPath(name);
+    if (entry) {
+        indexSha = entry.id.tostrS();
+    }
 
-    if (null !== indexUrl && null !== commitUrl) {
-        if (indexUrl !== commitUrl) {
-            args.indexStatus = FILESTATUS.MODIFIED;
-        }
-        if (args.indexSha !== args.commitSha) {
-            args.indexStatus = FILESTATUS.MODIFIED;
+    // We can't actually check the relation between the index commit and the
+    // head commit unless we have an open repo in which to perform the check.
+    // For now, we will set it to null if there is no relation (the case if
+    // there is no `commit`), SAME if we can trivially tell they're the same
+    // commit, and UNKNOWN otherwise.  If we set to UNKNOWN, we'll validate
+    // later if we have an open repository.
 
-            // Set relation to unknown for now; if we have a repository then
-            // we'll check later.
-
-            args.indexShaRelation = COMMIT_RELATION.UNKNOWN;
+    let indexRelation = null;
+    if (null !== commit) {
+        if (commit.sha !== indexSha) {
+            indexRelation = COMMIT_RELATION.UNKNOWN;
         }
         else {
-            args.indexShaRelation = COMMIT_RELATION.SAME;
+            indexRelation = COMMIT_RELATION.SAME;
         }
     }
 
     // We've done all we can for non-visible sub-repos.
 
     if (!isVisible) {
-        return new RepoStatus.Submodule(args);                        // RETURN
+        return new Submodule({
+            commit: commit,
+            index: new Submodule.Index(indexSha, indexUrl, indexRelation)
+        });                                                           // RETURN
     }
 
     const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
@@ -296,11 +292,21 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     // Compute the relations between the commits specifed in the workdir,
     // index, and commit.
 
-    args.indexShaRelation = yield getRelation(args.commitSha, args.indexSha);
-    args.workdirShaRelation = yield getRelation(args.indexSha,
-                                                subStatus.headCommit);
-    args.repoStatus = subStatus;
-    return new RepoStatus.Submodule(args);
+    // An 'UNKNOWN' commit relation for the index indicates that we have both
+    // commit and index shas to compare, but couldn't without an open repo --
+    // which we now have.
+
+    if (COMMIT_RELATION.UNKNOWN === indexRelation) {
+        indexRelation = yield getRelation(commit.sha, indexSha);
+    }
+
+    const workdirRelation = yield getRelation(indexSha, subStatus.headCommit);
+
+    return new RepoStatus.Submodule({
+        commit: commit,
+        index: new Submodule.Index(indexSha, indexUrl, indexRelation),
+        workdir: new Submodule.Workdir(subStatus, workdirRelation),
+    });
 });
 
 /**

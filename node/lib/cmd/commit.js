@@ -206,6 +206,9 @@ const doAmend = co.wrap(function *(args) {
     amendable.mismatchCommits.forEach(sub => {
         bad += `The commit for ${colors.red(sub)} does not match.`;
     });
+    amendable.deleted.forEach(sub => {
+        bad += `${colors.red(sub)} was deleted.\n`;
+    });
     if ("" !== bad) {
         throw new UserError("Cannot make amend commit:\n" + bad);
     }

@@ -235,9 +235,9 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     let subsChanged = false;
     const commitSubmodule = co.wrap(function *(name) {
         const status = submodules[name];
-        const repoStatus = status.repoStatus;
+        const repoStatus = (status.workdir && status.workdir.status) || null;
         let committed = null;
-        if (null !== status.repoStatus) {
+        if (null !== repoStatus) {
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
             committed = yield commitRepo(subRepo,
                                          repoStatus,
@@ -252,16 +252,26 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
 
         // Note that we need to stage the submodule in the meta-repo if:
         // - we made a commit
-        // - its index status has changed
-        // - it's new and has a workdir commit
+        // - there was already a new commit in the workdir
 
         if (null !== committed ||
             (null !== repoStatus &&
-             (repoStatus.headCommit !== status.indexSha))) {
+             (repoStatus.headCommit !== status.index.sha))) {
             subsToStage.push(name);
             subsChanged = true;
         }
-        else if (status.indexUrl !== status.commitUrl) {
+
+        // Othwerise, note that we even if we don't need to stage the sub, we
+        // did have a change if:
+        // - the sub was added
+        // - the sub was removed
+        // - the sub had a new commit in the index
+        // - the sub had a URL change
+
+        else if (status.commit === null ||
+                 status.index === null ||
+                 status.commit.sha !== status.index.sha ||
+                 status.commit.url !== status.index.url) {
             subsChanged = true;
         }
     });
@@ -323,6 +333,7 @@ exports.sameCommitInstance = function (x, y) {
  * @param {RepoStatus}         status
  * @param {Object}             oldSubs map from name to `Submodule`
  * @return {Object}
+ * @return {String[]} return.deleted           submodule is removed
  * @return {String[]} return.newCommits        different commit in submodule
  * @return {String[]} return.mismatchCommits   commit doesn't match
  * @return {RepoStatus} return.status          adjusted repo status
@@ -333,6 +344,7 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
     assert.isObject(oldSubs);
 
     const head = yield repo.getHeadCommit();
+    const deleted = [];
     const newCommits = [];
     const mismatchCommits = [];
     const subFetcher = new SubmoduleFetcher(repo, head);
@@ -341,14 +353,14 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
     const getSubRepo = co.wrap(function *(name) {
         const subStatus = currentSubs[name];
-        if (null === subStatus.repoStatus) {
+        if (null === subStatus.workdir) {
             console.log(`Opening ${colors.blue(name)}.`);
             // Update `submodules` to reflect that this one is now open.
 
             submodules[name] = subStatus.open();
             return yield Open.openOnCommit(subFetcher,
                                            name,
-                                           subStatus.indexSha,
+                                           subStatus.index.sha,
                                            templatePath);
         }
         return yield SubmoduleUtil.getRepo(repo, name);
@@ -357,20 +369,28 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
     yield Object.keys(currentSubs).map(co.wrap(function *(subName) {
         const oldSub = oldSubs[subName];
 
+        const newSub = currentSubs[subName];
+
+        // If the sub has been deleted in the index, it's bad.
+
+        if (null === newSub.index) {
+            deleted.push(subName);
+            return;                                                   // RETURN
+        }
+
         // If the submodule didn't exist before, it's inherently OK.
 
         if (undefined === oldSub) {
             return;                                                   // RETURN
         }
 
-        const newSub = currentSubs[subName];
-
-        // If a submodule has a different commit in the index of its workdir,
+        // If a submodule has a different commit in its index or its workdir,
         // fail.
 
-        if (newSub.indexSha !== newSub.commitSha ||
-            (null !== newSub.repoStatus &&
-             newSub.repoStatus.headCommit !== newSub.indexSha)) {
+        const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
+
+        if (SAME !== newSub.index.relation ||
+            (null !== newSub.workdir && SAME !== newSub.workdir.relation)) {
             newCommits.push(subName);
             return;                                                   // RETURN
         }
@@ -378,15 +398,16 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
         // Otherwise, if it's one of the submodules affecetd by HEAD, validate
         // that the comit signature and message matches.
 
-        if (oldSub.sha !== newSub.commitSha) {
+        if (oldSub.sha !== newSub.commit.sha) {
             const subRepo = yield getSubRepo(subName);
-            const subCommit = yield subRepo.getCommit(newSub.commitSha);
+            const subCommit = yield subRepo.getCommit(newSub.commit.sha);
             if (!exports.sameCommitInstance(head, subCommit)) {
                 mismatchCommits.push(subName);
             }
         }
     }));
     return {
+        deleted: deleted,
         newCommits: newCommits,
         mismatchCommits: mismatchCommits,
         status: status.copy({ submodules: submodules }),
@@ -475,8 +496,8 @@ exports.getAmendChanges = co.wrap(function *(repo,
         // Subs in those situations will not need an amend commit.
 
         if (undefined === oldSub ||
-            null === newSub.indexUrl ||
-            oldSub.sha === newSub.commitSha) {
+            null === newSub.index ||
+            oldSub.sha === newSub.commit.sha) {
             return;                                                   // RETURN
         }
 
@@ -488,11 +509,14 @@ exports.getAmendChanges = co.wrap(function *(repo,
         // the actual changes to be made rather than the changes that would be
         // made agains the current HEAD.
 
+        const newRepoStatus = newSub.workdir.status.copy({
+            staged: changes.staged,
+            workdir: changes.workdir,
+        });
         subs[subName] = newSub.copy({
-            repoStatus: newSub.repoStatus.copy({
-                staged: changes.staged,
-                workdir: changes.workdir,
-            })
+            workdir: new RepoStatus.Submodule.Workdir(
+                newRepoStatus,
+                RepoStatus.Submodule.COMMIT_RELATION.SAME),
         });
     }));
     return {
@@ -582,10 +606,11 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         // If the sub-repo doesn't have an open status, and there are no amend
         // changes, there's nothing to do.
 
-        if (null === subStatus.repoStatus) {
+        if (null === subStatus.workdir) {
             return;                                                   // RETURN
         }
 
+        const repoStatus = subStatus.workdir.status;
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
 
         // If the submodule is to be amended, we don't do the normal commit
@@ -604,7 +629,6 @@ exports.amendMetaRepo = co.wrap(function *(repo,
             // 'all') and we have one that's not ADDED.
 
             let workdirChanges = false;
-            const repoStatus = subStatus.repoStatus;
             assert.isNotNull(repoStatus);
             const staged = repoStatus.staged;
             const workdir = repoStatus.workdir;
@@ -630,9 +654,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
             return;                                                   // RETURN
         }
 
-        const subRepoStatus = subStatus.repoStatus;
         const commit = yield commitRepo(subRepo,
-                                        subRepoStatus,
+                                        repoStatus,
                                         all,
                                         message,
                                         false,
@@ -641,7 +664,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
             subsToStage.push(subName);
             subCommits[subName] = commit.tostrS();
         }
-        else if (subStatus.indexSha !== subRepoStatus.headCommit) {
+        else if (RepoStatus.Submodule.COMMIT_RELATION.SAME !==
+                                                  subStatus.workdir.relation) {
             // If we didn't make a commit, but the sub has a new commit in its
             // workdir, we still need to stage it.
 

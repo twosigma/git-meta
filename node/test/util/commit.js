@@ -449,6 +449,10 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 newCommits: ["t"],
                 newStatusSubs: ["s", "u"],
             },
+            "deleted": {
+                input: `a=B|x=U:I s`,
+                deleted: ["s"],
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -471,6 +475,9 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 const result = yield Commit.checkIfRepoIsAmendable(repo,
                                                                    status,
                                                                    oldSubs);
+                assert.deepEqual(result.deleted.sort(),
+                                 c.deleted || [],
+                                 "deleted");
                 assert.deepEqual(result.newCommits.sort(),
                                  c.newCommits || [],
                                  "newCommits");
@@ -620,11 +627,15 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
                     expectedSubNames.push(subName);
                     const expected = submodulesToAmend[subName];
                     const sub = expectedSubmodules[subName];
+                    const newStatus = sub.workdir.status.copy({
+                        staged: expected.staged,
+                        workdir: expected.workdir,
+                    });
+                    const newWd = new RepoStatus.Submodule.Workdir(
+                        newStatus,
+                        RepoStatus.Submodule.COMMIT_RELATION.SAME);
                     expectedSubmodules[subName] = sub.copy({
-                        repoStatus: sub.repoStatus.copy({
-                            staged: expected.staged,
-                            workdir: expected.workdir,
-                        }),
+                        workdir: newWd,
                     });
                 });
                 const expected = status.copy({

@@ -158,6 +158,29 @@ exports.printUntrackedFiles = function (untracked, color, cwd) {
 };
 
 /**
+ * Return a description for the specified commit `relation` to be used in
+ * status description.
+ *
+ * @param {RepoStatus.Submodule.COMMIT_RELATION} relation
+ * @return {String}
+ */
+exports.getRelationDescription = function (relation) {
+    assert.isNumber(relation);
+    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    switch (relation) {
+    case RELATION.AHEAD:
+        return "new commits";
+    case RELATION.BEHIND:
+        return "on old commit";
+    case RELATION.UNRELATED:
+        return "on unrelated commit";
+    case RELATION.UNKNOWN:
+        return "on unknown commit";
+    }
+    assert(false, `invalid relation: ${relation}`);
+};
+
+/**
  * Return a list of status descriptors for the submodules in the specified
  * `status` that have status changes.
  *
@@ -173,70 +196,74 @@ exports.listSubmoduleDescriptors = function (status) {
     const workdir = [];
     const untracked = [];
     const subs = status.submodules;
-    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    const FILESTATUS = RepoStatus.FILESTATUS;
     Object.keys(subs).forEach(subName => {
-        let detail = "";
         const sub = subs[subName];
-        const subRepo = sub.repoStatus;
 
         // Check for new submodule with no commit.
 
         if (!sub.isCommittable()) {
             workdir.push(new StatusDescriptor(
-                                 RepoStatus.FILESTATUS.ADDED,
+                                 FILESTATUS.ADDED,
                                  subName,
                                  "submodule, create commit or stage changes"));
             return;                                                   // RETURN
         }
 
-        // If workdir or index are on different commit, add a description to
-        // detail.
+        const commit = sub.commit;
+        const index = sub.index;
 
-        const commitRelation = (null === subRepo) ?
-                               sub.indexShaRelation :
-                               sub.workdirShaRelation;
-        switch (commitRelation) {
-        case RELATION.AHEAD:
-            detail += ", new commits";
-            break;
-        case RELATION.BEHIND:
-            detail += ", on old commit";
-            break;
-        case RELATION.UNRELATED:
-            detail += ", on unrelated commit";
-            break;
-        case RELATION.UNKNOWN:
-            detail += ", on unknown commit";
-            break;
+        // If it's been removed, there's nothing more to add.
+
+        if (null === index) {
+            staged.push(new StatusDescriptor(FILESTATUS.REMOVED,
+                                             subName,
+                                             "submodule"));
+            return;                                                   // RETURN
         }
 
-        // Check to see if new submodule.
+        // Now, if there is anything of intereset changed in this sub, we will
+        // put a description in 'detail'.
+
+        let detail = "";
+        let status = FILESTATUS.MODIFIED;  // only other choice is `ADDED`
 
         if (sub.isNew()) {
             detail += ", newly created";
+            status = FILESTATUS.ADDED;
         }
 
-        // Check if sha has changed.  If it's null, then this submodule is
-        // deleted in the index and will show that way.
+        // If it's not new, see if the URL has changed.
 
-        else if (null !== sub.indexUrl && sub.commitUrl !== sub.indexUrl) {
+        else if (commit.url !== index.url) {
             detail += ", new url";
         }
 
-        // If there is detail or a non-null indexStatus, we have something to
-        // report, add it to the list.
+        // If workdir or index are on different commit, add a description to
+        // detail.
 
-        if (null !== sub.indexStatus || "" !== detail) {
-            let status;
-            if (sub.isNew()) {
-                status = RepoStatus.FILESTATUS.ADDED;
+        const relation = (() => {
+            // Prefer the workdir relation.  TODO: treat index and workdir
+            // relation separately.
+
+            if (null !== sub.workdir && null !== sub.workdir.relation) {
+                return sub.workdir.relation;
             }
-            else if (null === sub.indexStatus) {
-                status = RepoStatus.FILESTATUS.MODIFIED;
+            if (null !== sub.index) {
+                return sub.index.relation;
             }
-            else {
-                status = sub.indexStatus;
-            }
+            return null;
+        })();
+
+        if (null !== relation &&
+            RepoStatus.Submodule.COMMIT_RELATION.SAME !== relation) {
+            detail += ", " + exports.getRelationDescription(relation);
+        }
+
+        // Now, if there is detail, add to staged section.
+        // TODO: register staged and workdir updates separately.
+
+        if ("" !== detail) {
             staged.push(new StatusDescriptor(status,
                                              subName,
                                              "submodule" + detail));
@@ -294,8 +321,8 @@ exports.accumulateStatus = function (status) {
     const subs = status.submodules;
     Object.keys(subs).forEach(subName => {
         const sub = subs[subName];
-        if(null !== sub.repoStatus) {
-            const subRepo = sub.repoStatus;
+        if(null !== sub.workdir) {
+            const subRepo = sub.workdir.status;
             accumulateStaged(subName, subRepo.staged);
             accumulateWorkdir(subName, subRepo.workdir);
         }

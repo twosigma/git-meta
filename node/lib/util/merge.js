@@ -183,7 +183,7 @@ ${colors.red(commitSha)}.`);
         const subSha = entry.id.tostrS();
         const subCommitId = NodeGit.Oid.fromString(subSha);
         const sub = subs[path];
-        const subHeadSha = sub.commitSha;
+        const subHeadSha = sub.commit.sha;
         const subCommitSha = subCommitId.tostrS();
 
         // Exit early without opening if we have the same commit as the one
@@ -193,7 +193,7 @@ ${colors.red(commitSha)}.`);
             return;                                                   // RETURN
         }
 
-        let subRepoStatus = sub.repoStatus;
+        let subRepoStatus = (sub.workdir && sub.workdir.status) || null;
         let subRepo;
         if (null === subRepoStatus) {
             // If this submodule's not open, open it.

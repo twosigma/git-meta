@@ -78,48 +78,173 @@ const COMMIT_RELATION = {
 };
 
 /**
+ * The `Submodule.Commit` class represents the state of a `Submodule` object in
+ * a commit.
+ */
+class Commit {
+    /**
+     * Create a new `Commit` object having the specified `sha` and `url`.
+     *
+     * @param {String} sha
+     * @param {String} url
+     */
+    constructor(sha, url) {
+        assert.isString(sha);
+        assert.isString(url);
+        this.d_sha = sha;
+        this.d_url = url;
+        Object.freeze(this);
+    }
+
+    /**
+     * the sha registered in the commit for a submodule
+     *
+     * @property {String}
+     */
+    get sha() {
+        return this.d_sha;
+    }
+
+    /**
+     * the url registered in the commit for a submodule
+     *
+     * @property {String}
+     */
+    get url() {
+        return this.d_url;
+    }
+}
+
+/**
+ * An `Submodule.Index` object represents the status of a submodule in the
+ * index.
+ */
+class Index {
+
+    /**
+     * Return a new `Index` object having the specified `sha`, `url`, and
+     * `relation`.
+     *
+     * @param {String|null}                    sha
+     * @param {String}                         url
+     * @param {Submodule.COMMIT_RELATION|null} relation
+     */
+    constructor(sha, url, relation) {
+        if (null !== sha) {
+            assert.isString(sha);
+        }
+        assert.isString(url);
+        if (null !== relation) {
+            assert.isNumber(relation);
+        }
+        this.d_sha = sha;
+        this.d_url = url;
+        this.d_relation = relation;
+        Object.freeze(this);
+    }
+
+    /**
+     * the sha registered in the index for a submodule
+     *
+     * @property {String}
+     */
+    get sha() {
+        return this.d_sha;
+    }
+
+    /**
+     * the url registered in the index for a submodule
+     *
+     * @property {String}
+     */
+    get url() {
+        return this.d_url;
+    }
+
+    /**
+     * relationship between the sha registered in the index the commit
+     *
+     * @property {String}
+     */
+    get relation() {
+        return this.d_relation;
+    }
+}
+
+/**
+ * A `Submodule.Workdir` object represents the state of an open submodule.
+ */
+class Workdir {
+    /**
+     * Create a new `Workdir` object having the specified repo `status` and
+     * `relation` between its head commit and that registered in the index.
+     * The behavior is undefined if
+     * `null === status.headCommit && null !== relation`.
+     *
+     * @param {RepoStatus}           status
+     * @param {COMMIT_RELATION|null} relation
+     */
+    constructor(status, relation) {
+        assert.instanceOf(status, module.exports);
+        if (null !== relation) {
+            assert.isNumber(relation);
+        }
+        if (null === status.headCommit) {
+            assert.isNull(relation);
+        }
+        this.d_status = status;
+        this.d_relation = relation;
+    }
+
+    /**
+     * the status of the open repository for a submodule
+     *
+     * @property {RepoStatus} status
+     */
+    get status() {
+        return this.d_status;
+    }
+
+    /**
+     * the relationship between the HEAD commit of the open repository and the
+     * commit registered in the index for a submodule
+     */
+    get relation() {
+        return this.d_relation;
+    }
+}
+
+
+/**
  * @class {RepoStatus.Submodule} a value-semantic type representing changes to
  * the state of a submodule
  */
 class Submodule {
-
     /**
      * @constructor
-     * Create a new `Submodule` object configured by the specified `status.
-     * A non-null `indexStatus` indicates staged changes to this submodule.  A
-     * non-null `repoStatus` indicates that the repository for this submodule
-     * is visible.  The behavior is undefined if:
-     *   - the submodule has been removed and contains `repoStatus` (open
-     *     working directory), `indexSha`, `indexShaRelation`,  or `indexUrl`
-     *   - the status does not indicate removal and `indexSha`, or `indexUrl`
-     *     are null
-     *   - the status indicates that the submodule was not just added but lacks
-     *     commit information, having null `commitSha` or `commitUrl`.
-     *   - the `indexSha` and `commitSha` are non-null but `indexShaRelation`
-     *     is null
-     *   - the status indicates that the submodule was just added, but contains
-     *     `commitSha` or `commitUrl`.
-     *   - index modification is indicated, but the indicated shas and urls are
-     *     the same in the index and commit
-     *   - modification is not indicated, but the indicated shas or urls differ
-     *     between index and commit
-     *   - `indexSha` and `commitSha` are the same, but `indexShaRelation` is
-     *     not `COMMIT_RELATION.SAME`, or `indexShaRelation` is
-     *     `COMMIT_RELATION.SAME but `indexSha` and `commitSha` differ
-     *   - `indexSha` and `repoStatus.headCommit` are the same, but
-     *     `workdirShaRelation` is not `COMMIT_RELATION.SAME`, or
-     *     `workdirShaRelation` is `COMMIT_RELATION.SAME but `indexSha` and
-     *     `repoStatus.headCommit` differ
+     * Create a new `Submodule` object configured by the specified `status`.
+     * A null `commit` field indicates thab the submodule was added.  A null
+     * `index` field indicates that the submodule was removed.  A non-null
+     * `workdir` field indicates an open submodule.
+     * The behavior is undefined if:
+     *   - `index` is null but `workdir` is non-null
+     *   - `commit` is null and `index.relation` is non-null
+     *   - `commit` is not null and `index.relation` is null
+     *   - `index.sha` and `commit.sha` are the same, but `index.Relation` is
+     *     not `COMMIT_RELATION.SAME`
+     *   - `index.relation` is `COMMIT_RELATION.SAME but `index.sha` and
+     *      `commit.sha` differ
+     *   - `index.sha` and `workdir.status.headCommit` are not null and
+     *   `workdir.relation` is null
+     *   - `index.sha` and `workdir.status.headCommit` are the same, but
+     *     `workdir.relation` is not `COMMIT_RELATION.SAME`
+     *   - `workdir.relation` is `COMMIT_RELATION.SAME but `index.sha` and
+     *     `workdir.status.headCommit` differ
      *
-     * @param {Object} status
-     * @param {RepoStatus.FILESTATUS} [status.indexStatus]
-     * @param {String}                [status.indexSha]
-     * @param {COMMIT_RELATION}       [status.indexShaRelation]
-     * @param {String}                [status.indexUrl]
-     * @param {String}                [status.commitSha]
-     * @param {String}                [status.commitUrl]
-     * @param {COMMIT_RELATION}       [status.workdirShaRelation]
-     * @param {RepoStatus}            [repoStatus]
+     * @param {Object}       status
+     * @param {Commit|null}  status.commit
+     * @param {Index|null}   status.index
+     * @param {Workdir|null} status.workdir
      */
     constructor(status) {
         if (undefined === status) {
@@ -128,115 +253,130 @@ class Submodule {
         else {
             assert.isObject(status);
         }
-        this.d_indexStatus        = null;
-        this.d_indexSha           = null;
-        this.d_indexShaRelation   = null;
-        this.d_indexUrl           = null;
-        this.d_commitSha          = null;
-        this.d_commitUrl          = null;
-        this.d_workdirShaRelation = null;
-        this.d_repoStatus         = null;
+        this.d_commit  = null;
+        this.d_index   = null;
+        this.d_workdir = null;
 
-        if ("indexStatus" in status) {
-            this.d_indexStatus = status.indexStatus;
+        // Copy in arguments and verify their types.
+
+        if ("commit" in status) {
+            if (null !== status.commit) {
+                assert.instanceOf(status.commit, Commit);
+            }
+            this.d_commit = status.commit;
         }
-        if ("indexSha" in status) {
-            this.d_indexSha = status.indexSha;
+        if ("index" in status) {
+            if (null !== status.index) {
+                assert.instanceOf(status.index, Index);
+            }
+            this.d_index = status.index;
         }
-        if ("indexShaRelation" in status) {
-            this.d_indexShaRelation = status.indexShaRelation;
+        if ("workdir" in status) {
+            if (null !== status.workdir) {
+                assert.instanceOf(status.workdir, Workdir);
+            }
+            this.d_workdir = status.workdir;
         }
-        if ("indexUrl" in status) {
-            this.d_indexUrl = status.indexUrl;
+
+        // Validate non-type preconditions.
+
+        // If the submodule has been deleted -- as indicated by lack of `index`
+        // -- it cannot be open.  Also, a submodule cannot be both deleted and
+        // added.
+
+        if (null === this.d_index) {
+            assert.isNull(this.d_workdir, "deleted submodule can't be open");
+            assert.isNotNull(this.d_commit,
+                             "cannot be both deleted and added");
         }
-        if ("commitSha" in status) {
-            this.d_commitSha = status.commitSha;
+
+        // If the submodule has been added, there can be no relation between
+        // the index and the commit.
+
+        if (null === this.d_commit) {
+            assert.isNull(
+                      this.d_index.relation,
+                      "cannot have index to commit relation in new submodule");
         }
-        if ("commitUrl" in status) {
-            this.d_commitUrl = status.commitUrl;
+
+        // Otherwise, there *must* be a relation between the index and the
+        // commit.
+
+        else if (null !== this.d_index) {
+            assert.isNotNull(this.d_index.relation,
+                             "must have relation between index and commit");
         }
-        if ("workdirShaRelation" in status) {
-            this.d_workdirShaRelation = status.workdirShaRelation;
+
+        // Check that the `relation` between the index and the commit isn't in
+        // conflict with equality relationship between their shas.
+
+        if (null !== this.d_commit && null !== this.d_index) {
+            if (this.d_commit.sha === this.d_index.sha) {
+                assert.equal(this.d_index.relation,
+                             COMMIT_RELATION.SAME,
+                             "same shas implies relationship is SAME");
+            }
+            else {
+                assert.notEqual(this.d_index.relation,
+                                COMMIT_RELATION.SAME,
+                                "different shas implies not SAME");
+            }
         }
-        if ("repoStatus" in status) {
-            this.d_repoStatus = status.repoStatus;
+        if (null !== this.d_workdir) {
+
+            // If the index has a commit and the workdir has a HEAD, it must
+            // have a relation to the index.
+
+            if (null !== this.d_index.sha &&
+                null !== this.d_workdir.headCommit) {
+
+                assert.isNotNull(this.d_workdir.relation);
+
+                // As above, validate that the workdir `relation` and the
+                // equality relationship of the index and workdir commits do
+                // not conflict.
+
+                if (this.d_index.sha === this.d_workdir.status.headCommit) {
+                    assert.equal(this.d_workdir.relation,
+                                 COMMIT_RELATION.SAME,
+                                 "same shas implies relationship is SAME");
+                }
+                else {
+                    assert.notEqual(this.d_workdir.relation,
+                                    COMMIT_RELATION.SAME,
+                                    "different shas implies not SAME");
+                }
+            }
         }
         Object.freeze(this);
     }
 
     /**
-     * @property {RepoStatus.FILESTATUS} [indexStatus] state of this submodule
-     * in the index.  Wil be null if no staged changes.
+     * status of the submodule in the current commit, or null if it's been
+     * added and not yet committed
+     *
+     * @property {Commit}
      */
-    get indexStatus() {
-        return this.d_indexStatus;
+    get commit() {
+        return this.d_commit;
     }
 
     /**
-     * @property {String} [indexSha] value for the submodule's sha in the
-     * index.  Will be null if `FILESTATUS.REMOVED === indexStatus`.
+     * status of the submodule in the index, or null if its been deleted
+     *
+     * @property {Index}
      */
-    get indexSha() {
-        return this.d_indexSha;
+    get index() {
+        return this.d_index;
     }
 
     /**
-     * @property {COMMIT_RELATION} indexShaRelation indicates the relationship
-     * between the sha indicated in the repository's index for this
-     * submodule and the sha indicated in the head commit.
+     * workdir status of the submodule if open, null if it's not open
+     *
+     * @property {Workdir}
      */
-    get indexShaRelation() {
-        return this.d_indexShaRelation;
-    }
-
-    /**
-     * @property {String} [indexUrl] value for the submodule's url in the
-     * index.  Will be null if `FILESTATUS.REMOVED === indexStatus`.
-     */
-    get indexUrl() {
-        return this.d_indexUrl;
-    }
-
-    /**
-     * @property {String} [commitSha] value for this repo's sha in the HEAD
-     * commit.  Will be null if `FILESTATUS.ADDED === indexStatus`.
-     */
-    get commitSha() {
-        return this.d_commitSha;
-    }
-
-    /**
-     * @property {String} [commitUrl] value for this repo's url in the HEAD
-     * commit.  Will be null if `FILESTATUS.ADDED === indexStatus`.
-     */
-    get commitUrl() {
-        return this.d_commitUrl;
-    }
-
-    /**
-     * @property {COMMIT_RELATION} [workdirShaRelation] indicates relationship
-     * to head commit in an open submodule's repo and the sha indicated for
-     * that submodule in the index
-     */
-    get workdirShaRelation() {
-        return this.d_workdirShaRelation;
-    }
-
-    /**
-     * @property {RepoStatus} [repoStatus] value for the open repository of
-     * this submodule.  Non-null value indicates that the submodule is open.
-     */
-    get repoStatus() {
-        return this.d_repoStatus;
-    }
-
-    /**
-     * Return true if this submodule is clean and false otherwise.  A submodule
-     * is clean if it has no staged or working directory changes to its commit
-     * sha, url, or open repository.
-     */
-    isClean() {
-        return this.isIndexClean() && this.isWorkdirClean();
+    get workdir() {
+        return this.d_workdir;
     }
 
     /**
@@ -248,25 +388,28 @@ class Submodule {
      * @return {Boolean}
      */
     isIndexClean() {
-        if (this.d_repoStatus) {
-            if (!this.d_repoStatus.isIndexClean() ||
-                (null !== this.d_workdirShaRelation && 
-                 COMMIT_RELATION.SAME !== this.d_workdirShaRelation)) {
+        if (null !== this.d_workdir) {
+            if (!this.d_workdir.status.isIndexClean() ||
+                 COMMIT_RELATION.SAME !== this.d_workdir.relation) {
                 return false;                                         // RETURN
             }
         }
 
-        // Check to see if there is a different sha for this submodule in the
-        // index then what is on HEAD.
+        // If it's been deleted it's not clean.
 
-        if (COMMIT_RELATION.SAME !== this.d_indexShaRelation) {
+        if (null === this.d_index) {
             return false;
         }
 
-        // Finally, we're clean if there is no change to our index status,
-        // which would indicate a URL change.
+        // If it's been added it's not clean.
+        if (null === this.d_commit) {
+            return false;
+        }
 
-        return null === this.d_indexStatus;
+        // Otherwise, it's unclean if its URL or commit has changed.
+
+        return this.d_commit.url === this.d_index.url &&
+            this.d_commit.sha === this.d_index.sha;
     }
 
     /**
@@ -274,7 +417,7 @@ class Submodule {
      * @return {Boolean}
      */
     isNew() {
-        return FILESTATUS.ADDED === this.d_indexStatus;
+        return null === this.d_commit;
     }
 
     /**
@@ -285,10 +428,10 @@ class Submodule {
      */
     isCommittable () {
         return !(this.isNew() &&
-            null === this.d_indexSha &&
-            (null === this.d_repoStatus ||
-             (null === this.d_repoStatus.headCommit &&
-             this.d_repoStatus.isIndexClean())));
+                 null === this.d_index.sha &&
+                 (null === this.d_workdir ||
+                  null === this.d_workdir.status.headCommit &&
+                  this.d_workdir.status.isIndexClean()));
     }
 
     /**
@@ -298,8 +441,8 @@ class Submodule {
      * @return {Boolean}
      */
     isWorkdirClean() {
-        return null === this.d_repoStatus ||
-            this.d_repoStatus.isWorkdirClean();
+        return null === this.d_workdir ||
+            this.d_workdir.status.isWorkdirClean();
     }
 
     /**
@@ -317,41 +460,27 @@ class Submodule {
             assert.isObject(args);
         }
         return new Submodule({
-            indexStatus: ("indexStatus" in args) ?
-                args.indexStatus : this.d_indexStatus,
-            indexSha: ("indexSha" in args) ?
-                args.indexSha : this.d_indexSha,
-            indexShaRelation: ("indexShaRelation" in args) ?
-                args.indexShaRelation : this.d_indexShaRelation,
-            indexUrl: ("indexUrl" in args) ?
-                args.indexUrl : this.d_indexUrl,
-            commitSha: ("commitSha" in args) ?
-                args.commitSha : this.d_commitSha,
-            commitUrl: ("commitUrl" in args) ?
-                args.commitUrl : this.d_commitUrl,
-            workdirShaRelation: ("workdirShaRelation" in args) ?
-                args.workdirShaRelation : this.d_workdirShaRelation,
-            repoStatus: ("repoStatus" in args) ?
-                args.repoStatus : this.d_repoStatus,
+            commit: ("commit" in args) ? args.commit : this.d_commit,
+            index: ("index" in args) ? args.index : this.d_index,
+            workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
         });
     }
 
     /**
      * Return a new `Submodule` object having the same value as this one with a
      * newly opened repository.  The behavior is undefined unless
-     * `null === this.repoStatus`.
+     * `null !== this.index && null === this.workdir`.
      *
      * @return {Submodule}
      */
     open() {
-        assert.isNull(this.d_repoStatus);
+        assert.isNotNull(this.d_index);
+        assert.isNull(this.d_workdir);
         const RepoStatus = module.exports;
         return this.copy({
-            indexSha: this.d_commitSha,
-            indexShaRelation: COMMIT_RELATION.SAME,
-            workdirShaRelation: COMMIT_RELATION.SAME,
-            repoStatus:
-                new RepoStatus({ headCommit: this.d_commitSha, }),
+            workdir: new Workdir(new RepoStatus({
+                headCommit: this.d_index.sha,
+            }), COMMIT_RELATION.SAME),
         });
     }
 }
@@ -623,4 +752,6 @@ RepoStatus.STAGE = STAGE;
 RepoStatus.FILESTATUS = FILESTATUS;
 RepoStatus.Submodule = Submodule;
 Submodule.COMMIT_RELATION = COMMIT_RELATION;
-
+Submodule.Commit = Commit;
+Submodule.Index = Index;
+Submodule.Workdir = Workdir;

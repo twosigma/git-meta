@@ -41,6 +41,9 @@ describe("PrintStatusUtil", function () {
     const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
     const StatusDescriptor = PrintStatusUtil.StatusDescriptor;
     const Submodule        = RepoStatus.Submodule;
+    const Commit           = Submodule.Commit;
+    const Index            = Submodule.Index;
+    const Workdir          = Submodule.Workdir;
 
     describe("StatusDescriptor", function () {
         describe("constructor", function () {
@@ -243,6 +246,35 @@ describe("PrintStatusUtil", function () {
         });
     });
 
+    describe("getRelationDescription", function () {
+        const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+        const cases = {
+            "ahead": {
+                input: RELATION.AHEAD,
+                expected: "new commits",
+            },
+            "behind": {
+                input: RELATION.BEHIND,
+                expected: "on old commit",
+            },
+            "unrelated": {
+                input: RELATION.UNRELATED,
+                expected: "on unrelated commit",
+            },
+            "unknown": {
+                input: RELATION.UNKNOWN,
+                expected: "on unknown commit",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = PrintStatusUtil.getRelationDescription(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
     describe("listSubmoduleDescriptors", function () {
         const cases = {
             "trivial": {
@@ -252,9 +284,7 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            commitUrl: "a",
-                            commitSha: "1",
-                            indexStatus: FILESTATUS.REMOVED,
+                            commit: new Commit("1", "a"),
                         }),
                     },
                 }),
@@ -266,11 +296,8 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "y",
-                            indexShaRelation: RELATION.SAME,
-                            commitUrl: "a",
-                            indexUrl: "b",
+                            commit: new Commit("y", "a"),
+                            index: new Index("y", "y", RELATION.SAME),
                         }),
                     },
                 }),
@@ -284,29 +311,23 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "z",
-                            indexShaRelation: RELATION.AHEAD,
-                            commitUrl: "a",
-                            indexUrl: "b",
+                            commit: new Commit("z", "a"),
+                            index: new Index("y", "b", RELATION.AHEAD),
                         }),
                     },
                 }),
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new commits, new url"),
+                                         "submodule, new url, new commits"),
                 ],
             },
             "new commits in index": {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "z",
-                            indexShaRelation: RELATION.AHEAD,
-                            commitUrl: "a",
-                            indexUrl: "a",
+                            commit: new Commit("z", "a"),
+                            index: new Index("y", "a", RELATION.AHEAD),
                         }),
                     },
                 }),
@@ -320,15 +341,11 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "y",
-                            indexShaRelation: RELATION.SAME,
-                            commitUrl: "a",
-                            indexUrl: "a",
-                            workdirShaRelation: RELATION.AHEAD,
-                            repoStatus: new RepoStatus({
-                                head: "z",
-                            }),
+                            commit: new Commit("y", "a"),
+                            index: new Index("y", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "z",
+                            }), RELATION.AHEAD),
                         }),
                     },
                 }),
@@ -342,11 +359,8 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "z",
-                            indexShaRelation: RELATION.BEHIND,
-                            commitUrl: "a",
-                            indexUrl: "a",
+                            commit: new Commit("z", "a"),
+                            index: new Index("y", "a", RELATION.BEHIND),
                         }),
                     },
                 }),
@@ -360,11 +374,8 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "z",
-                            indexShaRelation: RELATION.UNRELATED,
-                            commitUrl: "a",
-                            indexUrl: "a",
+                            commit: new Commit("z", "a"),
+                            index: new Index("y", "a", RELATION.UNRELATED),
                         }),
                     },
                 }),
@@ -378,11 +389,8 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexSha: "y",
-                            commitSha: "z",
-                            indexShaRelation: RELATION.UNKNOWN,
-                            commitUrl: "a",
-                            indexUrl: "a",
+                            commit: new Commit("z", "a"),
+                            index: new Index("y", "a", RELATION.UNKNOWN),
                         }),
                     },
                 }),
@@ -396,7 +404,7 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexStatus: FILESTATUS.ADDED,
+                            index: new Index(null, "a", null),
                         }),
                     },
                 }),
@@ -411,8 +419,8 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexStatus: FILESTATUS.ADDED,
-                            repoStatus: new RepoStatus(),
+                            index: new Index(null, "a", null),
+                            workdir: new Workdir(new RepoStatus(), null),
                         }),
                     },
                 }),
@@ -427,10 +435,10 @@ describe("PrintStatusUtil", function () {
                 status: new RepoStatus({
                     submodules: {
                         x: new RepoStatus.Submodule({
-                            indexStatus: FILESTATUS.ADDED,
-                            repoStatus: new RepoStatus({
+                            index: new Index(null, "a", null),
+                            workdir: new Workdir(new RepoStatus({
                                 staged: { foo: FILESTATUS.ADDED },
-                            }),
+                            }), null),
                         }),
                     },
                 }),
@@ -518,9 +526,8 @@ describe("PrintStatusUtil", function () {
                 input: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            commitUrl: "foo",
-                            commitSha: "a",
-                            indexUrl: "bar",
+                            commit: new Commit("a", "foo"),
+                            index: new Index("a", "bar", RELATION.SAME),
                         }),
                     },
                 }),
@@ -538,15 +545,16 @@ describe("PrintStatusUtil", function () {
                 input: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            commitUrl: "1",
-                            commitSha: "2",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("2", "1"),
+                            index: new Index("2", "1", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "2",
                                 staged: { x: FILESTATUS.REMOVED },
                                 workdir: { 
                                     y: FILESTATUS.MODIFIED,
                                     z: FILESTATUS.ADDED,
                                 },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -664,11 +672,12 @@ describe("PrintStatusUtil", function () {
                     currentBranchName: "master",
                     submodules: {
                         qrst: new Submodule({
-                            repoStatus: new RepoStatus({
+                            index: new Index(null, "a", null),
+                            workdir: new Workdir(new RepoStatus({
                                 staged: {
                                     "x/y/z": FILESTATUS.MODIFIED,
                                 },
-                            }),
+                            }), null),
                         }),
                     },
                 }),
