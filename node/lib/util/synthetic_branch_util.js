@@ -66,6 +66,15 @@ function *urlToLocalPath(repo, url) {
     assert.isString(url);
 
     const config = yield repo.config();
+    let subrepoUrlBase = "";
+    try {
+        subrepoUrlBase =
+              yield config.getStringBuf("gitmeta.subrepourlbase");
+    } catch (e) {
+        //It's OK for this to be missing, but nodegit lacks an
+        //API that expresses this.
+
+    }
     const subrepoRootPath =
         yield config.getStringBuf("gitmeta.subreporootpath");
     let subrepoSuffix = "";
@@ -75,7 +84,13 @@ function *urlToLocalPath(repo, url) {
         //It's OK for this to be missing, but nodegit lacks an
         //API that expresses this.
     }
-    const localPath = path.join(subrepoRootPath, url + subrepoSuffix);
+    if (!url.startsWith(subrepoUrlBase)) {
+        throw "Your git configuration gitmeta.subrepoUrlBase, '" +
+            subrepoUrlBase + "', must be a prefix of all submodule " +
+            "urls.  Submodule url '" + url + "' fails.";
+    }
+    const remotePath = url.slice(subrepoUrlBase.length);
+    const localPath = path.join(subrepoRootPath, remotePath + subrepoSuffix);
     if (localPath[0] === "/") {
         return localPath;
     } else {
