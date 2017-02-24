@@ -323,6 +323,14 @@ x=E:Cx-1 s=Sa:s;I s=~;Os Cs q=r!*=master!Bmaster=s;Bmaster=x`,
                 message: "message",
                 expected: `x=E:Cx-1 s=S.:z;Bmaster=x;I s=~`,
             },
+            "staged commit in index undone in workdir": {
+                initial: `
+q=B:Cz-1;Bmaster=z|x=S:C2-1 s=Sq:1;I s=Sq:z,x=Sq:1;Bmaster=2;Os H=1`,
+                doAll: false,
+                message: "message",
+                expected: `
+x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

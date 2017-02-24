@@ -200,6 +200,25 @@ exports.formatEditorPrompt  = function (status, cwd, all) {
 };
 
 /**
+ * Stage all of the specified `submodules` that are open in the specified
+ * `index`.  We need to do this whenever generating a meta-repo commit because
+ * otherwise, we could commit a staged commit in a submodule that would have
+ * been reverted in its open repo.
+ * 
+ * @param {NodeGit.Repository} index
+ * @param {Object}             submodules name -> RepoStatus.Submodule
+ */
+const stageOpenSubmodules = co.wrap(function *(index, submodules) {
+    yield Object.keys(submodules).map(co.wrap(function *(name) {
+        const sub = submodules[name];
+        if (null !== sub.workdir) {
+            yield index.addByPath(name);
+        }
+    }));
+    yield index.write();
+});
+
+/**
  * Create a commit across modified repositories and the specified `metaRepo`
  * with the specified `message`, if provided, prompting the user if no message
  * is provided.  If the specified `all` is provided, automatically stage
@@ -231,7 +250,6 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     // workdir changes.
 
     const subCommits = {};
-    const subsToStage = [];
     let subsChanged = false;
     const commitSubmodule = co.wrap(function *(name) {
         const status = submodules[name];
@@ -257,7 +275,6 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
         if (null !== committed ||
             (null !== repoStatus &&
              (repoStatus.headCommit !== status.index.sha))) {
-            subsToStage.push(name);
             subsChanged = true;
         }
 
@@ -279,13 +296,8 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     const subCommitters = Object.keys(submodules).map(commitSubmodule);
     yield subCommitters;
 
-    // If submodule commits were created, we need to stage them.
-
-    if (0 !== subsToStage.length) {
-        const index = yield metaRepo.index();
-        yield subsToStage.map(name => index.addByPath(name));
-        yield index.write();
-    }
+    const index = yield metaRepo.index();
+    yield stageOpenSubmodules(index, submodules);
 
     const metaResult = yield commitRepo(metaRepo,
                                         metaStatus,
@@ -598,7 +610,6 @@ exports.amendMetaRepo = co.wrap(function *(repo,
     const subCommits = {};
     const subs = status.submodules;
     const amendSubSet = new Set(subsToAmend);
-    const subsToStage = [];
 
     yield Object.keys(subs).map(co.wrap(function *(subName) {
         const subStatus = subs[subName];
@@ -617,8 +628,6 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         // process.
 
         if (amendSubSet.has(subName)) {
-            subsToStage.push(subName);
-
             // First, we check to see if this submodule needs to have its last
             // commit stripped.  That will be the case if we have no files
             // staged or to be staged, indicating that if we were to do an
@@ -661,20 +670,12 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                                         false,
                                         signature);
         if (null !== commit) {
-            subsToStage.push(subName);
             subCommits[subName] = commit.tostrS();
-        }
-        else if (RepoStatus.Submodule.COMMIT_RELATION.SAME !==
-                                                  subStatus.workdir.relation) {
-            // If we didn't make a commit, but the sub has a new commit in its
-            // workdir, we still need to stage it.
-
-            subsToStage.push(subName);
         }
     }));
 
     const index = yield repo.index();
-    yield subsToStage.map(path => index.addByPath(path));
+    yield stageOpenSubmodules(index, subs);
     yield stageFiles(repo, status.workdir, index);
 
     const metaCommit = yield exports.amendRepo(repo, message);
