@@ -222,51 +222,47 @@ exports.listSubmoduleDescriptors = function (status) {
             return;                                                   // RETURN
         }
 
-        // Now, if there is anything of intereset changed in this sub, we will
-        // put a description in 'detail'.
+        // Configuration changes and staged changes go in `stagedDetail`.
 
-        let detail = "";
-        let status = FILESTATUS.MODIFIED;  // only other choice is `ADDED`
+        let stagedDetail = "";
+        let stagedStatus = FILESTATUS.MODIFIED;  // other choice is `ADDED`
 
         if (sub.isNew()) {
-            detail += ", newly created";
-            status = FILESTATUS.ADDED;
+            stagedDetail += ", newly created";
+            stagedStatus = FILESTATUS.ADDED;
         }
 
         // If it's not new, see if the URL has changed.
 
         else if (commit.url !== index.url) {
-            detail += ", new url";
+            stagedDetail += ", new url";
         }
 
-        // If workdir or index are on different commit, add a description to
-        // detail.
+        const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
 
-        const relation = (() => {
-            // Prefer the workdir relation.  TODO: treat index and workdir
-            // relation separately.
-
-            if (null !== sub.workdir && null !== sub.workdir.relation) {
-                return sub.workdir.relation;
-            }
-            if (null !== sub.index) {
-                return sub.index.relation;
-            }
-            return null;
-        })();
-
-        if (null !== relation &&
-            RepoStatus.Submodule.COMMIT_RELATION.SAME !== relation) {
-            detail += ", " + exports.getRelationDescription(relation);
+        if (null !== index.relation && SAME !== index.relation) {
+            stagedDetail += ", " +
+                exports.getRelationDescription(index.relation);
         }
 
-        // Now, if there is detail, add to staged section.
-        // TODO: register staged and workdir updates separately.
+        // Now, if there is staged detail, add to staged section.
 
-        if ("" !== detail) {
-            staged.push(new StatusDescriptor(status,
+        if ("" !== stagedDetail) {
+            staged.push(new StatusDescriptor(stagedStatus,
                                              subName,
-                                             "submodule" + detail));
+                                             "submodule" + stagedDetail));
+        }
+
+        // Register unstaged commits on an open submodule.
+
+        if (null !== sub.workdir &&
+            null !== sub.workdir.relation &&
+            SAME !== sub.workdir.relation) {
+            const desc = "submodule, " +
+                exports.getRelationDescription(sub.workdir.relation);
+            workdir.push(new StatusDescriptor(FILESTATUS.MODIFIED,
+                                              subName,
+                                              desc));
         }
     });
     return {

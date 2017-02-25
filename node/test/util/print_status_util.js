@@ -31,6 +31,7 @@
 "use strict";
 
 const assert  = require("chai").assert;
+const colors  = require("colors");
 
 const Rebase              = require("../../lib/util/rebase");
 const RepoStatus          = require("../../lib/util/repo_status");
@@ -349,10 +350,33 @@ describe("PrintStatusUtil", function () {
                         }),
                     },
                 }),
+                workdir: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, new commits"),
+                ],
+            },
+            "new commits in index and workdir": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            commit: new Commit("y", "a"),
+                            index: new Index("z", "a", RELATION.AHEAD),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "y",
+                            }), RELATION.BEHIND),
+                        }),
+                    },
+                }),
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
                                          "submodule, new commits"),
+                ],
+                workdir: [
+                    new StatusDescriptor(FILESTATUS.MODIFIED,
+                                         "x",
+                                         "submodule, on old commit"),
                 ],
             },
             "behind in index": {
@@ -698,7 +722,33 @@ describe("PrintStatusUtil", function () {
                     currentBranchName: "master",
                     workdir: { foo: FILESTATUS.ADDED },
                 }),
-                regex: /foo/,
+                exact: `\
+On branch ${colors.green("master")}.
+Untracked files:
+  (use "git meta add <file>..." to include in what will be committed)
+
+\t${colors.red("foo")}
+
+`,
+            },
+            "change in sub workdir": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    submodules: {
+                        zap: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("2", "/a", RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                exact: `\
+On branch ${colors.green("master")}.
+Changes to be committed:
+  (use "git meta reset HEAD <file>..." to unstage)
+
+\t${colors.green("modified:     zap")} (submodule, new commits)
+
+`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -706,7 +756,12 @@ describe("PrintStatusUtil", function () {
             it(caseName, function () {
                 const cwd = c.cwd || "";
                 const result = PrintStatusUtil.printRepoStatus(c.input, cwd);
-                if (c.inverse) {
+                if (c.exact) {
+                    const resultLines = result.split("\n");
+                    const expectedLines = c.exact.split("\n");
+                    assert.deepEqual(resultLines, expectedLines);
+                }
+                else if (c.inverse) {
                     assert.notMatch(result, c.regex);
                 }
                 else {
