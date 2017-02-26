@@ -116,7 +116,6 @@ const doCommit = co.wrap(function *(args) {
     const relCwd = path.relative(workdir, cwd);
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
-        includeClosedSubmodules: args.closed,
         workdirToTree: args.all,
     });
 
@@ -181,7 +180,6 @@ const doAmend = co.wrap(function *(args) {
     const relCwd = path.relative(workdir, cwd);
     let status = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
-        includeClosedSubmodules: true,
     });
     const head = yield repo.getHeadCommit();
 

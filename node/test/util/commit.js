@@ -471,7 +471,6 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 const repo = repos.x;
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: true,
-                    includeClosedSubmodules: true,
                 });
                 const head = yield repo.getHeadCommit();
                 let oldSubs = {};
@@ -604,7 +603,6 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
                 const all = c.all || false;
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: includeMeta,
-                    includeClosedSubmodules: true,
                 });
                 const head = yield repo.getHeadCommit();
                 let oldSubs = {};
@@ -814,7 +812,6 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                     const repo = repos.x;
                     const status = yield StatusUtil.getRepoStatus(repo, {
                         showMetaChanges: true,
-                        includeClosedSubmodules: true,
                     });
                     const head = yield repo.getHeadCommit();
                     let oldSubs = {};
