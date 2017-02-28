@@ -36,7 +36,7 @@ const NodeGit = require("nodegit");
 
 const GitUtil       = require("../util/git_util");
 const RebaseUtil    = require("../util/rebase_util");
-const StatusUtil    = require("../util/status");
+const StatusUtil    = require("../util/status_util");
 const UserError     = require("../util/user_error");
 
 /**
