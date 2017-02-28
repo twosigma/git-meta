@@ -51,6 +51,7 @@ const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const TestUtil            = require("./test_util");
+const TreeUtil            = require("./tree_util");
 
                          // Begin module-local methods
 
@@ -83,82 +84,42 @@ const configRepo = co.wrap(function *(repo) {
 
 /**
  * Return the tree and a map of associated subtrees corresponding to the
- * specified `flatChanges` in the specified `repo`, and based on the optionally
+ * specified `changes` in the specified `repo`, and based on the optionally
  * specified `parent`.  Use the specified `shaMap` to resolve logical shas to
  * actual written shas (such as for submodule heads).  Use the specified `db`
- * to write objects.  If the specified `root` is true, generate a `.gitmodules`
- * file containing an entry for each submodule.
+ * to write objects.
  *
  * @async
- * @param {Boolean}               root
  * @param {NodeGit.Repository}    repo
  * @param {NodeGit.Odb}           db
  * @param {Object}                shaMap maps logical to physical ID
- * @param {Object}                flatChanges map of changes
+ * @param {Object}                changes map of changes
  * @param {Object}                [parent]
- * @param {Object}                parent.subtrees   filename to return value
  * @param {NodeGit.Tree}          parent.tree       generated tree object
  * @param {Object}                parent.submodules name to url
  * @return {Object}
  * @return {Object}       return.submodules
- * @return {Object}       return.subtrees
  * @return {NodeGit.Tree} return.tree
  */
-const writeTree = co.wrap(function *(root,
-                                     repo,
+const writeTree = co.wrap(function *(repo,
                                      db,
                                      shaMap,
                                      changes,
                                      parent) {
-    let subtrees = {};          // will contain written subtree entries
     let parentTree = null;      // base root
     const submodules = {};      // all submodule entries, including children
 
     // If `parent` is provided, copy values into the above structures.
 
     if (undefined !== parent) {
-        Object.assign(subtrees, parent.subtrees);
         parentTree = parent.tree;
         Object.assign(submodules, parent.submodules);
     }
 
+    const FILEMODE = NodeGit.TreeEntry.FILEMODE;
     const wereSubs = 0 !== Object.keys(submodules).length;
 
-    // Initialize the builder with the previous tree from which the changes are
-    // derived.
-
-    const builder = yield NodeGit.Treebuilder.create(repo, parentTree);
-
-    const actions = [];  // tree updates to be applied in parallel
-
-    const writeSubtree = co.wrap(function *(filename, entry) {
-        const subtree = yield writeTree(false,
-                                        repo,
-                                        db,
-                                        shaMap,
-                                        entry,
-                                        subtrees[filename]);
-        subtrees[filename] = subtree;
-        yield builder.insert(filename,
-                             subtree.tree.id(),
-                             NodeGit.TreeEntry.FILEMODE.TREE);
-
-        // Reconstitute the submodule path and copy it into the right location.
-
-        for (let subPath in subtree.submodules) {
-            const sub = subtree.submodules[subPath];
-            submodules[path.join(filename, subPath)] = sub;
-        }
-    });
-
-    const writeBlob = co.wrap(function *(filename, data) {
-        const id = yield hashObject(db, data);
-        yield builder.insert(filename,
-                             id,
-                             NodeGit.TreeEntry.FILEMODE.BLOB);
-    });
-
-    // Loop through all the changes and store an action to apply them.
+    const pathToChange = {}; // name to `TreeUtil.Change`
 
     for (let filename in changes) {
         const entry = changes[filename];
@@ -168,12 +129,13 @@ const writeTree = co.wrap(function *(root,
         if (null === entry) {
             // Null means the entry was deleted.
 
-            builder.remove(filename);
+            pathToChange[filename] = null;
         }
         else if ("string" === typeof entry) {
             // A string is just plain data.
 
-            actions.push(writeBlob(filename, entry));
+            const id = yield hashObject(db, entry);
+            pathToChange[filename] = new TreeUtil.Change(id, FILEMODE.BLOB);
         }
         else if (entry instanceof RepoAST.Submodule) {
             // For submodules, we must map the logical sha it contains to the
@@ -181,18 +143,11 @@ const writeTree = co.wrap(function *(root,
 
             if(null !== entry.sha) {
                 const id = shaMap[entry.sha];
-                actions.push(builder.insert(
-                                           filename,
-                                           id,
-                                           NodeGit.TreeEntry.FILEMODE.COMMIT));
+                pathToChange[filename] = new TreeUtil.Change(id,
+                                                             FILEMODE.COMMIT);
             }
             submodules[filename] = entry.url;
             isSubmodule = true;
-        }
-        else {
-            // Otherwise, we have a directory and must make a subtree.
-
-            actions.push(writeSubtree(filename, entry));
         }
         if (!isSubmodule) {
             // In case this entry was previously a submodule, we have to remove
@@ -202,40 +157,32 @@ const writeTree = co.wrap(function *(root,
         }
     }
 
-    // Apply the operations in parallel.
-
-    yield actions;
-
     // If this is a "root" tree, and there are submodules, we must write the
     // `.gitmodules` file.
 
-    if (root) {
-        const subNames = Object.keys(submodules).sort();
-        if (0 !== subNames.length) {
-            let data = "";
-            for (let i = 0; i < subNames.length; ++i) {
-                const filename = subNames[i];
-                const url = submodules[filename];
-                data += `\
+    const subNames = Object.keys(submodules).sort();
+    if (0 !== subNames.length) {
+        let data = "";
+        for (let i = 0; i < subNames.length; ++i) {
+            const filename = subNames[i];
+            const url = submodules[filename];
+            data += `\
 [submodule "${filename}"]
 \tpath = ${filename}
 \turl = ${url}
 `;
-            }
-            const dataId = yield hashObject(db, data);
-            yield builder.insert(SubmoduleConfigUtil.modulesFileName,
-                                 dataId,
-                                 NodeGit.TreeEntry.FILEMODE.BLOB);
         }
-        else if (wereSubs) {
-            builder.remove(SubmoduleConfigUtil.modulesFileName);
-        }
+        const dataId = yield hashObject(db, data);
+        pathToChange[SubmoduleConfigUtil.modulesFileName] =
+                                    new TreeUtil.Change(dataId, FILEMODE.BLOB);
     }
-    const id = builder.write();
-    const tree = yield repo.getTree(id);
+    else if (wereSubs) {
+        pathToChange[SubmoduleConfigUtil.modulesFileName] = null;
+    }
+
+    const newTree = yield TreeUtil.writeTree(repo, parentTree, pathToChange);
     return {
-        tree: tree,
-        subtrees: subtrees,
+        tree: newTree,
         submodules: submodules,
     };
 });
@@ -295,13 +242,10 @@ exports.writeCommits = co.wrap(function *(oldCommitMap,
         // Calculate the tree.  `trees` describes the directory tree specified
         // by the commit at `sha` and has caches for subtrees and submodules.
 
-        const changes = exports.buildDirectoryTree(commit.changes);
-
-        const trees = yield writeTree(true,
-                                      repo,
+        const trees = yield writeTree(repo,
                                       db,
                                       oldCommitMap,
-                                      changes,
+                                      commit.changes,
                                       parentTrees);
 
         // Store the returned tree information for potential use by descendants
@@ -493,12 +437,10 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             indexParent = treeCache[indexHead];
         }
         const db = yield repo.odb();
-        const changes = exports.buildDirectoryTree(ast.index);
-        const trees = yield writeTree(true,
-                                      repo,
+        const trees = yield writeTree(repo,
                                       db,
                                       commitMap,
-                                      changes,
+                                      ast.index,
                                       indexParent);
         const index = yield repo.index();
         const treeObj = trees.tree;
@@ -600,53 +542,6 @@ exports.levelizeCommitTrees = function (commits, shas) {
         computeCommitLevel(shas[i]);
     }
 
-    return result;
-};
-
-/**
- * Return a nested tree mapping the flat structure in the specified `flatTree`,
- * which consists of a map of paths to values, into a hierarchical structure
- * beginning at the root.  For example, if the input is:
- *     { "a/b/c": 2, "a/b/d": 3}
- * the output will be:
- *     { a : { b: { c: 2, d: 3} } }
- *
- * If `flatTree` contains submodules, render an appropriate `.gitmodules` file.
- *
- * @param {Object} flatTree
- * @return {Object}
- */
-exports.buildDirectoryTree = function (flatTree) {
-    let result = {};
-
-    for (let path in flatTree) {
-        const paths = path.split("/");
-        let tree = result;
-
-        // Navigate/build the tree until there is only one path left in paths,
-        // then write the entry.
-
-        for (let i = 0; i + 1 < paths.length; ++i) {
-            const nextPath = paths[i];
-            if (nextPath in tree) {
-                tree = tree[nextPath];
-                assert.isObject(tree, `for path ${path}`);
-            }
-            else {
-                const nextTree = {};
-                tree[nextPath] = nextTree;
-                tree = nextTree;
-            }
-        }
-        const leafPath = paths[paths.length - 1];
-        assert.notProperty(tree, leafPath, `duplicate entry for ${path}`);
-        const data = flatTree[path];
-        tree[leafPath] = data;
-    }
-
-    assert.notProperty(result,
-                       SubmoduleConfigUtil.modulesFileName,
-                       "no explicit changes to the git modules file");
     return result;
 };
 

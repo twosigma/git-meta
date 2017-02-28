@@ -307,7 +307,6 @@ function doGc(state) {
 /**
  * @return {Object}
  * @return {NodeGit.Tree} return.tree
- * @return {Object}       return.subtrees
  * @return {Object}       return.submodules
  */
 const loadTree = co.wrap(function *(repo, treeId, renderCache, basePath) {
@@ -318,22 +317,14 @@ const loadTree = co.wrap(function *(repo, treeId, renderCache, basePath) {
     const entries = tree.entries();
     const result = {
         tree: tree,
-        subtrees: {},
         submodules: {},
     };
-    const subtrees = result.subtrees;
     for (let i = 0; i < entries.length; ++i) {
         const entry = entries[i];
         const entryPath = entry.path();
         const fullPath = null === basePath ?
                                     entryPath : path.join(basePath, entryPath);
-        if (entry.isTree()) {
-            subtrees[entryPath] = yield loadTree(repo,
-                                                 entry.id(),
-                                                 renderCache,
-                                                 fullPath);
-        }
-        else {
+        if (!entry.isTree()) {
             // Just put a placeholder in the render cache for now; the only
             // place we're using it is to determine what paths exist in a
             // submodule.

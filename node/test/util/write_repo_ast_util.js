@@ -103,56 +103,6 @@ describe("WriteRepoASTUtil", function () {
         });
     });
 
-    describe("buildDirectoryTree", function () {
-        const cases = {
-            "trivial": { input: {}, expected: {}, },
-            "simple": {
-                input: { a: "b" },
-                expected: { a: "b" },
-            },
-            "deep": {
-                input: { "a/b": "c" },
-                expected: {
-                    a: { b: "c" },
-                },
-            },
-            "overlap": {
-                input: { "a/b": "1", "a/d": "2" },
-                expected: {
-                    a: {
-                        b: "1",
-                        d: "2",
-                    },
-                },
-            },
-            "deep overlap": {
-                input: { "a/b": "1", "a/c/d": "2" },
-                expected: {
-                    a: {
-                        b: "1",
-                        c: { d: "2", }
-                    },
-                },
-            },
-            "deep overlap reversed": {
-                input: { "a/c/d": "2", "a/b": "1" },
-                expected: {
-                    a: {
-                        c: { d: "2", },
-                        b: "1",
-                    },
-                },
-            },
-        };
-        Object.keys(cases).forEach((caseName) => {
-            const c = cases[caseName];
-            it(caseName, function () {
-                const result = WriteRepoASTUtil.buildDirectoryTree(c.input);
-                assert.deepEqual(result, c.expected);
-            });
-        });
-    });
-
     describe("writeCommits", function () {
         // TODO: Move unit tests relating to commits from `writeRAST` into this
         // unit as `writeRAST` is implemented in terms of `writeCommits`.
