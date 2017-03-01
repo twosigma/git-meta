@@ -89,6 +89,16 @@ Amend the last commit, including newly staged chnages and, (if -a is \
 specified) modifications.  Will fail unless all submodules changed in HEAD \
 have matching commits and have no new commits.`,
     });
+    parser.addArgument(["file"], {
+        type: "string",
+        help: `\
+When files are provided, this command ignores changes staged in the index,
+and instead records the current content of the listed files (which must already
+be known to Git).  Note that this command is incompatible with  the '-a' option
+and submodule configuration changes (i.e., those that add, remove, or change
+the URL of submodules).`,
+        nargs: "*",
+    });
 };
 
 function abortForNoMessage() {
@@ -96,19 +106,33 @@ function abortForNoMessage() {
     process.exit(1);
 }
 
-const doCommit = co.wrap(function *(args) {
+function errorWithStatus(status, relCwd, message) {
     const colors = require("colors");
+    const PrintStatusUtil = require("../util/print_status_util");
+
+    process.stderr.write(PrintStatusUtil.printRepoStatus(status, relCwd));
+    console.error(colors.yellow(message));
+    process.exit(1);
+}
+
+function checkForPathIncompatibleSubmodules(checkStatus, repoStatus, relCwd) {
+
+    const Commit = require("../util/commit");
+
+    if (Commit.areSubmodulesIncompatibleWithPathCommits(repoStatus)) {
+            errorWithStatus(repoStatus, relCwd, `\
+Cannot use path-based commit on submodules with staged commits or
+configuration changes.`);
+    }
+}
+
+const doCommit = co.wrap(function *(args) {
     const path = require("path");
 
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
     const PrintStatusUtil = require("../util/print_status_util");
     const StatusUtil      = require("../util/status_util");
-
-    // TODO: notes on amend
-    // - if a sub that matches an amend has a new head, abort
-    // - might generate new commits in subs with new changes
-    // - might drop commits in subs where changes were reverted
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
@@ -124,33 +148,59 @@ const doCommit = co.wrap(function *(args) {
     // commit.
     //
     // TODO: potentially do somthing more intelligent like committing a
-    // different versio of .gitmodules than what is on disk to omit
+    // different versions of .gitmodules than what is on disk to omit
     // "uncommittable" submodules.  Considering that this situation should be
     // relatively rare, I don't think it's worth the additional complexity at
     // this time.
 
     if (repoStatus.areUncommittableSubmodules()) {
-        process.stderr.write(PrintStatusUtil.printRepoStatus(repoStatus,
-                                                             relCwd));
-        console.error(`\
-${colors.yellow("Please stage changes in new submodules before committing.")}\
-`);
-        process.exit(1);
+        errorWithStatus(
+                  repoStatus,
+                  relCwd,
+                  "Please stage changes in new submodules before committing.");
+    }
+
+    let commitStatus = repoStatus;
+
+    // If we're using paths, the status of what we're committing needs to be
+    // calculated.  Also, we need to see if there are any submodule
+    // configuration changes.
+
+    const usingPaths = 0 !== args.file.length;
+
+    if (usingPaths) {
+        // We need to compute the `commitStatus` object that reflects the paths
+        // requested by the user.  First, we need to resolve the relative
+        // paths.
+
+        const paths = yield args.file.map(filename => {
+            return GitUtil.resolveRelativePath(workdir, cwd, filename);
+        });
+
+        const requestedStatus = yield StatusUtil.getRepoStatus(repo, {
+            showMetaChanges: args.meta,
+            paths: paths,
+        });
+
+        commitStatus = Commit.calculatePathCommitStatus(repoStatus,
+                                                        requestedStatus);
+
+        checkForPathIncompatibleSubmodules(commitStatus, repoStatus, relCwd);
     }
 
     // If there are no staged changes, and we either didn't specify "all" or we
     // did but there are no working directory changes, warn the user and exit
     // early.
 
-    if (repoStatus.isIndexDeepClean() &&
-        (!args.all || repoStatus.isWorkdirDeepClean())) {
-        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
+    if (commitStatus.isIndexDeepClean() &&
+        (!args.all || commitStatus.isWorkdirDeepClean())) {
+        process.stdout.write(PrintStatusUtil.printRepoStatus(commitStatus,
                                                              relCwd));
         return;
     }
 
     if (null === args.message) {
-        const initialMessage = Commit.formatEditorPrompt(repoStatus,
+        const initialMessage = Commit.formatEditorPrompt(commitStatus,
                                                          cwd,
                                                          args.all);
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
@@ -161,7 +211,12 @@ ${colors.yellow("Please stage changes in new submodules before committing.")}\
         abortForNoMessage();
     }
 
-    yield Commit.commit(repo, args.all, repoStatus, args.message);
+    if (usingPaths) {
+        yield Commit.commitPaths(repo, commitStatus, args.message);
+    }
+    else {
+        yield Commit.commit(repo, args.all, commitStatus, args.message);
+    }
 });
 
 const doAmend = co.wrap(function *(args) {
@@ -173,6 +228,12 @@ const doAmend = co.wrap(function *(args) {
     const StatusUtil      = require("../util/status_util");
     const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
+
+    const usingPaths = 0 !== args.file.length;
+
+    if (usingPaths) {
+        throw new UserError("Paths not supported with amend yet.");
+    }
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
@@ -270,6 +331,10 @@ const doAmend = co.wrap(function *(args) {
  * @param {String}  [args.message]
  */
 exports.executeableSubcommand = function (args) {
+    if (args.all && 0 !== args.file.length) {
+        console.error("The use of '-a' and files does not make sense.");
+        process.exit(1);
+    }
     if (args.amend) {
         return doAmend(args);                                         // RETURN
     }

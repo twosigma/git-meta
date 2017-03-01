@@ -38,6 +38,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -47,6 +48,7 @@ const PrintStatusUtil     = require("./print_status_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
+const TreeUtil            = require("./tree_util");
 
 /**
  * Commit changes in the specified `repo`.  If the specified `doAll` is true,
@@ -205,8 +207,8 @@ exports.formatEditorPrompt  = function (status, cwd, all) {
  * otherwise, we could commit a staged commit in a submodule that would have
  * been reverted in its open repo.
  * 
- * @param {NodeGit.Repository} index
- * @param {Object}             submodules name -> RepoStatus.Submodule
+ * @param {NodeGit.Index} index
+ * @param {Object}        submodules name -> RepoStatus.Submodule
  */
 const stageOpenSubmodules = co.wrap(function *(index, submodules) {
     yield Object.keys(submodules).map(co.wrap(function *(name) {
@@ -313,6 +315,186 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
         };
     }
     return null;
+});
+
+/**
+ * Write a commit for the specified `repo` having the specified
+ * `status` using the specified commit `message` and return the ID of the new
+ * commit.  Note that this method records staged commits for submodules but
+ * does not recurse into their repositories.  Note also that changes that would
+ * involve altering `.gitmodules` -- additions, removals, and URL changes --
+ * are ignored.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {RepoStatus}         status
+ * @param {String}             message
+ * @return {String}
+ */
+exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(message);
+
+    const workdir = repo.workdir();
+    const headCommit = yield repo.getHeadCommit();
+    const changes = {};
+    const staged = status.staged;
+    const FILEMODE = NodeGit.TreeEntry.FILEMODE;
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    const Change = TreeUtil.Change;
+
+    // We do a soft reset later, which means that we don't touch the index.
+    // Therefore, all of our files must be staged.
+
+    const index = yield repo.index();
+
+    // First, handle "normal" file changes.
+
+    for (let filename in staged) {
+        const stat = staged[filename];
+        if (FILESTATUS.REMOVED === stat) {
+            changes[filename] = null;
+        }
+        else {
+            const filePath = path.join(workdir, filename);
+
+            // 'createFromDisk' is unfinished; instead of returning an id, it
+            // takes an ID object and writes into it, unlike the rest of its
+            // brethern on `Blob`.  TODO: patch nodegit with corrected API.
+
+            const idPlaceholder = headCommit.id();  // need a place to load ids
+            NodeGit.Blob.createFromDisk(idPlaceholder, repo, filePath);
+            changes[filename] = new Change(idPlaceholder, FILEMODE.BLOB);
+
+            yield index.addByPath(filename);
+        }
+    }
+
+    // Then submodules.
+
+    const subs = status.submodules;
+    for (let subName in subs) {
+        const sub = subs[subName];
+
+        // As noted in the contract, `writePaths` ignores added or removed
+        // submodules.
+
+        if (null !== sub.commit &&
+            null !== sub.index &&
+            sub.commit.sha !== sub.index.sha) {
+            const id = NodeGit.Oid.fromString(sub.index.sha);
+            changes[subName] = new Change(id, FILEMODE.COMMIT);
+
+            // Stage this submodule if it's open.
+
+            if (null !== sub.workdir) {
+                yield index.addByPath(subName);
+            }
+        }
+    }
+
+    yield index.write();
+
+    // Use 'TreeUtil' to create a new tree having the required paths.
+
+    const baseTree = yield headCommit.getTree();
+    const tree = yield TreeUtil.writeTree(repo, baseTree, changes);
+
+    // Create a commit with this tree.
+
+    const sig = repo.defaultSignature();
+    const parents = [headCommit];
+    const commitId = yield NodeGit.Commit.create(repo,
+                                                 0,
+                                                 sig,
+                                                 sig,
+                                                 0,
+                                                 message,
+                                                 tree,
+                                                 parents.length,
+                                                 parents);
+
+    // Now we need to put the commit on head.  We need to unstage the changes
+    // we've just committed, otherwise we see conflicts with the workdir.  We
+    // do a SOFT reset because we don't want to affect index changes for paths
+    // you didn't touch.
+
+    const commit = yield repo.getCommit(commitId);
+    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.SOFT);
+    return commitId.tostrS();
+});
+
+
+/**
+ * Commit changes to the files indicated as staged by the specified `status`
+ * in the specified `repo`, applying the specified commit `message`.  Return an
+ * object listing the commit IDs of the commits that were made in submodules
+ * and the meta-repo.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {RepoStatus}         status
+ * @param {String}             message
+ * @return {Object}
+ * @return {String} return.metaCommit
+ * @return {Object} return.submoduleCommits  map from sub name to commit id
+ */
+exports.commitPaths = co.wrap(function *(repo, status, message) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(message);
+
+    const subCommits = {};  // map from name to sha
+
+    const committedSubs = {};  // map from name to RepoAST.Submodule
+
+    const subs = status.submodules;
+    yield Object.keys(subs).map(co.wrap(function *(subName) {
+        const sub = subs[subName];
+        const workdir = sub.workdir;
+
+        // Nothing to do for closed submodules.
+
+        if (null === workdir) {
+            return;                                                   // RETURN
+        }
+        const staged = workdir.status.staged;
+        const stagedPaths = Object.keys(staged);
+
+        // Nothing to do if no paths listed as stagged.
+
+        if (0 === stagedPaths.length) {
+            return;                                                   // RETURN
+        }
+
+        const wdStatus = workdir.status;
+        const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+        const sha = yield exports.writeRepoPaths(subRepo, wdStatus, message);
+        subCommits[subName] = sha;
+        const oldIndex = sub.index;
+        const Submodule = RepoStatus.Submodule;
+        committedSubs[subName] = sub.copy({
+            index: new Submodule.Index(sha,
+                                       oldIndex.url,
+                                       Submodule.COMMIT_RELATION.AHEAD),
+            workdir: new Submodule.Workdir(wdStatus.copy({
+                headCommit: sha,
+            }), Submodule.COMMIT_RELATION.SAME)
+        });
+    }));
+
+    // We need a `RepoStatus` object containing only the set of the submodules
+    // to commit to pass to `writeRepoPaths`.
+
+    const pathStatus = status.copy({
+        submodules: committedSubs,
+    });
+
+    const id = yield exports.writeRepoPaths(repo, pathStatus, message);
+    return {
+        metaCommit: id,
+        submoduleCommits: subCommits,
+    };
 });
 
 /**
@@ -728,4 +910,172 @@ Author:    ${commitSig.name()} <${commitSig.email()}>
     result += branchStatusLine(status);
     result += exports.formatStatus(status, cwd, all);
     return "\n" + prefixWithPound(result) + "\n";
+};
+
+/**
+ * Calculate and return, from the specified `current` `RepoStatus` object
+ * describing the status of the repository, and the specified `requested`
+ * `ReposStatus` object describing the state of only the paths the user wants
+ * to commit, a new `RepoStatus` object having all changes to be committed
+ * indicated as staged and all changes not to be committed (even if actually
+ * staged) registered as workdir changes.  Note that the non-path fields of the
+ * returned object (such as `currentBranch`) are derived from `current`.
+ *
+ * @param {RepoStatus} current
+ * @param {RepoStatus} requested
+ * @return {RepoStatus}
+ */
+exports.calculatePathCommitStatus = function (current, requested) {
+    assert.instanceOf(current, RepoStatus);
+    assert.instanceOf(requested, RepoStatus);
+
+    // Anything requested that's staged or not untracked becomes staged.
+    // Everything else that's currently staged or in the workdir goes to
+    // workdir.
+
+    function calculateOneRepo(currentStaged,
+                              currentWorkdir,
+                              requestedStaged,
+                              requestedWorkdir) {
+        const newStaged = {};
+        const newWorkdir = {};
+
+        // Initialize `newStaged` with requested files that are already staged.
+
+        Object.assign(newStaged, requestedStaged);
+
+        // Copy over everything requested in the workdir that's not added,
+        // i.e., untracked.
+
+        Object.keys(requestedWorkdir).forEach(filename => {
+            const status = requestedWorkdir[filename];
+            if (RepoStatus.FILESTATUS.ADDED !== status) {
+                newStaged[filename] = status;
+            }
+        });
+
+        // Now copy over to `workdir` the current files that won't be staged.
+
+        function copyToWorkdir(files) {
+            Object.keys(files).forEach(filename => {
+                if (!(filename in newStaged)) {
+                    newWorkdir[filename] = files[filename];
+                }
+            });
+        }
+
+        copyToWorkdir(currentStaged);
+        copyToWorkdir(currentWorkdir);
+
+        return {
+            staged: newStaged,
+            workdir: newWorkdir,
+        };
+    }
+
+    const newFiles = calculateOneRepo(current.staged,
+                                      current.workdir,
+                                      requested.staged,
+                                      requested.workdir);
+    const currentSubs = current.submodules;
+    const requestedSubs = requested.submodules;
+    const newSubs = {};
+    Object.keys(currentSubs).forEach(subName => {
+        const currentSub = currentSubs[subName];
+        const requestedSub = requestedSubs[subName];
+        const curWd = currentSub.workdir;
+        if (null !== curWd) {
+            const curStatus = curWd.status;
+
+            // If this submodule was not requested (i.e.,
+            // `undefined === requestedSubs`, default to an empty repo status;
+            // this will cause all current status files to be moved to the
+            // workdir.
+
+            let reqStatus = new RepoStatus();
+            if (undefined !== requestedSub) {
+                reqStatus = requestedSub.workdir.status;
+            }
+            const newSubFiles = calculateOneRepo(curStatus.staged,
+                                                 curStatus.workdir,
+                                                 reqStatus.staged,
+                                                 reqStatus.workdir);
+            const newStatus = curWd.status.copy({
+                staged: newSubFiles.staged,
+                workdir: newSubFiles.workdir,
+            });
+            newSubs[subName] = currentSub.copy({
+                workdir: new RepoStatus.Submodule.Workdir(newStatus,
+                                                          curWd.relation)
+            });
+        }
+        else {
+            // If no workdir, no change.
+
+            newSubs[subName] = currentSub;
+        }
+    });
+    return current.copy({
+        staged: newFiles.staged,
+        workdir: newFiles.workdir,
+        submodules: newSubs,
+    });
+};
+
+/**
+ * Return true if the specified `status` contains any submodules that are
+ * incompatible with path-based commits.  A submodule is incompatible with
+ * path-based commits if:
+ * 1. It has a change that would affect the `.gitmodules` file.
+ * 2. It has files selected (staged) to be committed on top of new commits.
+ * We cannot use path-based commit with previously staged commits because it's
+ * impossible to ignore or target those commits.  We can't use them with
+ * configuration changes due to the complexity of manipulating the
+ * `.gitmodules` file.
+ * 
+ * TODO:
+ *   (a) Consider allowing previously-staged commits to be included with a
+ *       flag.
+ *   (b) Consider allowing submodules with configuration changes if the
+ *       submodule itself is included in the path change.  Note that even if
+ *       this makes sense (not sure yet), it would require sophisticated
+ *       manipulation of the `gitmodules` file.
+ *
+ * @param {RepoStatus} status
+ * @return {Boolean}
+ */
+exports.areSubmodulesIncompatibleWithPathCommits = function (status) {
+    assert.instanceOf(status, RepoStatus);
+    const subs = status.submodules;
+    for (let subName in subs) {
+        const sub = subs[subName];
+        const commit = sub.commit;
+        const index = sub.index;
+
+        // Newly added or removed submodules require changes to the modules
+        // file.
+
+        if (null === commit || null === index) {
+            return true;
+        }
+
+        // as do URL changes
+
+        if (commit.url !== index.url) {
+            return true;
+        }
+
+        // Finally, check for new commits.
+
+        const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
+
+        const workdir = sub.workdir;
+
+        if ((null !== workdir &&
+            0 !== Object.keys(workdir.status.staged).length) &&
+            (SAME !== index.relation || SAME !== workdir.relation)) {
+            return true;
+        }
+    }
+    return false;
 };
