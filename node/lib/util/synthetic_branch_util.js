@@ -104,17 +104,13 @@ function *urlToLocalPath(repo, url) {
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
  * @param {NodeGit.TreeEntry} submoduleEntry the submodule's tree entry
+ * @param {String}            url the configured URL of the submodule
  * in the meta tree.
  */
-function* checkSubmodule(repo, metaCommit, submoduleEntry) {
+function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(submoduleEntry, NodeGit.TreeEntry);
 
-    const submodulePath = submoduleEntry.path();
-
-    const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
-                                                                  metaCommit);
-    const url = submodules[submodulePath].url;
     const localPath = yield *urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
     const submoduleCommitId = submoduleEntry.id();
@@ -133,13 +129,18 @@ function* checkSubmodule(repo, metaCommit, submoduleEntry) {
 function* checkSubmodules(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+
+    const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
+                                                                  commit);
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
     const changes = yield getChanges(repo, commit);
     const allChanges = [changes.added, changes.changed];
     const result = allChanges.map(function *(changeSet) {
         const result = Array.from(changeSet).map(function *(path) {
             const entry = yield commit.getEntry(path);
-            return yield *checkSubmodule(repo, commit, entry);
+            const submodulePath = entry.path();
+            const url = submodules[submodulePath].url;
+            return yield *checkSubmodule(repo, commit, entry, url);
         });
         return (yield result).every(identity);
     });
