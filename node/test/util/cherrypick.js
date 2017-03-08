@@ -130,6 +130,12 @@ Bmaster=9;\
 Os Czs-x z=z!H=zs;\
 Ot Cct-a c=c!H=ct",
         },
+        "new sub on head": {
+            input: `
+a=B|
+x=U:C8-2;C4-2 t=Sa:1;Bmaster=4;Bfoo=8`,
+            expected: "x=E:C9-4 8=8;Bmaster=9",
+        }
     };
 
     Object.keys(cases).forEach(caseName => {
