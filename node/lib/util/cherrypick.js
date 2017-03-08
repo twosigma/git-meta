@@ -146,9 +146,9 @@ ${colors.green(commitSha)}.`);
         const headSub = headSubs[subName];
         const commitSub = commitSubs[subName];
         const headSha = headSub.sha;
-        const commitSha = commitSub.sha;
-        if (headSha !== commitSha) {
-            pickers.push(picker(subName, headSha, commitSha));
+        if (undefined !== commitSub &&
+            headSha !== commitSub.sha) {
+            pickers.push(picker(subName, headSha, commitSub.sha));
         }
     });
 
