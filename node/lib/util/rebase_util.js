@@ -55,8 +55,7 @@ const UserError           = require("./user_error");
  * @return {String}
  */
 function submoduleConflictMessage(name) {
-    return `
-Conflict rebasing the submodule ${colors.red(name)}.`;
+    return `Conflict rebasing the submodule ${colors.red(name)}.`;
 }
 
 /**
@@ -240,9 +239,22 @@ rebase.`);
         return yield next(commitSha);
     });
 
+    /**
+     * Continue rebasing for this submodule from the specified `curSha` using
+     * the specified rebase `index` position.  Return false if the rebase
+     * cannot be continued and true otherwise.
+     *
+     * @param {String} curSha
+     * @param {Number} index
+     * @return {Boolean}
+     */
     const continueRebase = co.wrap(function *(curSha, index) {
+        // If the submodule is not rebasing, stage any commits it might have
+        // and return successfully.
+
         if (!repo.isRebasing()) {
-            return;                                                   // RETURN
+            yield index.addByPath(submoduleName);
+            return true;                                              // RETURN
         }
         const subInfo = yield RebaseFileUtil.readRebase(repo.path());
         console.log(`Submodule ${colors.blue(submoduleName)} continuing \
