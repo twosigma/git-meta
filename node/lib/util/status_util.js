@@ -71,17 +71,23 @@ exports.remapSubmodule = function (sub, commitMap, urlMap) {
     function mapUrl(url) {
         return url && (urlMap[url] || url);
     }
+    const Submodule = RepoStatus.Submodule;
+
+    const commit = sub.commit &&
+          new Submodule.Commit(mapSha(sub.commit.sha), mapUrl(sub.commit.url));
+    const index = sub.index && new Submodule.Index(mapSha(sub.index.sha),
+                                                   mapUrl(sub.index.url),
+                                                   sub.index.relation);
+    const workdir = sub.workdir &&
+        new Submodule.Workdir(exports.remapRepoStatus(sub.workdir.status,
+                                                      commitMap,
+                                                      urlMap),
+                              sub.workdir.relation);
 
     return new RepoStatus.Submodule({
-        indexStatus: sub.indexStatus,
-        indexSha: mapSha(sub.indexSha),
-        indexShaRelation: sub.indexShaRelation,
-        indexUrl: mapUrl(sub.indexUrl),
-        commitSha: mapSha(sub.commitSha),
-        commitUrl: mapUrl(sub.commitUrl),
-        workdirShaRelation: sub.workdirShaRelation,
-        repoStatus: sub.repoStatus &&
-                    exports.remapRepoStatus(sub.repoStatus, commitMap, urlMap),
+        commit: commit,
+        index: index,
+        workdir: workdir,
     });
 };
 
@@ -146,6 +152,55 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
 };
 
 /**
+ * Return COMMIT_RELATION.AHEAD if the commit having the specified `to` sha in
+ * the specified `repo` is a descendant of the specified `from`, BEHIND if
+ * `from` is a descendant of `to`, and UNRELATED if neither is descended from
+ * the other.  If null is provided for either value, return null.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             [from]
+ * @param {String}             [to]
+ * @return {RepoStatus.Submodule.COMMIT_RELATION|null}
+ */
+exports.getRelation = co.wrap(function *(repo, from, to) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    if (null === from || null === to) {
+        return null;
+    }
+    assert.isString(from);
+    assert.isString(to);
+    const COMMIT_RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    if (from === to) {
+        return COMMIT_RELATION.SAME;
+    }
+
+    const fromId = NodeGit.Oid.fromString(from);
+    const toId = NodeGit.Oid.fromString(to);
+
+    // If one of the commits is not present, `descendantOf` will throw.
+
+    let toDescendant;
+    try {
+        toDescendant = yield NodeGit.Graph.descendantOf(repo, toId, fromId);
+    }
+    catch (e) {
+        return COMMIT_RELATION.UNKNOWN;
+    }
+
+    if (toDescendant) {
+        return COMMIT_RELATION.AHEAD;
+    }
+
+    const fromDescendant = yield NodeGit.Graph.descendantOf(repo,
+                                                            fromId,
+                                                            toId);
+    if (fromDescendant) {
+        return COMMIT_RELATION.BEHIND;
+    }
+    return COMMIT_RELATION.UNRELATED;
+});
+
+/**
  * Return the `RepoStatus.Submodule` for the submodule having the specified
  * `name` in the specified `metaRepo`.  The specified `indexUrl` contains the
  * configured url for this submodule, unless it has been removed in the index.
@@ -154,11 +209,16 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
  * true if the submodule has an open repository.  Use the specified
  * `readRepoStatus` to read the status of a repository.  The specified `index`
  * and `commitTree` are used to read the shas for the meta repository index and
- * current commit, respectively.
+ * current commit, respectively.  Note that this method follows the git-meta
+ * model wherein the HEAD of an open repository for a submodule is assumed to
+ * be auto-staged  Thus, when a submodule has an open repository, this method
+ * will return as `index.sha` the HEAD of the open repo, and as
+ * `index.relation` the comparison between the HEAD of the open repo and the
+ * commit registered in the HEAD of the meta-repo for that submodule.
  *
- * Note that this method is mostly exposed to make it easier to test, and the
- * `readRepoStatus` parameter is provided to break a cycle between this method
- * and `getRepoStatus`.
+ * Note also that this method is mostly exposed to make it easier to test, and
+ * the `readRepoStatus` parameter is provided to break a cycle between this
+ * method and `getRepoStatus`.
  *
  * @async
  * @private
@@ -180,127 +240,74 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
                                                 commitTree,
                                                 isVisible,
                                                 readRepoStatus) {
-    const args = {
-        indexUrl: indexUrl,
-        commitUrl: commitUrl,
-    };
-
-    const FILESTATUS = RepoStatus.FILESTATUS;
-    const COMMIT_RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    const Submodule = RepoStatus.Submodule;
+    const COMMIT_RELATION = Submodule.COMMIT_RELATION;
 
     // If we have a null commitUrl, it means that the submodule exists in the
     // commit but not on the index; set index status to added.  Otherwise, load
     // up the commit sha.
 
-    if (null === commitUrl) {
-        args.indexStatus = FILESTATUS.ADDED;
-    }
-    else {
-        args.commitSha = (yield commitTree.entryByPath(name)).sha();
+    let commit = null;
+    if (null !== commitUrl) {
+        const commitSha = (yield commitTree.entryByPath(name)).sha();
+        commit = new Submodule.Commit(commitSha, commitUrl);
     }
 
-    // A null indexUrl indicates that the submodule was removed.  Otherwise,
-    // load up the sha in the index.
+    // A null indexUrl indicates that the submodule was removed.  If that is
+    // the case, we're done.
 
     if (null === indexUrl) {
-        args.indexStatus = FILESTATUS.REMOVED;
-    }
-    else {
-        const entry = index.getByPath(name);
-        if (entry) {
-            args.indexSha = entry.id.tostrS();
-        }
-        else {
-            args.indexSha = null;
-        }
+        return new Submodule({ commit: commit });                     // RETURN
     }
 
-    // If we have both an index and commit url, then we should have shas for
-    // both; if that is the case, set the status to MODIFIED if they are
-    // different.
-
-    if (null !== indexUrl && null !== commitUrl) {
-        if (indexUrl !== commitUrl) {
-            args.indexStatus = FILESTATUS.MODIFIED;
-        }
-        if (args.indexSha !== args.commitSha) {
-            args.indexStatus = FILESTATUS.MODIFIED;
-
-            // Set relation to unknown for now; if we have a repository then
-            // we'll check later.
-
-            args.indexShaRelation = COMMIT_RELATION.UNKNOWN;
-        }
-        else {
-            args.indexShaRelation = COMMIT_RELATION.SAME;
-        }
+    let indexSha = null;
+    const entry = index.getByPath(name);
+    if (entry) {
+        indexSha = entry.id.tostrS();
     }
 
     // We've done all we can for non-visible sub-repos.
 
     if (!isVisible) {
-        return new RepoStatus.Submodule(args);                        // RETURN
+        const indexRelation = (() => {
+            if (null === commit) {
+                return null;
+            }
+            return commit.sha === indexSha ?
+                COMMIT_RELATION.SAME :
+                COMMIT_RELATION.UNKNOWN;
+        })();
+        return new Submodule({
+            commit: commit,
+            index: new Submodule.Index(indexSha, indexUrl, indexRelation)
+        });                                                           // RETURN
     }
 
     const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
     const subStatus = yield readRepoStatus(subRepo);
 
-    /**
-     * Return COMMIT_RELATION.AHEAD if the commit having the specified `to` sha
-     * in `subRepo` is a descendant of the specified `from`, BEHIND if `from`
-     * is a descendant of `to`, and UNRELATED if neither is descended from the
-     * other.  If null is provided for either value, return null.
-     *
-     * @param {String} [from]
-     * @param {String} [to]
-     * @return {RepoStatus.Submodule.COMMIT_RELATION|null}
-     */
-    const getRelation = co.wrap(function *(from, to) {
-        if (!from || !to) {
-            return null;
-        }
-        assert.isString(from);
-        assert.isString(to);
-        if (from === to) {
-            return COMMIT_RELATION.SAME;
-        }
-
-        const fromId = NodeGit.Oid.fromString(from);
-        const toId = NodeGit.Oid.fromString(to);
-
-        // If one of the commits is not present, `descendantOf` will throw.
-
-        let toDescendant;
-        try {
-            toDescendant = yield NodeGit.Graph.descendantOf(subRepo,
-                                                            toId,
-                                                            fromId);
-        }
-        catch (e) {
-            return COMMIT_RELATION.UNKNOWN;
-        }
-
-        if (toDescendant) {
-            return COMMIT_RELATION.AHEAD;
-        }
-
-        const fromDescendant = yield NodeGit.Graph.descendantOf(subRepo,
-                                                                fromId,
-                                                                toId);
-        if (fromDescendant) {
-            return COMMIT_RELATION.BEHIND;
-        }
-        return COMMIT_RELATION.UNRELATED;
-    });
-
     // Compute the relations between the commits specifed in the workdir,
-    // index, and commit.
+    // index, and commit.  We care only about the relationship between the
+    // workdir commit and the commit from the tree, but we show the change as
+    // staged since git-meta treats workdir commits as implicitly staged.  We
+    // can provide flags to control this behavior if needed, but it's not
+    // needed right now.
 
-    args.indexShaRelation = yield getRelation(args.commitSha, args.indexSha);
-    args.workdirShaRelation = yield getRelation(args.indexSha,
-                                                subStatus.headCommit);
-    args.repoStatus = subStatus;
-    return new RepoStatus.Submodule(args);
+    indexSha = subStatus.headCommit || indexSha;  // if empty, use index sha
+
+    let relation = null;
+
+    if (null !== commit) {
+        relation = yield exports.getRelation(subRepo, commit.sha, indexSha);
+    }
+    const workdirRelation = (null === indexSha) ?
+        null :
+        COMMIT_RELATION.SAME;
+    return new RepoStatus.Submodule({
+        commit: commit,
+        index: new Submodule.Index(indexSha, indexUrl, relation),
+        workdir: new Submodule.Workdir(subStatus, workdirRelation),
+    });
 });
 
 /**

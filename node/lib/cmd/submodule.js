@@ -124,7 +124,6 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         paths: paths,
         showMetaChanges: false,
-        includeClosedSubmodules: verbose,
     });
     const subStats = repoStatus.submodules;
     const relCwd = path.relative(workdir, cwd);

@@ -56,7 +56,6 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges) {
 
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,
-        includeClosedSubmodules: false,
         paths: paths,
         showAllUntracked: true,
     });
@@ -66,11 +65,14 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges) {
     const subs = repoStatus.submodules;
     yield Object.keys(subs).map(co.wrap(function *(name) {
         const subStat = subs[name];
-        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-        const workdir = subStat.repoStatus.workdir;
-        const index = yield subRepo.index();
-        yield Object.keys(workdir).map(filename => index.addByPath(filename));
-        yield index.write();
+        if (null !== subStat.workdir) {
+            const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+            const workdir = subStat.workdir.status.workdir;
+            const index = yield subRepo.index();
+            yield Object.keys(workdir).map(
+                filename => index.addByPath(filename));
+            yield index.write();
+        }
     }));
 
     // Then meta changes.

@@ -47,42 +47,34 @@ describe("StatusUtil", function () {
     const FILESTATUS       = RepoStatus.FILESTATUS;
     const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
     const Submodule        = RepoStatus.Submodule;
+    const Commit           = Submodule.Commit;
+    const Index            = Submodule.Index;
+    const Workdir          = Submodule.Workdir;
  
     describe("remapSubmodule", function () {
-        const Submodule = RepoStatus.Submodule;
-        const RELATION  = Submodule.COMMIT_RELATION;
-        const FILESTATUS = RepoStatus.FILESTATUS;
         const cases = {
             "all": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
                 commitMap: { "1": "2" },
                 urlMap: { "a": "b" },
                 expected: new Submodule({
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "b",
-                    commitSha: "2",
-                    commitUrl: "b",
+                    commit: new Commit("2", "b"),
+                    index: new Index("2", "b", RELATION.SAME),
                 }),
             },
             "some skipped": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    indexSha: "1",
-                    indexUrl: "x",
+                    commit: new Commit("3", "z"),
+                    index: new Index("1", "x", RELATION.BEHIND),
                 }),
                 commitMap: { "1": "2" },
                 urlMap: { "x": "y" },
                 expected: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    indexSha: "2",
-                    indexUrl: "y",
+                    commit: new Commit("3", "z"),
+                    index: new Index("2", "y", RELATION.BEHIND),
                 }),
             },
         };
@@ -98,9 +90,6 @@ describe("StatusUtil", function () {
     });
 
     describe("remapRepoStatus", function () {
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const Submodule = RepoStatus.Submodule;
-        const RELATION = Submodule.COMMIT_RELATION;
         const cases = {
             trivial: {
                 input: new RepoStatus(),
@@ -130,11 +119,8 @@ describe("StatusUtil", function () {
                 input: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                 }),
@@ -143,11 +129,8 @@ describe("StatusUtil", function () {
                 expected: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            indexSha: "2",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "b",
-                            commitSha: "2",
-                            commitUrl: "b",
+                            commit: new Commit("2", "b"),
+                            index: new Index("2", "b", RELATION.SAME),
                         }),
                     },
                 }),
@@ -156,13 +139,10 @@ describe("StatusUtil", function () {
                 input: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexStatus: FILESTATUS.ADDED,
-                            workdirShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
+                            index: new Index("1", "a", null),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "1",
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -171,13 +151,10 @@ describe("StatusUtil", function () {
                 expected: new RepoStatus({
                     submodules: {
                         s: new Submodule({
-                            indexSha: "2",
-                            indexUrl: "b",
-                            workdirShaRelation: RELATION.SAME,
-                            indexStatus: FILESTATUS.ADDED,
-                            repoStatus: new RepoStatus({
+                            index: new Index("2", "b", null),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "2",
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -193,6 +170,90 @@ describe("StatusUtil", function () {
         });
     });
 
+    describe("getRelation", function () {
+        const sha1 = "aa48dbe570caf481d41da6aa674afe05f8db534b";
+        const sha2 = "72c6d7cbcac84e6ebc569fec4b1d08bfee5ac4c3";
+        const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+        const cases = {
+            "both null": {
+                state: "S",
+                from: null,
+                to: null,
+                expected: null,
+            },
+            "from null": {
+                state: "S",
+                from: null,
+                to: sha1,
+                expected: null,
+            },
+            "to null": {
+                state: "S",
+                from: sha1,
+                to: null,
+                expected: null,
+            },
+            "same": {
+                state: "S",
+                from: sha1,
+                to: sha1,
+                expected: RELATION.SAME,
+            },
+            "ahead": {
+                state: "S:C2-1;Bmaster=2",
+                from: "1",
+                to: "2",
+                expected: RELATION.AHEAD,
+            },
+            "behind": {
+                state: "S:C2-1;Bmaster=2",
+                from: "2",
+                to: "1",
+                expected: RELATION.BEHIND,
+            },
+            "unknown": {
+                state: "S",
+                from: sha1,
+                to: sha2,
+                expected: RELATION.UNKNOWN,
+            },
+            "unknown (from known)": {
+                state: "S",
+                from: "1",
+                to: sha2,
+                expected: RELATION.UNKNOWN,
+            },
+            "unknown (to known)": {
+                state: "S",
+                from: sha1,
+                to: "1",
+                expected: RELATION.UNKNOWN,
+            },
+            "unrelated": {
+                state: "S:C2;Bfoo=2",
+                from: "2",
+                to: "1",
+                expected: RELATION.UNRELATED,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const commitMap = written.oldCommitMap;
+                function mapSha(sha) {
+                    const mapped = commitMap[sha];
+                    return (undefined === mapped) ? sha : mapped;
+                }
+                const from = mapSha(c.from);
+                const to = mapSha(c.to);
+                const result = yield StatusUtil.getRelation(repo, from, to);
+                assert.equal(result, c.expected);
+            }));
+        });
+    });
+
     describe("getSubmoduleStatus", function () {
         // We will use `x` for the repo name and `s` for the submodule name.
 
@@ -204,141 +265,163 @@ describe("StatusUtil", function () {
          */
         const getRepoStatus = co.wrap(function *(repo) {
             const head = yield repo.getHeadCommit();
+            const headCommit = head && head.id().tostrS();
             return new RepoStatus({
-                headCommit: head.id().tostrS(),
+                headCommit: headCommit,
             });
         });
-
-        const FILESTATUS = RepoStatus.FILESTATUS;
-        const Submodule = RepoStatus.Submodule;
-        const RELATION = Submodule.COMMIT_RELATION;
 
         const cases = {
             "unchanged": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2",
                 expected: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexShaRelation: RELATION.SAME,
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
             },
             "added": {
                 state: "a=S|x=S:I s=Sa:1",
                 expected: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
+                    index: new Index("1", "a", null),
                 })
+            },
+            "added and open": {
+                state: "a=S|x=S:I s=Sa:;Os",
+                expected: new Submodule({
+                    index: new Index(null, "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                    }), null),
+                }),
+            },
+            "added with commit in workdir but not index": {
+                state: "a=S|x=S:C2-1;I s=Sa:;Os H=2;Bfoo=2",
+                expected: new Submodule({
+                    index: new Index("2", "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "2",
+                    }), RELATION.SAME),
+                }),
             },
             "removed": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;I s",
                 expected: new Submodule({
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexStatus: FILESTATUS.REMOVED,
+                    commit: new Commit("1", "a"),
                 }),
             },
             "new commit": {
                 state: "a=S:C3-1;Bfoo=3|x=S:C2-1 s=Sa:1;I s=Sa:3;Bmaster=2",
                 expected: new Submodule({
-                    indexSha: "3",
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexShaRelation: RELATION.UNKNOWN,
+                    commit: new Commit("1", "a"),
+                    index: new Index("3", "a", RELATION.UNKNOWN),
                 }),
             },
             "new commit -- known": {
                 state: "a=S:C3-1;Bfoo=3|x=S:C2-1 s=Sa:1;I s=Sa:3;Bmaster=2;Os",
                 expected: new Submodule({
-                    indexSha: "3",
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexShaRelation: RELATION.AHEAD,
-                    workdirShaRelation: RELATION.SAME,
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("3", "a", RELATION.AHEAD),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "3",
-                    }),
+                    }), RELATION.SAME),
                 }),
             },
             "new url": {
                 state: "a=S|x=S:C2-1 s=Sa:1;I s=Sb:1;Bmaster=2",
                 expected: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "b",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexShaRelation: RELATION.SAME,
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "b", RELATION.SAME),
                 }),
             },
             "unchanged open": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2;Os",
                 expected: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    indexShaRelation: RELATION.SAME,
-                    workdirShaRelation: RELATION.SAME,
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "1",
-                    }),
+                    }), RELATION.SAME),
                 }),
             },
             "new in open": {
                 state: "a=S:C2-1;Bb=2|x=S:I s=Sa:1;Os H=2",
                 expected: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
-                    workdirShaRelation: RELATION.AHEAD,
-                    repoStatus: new RepoStatus({
+                    index: new Index("2", "a", null),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "2",
-                    }),
+                    }), RELATION.SAME),
                 }),
             },
             "missing commit in open": {
                 state: "a=S:C2-1;Bb=2|x=S:I s=Sa:2;Os H=1",
                 expected: new Submodule({
-                    indexSha: "2",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
-                    workdirShaRelation: RELATION.UNKNOWN,
-                    repoStatus: new RepoStatus({
+                    index: new Index("1", "a", null),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "1",
-                    }),
+                    }), RELATION.SAME),
                 }),
             },
             "old in open": {
                 state: "a=S:C2-1;Bb=2|x=S:I s=Sa:2;Os H=1!Bf=2",
                 expected: new Submodule({
-                    indexSha: "2",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: new RepoStatus({
+                    index: new Index("1", "a", null),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "1",
-                    }),
+                    }), RELATION.SAME),
                 }),
             },
             "unrelated in open": {
                 state: "a=S:C2-1;C3-1;Bb=2;Bc=3|x=S:I s=Sa:2;Os H=3!Bf=2",
                 expected: new Submodule({
-                    indexSha: "2",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
-                    workdirShaRelation: RELATION.UNRELATED,
-                    repoStatus: new RepoStatus({
+                    index: new Index("3", "a", null),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "3",
-                    }),
+                    }), RELATION.SAME),
                 }),
-            }
+            },
+            "reset from workdir": {
+                state: "a=S:Ca-1;Bmaster=a|x=U:I s=Sa:a;Os H=1",
+                expected: new Submodule({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
+                }),
+            },
+            "unchanged from workdir": {
+                state: "a=S:Ca-1;Bmaster=a|x=U:I s=Sa:a;Os H=a",
+                expected: new Submodule({
+                    commit: new Commit("1", "a"),
+                    index: new Index("a", "a", RELATION.AHEAD),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "a",
+                    }), RELATION.SAME),
+                }),
+            },
+            "behind from workdir": {
+                state: `
+a=S:Ca-1;Cb-a;Bmaster=b|
+x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1!Bfoo=b`,
+                expected: new Submodule({
+                    commit: new Commit("a", "a"),
+                    index: new Index("1", "a", RELATION.BEHIND),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
+                }),
+            },
+            "behind from workdir (missing commit)": {
+                state: `
+a=S:Ca-1;Cb-a;Bmaster=b|
+x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
+                expected: new Submodule({
+                    commit: new Commit("a", "a"),
+                    index: new Index("1", "a", RELATION.UNKNOWN),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
+                }),
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
@@ -366,7 +449,7 @@ describe("StatusUtil", function () {
                                                                 commitTree,
                                                                 isVisible,
                                                                 getRepoStatus);
-                assert.instanceOf(result, RepoStatus.Submodule);
+                assert.instanceOf(result, Submodule);
                 const mappedResult = StatusUtil.remapSubmodule(result,
                                                                w.commitMap,
                                                                w.urlMap);
@@ -467,18 +550,14 @@ describe("StatusUtil", function () {
                     headCommit: "2",
                     submodules: {
                         "s": new Submodule({
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
-                            commitSha: "1",
-                            commitUrl: "a",
-                            workdirShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "1",
                                 workdir: {
                                     "x/": FILESTATUS.ADDED,
                                 },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -490,18 +569,14 @@ describe("StatusUtil", function () {
                     headCommit: "2",
                     submodules: {
                         "s": new Submodule({
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
-                            commitSha: "1",
-                            commitUrl: "a",
-                            workdirShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "1",
                                 workdir: {
                                     "x/y": FILESTATUS.ADDED,
                                 },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -514,9 +589,7 @@ describe("StatusUtil", function () {
                     headCommit: "1",
                     submodules: {
                         "s": new Submodule({
-                            indexStatus: FILESTATUS.ADDED,
-                            indexSha: "1",
-                            indexUrl: "a",
+                            index: new Index("1", "a", null),
                         }),
                     },
                 }),
@@ -528,9 +601,7 @@ describe("StatusUtil", function () {
                     headCommit: "2",
                     submodules: {
                         "s": new Submodule({
-                            indexStatus: FILESTATUS.REMOVED,
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
                         }),
                     },
                 }),
@@ -542,16 +613,13 @@ describe("StatusUtil", function () {
                     headCommit: "1",
                     submodules: {
                         "s": new Submodule({
-                            indexStatus: FILESTATUS.ADDED,
-                            indexSha: "1",
-                            indexUrl: "a",
-                            workdirShaRelation: RELATION.AHEAD,
-                            repoStatus: new RepoStatus({
+                            index: new Index("2", "a", null),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "2",
                                 workdir: {
                                     x: FILESTATUS.ADDED,
                                 },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -586,11 +654,8 @@ describe("StatusUtil", function () {
                     headCommit: "2",
                     submodules: {
                         s: new Submodule({
-                            commitSha: "1",
-                            commitUrl: "a",
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                 }),
@@ -604,18 +669,14 @@ describe("StatusUtil", function () {
                     headCommit: "2",
                     submodules: {
                         s: new Submodule({
-                            commitSha: "1",
-                            commitUrl: "a",
-                            indexSha: "1",
-                            indexUrl: "a",
-                            indexShaRelation: RELATION.SAME,
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
                                 headCommit: "1",
                                 staged: {
                                     "a/b/c": FILESTATUS.ADDED,
                                 },
-                            }),
-                            workdirShaRelation: RELATION.SAME,
+                            }), RELATION.SAME),
                         }),
                     },
                 }),

@@ -69,6 +69,8 @@ const committer = co.wrap(function *(doAll, message, repos) {
 
 describe("Commit", function () {
     const FILESTATUS = RepoStatus.FILESTATUS;
+    const Submodule = RepoStatus.Submodule;
+    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
     describe("formatStatus", function () {
         const cases = {
             "workdir": {
@@ -323,6 +325,14 @@ x=E:Cx-1 s=Sa:s;I s=~;Os Cs q=r!*=master!Bmaster=s;Bmaster=x`,
                 message: "message",
                 expected: `x=E:Cx-1 s=S.:z;Bmaster=x;I s=~`,
             },
+            "staged commit in index undone in workdir": {
+                initial: `
+q=B:Cz-1;Bmaster=z|x=S:C2-1 s=Sq:1;I s=Sq:z,x=Sq:1;Bmaster=2;Os H=1`,
+                doAll: false,
+                message: "message",
+                expected: `
+x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -449,6 +459,10 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 newCommits: ["t"],
                 newStatusSubs: ["s", "u"],
             },
+            "deleted": {
+                input: `a=B|x=U:I s`,
+                deleted: ["s"],
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -459,7 +473,6 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 const repo = repos.x;
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: true,
-                    includeClosedSubmodules: true,
                 });
                 const head = yield repo.getHeadCommit();
                 let oldSubs = {};
@@ -471,6 +484,9 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 const result = yield Commit.checkIfRepoIsAmendable(repo,
                                                                    status,
                                                                    oldSubs);
+                assert.deepEqual(result.deleted.sort(),
+                                 c.deleted || [],
+                                 "deleted");
                 assert.deepEqual(result.newCommits.sort(),
                                  c.newCommits || [],
                                  "newCommits");
@@ -589,7 +605,6 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
                 const all = c.all || false;
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: includeMeta,
-                    includeClosedSubmodules: true,
                 });
                 const head = yield repo.getHeadCommit();
                 let oldSubs = {};
@@ -620,11 +635,15 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=foo`,
                     expectedSubNames.push(subName);
                     const expected = submodulesToAmend[subName];
                     const sub = expectedSubmodules[subName];
+                    const newStatus = sub.workdir.status.copy({
+                        staged: expected.staged,
+                        workdir: expected.workdir,
+                    });
+                    const newWd = new RepoStatus.Submodule.Workdir(
+                                                                newStatus,
+                                                                RELATION.SAME);
                     expectedSubmodules[subName] = sub.copy({
-                        repoStatus: sub.repoStatus.copy({
-                            staged: expected.staged,
-                            workdir: expected.workdir,
-                        }),
+                        workdir: newWd,
                     });
                 });
                 const expected = status.copy({
@@ -795,7 +814,6 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                     const repo = repos.x;
                     const status = yield StatusUtil.getRepoStatus(repo, {
                         showMetaChanges: true,
-                        includeClosedSubmodules: true,
                     });
                     const head = yield repo.getHeadCommit();
                     let oldSubs = {};
@@ -935,4 +953,473 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
             });
         });
     });
+
+    describe("calculatePathCommitStatus", function () {
+        const cases = {
+            "trivial": {
+                cur: new RepoStatus(),
+                req: new RepoStatus(),
+                exp: new RepoStatus(),
+            },
+            "no cur": {
+                cur: new RepoStatus(),
+                req: new RepoStatus({
+                    staged: { foo: FILESTATUS.ADDED },
+                }),
+                exp: new RepoStatus({
+                    staged: { foo: FILESTATUS.ADDED },
+                }),
+            },
+            "no cur, from workdir": {
+                cur: new RepoStatus(),
+                req: new RepoStatus({
+                    workdir: { foo: FILESTATUS.MODIFIED },
+                }),
+                exp: new RepoStatus({
+                    staged: { foo: FILESTATUS.MODIFIED },
+                }),
+            },
+            "no cur, ignore added": {
+                cur: new RepoStatus(),
+                req: new RepoStatus({
+                    workdir: { foo: FILESTATUS.ADDED },
+                }),
+                exp: new RepoStatus(),
+            },
+            "no requested": {
+                cur: new RepoStatus({
+                    staged: { foo: FILESTATUS.MODIFIED },
+                }),
+                req: new RepoStatus(),
+                exp: new RepoStatus({
+                    workdir: { foo: FILESTATUS.MODIFIED },
+                }),
+            },
+            "requested overrides": {
+                cur:  new RepoStatus({
+                    staged: {
+                        foo: FILESTATUS.MODIFIED,
+                        ugh: FILESTATUS.ADDED,
+                    },
+                    workdir: {
+                        bar: FILESTATUS.MODIFIED,
+                        baz: FILESTATUS.REMOVED,
+                    },
+                }),
+                req: new RepoStatus({
+                    staged: { foo: FILESTATUS.ADDED },
+                    workdir: { bar: FILESTATUS.MODIFIED },
+                }),
+                exp: new RepoStatus({
+                    staged: {
+                        foo: FILESTATUS.ADDED,
+                        bar: FILESTATUS.MODIFIED,
+                    },
+                    workdir: {
+                        ugh: FILESTATUS.ADDED,
+                        baz: FILESTATUS.REMOVED,
+                    },
+                }),
+            },
+            "in a sub, no cur": {
+                cur: new RepoStatus({
+                    submodules: {
+                        s: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                req: new RepoStatus({
+                    submodules: {
+                        s: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: { foo: FILESTATUS.ADDED },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                exp: new RepoStatus({
+                    submodules: {
+                        s: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: { foo: FILESTATUS.ADDED },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+            },
+            "unrequested sub": {
+                cur: new RepoStatus({
+                    submodules: {
+                        xxx: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    xxx: FILESTATUS.MODIFIED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                req: new RepoStatus(),
+                exp: new RepoStatus({
+                    submodules: {
+                        xxx: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    xxx: FILESTATUS.MODIFIED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.calculatePathCommitStatus(c.cur, c.req);
+                assert.deepEqual(result, c.exp);
+            });
+        });
+    });
+
+    describe("writeRepoPaths", function () {
+
+        // Will apply commit to repo `x` and name the created commit `x`.
+        const cases = {
+            "simple staged change": {
+                state: "x=S:I README.md=haha",
+                fileChanges: {
+                    "README.md": FILESTATUS.MODIFIED,
+                },
+                expected: "x=S:Cx-1 README.md=haha;Bmaster=x",
+            },
+            "simple workdir change": {
+                state: "x=S:W README.md=haha",
+                fileChanges: { "README.md": FILESTATUS.MODIFIED, },
+                expected: "x=S:Cx-1 README.md=haha;Bmaster=x",
+            },
+            "simple change with message": {
+                state: "x=S:I README.md=haha",
+                fileChanges: { "README.md": FILESTATUS.MODIFIED, },
+                expected: "x=S:Chello world#x-1 README.md=haha;Bmaster=x",
+                message: "hello world",
+            },
+            "added file": {
+                state: "x=S:W q=3",
+                fileChanges: { "q": FILESTATUS.ADDED },
+                expected: "x=S:Cx-1 q=3;Bmaster=x",
+            },
+            "added two files, but mentioned only one": {
+                state: "x=S:W q=3,r=4",
+                fileChanges: { "q": FILESTATUS.ADDED },
+                expected: "x=S:Cx-1 q=3;W r=4;Bmaster=x",
+            },
+            "staged a change and didn't mention it": {
+                state: "x=S:W q=3;I r=4",
+                fileChanges: { "q": FILESTATUS.ADDED },
+                expected: "x=S:Cx-1 q=3;I r=4;Bmaster=x",
+            },
+            "staged a change and did mention it": {
+                state: "x=S:W q=3;I r=4",
+                fileChanges: {
+                    "q": FILESTATUS.ADDED,
+                    "r": FILESTATUS.ADDED,
+                },
+                expected: "x=S:Cx-1 q=3,r=4;Bmaster=x",
+            },
+            "deep path": {
+                state: "x=S:W a/b/c=2",
+                fileChanges: {
+                    "a/b/c": FILESTATUS.ADDED,
+                },
+                expected: "x=S:Cx-1 a/b/c=2;Bmaster=x",
+            },
+            "submodule": {
+                state: "a=B:Ca-1;Bm=a|x=U:I s=Sa:a",
+                subChanges: ["s"],
+                expected: "x=E:Cx-2 s=Sa:a;Bmaster=x;I s=~",
+            },
+            "submodule in workdir": {
+                state: "a=B:Ca-1;Bm=a|x=U:Os H=a",
+                subChanges: ["s"],
+                expected: "x=E:Cx-2 s=Sa:a;Bmaster=x",
+            },
+            "ignored a sub": {
+                state: "a=B:Ca-1;Bm=a|x=U:Os H=a;W foo=bar",
+                fileChanges: {
+                    "foo": FILESTATUS.ADDED,
+                },
+                subChanges: [],
+                expected: "x=E:Cx-2 foo=bar;Bmaster=x;W foo=~",
+            },
+            "deep sub": {
+                state: `
+a=B:Ca-1;Bm=a|
+x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
+                subChanges: ["q/r/s"],
+                expected: "x=E:Cx-2 q/r/s=Sa:a;Bmaster=x",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const writer = co.wrap(function *(repos) {
+                const repo = repos.x;
+                let status = yield StatusUtil.getRepoStatus(repo);
+                const message = c.message || "message";
+                const subChanges = c.subChanges || [];
+                const subs = {};
+                const submodules = status.submodules;
+                subChanges.forEach(subName => {
+                    subs[subName] = submodules[subName];
+                });
+                status = status.copy({
+                    staged: c.fileChanges || {},
+                    submodules: subs,
+                });
+                const result = yield Commit.writeRepoPaths(repo,
+                                                           status,
+                                                           message);
+                const commitMap = {};
+                commitMap[result] = "x";
+                return { commitMap: commitMap, };
+
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
+                                                               c.expected,
+                                                               writer,
+                                                               c.fails);
+            }));
+        });
+    });
+
+    describe("commitPaths", function () {
+        // Most of the logic here is delegated to the previously tested method
+        // 'writeRepo'.
+
+        const cases = {
+            "one file": {
+                state: "x=S:C2-1 x=y;W x=q;Bmaster=2",
+                paths: ["x"],
+                expected: "x=E:Cx-2 x=q;W x=~;Bmaster=x",
+            },
+            "skip a file": {
+                state: "x=S:C2-1 x=y;I a=b;W x=q;Bmaster=2",
+                paths: ["x"],
+                expected: "x=E:Cx-2 x=q;W x=~;Bmaster=x",
+            },
+            "files in a tree": {
+                state: "x=S:I x/y=2,x/z=3,y/r=4",
+                paths: ["x"],
+                expected: "x=E:Cx-1 x/y=2,x/z=3;I x/y=~,x/z=~;Bmaster=x"
+            },
+            "files in a submodule": {
+                state: "a=B:Ca-1;Bm=a|x=U:Os I q=r",
+                paths: ["s"],
+                expected: "x=E:Cx-2 s=Sa:s;Os Cs-1 q=r!H=s;Bmaster=x",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const committer = co.wrap(function *(repos) {
+                    const repo = repos.x;
+                    const status = yield StatusUtil.getRepoStatus(repo, {
+                        showMetaChanges: true,
+                    });
+                    const requestedStatus = yield StatusUtil.getRepoStatus(
+                        repo, {
+                            showMetaChanges: true,
+                            paths: c.paths,
+                        }
+                    );
+                    const newStatus = Commit.calculatePathCommitStatus(
+                                                              status,
+                                                              requestedStatus);
+                    const message = c.message || "message";
+                    const result = yield Commit.commitPaths(repo,
+                                                            newStatus,
+                                                            message);
+                    const commitMap = {};
+                    commitMap[result.metaCommit] = "x";
+                    Object.keys(result.submoduleCommits).forEach(name => {
+                        const sha = result.submoduleCommits[name];
+                        commitMap[sha] = name;
+                    });
+                    return { commitMap: commitMap };
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
+                                                               c.expected,
+                                                               committer,
+                                                               c.fails);
+            }));
+        });
+    });
+
+    describe("areSubmodulesIncompatibleWithPathCommits", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: false,
+            },
+            "good submodule": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+            "new sub": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            index: new Submodule.Index(null, "/a", null),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "removed sub": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "new URL": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/b",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "new index commit": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("2",
+                                                       "/a",
+                                                       RELATION.AHEAD),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "2",
+                                staged: {
+                                    q: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.SAME)
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "new index commit, workdir change": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("2",
+                                                       "/a",
+                                                       RELATION.AHEAD),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "2",
+                                workdir: {
+                                    q: FILESTATUS.MODIFIED,
+                                },
+                            }), RELATION.SAME)
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+            "new workdir commit": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "2",
+                                staged: {
+                                    q: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "bad and good submodule": {
+                input: new RepoStatus({
+                    submodules: {
+                        x: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                        }),
+                        y: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/b",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result =
+                      Commit.areSubmodulesIncompatibleWithPathCommits(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
 });

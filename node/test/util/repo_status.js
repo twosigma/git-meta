@@ -38,171 +38,93 @@ const RepoStatus = require("../../lib/util/repo_status");
 describe("RepoStatus", function () {
     const FILESTATUS = RepoStatus.FILESTATUS;
     const Submodule = RepoStatus.Submodule;
+    const Commit = Submodule.Commit;
+    const Index = Submodule.Index;
+    const Workdir = Submodule.Workdir;
     const RELATION = Submodule.COMMIT_RELATION;
+
+    describe("Submodule.Commit", function () {
+        it("breathing", function () {
+            const commit = new Commit("aaa", "/a");
+            assert.equal(commit.sha, "aaa");
+            assert.equal(commit.url, "/a");
+        });
+    });
+
+    describe("Submodule.Index", function () {
+        it("breathing", function () {
+            const index = new Index("aaa", "/a", RELATION.AHEAD);
+            assert.equal(index.sha, "aaa");
+            assert.equal(index.url, "/a");
+            assert.equal(index.relation, RELATION.AHEAD);
+        });
+    });
+
+    describe("Submodule.Workdir", function () {
+        const status = new RepoStatus({ headCommit: "3" });
+        const workdir = new Workdir(status, RELATION.BEHIND);
+        assert.deepEqual(workdir.status, status);
+        assert.equal(workdir.relation, RELATION.BEHIND);
+    });
 
     describe("Submodule", function () {
         function m(args) {
             const result = {
-                indexStatus: null,
-                indexSha: null,
-                indexUrl: null,
-                commitSha: null,
-                commitUrl: null,
-                repoStatus: null,
+                commit: null,
+                index: null,
+                workdir: null,
             };
             Object.assign(result, args);
             return result;
         }
 
         const cases = {
+            "new and open": {
+                args: {
+                    index: new Index("1", "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
+                },
+                expected: m({
+                    index: new Index("1", "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
+                }),
+            },
             "no changes": {
                 args: {
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 },
                 expected: m({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
             },
-            "added": {
+            "no changes open": {
                 args: {
-                    indexStatus: FILESTATUS.ADDED,
-                    indexUrl: "a",
-                    indexSha: "1",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
                 },
                 expected: m({
-                    indexStatus: FILESTATUS.ADDED,
-                    indexUrl: "a",
-                    indexSha: "1",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                    }), RELATION.SAME),
                 }),
             },
-            "removed": {
+            "deleted": {
                 args: {
-                    indexStatus: FILESTATUS.REMOVED,
-                    commitUrl: "a",
-                    commitSha: "1",
+                    commit: new Commit("1", "b"),
                 },
                 expected: m({
-                    indexStatus: FILESTATUS.REMOVED,
-                    commitUrl: "a",
-                    commitSha: "1",
-                }),
-            },
-            "changeg url": {
-                args: {
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexSha: "2",
-                    indexUrl: "a",
-                    indexShaRelation: RELATION.SAME,
-                    commitSha: "2",
-                    commitUrl: "b",
-                },
-                expected: m({
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexSha: "2",
-                    indexUrl: "a",
-                    indexShaRelation: RELATION.SAME,
-                    commitSha: "2",
-                    commitUrl: "b",
-                }),
-            },
-            "modified": {
-                args: {
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexSha: "2",
-                    indexShaRelation: RELATION.AHEAD,
-                    indexUrl: "2",
-                    commitUrl: "a",
-                    commitSha: "1",
-                },
-                expected: m({
-                    indexStatus: FILESTATUS.MODIFIED,
-                    indexSha: "2",
-                    indexShaRelation: RELATION.AHEAD,
-                    indexUrl: "2",
-                    commitUrl: "a",
-                    commitSha: "1",
-                }),
-            },
-            "repo status": {
-                args: {
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                },
-                expected: m({
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                }),
-            },
-            "repo status with head commit": {
-                args: {
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                        headCommit: "2",
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.SAME,
-                },
-                expected: m({
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                        headCommit: "2",
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.SAME,
-                }),
-            },
-            "repo status with different head commit": {
-                args: {
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                        headCommit: "3",
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.BEHIND,
-                },
-                expected: m({
-                    repoStatus: new RepoStatus({
-                        workdir: { foo: FILESTATUS.ADDED },
-                        headCommit: "3",
-                    }),
-                    indexSha: "2",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "2",
-                    commitUrl: "2",
-                    commitSha: "2",
-                    workdirShaRelation: RELATION.BEHIND,
+                    commit: new Commit("1", "b"),
                 }),
             },
         };
@@ -211,15 +133,11 @@ describe("RepoStatus", function () {
             const c = cases[caseName];
             it(caseName, function () {
                 const result = new Submodule(c.args);
-                assert.instanceOf(result, Submodule);
                 assert.isFrozen(result);
                 const e = c.expected;
-                assert.equal(result.indexStatus, e.indexStatus);
-                assert.equal(result.indexSha, e.indexSha);
-                assert.equal(result.indexUrl, e.indexUrl);
-                assert.equal(result.commitSha, e.commitSha);
-                assert.equal(result.commitUrl, e.commitUrl);
-                assert.deepEqual(result.repoStatus, e.repoStatus);
+                assert.deepEqual(result.commit, e.commit);
+                assert.deepEqual(result.index, e.index);
+                assert.deepEqual(result.workdir, e.workdir);
             });
         });
     });
@@ -228,68 +146,53 @@ describe("RepoStatus", function () {
         const cases = {
             "no changes": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
                 expected: true,
             },
             "changed files in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
                         workdir: {
                             "foo": FILESTATUS.MODIFIED,
                         },
-                    }),
+                    }), RELATION.SAME),
                 }),
                 expected: true,
             },
             "new commit in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
                         headCommit: "2",
-                    }),
+                    }), RELATION.AHEAD),
                 }),
                 expected: false,
             },
             "new commit in open repo, new sub": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    indexUrl: "a",
-                    repoStatus: new RepoStatus({
-                        headCommit: "2",
-                    }),
+                    index: new Index("1", "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "2"
+                    }), RELATION.AHEAD),
                 }),
                 expected: false,
             },
-            "change in index": {
+            "new sub": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexUrl: "a",
-                    indexStatus: FILESTATUS.ADDED,
+                    index: new Index("1", "a", null),
                 }),
                 expected: false,
             },
             "different commit": {
                 input: new Submodule({
-                    indexSha: "2",
-                    indexShaRelation: RELATION.BEHIND,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("2", "a", RELATION.BEHIND),
                 }),
                 expected: false,
             },
@@ -308,72 +211,48 @@ describe("RepoStatus", function () {
         const cases = {
             "no changes": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
                 expected: true,
             },
             "new files in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
                         workdir: {
-                            "foo": FILESTATUS.ADDED,
+                            foo: FILESTATUS.ADDED,
                         },
-                    }),
+                    }), RELATION.SAME),
                 }),
                 expected: true,
             },
             "changed files in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
                         workdir: {
                             "foo": FILESTATUS.MODIFIED,
                         },
-                    }),
+                    }), RELATION.SAME),
                 }),
                 expected: false,
             },
             "new commit in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: new RepoStatus({
-                        headCommit: "2",
-                    }),
-                }),
-                expected: true,
-            },
-            "closed": {
-                input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: null,
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "0",
+                    }), RELATION.BEHIND),
                 }),
                 expected: true,
             },
         };
-
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
@@ -383,53 +262,62 @@ describe("RepoStatus", function () {
         });
     });
 
-    describe("Submodule.isClean", function () {
+    describe("Submodule.isIndexClean", function () {
         const cases = {
             "no changes": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
                 }),
                 expected: true,
             },
             "changed files in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    repoStatus: new RepoStatus({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
                         workdir: {
                             "foo": FILESTATUS.MODIFIED,
                         },
-                    }),
+                    }), RELATION.SAME),
+                }),
+                expected: true,
+            },
+            "new commit in index": {
+                input: new Submodule({
+                    commit: new Commit("1", "a"),
+                    index: new Index("2", "a", RELATION.AHEAD),
+                }),
+                expected: false,
+            },
+            "deleted": {
+                input: new Submodule({
+                    commit: new Commit("1", "a"),
+                }),
+                expected: false,
+            },
+            "new sub": {
+                input: new Submodule({
+                    index: new Index(null, "a", null),
                 }),
                 expected: false,
             },
             "new commit in open repo": {
                 input: new Submodule({
-                    indexSha: "1",
-                    indexShaRelation: RELATION.SAME,
-                    indexUrl: "a",
-                    commitSha: "1",
-                    commitUrl: "a",
-                    workdirShaRelation: RELATION.BEHIND,
-                    repoStatus: new RepoStatus({
-                        headCommit: "2",
-                    }),
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "0"
+                    }), RELATION.BEHIND),
                 }),
                 expected: false,
             },
         };
-
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isClean();
+                const result = c.input.isIndexClean();
                 assert.equal(result, c.expected);
             });
         });
@@ -439,13 +327,13 @@ describe("RepoStatus", function () {
         const cases = {
             "not new": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.MODIFIED,
+                    commit: new Commit("1", "2"),
                 }),
                 expected: false,
             },
             "new": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
+                    index: new Index(null, "a", null),
                 }),
                 expected: true,
             },
@@ -463,40 +351,46 @@ describe("RepoStatus", function () {
         const cases = {
             "not new": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.MODIFIED,
+                    commit: new Commit("1", "a"),
                 }),
                 expected: true,
             },
             "new but staged commit": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    indexSha: "3",
+                    index: new Index("1", "a", null),
                 }),
                 expected: true,
             },
             "new but new commit in repo": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    repoStatus: new RepoStatus({
-                        headCommit: "3"
-                    }),
+                    index: new Index(null, "a", null),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "3",
+                    }), null),
                 }),
                 expected: true,
             },
             "new but staged file": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
-                    repoStatus: new RepoStatus({
+                    index: new Index(null, "a", null),
+                    workdir: new Workdir(new RepoStatus({
                         staged: {
                             foo: FILESTATUS.ADDED,
                         },
-                    }),
+                    }), null),
                 }),
                 expected: true,
             },
+            "new, open, and no good": {
+                input: new Submodule({
+                    index: new Index(null, "a", null),
+                    workdir: new Workdir(new RepoStatus(), null),
+                }),
+                expected: false,
+            },
             "new and no good": {
                 input: new Submodule({
-                    indexStatus: FILESTATUS.ADDED,
+                    index: new Index(null, "a", null),
                 }),
                 expected: false,
             },
@@ -512,24 +406,16 @@ describe("RepoStatus", function () {
 
     describe("Submodule.copy", function () {
         const sub = new Submodule({
-            indexStatus: RepoStatus.FILESTATUS.ADDED,
-            indexSha: "1",
-            indexShaRelation: RepoStatus.Submodule.COMMIT_RELATION.SAME,
-            indexUrl: "/a",
-            commitSha: "2",
-            commitUrl: "/b",
-            workdirShaRelation: RepoStatus.Submodule.COMMIT_RELATION.AHEAD,
-            repoStatus: new RepoStatus({ headCommit: "3"}),
+            commit: new Commit("2", "/b"),
+            index: new Index("1", "/a", FILESTATUS.ADDED),
+            workdir: new Workdir(new RepoStatus({ headCommit: "3"}),
+                                 RELATION.AHEAD),
         });
         const anotherSub = new Submodule({
-            indexStatus: RepoStatus.FILESTATUS.REMOVED,
-            indexSha: "2",
-            indexShaRelation: RepoStatus.Submodule.COMMIT_RELATION.AHEAD,
-            indexUrl: "/c",
-            commitSha: "4",
-            commitUrl: "/e",
-            workdirShaRelation: RepoStatus.Submodule.COMMIT_RELATION.BEHIND,
-            repoStatus: new RepoStatus({ headCommit: "5"}),
+            commit: new Commit("4", "/d"),
+            index: new Index("2", "/q", FILESTATUS.REMOVED),
+            workdir: new Workdir(new RepoStatus({ headCommit: "1"}),
+                                 RELATION.BEHIND),
         });
         it("simple, no args", function () {
             const newSub = sub.copy();
@@ -541,14 +427,9 @@ describe("RepoStatus", function () {
         });
         it("copy it all", function () {
             const newSub = sub.copy({
-                indexStatus: anotherSub.indexStatus,
-                indexSha: anotherSub.indexSha,
-                indexShaRelation: anotherSub.indexShaRelation,
-                indexUrl: anotherSub.indexUrl,
-                commitSha: anotherSub.commitSha,
-                commitUrl: anotherSub.commitUrl,
-                workdirShaRelation: anotherSub.workdirShaRelation,
-                repoStatus: anotherSub.repoStatus,
+                commit: anotherSub.commit,
+                index: anotherSub.index,
+                workdir: anotherSub.workdir,
             });
             assert.deepEqual(newSub, anotherSub);
         });
@@ -557,17 +438,16 @@ describe("RepoStatus", function () {
     describe("Submodule.open", function () {
         it("breathing", function () {
             const sub = new Submodule({
-                commitSha: "1",
+                commit: new Commit("1", "/a"),
+                index: new Index("1", "/a", RELATION.SAME),
             });
             const opened = sub.open();
             assert.deepEqual(opened, new Submodule({
-                commitSha: "1",
-                indexSha: "1",
-                indexShaRelation: RELATION.SAME,
-                workdirShaRelation: RELATION.SAME,
-                repoStatus: new RepoStatus({
+                commit: sub.commit,
+                index: sub.index,
+                workdir: new Workdir(new RepoStatus({
                     headCommit: "1",
-                }),
+                }), RELATION.SAME),
             }));
         });
     });
@@ -601,11 +481,8 @@ describe("RepoStatus", function () {
                     workdir: { "x/z": FILESTATUS.REMOVED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
@@ -617,11 +494,8 @@ describe("RepoStatus", function () {
                     workdir: { "x/z": FILESTATUS.REMOVED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
@@ -659,15 +533,13 @@ describe("RepoStatus", function () {
                     },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: {
-                                workdir: { x: "y"},
-                                staged: { q: "r"},
-                            },
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: { q: FILESTATUS.MODIFIED },
+                                workdir: { x: FILESTATUS.MODIFIED },
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -703,15 +575,13 @@ describe("RepoStatus", function () {
                     staged: { x: FILESTATUS.MODIFIED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
                                 workdir: { x: FILESTATUS.ADDED },
                                 staged: { q: FILESTATUS.MODIFIED },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -746,14 +616,12 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.MODIFIED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
-                                workdir: { foo: FILESTATUS.MODIFIED },
-                            }),
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                                workdir: { foo: FILESTATUS.ADDED },
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -778,14 +646,12 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
                                 staged: { x: FILESTATUS.ADDED },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -814,11 +680,8 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                 }),
@@ -843,14 +706,12 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
                                 workdir: { x: FILESTATUS.MODIFIED },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -875,7 +736,9 @@ describe("RepoStatus", function () {
             "good sub": {
                 input: new RepoStatus({
                     submodules: {
-                        x: new RepoStatus.Submodule(),
+                        x: new Submodule({
+                            commit: new Commit("1", "a"),
+                        }),
                     },
                 }),
                 expected: false,
@@ -883,8 +746,8 @@ describe("RepoStatus", function () {
             "bad sub": {
                 input: new RepoStatus({
                     submodules: {
-                        x: new RepoStatus.Submodule({
-                            indexStatus: FILESTATUS.ADDED,
+                        x: new Submodule({
+                            index: new Index(null, "a", null),
                         }),
                     },
                 }),
@@ -893,11 +756,11 @@ describe("RepoStatus", function () {
             "added but staged": {
                 input: new RepoStatus({
                     submodules: {
-                        x: new RepoStatus.Submodule({
-                            indexStatus: FILESTATUS.ADDED,
-                            repoStatus: new RepoStatus({
+                        x: new Submodule({
+                            index: new Index(null, "a", null),
+                            workdir: new Workdir(new RepoStatus({
                                 staged: { x: FILESTATUS.ADDED },
-                            }),
+                            }), null),
                         }),
                     },
                 }),
@@ -926,11 +789,8 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
                         }),
                     },
                 }),
@@ -955,14 +815,12 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
                                 workdir: { x: FILESTATUS.MODIFIED },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -975,14 +833,12 @@ describe("RepoStatus", function () {
                     workdir: { foo: FILESTATUS.ADDED },
                     submodules: {
                         "a": new Submodule({
-                            indexSha: "1",
-                            indexShaRelation: RELATION.SAME,
-                            indexUrl: "a",
-                            commitSha: "1",
-                            commitUrl: "a",
-                            repoStatus: new RepoStatus({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
                                 staged: { x: FILESTATUS.MODIFIED },
-                            }),
+                            }), RELATION.SAME),
                         }),
                     },
                 }),
@@ -1004,7 +860,7 @@ describe("RepoStatus", function () {
             headCommit: "1",
             staged: { foo: FILESTATUS.ADDED },
             submodules: {
-                s: new RepoStatus.Submodule({ "indexSha": "3", }),
+                s: new Submodule({ commit: new Commit("1", "2") }),
             },
             workdir: { x: FILESTATUS.MODIFIED },
             rebase: new Rebase("2", "4", "b"),
@@ -1014,7 +870,7 @@ describe("RepoStatus", function () {
             headCommit: "2",
             staged: { foo: FILESTATUS.MODIFIED },
             submodules: {
-                s: new RepoStatus.Submodule({ "indexSha": "4", }),
+                s: new Submodule({ commit: new Commit("3", "4") }),
             },
             workdir: { x: FILESTATUS.ADDED },
             rebase: new Rebase("a", "4", "b"),
