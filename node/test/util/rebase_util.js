@@ -319,6 +319,29 @@ x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
                 expected: `
 x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E`
             },
+            "with rebase in submodule, staged commit in another submodule": {
+                initial: `
+a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
+x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
+    Bmaster=3;Bfoo=4;Bold=3;
+    Erefs/heads/master,3,4;
+    Os EHEAD,q,r!I q=q;
+    Ot H=s;
+    I t=Sa:s`,
+                expected: `
+x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;Os Cqs-r q=q!H=qs!E;I t=~;Ot`
+            },
+            "with rebase in submodule, workdir commit in another submodule": {
+                initial: `
+a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
+x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
+    Bmaster=3;Bfoo=4;Bold=3;
+    Erefs/heads/master,3,4;
+    Os EHEAD,q,r!I q=q;
+    Ot H=s`,
+                expected: `
+x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;Os Cqs-r q=q!H=qs!E;Ot H=s`
+            },
             "staged fix in submodule": {
                 initial: `
 a=B:Ca-1 q=r;Cb-1 q=s;Bmaster=a;Bfoo=b|
