@@ -366,11 +366,11 @@ exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
 });
 
 /**
- * Return the list of submodules that are a descendant of the specified `dir`,
- * including (potentially) `dir` itself (unless `dir` is suffixed with '/'), in
- * the specified `repo`.  The behavior is undefined unless `dir` is empty or
- * refers to a valid path within `repo`.  Note that if `"" === dir`, the result
- * will be all submodules.
+ * Return the list of submodules, listed in the specified `indexSubNames`, that
+ * are a descendant of the specified `dir`, including (potentially) `dir`
+ * itself (unless `dir` is suffixed with '/'), in the specified `repo`.  The
+ * behavior is undefined unless `dir` is empty or refers to a valid path within
+ * `repo`.  Note that if `"" === dir`, the result will be all submodules.
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             dir
@@ -383,7 +383,8 @@ exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
     assert.isArray(indexSubNames);
     if ("" !== dir) {
         assert.notEqual("/", dir[0]);
-        assert.notEqual(".", dir[0]);
+        assert.notEqual(".", dir);
+        assert.notEqual("..", dir);
     }
     if ("" === dir) {
         return indexSubNames;

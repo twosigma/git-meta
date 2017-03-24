@@ -485,6 +485,59 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
+    describe("getSubmodulesInPath", function () {
+        const cases = {
+            "trivial": {
+                state: "x=S",
+                dir: "",
+                indexSubNames: [],
+                expected: [],
+            },
+            "got a sub": {
+                state: "a=B|x=S:C2-1 q/r=Sa:1;Bmaster=2",
+                dir: "",
+                indexSubNames: ["q/r"],
+                expected: ["q/r"],
+            },
+            "got a sub, by path": {
+                state: "a=B|x=S:C2-1 q/r=Sa:1;Bmaster=2",
+                dir: "q",
+                indexSubNames: ["q/r"],
+                expected: ["q/r"],
+            },
+            "got a sub, by exact path": {
+                state: "a=B|x=S:C2-1 q/r=Sa:1;Bmaster=2",
+                dir: "q/r",
+                indexSubNames: ["q/r"],
+                expected: ["q/r"],
+            },
+            "missed": {
+                state: "a=B|x=S:C2-1 q/r=Sa:1;Bmaster=2",
+                dir: "README.md",
+                indexSubNames: ["q/r"],
+                expected: [],
+            },
+            "missed, with a dot": {
+                state: "a=B|x=S:C2-1 q/r=Sa:1;Bmaster=2;W .foo=bar",
+                dir: ".foo",
+                indexSubNames: ["q/r"],
+                expected: [],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.state);
+                const x = written.repos.x;
+                const result = yield SubmoduleUtil.getSubmodulesInPath(
+                                                              x.workdir(),
+                                                              c.dir,
+                                                              c.indexSubNames);
+                assert.deepEqual(result.sort(), c.expected.sort());
+            }));
+        });
+    });
     describe("resolveSubmoduleNames", function () {
         // We'll run this with 
         const cases = {
