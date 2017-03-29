@@ -39,11 +39,12 @@ space.  In short, the first section should explain why git-meta is needed.
 
 Next, we present the architecture for implementing a mono-repo using Git
 submodules.  We describe the overall repository structure, commits, forking,
-refs, and the client-side representation.
+refs, client-side representation, and a recommended server-side configuration.
 
-Then, we present an earlier, more-intuitive architecture.  Seeing how our
-strategy evolved from this approach is illustrative, and helps to understand
-some of the less-intuitive design choices.
+Then, we discuss how our current design evolved from a seemingly simple goal of
+making submodules easier to use into the current architecture.  Seeing how our
+strategy developed from a naive approach is illustrative, and helps to
+understand some of the less-intuitive design choices.
 
 Next, we provide an analysis of the performance of a mono-repo.  We show how
 the performance of a mono-repo can remain mostly constant as it grows, ages,
@@ -252,52 +253,42 @@ $ ls b
 README.md
 ```
 
-## Forking
+## Server-side Representation
 
-It is possible to use git-meta with a single meta-repo namespace, but we
-strongly recommend the use of a name-partitioning strategy, a.k.a. forking.
-Forking may be generally be implemented either via [Git
-namespaces](https://git-scm.com/docs/gitnamespaces) or a
-hosting-solution-specific forking mechanism.  Without forking, every user will
-receive every branch in existence on every fetch and clone, causing significant
-performance problems, especially over time.
+We use the *omega* repo strategy to organize sub-repos.  With this strategy,
+all submodules have the same URL: ".".  When a submodule is opened, Git
+resolves the URL of the submodule to be exactly that of the origin of the
+meta-repo itself, i.e., the objects for the meta-repo and all sub-repos live in
+the same physical repository on the back-end.
 
-We fork only the meta-repo.  That is, for a given mono-repo, there may be any
-number of peer forks of the meta-repo on the back-end (though policy will
-generally designate that some meta-repos are special), but only one instance of
-each sub-repo:
+Thus, we have a true (as in all commits reside in one repository) mono-repo
+that can be treated as many sub-repos (especially, client-side).  Key
+functionality enabled by this technique:
 
+- Server-side forks are possible; other potential strategies, as described in
+  the design and evolution section, preclude forks.
+- When desired (e.g. preparing to work remotely) the entire mono-repo can be
+  cloned relatively quickly -- with a single fetch -- compared to other
+  techniques which would require a fetch for each sub-repo.
+- A commit is sufficient to describe the state of a sub-repo in a repository.
+  A separate repository does not need to be brought to life to back a new
+  sub-repo.  If a sub-repo is created, e.g., on a local branch, there is no
+  side-effects or impact on other (local or remote) branches.
+- Sub-repo creation and deletion are implemented in terms of normal,
+  client-side, git operations.
+
+Creating and pushing a new sub-repo:
+
+```bash
+$ git meta new my/sub/repo
+Created new sub-repo my/sub/repo.  It is currently empty.  Please
+stage changes and/or make a commit before finishing with 'git meta commit';
+you will not be able to use 'git meta commit' until you do so.
+$ git touch my/sub/repo/README.md
+$ git meta add .
+$ git meta commit -m 'added my/sub/repo'
+$ git meta push
 ```
-'-----------` '-----------`
-|     a     | |     b     |
-`-----------, `-----------,
-   ^     ^      ^      ^
-   |     |     /       |
-   |     |    /        |
-   |      `--.---.     |
-   |     .--/    |     |
-'--|-----|--` '--|-----|--`
-|  a     b  | |  a     b  |
-| - - - - - | | - - - - - |
-| jill/meta | | bill/meta |
-`-----------, `-----------,
-```
-
-Any clone of any meta-repo (even a local one) will still reference the same
-canonical sub-repos.  Thus, a mono-repo is not truly distributed like single
-Git repositories.  We consider this to be acceptable for the following reasons:
-
-- Mono-repos are designed to facilitate source management in large
-  organizations, which generally nominate canonical repositories for
-  integration anyway.
-- The individual repos of which they are composed are still normal,
-  distributed, Git repos (e.g., two distinct mono-repos may contain sub-repos
-  with the same histories).
-- As described in the section on our "naive architecture", workflows
-  involving forked sub-repos have significant drawbacks.
-- One of the main benefits of DVCSs -- the ability to have a first-class
-  development experience without network connectivity to the server -- is still
-  possible.
 
 ## Refs
 
@@ -313,8 +304,8 @@ old version of Git.
 In git-meta, branches and tags are applied only to meta-repos.  Because each
 commit in a meta-repo unambiguously describes the state of all sub-repos, it is
 unnecessary to apply branches and tags to sup-repos.  Furthermore, as described
-in the "Naive Architecture" section below, schemes relying on sub-repo branches
-proved to be impractical.
+in the "Design and Evolution" section below, schemes relying on sub-repo
+branches proved to be impractical.
 
 Therefore, ref names in git-meta always refer to refs in the meta-repo.
 Branches and tags in sub-repos are ignored by git-meta -- by server-side checks
@@ -539,13 +530,15 @@ by the new synthetic-meta-ref if it does not already contain that commit in its
 history.  The downside of this approach is that the mega-ref references all
 commits, probably many more than what is needed at any given time.
 
-# Naive Architecture
+# Design and Evolution
 
-In this section we describe the basic model we had in mind when we started
-git-meta.  First, we provide an overview of the original architecture.  Then,
-we describe a series of problems that arise from this architecture.  Finally,
-we draw conclusions by this exercise and connect them to our final design
-choices.
+In this section we show how the architecture of git-meta evolved, in order to
+better explain our current design.  First, we provide an overview of the
+original, "naive" architecture that seemed to make sense, but was actually
+unworkable.  The, we describe a series of problems that arise from this
+architecture, leading through several intermediate solutions.  Next, we
+describe our first working architecture and its failings.  Finally, we
+highlight some key points that inform our current solution.
 
 ## Overview
 
@@ -902,6 +895,45 @@ Now even `git meta open` will be unable to initialize the submodule `a` because
 Bob's `master` branch references a commit in it that cannot be found; we no
 longer have any knowledge that Jill's fork exists.
 
+## A Workable Solution: namespaces and relative submodule URLs
+
+Our first workable solution had the following characteristics:
+
+1. Each submodule would have a relative URL.  When opening a sub-repo, Git
+   resolves this against the URL of the remote named `origin` to derive an
+   absolute URL.  For example, given an origin url of
+   `http://git.example.com/meta` and a relative submodule URL
+   `./a/b/c`, git would derive the absolute url for `a/b/c` to be:
+   `http://git.example.com/meta/a/b/c`.
+1. Because forking is impractical with this scheme, we would use
+   [Git namespaces](https://git-scm.com/docs/gitnamespaces) to create
+   partition reference names.
+1. Sub-repo creation and deletion would be done through separate scripts
+   that manipulated the local clone and communicated to the back-end in
+   a hosting-solution-specific protocol.
+
+This design has one several drawbacks:
+
+1.  The only major Git hosting solution that allows repositories to have `/`
+    characters in their names (and hence, URLs), is Gitolite.  Solving this
+    problem for use with other hosting solutions (e.g., Gitlab or Github) is
+    non-obvious.
+1.  As mentioned above, true forking is not possible.  Using Git namespaces
+    instead poses problems:
+    - Forks are common and widely understood; Git namespaces are not.
+    - Hosting solutions provide for customizations and administration in forks,
+      we would need to synthesize similar functionality around namespaces.
+    - Our collaboration strategy was simplistic: users could push only to their
+      own namespaces.  To exchange code, Jill would pull changes from Bob's
+      branch, and vice-versa.  This approach works for collaborations between
+      pairs of users, but becomes more clunky as the number of collaborators
+      increases.  We did not provide spaces for adhoc or org-structure-based
+      groups where shard branches could be created.  Such spaces and their
+      branches are necessary for larger collaborations and release processes.
+      Solving this problem would have likely required a hand-rolled solution.
+1. The use of hosting-solution-specific interfaces to create sub-repos is
+   sub-optimal.
+
 ## Conclusions
 
 1. It is not generally possible to synchronize or validate updates to a ref
@@ -911,15 +943,13 @@ longer have any knowledge that Jill's fork exists.
 1. We use symbolic-meta-refs as push-targets in sub-repos; as the contents of a
    symbolic-meta-ref are immutable (a given symbolic-meta-ref can point to only
    one commit), we are always guaranteed to be able to update them when needed.
-1. Forking sub-repos is potentially expensive, and probably impractical on the
-   server-side, and creates many complications on the client-side.  Therefore,
-   we allow forking of only meta-repos; each sub-repo has a single namespace
-   for the entire mono-repo.
-1. However, since git-meta does not push branch or tag names to sub-repos, and
-   synthetic-meta-branches are plain refs that must be explicitly fetched,
-   there will not be a problem with name-explosion in sub-repos.
+1. Using the omega repo strategy to store sub-repo refs together with meta-repo
+   refs allows us to use forking and to implement submodule creation and
+   deletion with normal Git operations.
 
 # Performance
+
+## Client-side
 
 At a minimum, users working in a mono-repo must download the meta-repo and all
 sub-repos containing code that they require to work.
@@ -951,6 +981,21 @@ minimized through several strategies:
   git-meta, we are developing a proposal to address this case and will link to
   it here when ready.
 
+## Server-side
+
+We were initially concerned about the effect of putting large numbers of refs
+(i.e., one or more synthetic-meta-refs per sub-repo) and objects into a single
+(back end) repository would have on the performance of client-server
+interactions, particularly fetching (including cloning) and pushing.
+
+Testing on [an extremely large repository](https://github.com/bpeabody/mongo)
+(~260k commits and 26k sub-repos) has been encouraging so far.  Still, we
+believe that keeping the total number of refs in a given repository to a small
+factor (close to 1) of the number of sub-repos is required to maintain
+performance.  Synthetic-meta-refs should be pruned regularly (s.t. only
+necessary roots remain) and forks should be used to minimize the number of
+meta-repo branches in a given repository; this practice is a good one anyway.
+
 # Tools
 
 We provide three types of tools:
@@ -958,7 +1003,7 @@ We provide three types of tools:
 1. the `git-meta` plugin to simplify client-side operations such as
    cross-repository merges
 2. push validation tools to preserve mono-repo invariants
-3. maintenance scripts
+3. maintenance scripts, e.g. to minimize the number of meta-refs
 
 ## The git-meta plugin
 

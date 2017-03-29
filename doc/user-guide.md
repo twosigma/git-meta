@@ -282,6 +282,11 @@ $ git meta commit -m "changed my-sub-repo"
 
 ## Usage Scenarios
 
+### Creating a meta-repository
+
+A meta-repository doesn't need any special configuration; any Git repository
+can get a meta-repository.
+
 ### Cloning
 
 We do not provide a git-meta command for cloning as the built-in Git command
@@ -289,6 +294,23 @@ does exactly the right thing:
 
 ```bash
 $ git clone http://example.com/your-meta-repo.git meta
+```
+
+### Creating a new sub-repository
+
+Assuming that you are using the omega repository strategy described in the
+[architecture](./architecture.md) document, making a new sub-repo is
+straightforward:
+
+```bash
+$ cd meta
+$ git meta new foo/bar
+Created new sub-repo foo/bar.  It is currently empty.  Please
+stage changes and/or make a commit before finishing with 'git meta commit';
+you will not be able to use 'git meta commit' until you do so.
+$ touch foo/bar/README.md
+$ git meta add .
+$ git meta commit -m "added foo/bar"
 ```
 
 ### Submodule Visibility
