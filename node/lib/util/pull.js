@@ -30,6 +30,7 @@
  */
 "use strict";
 
+const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
@@ -41,22 +42,17 @@ const UserError     = require("../util/user_error");
 
 /**
  * Pull the specified `source` branch from the remote having the specified
- * `remoteName` into the specified `metaRepo`.  If the specified `any` is true,
- * attempt to pull from all repositories that do not have local changes.
- * Otherwise, fail if any visible repositories or the meta repository has
- * uncommitted changes.
+ * `remoteName` into the specified `metaRepo`.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
- * @param {Boolean}            any
  * @param {String}             remoteName
  * @param {String}             source
  */
 exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
-    // 1. Validate that no repos have local modifications and that they all
-    //    have the remote with the name `remoteName`.
-    // 2. Fetch the meta-repo and all sub-repos.
-    // 3. Perform a rebase.
+    assert.instanceOf(metaRepo, NodeGit.Repository);
+    assert.isString(remoteName);
+    assert.isString(source);
 
     // First do some sanity checking on the repos to see if they have a remote
     // with `remoteName` and are clean.
