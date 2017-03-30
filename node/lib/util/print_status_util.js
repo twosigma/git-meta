@@ -389,7 +389,6 @@ exports.printRepoStatus = function (status, cwd) {
     if (0 !== staged.length) {
         changes += `\
 Changes to be committed:
-  (use "git meta reset HEAD <file>..." to unstage)
 
 `;
         changes += exports.printStatusDescriptors(staged, colors.green, cwd);
@@ -400,7 +399,6 @@ Changes to be committed:
         changes += `\
 Changes not staged for commit:
   (use "git meta add <file>..." to update what will be committed)
-  (use "git meta checkout -- <file>..." to discard changes in working \
 directory)
   (commit or discard the untracked or modified content in submodules)
 
