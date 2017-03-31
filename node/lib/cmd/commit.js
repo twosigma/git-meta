@@ -225,6 +225,7 @@ const doAmend = co.wrap(function *(args) {
 
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
+    const PrintStatusUtil = require("../util/print_status_util");
     const StatusUtil      = require("../util/status_util");
     const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
@@ -259,8 +260,10 @@ const doAmend = co.wrap(function *(args) {
                                                           status,
                                                           oldSubs);
     let bad = "";
-    amendable.newCommits.forEach(sub => {
-        bad += `${colors.red(sub)} has new commits.\n`;
+    Object.keys(amendable.newCommits).forEach(sub => {
+        const relation = amendable.newCommits[sub];
+        const description = PrintStatusUtil.getRelationDescription(relation);
+        bad += `${colors.red(sub)} : ${description}`;
     });
     amendable.mismatchCommits.forEach(sub => {
         bad += `The commit for ${colors.red(sub)} does not match.`;

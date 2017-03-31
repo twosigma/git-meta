@@ -439,13 +439,13 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
                 input: `
 a=B:Ca-1;Cb-a;Bf=b|
 x=U:C3-2 s=Sa:a;Bmaster=3;I s=Sa:b`,
-                newCommits: ["s"],
+                newCommits: { s: RELATION.UNKNOWN },
             },
             "sub with new commit in workdir": {
                 input: `
 a=B:Ca-1;Cb-a;Bf=b|
 x=U:C3-2 s=Sa:a;Bmaster=3;Os H=b`,
-                newCommits: ["s"],
+                newCommits: { s: RELATION.AHEAD },
             },
             "sub with bad commit": {
                 input: "a=B:Ca message#a-1;Bf=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
@@ -456,7 +456,7 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os H=b`,
 a=B:Ca-1;Cb-a;Ccommit me#c-b;Bf=c|
 x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 mismatchCommits: ["u"],
-                newCommits: ["t"],
+                newCommits: { t: RELATION.UNKNOWN },
                 newStatusSubs: ["s", "u"],
             },
             "deleted": {
@@ -487,8 +487,8 @@ x=S:C2-1 s=Sa:1,t=Sa:1,u=Sa:1;C3-2 s=Sa:b,t=Sa:b,u=Sa:c;I t=Sa:1;Bmaster=3`,
                 assert.deepEqual(result.deleted.sort(),
                                  c.deleted || [],
                                  "deleted");
-                assert.deepEqual(result.newCommits.sort(),
-                                 c.newCommits || [],
+                assert.deepEqual(result.newCommits,
+                                 c.newCommits || {},
                                  "newCommits");
                 assert.deepEqual(result.mismatchCommits.sort(),
                                  c.mismatchCommits || [],
