@@ -214,6 +214,12 @@ Changes to be committed:
                 message: "hello",
                 expected: "x=S:Chello#x-1 a=b;Bmaster=x",
             },
+            "staged addition, unstaged modification but all": {
+                initial: "x=S:I a=b;W a=c",
+                doAll: true,
+                message: "message",
+                expected: "x=S:Cx-1 a=c;Bmaster=x",
+            },
             "staged deletion": {
                 initial: "x=S:I README.md",
                 doAll: true,
