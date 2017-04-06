@@ -54,17 +54,17 @@ generate merge commits; local commits are rebased on top of pulled commits.`;
 
 exports.configureParser = function (parser) {
 
-    parser.addArgument(["-r", "--repository"], {
+    parser.addArgument(["repository"], {
         type: "string",
-        required: false,
+        nargs: "?",
         defaultValue: "origin",
         help: `name of remote from which to pull; 'origin' used if not
 specified`,
     });
 
-    parser.addArgument(["-s", "--source"], {
+    parser.addArgument(["source"], {
         type: "string",
-        required: false,
+        nargs: "?",
         defaultValue: null,
         help: `name of remote branch from which to pull; active branch name
 used if not specified`,
