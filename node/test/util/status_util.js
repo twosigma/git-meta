@@ -681,6 +681,16 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     },
                 }),
             },
+           "ignore index": {
+               state: "x=S:I a=b;W a",
+               options: {
+                   ignoreIndex: true,
+               },
+               expected: new RepoStatus({
+                   headCommit: "1",
+                   currentBranchName: "master",
+               }),
+           },
        };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
