@@ -153,7 +153,7 @@ describe("DiffUtil", function () {
             },
             "added index, rm workdir": {
                 input: "x=S:I x=y;W x",
-                staged: { x: FILESTATUS.ADDED },
+                staged: { x: FILESTATUS.ADDED, },
                 workdir: { x: FILESTATUS.REMOVED },
             },
             "added index, rm workdir -a": {
@@ -387,10 +387,8 @@ x=S:C2-1 README.md=3;W README.md=hello world;Bmaster=2`,
             },
             "HEAD^ changed in index, rm'd in workdir, all": {
                 input: "x=S:C2-1;I README.md=3;W README.md;Bmaster=2",
-                staged: {
-                    "2": FILESTATUS.ADDED,
-                },
                 workdir: {
+                    "2": FILESTATUS.ADDED,
                     "README.md": FILESTATUS.REMOVED,
                 },
                 workdirToTree: true,
