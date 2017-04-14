@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const fs = require("fs-promise");
 
 const New             = require("../../lib/util/new");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
@@ -60,7 +61,7 @@ describe("new", function () {
             const doNew = co.wrap(function *(repos) {
                 let imp = c.import || null;
                 if (null !== imp) {
-                    const url = repos[imp.url].path();
+                    const url = yield fs.realpath(repos[imp.url].path());
                     imp = { url: url, branch: imp.branch};
                 }
                 yield New.newSubmodule(repos.x, c.name, imp);

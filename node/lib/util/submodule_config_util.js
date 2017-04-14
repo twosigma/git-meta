@@ -109,10 +109,22 @@ exports.computeRelativeWorkDir = function (subName) {
 exports.resolveUrl = function (baseUrl, relativeUrl) {
     assert.isString(baseUrl);
     assert.isString(relativeUrl);
-    if (0 !== baseUrl.length && baseUrl[baseUrl.length - 1] !== "/") {
+
+    // Make sure ends with trailing "/" so resolution will work with "."
+    // correctly.
+
+    if (!baseUrl.endsWith("/")) {
         baseUrl += "/";
     }
-    return url.resolve(baseUrl, relativeUrl);
+    const res = url.resolve(baseUrl, relativeUrl);
+
+    // Trim trailing "/" which will stick around in some situations (e.g., "."
+    // for relativeUrl) but not others, to give uniform results.
+
+    if (res.endsWith("/")) {
+        return res.substr(0, res.length - 1);
+    }
+    return res;
 };
 
 /**
