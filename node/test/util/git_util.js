@@ -49,6 +49,26 @@ const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 describe("GitUtil", function () {
     after(TestUtil.cleanup);
 
+    describe("getRemoteForBranch", function () {
+        it("no upstream", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo("S");
+            const repo = written.repo;
+            const branch = yield repo.getCurrentBranch();
+            const result = yield GitUtil.getRemoteForBranch(repo, branch);
+            assert.isNull(result);
+        }));
+        it("has upstream", co.wrap(function *() {
+            const clonePath = yield TestUtil.makeTempDir();
+            const baseRepo = yield TestUtil.createSimpleRepository();
+            const repo = yield NodeGit.Clone.clone(baseRepo.workdir(),
+                                                   clonePath);
+            const branch = yield repo.getCurrentBranch();
+            const result = yield GitUtil.getRemoteForBranch(repo, branch);
+            assert.instanceOf(result, NodeGit.Remote);
+            assert.equal(result.name(), "origin");
+        }));
+    });
+
     describe("createBranchFromHead", function () {
         const brancher = co.wrap(function *(repo) {
             const newBranch = yield GitUtil.createBranchFromHead(repo, "foo");
@@ -112,9 +132,30 @@ describe("GitUtil", function () {
     });
 
     describe("getOriginUrl", function () {
+        it("url from branch remote", co.wrap(function *() {
+            // TODO: don't have it in my shorthand to associate a branch with
+            // an upstream yet so we have to do this test manually.
+
+            const clonePath = yield TestUtil.makeTempDir();
+            const baseRepo = yield TestUtil.createSimpleRepository();
+            const upstream = yield TestUtil.createSimpleRepository();
+            const repo = yield NodeGit.Clone.clone(baseRepo.workdir(),
+                                                   clonePath);
+            yield NodeGit.Remote.create(repo, "upstream", upstream.workdir());
+            yield GitUtil.fetch(repo, "upstream");
+            const branch = yield repo.getCurrentBranch();
+            yield NodeGit.Branch.setUpstream(branch, "upstream/master");
+            const result = yield GitUtil.getOriginUrl(repo);
+            assert.equal(result, upstream.workdir());
+        }));
         const cases = {
             "good": { i: "a=B|x=Ca", e: "a" },
+            "good, but no branch": {
+                i: "a=B|x=Ca:H=1",
+                e: "a"
+            },
             "bad": { i: "x=S", e: null},
+            "no head and empty": { i: "x=N", e: null },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

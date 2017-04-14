@@ -111,6 +111,30 @@ exports.findBranch = co.wrap(function *(repo, branchName) {
 });
 
 /**
+ * Return the remote associated with the upstream reference of the specified
+ * `branch` in the specified `repo`.
+ *
+ * @param {NodeGit.Repo}      repo
+ * @param {NodeGit.Reference} branch
+ * @return {NodeGit.Remote|null}
+ */
+exports.getRemoteForBranch = co.wrap(function *(repo, branch) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(branch, NodeGit.Reference);
+    let upstream;
+    try {
+        upstream = yield NodeGit.Branch.upstream(branch);
+    }
+    catch (e) {
+        // No way to check for this other than to catch.
+        return null;
+    }
+    const name = upstream.shorthand();
+    const remoteName = name.split("/")[0];
+    return yield NodeGit.Remote.lookup(repo, remoteName);
+});
+
+/**
  * Return true if the specified `repo` has a remote with the specified `name`
  * and false otherwise.
  *
@@ -128,8 +152,11 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
 });
 
 /**
- * Return the URL for the remote named "origin" in the specified `repo`, or
- * null if there is no remote named "origin".
+ * Return the URL for the remote from which to fetch submodule refs in the
+ * specified `repo`, or null if no remote can be found.  If `repo` has a
+ * current branch, and that branch has an upstream, return the URL for the
+ * remote of that upstream; otherwise, if there is a remote named "origin",
+ * return the URL for that remote; otherwise, return null.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -138,6 +165,19 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
 exports.getOriginUrl = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
+    let currentBranch = null;
+    try {
+        currentBranch = yield repo.getCurrentBranch();
+    }
+    catch (e) {
+        // this can fail, e.g., if the repo is empty
+    }
+    if (null !== currentBranch) {
+        const remote = yield exports.getRemoteForBranch(repo, currentBranch);
+        if (null !== remote) {
+            return remote.url();                                      // RETURN
+        }
+    }
     let remote;
     try {
         remote = yield repo.getRemote("origin");
