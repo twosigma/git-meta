@@ -75,52 +75,11 @@ unpushed or uncommitted changes. This flag disables those checks.`
  * @param {String} args.path
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors        = require("colors");
 
-    const GitUtil         = require("../util/git_util");
-    const DeinitUtil      = require("../util/deinit_util");
-    const StatusUtil      = require("../util/status_util");
-    const SubmoduleUtil   = require("../util/submodule_util");
-    const UserError       = require("../util/user_error");
+    const CloseUtil = require("../util/close_util");
+    const GitUtil   = require("../util/git_util");
 
     const repo = yield GitUtil.getCurrentRepo();
-    const repoStatus = yield StatusUtil.getRepoStatus(repo);
-    const subStats = repoStatus.submodules;
-    let errorMessage = "";
-
-    const workdir = repo.workdir();
-    const cwd     = process.cwd();
-    const subs    = yield SubmoduleUtil.getSubmoduleNames(repo);
-
-    const subsToClose = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
-                                                                  cwd,
-                                                                  subs,
-                                                                  args.path);
-    const closers = subsToClose.map(co.wrap(function *(name) {
-        const sub = subStats[name];
-        const subRepo = sub.repoStatus;
-        if (null === subRepo) {
-            return;                                                   // RETURN
-        }
-
-        if (!args.force) {
-            // Determine if there are any uncommited changes:
-            // 1) Clean (no staged or unstaged changes)
-            // 2) new files
-
-            if (!subRepo.isClean() ||
-                                   0 !== Object.keys(subRepo.workdir).length) {
-                errorMessage += `\
-Could not close ${colors.cyan(name)} because it is not clean.
-Pass ${colors.magenta("--force")} to close it anyway.
-`;
-                return;                                               // RETURN
-            }
-        }
-        yield DeinitUtil.deinit(repo, name);
-    }));
-    yield closers;
-    if ("" !== errorMessage) {
-        throw new UserError(errorMessage);
-    }
+    const cwd  = process.cwd();
+    yield CloseUtil.close(repo, cwd, args.path, args.force);
 });
