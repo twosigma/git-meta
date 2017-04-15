@@ -528,7 +528,7 @@ exports.sameCommitInstance = function (x, y) {
  * @param {Object}             oldSubs map from name to `Submodule`
  * @return {Object}
  * @return {String[]} return.deleted           submodule is removed
- * @return {String[]} return.newCommits        different commit in submodule
+ * @return {Object}   return.newCommits        map from sub name to relation
  * @return {String[]} return.mismatchCommits   commit doesn't match
  * @return {RepoStatus} return.status          adjusted repo status
  */
@@ -539,7 +539,7 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
 
     const head = yield repo.getHeadCommit();
     const deleted = [];
-    const newCommits = [];
+    const newCommits = {};
     const mismatchCommits = [];
     const subFetcher = new SubmoduleFetcher(repo, head);
     const currentSubs = status.submodules;
@@ -578,14 +578,11 @@ exports.checkIfRepoIsAmendable = co.wrap(function *(repo, status, oldSubs) {
             return;                                                   // RETURN
         }
 
-        // If a submodule has a different commit in its index or its workdir,
-        // fail.
+        // If a submodule has a different commit fail.
 
-        const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
-
-        if (SAME !== newSub.index.relation ||
-            (null !== newSub.workdir && SAME !== newSub.workdir.relation)) {
-            newCommits.push(subName);
+        const relation = newSub.index.relation;
+        if (RepoStatus.Submodule.COMMIT_RELATION.SAME !== relation) {
+            newCommits[subName] = relation;
             return;                                                   // RETURN
         }
 
