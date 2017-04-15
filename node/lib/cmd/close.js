@@ -78,7 +78,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const colors        = require("colors");
 
     const GitUtil         = require("../util/git_util");
-    const Close           = require("../util/close");
+    const DeinitUtil      = require("../util/deinit_util");
     const StatusUtil      = require("../util/status_util");
     const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
@@ -117,7 +117,7 @@ Pass ${colors.magenta("--force")} to close it anyway.
                 return;                                               // RETURN
             }
         }
-        yield Close.close(repo, name);
+        yield DeinitUtil.deinit(repo, name);
     }));
     yield closers;
     if ("" !== errorMessage) {

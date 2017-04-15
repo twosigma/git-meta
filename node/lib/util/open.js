@@ -36,7 +36,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 
 const GitUtil             = require("./git_util");
-const Close               = require("./close");
+const DeinitUtil          = require("./deinit_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 
@@ -86,7 +86,7 @@ exports.openOnCommit = co.wrap(function *(fetcher,
         yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
     }
     catch (e) {
-        yield Close.close(metaRepo, submoduleName);
+        yield DeinitUtil.deinit(metaRepo, submoduleName);
         throw e;
     }
 

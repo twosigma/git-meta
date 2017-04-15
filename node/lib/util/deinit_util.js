@@ -31,7 +31,7 @@
 "use strict";
 
 /**
- * This module contains methods for closing local sub repositories.
+ * This module contains methods for de-initializing local sub repositories.
  */
 
 const co      = require("co");
@@ -40,14 +40,14 @@ const path    = require("path");
 const fs      = require("fs-promise");
 
 /**
- * Close the repository having the specified `submoduleName` in the specified
- * `repo`.
+ * De-initialize the repository having the specified `submoduleName` in the
+ * specified `repo`.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {String}             submoduleName
  */
-exports.close = co.wrap(function *(repo, submoduleName) {
+exports.deinit = co.wrap(function *(repo, submoduleName) {
 
     // This operation is a major pain, first because libgit2 does not provide
     // any direct methods to do the equivalent of 'git deinit', and second
