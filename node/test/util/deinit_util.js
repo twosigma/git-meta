@@ -34,10 +34,10 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const close    = require("../../lib/util/close");
-const TestUtil = require("../../lib/util/test_util");
+const DeinitUtil = require("../../lib/util/deinit_util");
+const TestUtil   = require("../../lib/util/test_util");
 
-describe("close", function () {
+describe("deinit_util", function () {
 
     // Going to do a simple test here to verify that after closing a submodule:
     //
@@ -80,7 +80,7 @@ describe("close", function () {
 
         // Then close it and recheck status.
 
-        yield close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
         const closedStatus = yield NodeGit.Submodule.status(repo, "x/y", 0);
         assert(closedStatus & WD_UNINITIALIZED);
     }));

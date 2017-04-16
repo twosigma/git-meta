@@ -37,7 +37,7 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const Close               = require("../../lib/util/close");
+const DeinitUtil          = require("../../lib/util/deinit_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 const UserError           = require("../../lib/util/user_error");
@@ -456,7 +456,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield Close.close(repo, subName);
+            yield DeinitUtil.deinit(repo, subName);
             const repoPath = repo.workdir();
             const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                      originUrl,
@@ -499,7 +499,7 @@ foo
             const sub = yield NodeGit.Submodule.lookup(repo, "foo");
             const subRepo = yield sub.open();
             NodeGit.Remote.setUrl(subRepo, "origin", "/bar");
-            yield Close.close(repo, "foo");
+            yield DeinitUtil.deinit(repo, "foo");
             const newSub =
                 yield SubmoduleConfigUtil.initSubmoduleAndRepo("",
                                                                repo,
@@ -567,7 +567,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield Close.close(repo, "foo");
+            yield DeinitUtil.deinit(repo, "foo");
 
             // Remove `foo` dir, otherwise, we will not need to re-init the
             // repo and the template will not be executed.

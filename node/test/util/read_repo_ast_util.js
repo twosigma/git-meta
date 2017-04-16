@@ -36,7 +36,7 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const Close               = require("../../lib/util/close");
+const DeinitUtil          = require("../../lib/util/deinit_util");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
@@ -498,7 +498,7 @@ describe("readRAST", function () {
 
         const commit = yield TestUtil.makeCommit(repo,
                                                  ["x/y", ".gitmodules"]);
-        yield Close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
@@ -544,7 +544,7 @@ describe("readRAST", function () {
         const index = yield repo.index();
         yield index.addByPath(".gitmodules");
         yield index.write();
-        yield Close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
             changes: {"README.md":""},
@@ -593,7 +593,7 @@ describe("readRAST", function () {
         const subRepo = yield submodule.open();
         const anotherSubCommit = yield TestUtil.generateCommit(subRepo);
         const lastCommit = yield TestUtil.makeCommit(repo, ["x/y"]);
-        yield Close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
@@ -752,7 +752,7 @@ describe("readRAST", function () {
                            baseSubPath,
                            "x/y",
                            subHead.id().tostrS());
-        yield Close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
@@ -795,7 +795,7 @@ describe("readRAST", function () {
         const nextSubCommit = yield TestUtil.generateCommit(subRepo);
         const index = yield repo.index();
         yield index.addAll("x/y", -1);
-        yield Close.close(repo, "x/y");
+        yield DeinitUtil.deinit(repo, "x/y");
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
@@ -1405,7 +1405,7 @@ describe("readRAST", function () {
         const modules = ".gitmodules";
         const nextCommit = yield TestUtil.makeCommit(repo, ["a", modules]);
         const nextSha = nextCommit.id().tostrS();
-        yield Close.close(repo, "a");
+        yield DeinitUtil.deinit(repo, "a");
 
         yield fs.writeFile(path.join(repo.workdir(),
                                      modules),
