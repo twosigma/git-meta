@@ -152,8 +152,6 @@ const doCommit = co.wrap(function *(args) {
                   "Please stage changes in new submodules before committing.");
     }
 
-    let commitStatus = repoStatus;
-
     // If we're using paths, the status of what we're committing needs to be
     // calculated.  Also, we need to see if there are any submodule
     // configuration changes.
@@ -178,7 +176,7 @@ const doCommit = co.wrap(function *(args) {
     // If no message on the command line, prompt for one.
 
     if (null === args.message) {
-        const initialMessage = Commit.formatEditorPrompt(commitStatus, cwd);
+        const initialMessage = Commit.formatEditorPrompt(repoStatus, cwd);
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
         args.message = GitUtil.stripMessage(rawMessage);
     }
