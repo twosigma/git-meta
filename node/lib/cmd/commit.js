@@ -71,15 +71,6 @@ exports.configureParser = function (parser) {
 Include changes to the meta-repo; disabled by default to prevent mistakes.`,
         defaultValue: false,
     });
-    parser.addArgument(["--closed"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the index for closed submodules, a very rare situation \
-that is expensive to check.`,
-        defaultValue: false,
-    });
     parser.addArgument(["--amend"], {
         required: false,
         action: "storeConst",
