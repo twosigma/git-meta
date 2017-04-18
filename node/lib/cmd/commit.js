@@ -115,7 +115,7 @@ function errorWithStatus(status, relCwd, message) {
     process.exit(1);
 }
 
-function checkForPathIncompatibleSubmodules(checkStatus, repoStatus, relCwd) {
+function checkForPathIncompatibleSubmodules(repoStatus, relCwd) {
 
     const Commit = require("../util/commit");
 
@@ -132,15 +132,16 @@ const doCommit = co.wrap(function *(args) {
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
     const PrintStatusUtil = require("../util/print_status_util");
-    const StatusUtil      = require("../util/status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
-    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
+    const repoStatus = yield Commit.getCommitStatus(repo,
+                                                    cwd, {
         showMetaChanges: args.meta,
-        workdirToTree: args.all,
+        all: args.all,
+        paths: args.file,
     });
 
     // Abort if there are uncommittable submodules; we don't want to commit a
@@ -168,41 +169,25 @@ const doCommit = co.wrap(function *(args) {
 
     const usingPaths = 0 !== args.file.length;
 
+    // If we're doing a path based commit, validate that we are in a supported
+    // configuration.
+
     if (usingPaths) {
-        // We need to compute the `commitStatus` object that reflects the paths
-        // requested by the user.  First, we need to resolve the relative
-        // paths.
-
-        const paths = yield args.file.map(filename => {
-            return GitUtil.resolveRelativePath(workdir, cwd, filename);
-        });
-
-        const requestedStatus = yield StatusUtil.getRepoStatus(repo, {
-            showMetaChanges: args.meta,
-            paths: paths,
-        });
-
-        commitStatus = Commit.calculatePathCommitStatus(repoStatus,
-                                                        requestedStatus);
-
-        checkForPathIncompatibleSubmodules(commitStatus, repoStatus, relCwd);
+        checkForPathIncompatibleSubmodules(repoStatus, relCwd);
     }
 
-    // If there are no staged changes, and we either didn't specify "all" or we
-    // did but there are no working directory changes, warn the user and exit
-    // early.
+    // If there are no staged changes, warn the user and exit early.
 
-    if (commitStatus.isIndexDeepClean() &&
-        (!args.all || commitStatus.isWorkdirDeepClean())) {
-        process.stdout.write(PrintStatusUtil.printRepoStatus(commitStatus,
+    if (repoStatus.isIndexDeepClean()) {
+        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
                                                              relCwd));
         return;
     }
 
+    // If no message on the command line, prompt for one.
+
     if (null === args.message) {
-        const initialMessage = Commit.formatEditorPrompt(commitStatus,
-                                                         cwd,
-                                                         args.all);
+        const initialMessage = Commit.formatEditorPrompt(commitStatus, cwd);
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
         args.message = GitUtil.stripMessage(rawMessage);
     }
@@ -212,10 +197,10 @@ const doCommit = co.wrap(function *(args) {
     }
 
     if (usingPaths) {
-        yield Commit.commitPaths(repo, commitStatus, args.message);
+        yield Commit.commitPaths(repo, repoStatus, args.message);
     }
     else {
-        yield Commit.commit(repo, args.all, commitStatus, args.message);
+        yield Commit.commit(repo, args.all, repoStatus, args.message);
     }
 });
 
@@ -226,7 +211,6 @@ const doAmend = co.wrap(function *(args) {
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
     const PrintStatusUtil = require("../util/print_status_util");
-    const StatusUtil      = require("../util/status_util");
     const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
 
@@ -240,9 +224,13 @@ const doAmend = co.wrap(function *(args) {
     const cwd = process.cwd();
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
-    let status = yield StatusUtil.getRepoStatus(repo, {
+    let status = yield Commit.getCommitStatus(repo,
+                                              cwd, {
         showMetaChanges: args.meta,
+        all: args.all,
+        paths: args.file,
     });
+
     const head = yield repo.getHeadCommit();
 
     // Load up the set of submodules in existence on the previous commit, if
@@ -305,7 +293,6 @@ const doAmend = co.wrap(function *(args) {
                                                              defaultSig,
                                                              status,
                                                              relCwd,
-                                                             args.all,
                                                              `${date}`);
         const initialMessage = head.message() + statusMessage;
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);

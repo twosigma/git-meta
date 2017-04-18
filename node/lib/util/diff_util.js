@@ -94,16 +94,17 @@ function readDiff(diff) {
  * the current index and working directory, and the specified `tree`, if
  * not null.  If the specified `allUntracked` is true, include all untracked
  * files rather than accumulating them by directory.  If `paths` is empty,
- * check the entire `repo`.  If the specified `workdirToTree` is true,
- * calculate workdir differences from the `tree`; otherwise, calculate
- * them between the workdir and the index of `repo`.  When calculating a diff
- * to compute changes to stage with a `-a` option (stage modified files), for
- * example, you need to `workdirToTree` to be true.
+ * check the entire `repo`.  If the specified `ignoreIndex` is true,
+ * return, in the `workdir` field, the status difference between the workdir
+ * and `tree`, ignoring the state of the index.  Otherwise, return, in the
+ * `workdir` field, the difference between the workir and the index; and in the
+ * `staged` field, the difference between the index and `tree`.  Note that when
+ * `ignoreIndex` is true, the returned `staged` field will always be `{}`.
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Tree|null} tree
  * @param {String []} paths
- * @param {Boolean} workdirToTree
+ * @param {Boolean} ignoreIndex
  * @param {Boolean} allUntracked
  * @return {Object}
  * @return {Object} return.staged path to FILESTATUS of staged changes
@@ -112,14 +113,14 @@ function readDiff(diff) {
 exports.getRepoStatus = co.wrap(function *(repo,
                                            tree,
                                            paths,
-                                           workdirToTree,
+                                           ignoreIndex,
                                            allUntracked) {
     assert.instanceOf(repo, NodeGit.Repository);
     if (null !== tree) {
         assert.instanceOf(tree, NodeGit.Tree);
     }
     assert.isArray(paths);
-    assert.isBoolean(workdirToTree);
+    assert.isBoolean(ignoreIndex);
     assert.isBoolean(allUntracked);
 
     const options = {
@@ -134,42 +135,24 @@ exports.getRepoStatus = co.wrap(function *(repo,
         options.flags = options.flags |
                         NodeGit.Diff.OPTION.RECURSE_UNTRACKED_DIRS;
     }
+    if (ignoreIndex) {
+        const workdirToTreeDiff =
+                   yield NodeGit.Diff.treeToWorkdir(repo, tree, options);
+        const workdirToTreeStatus = readDiff(workdirToTreeDiff);
+        return {
+            staged: {},
+            workdir: workdirToTreeStatus,
+        };
+    }
     const index = yield repo.index();
     const workdirToIndexDiff =
                        yield NodeGit.Diff.indexToWorkdir(repo, index, options);
     const workdirToIndexStatus = readDiff(workdirToIndexDiff);
-    if (!workdirToTree) {
-        const indexToTreeDiff =
+    const indexToTreeDiff =
             yield NodeGit.Diff.treeToIndex(repo, tree, null, options);
-        const indexToTreeStatus = readDiff(indexToTreeDiff);
-        return {
-            staged: indexToTreeStatus,
-            workdir: workdirToIndexStatus,
-        };
-    }
-    const workdirToTreeDiff =
-                   yield NodeGit.Diff.treeToWorkdir(repo, tree, options);
-    const workdirToTreeStatus = readDiff(workdirToTreeDiff);
-    const staged = {};
-    const workdir = {};
-
-    // `workdirToTreeStatus` contains all differences between the working
-    // directory and `tree`: staged and unstaged.  We characterize files having
-    // no change between the workdir and the index as being staged, and all
-    // else as workdir.
-
-    Object.keys(workdirToTreeStatus).forEach(path => {
-        const change = workdirToTreeStatus[path];
-        if (!(path in workdirToIndexStatus)) {
-            staged[path] = change;
-        }
-        else {
-            workdir[path] = change;
-        }
-    });
-
+    const indexToTreeStatus = readDiff(indexToTreeDiff);
     return {
-        staged: staged,
-        workdir: workdir,
+        staged: indexToTreeStatus,
+        workdir: workdirToIndexStatus,
     };
 });

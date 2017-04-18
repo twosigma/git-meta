@@ -45,15 +45,44 @@ const GitUtil             = require("./git_util");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
+const StatusUtil          = require("./status_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 
 /**
+ * Stage the specified `filename` having the specified `change` in the
+ * specified `index`.
+ *
+ * @param {NodeGit.Index}       index
+ * @param {String}              path
+ * @param {RepoStatus.FILEMODE} change
+ */
+exports.stageChange = co.wrap(function *(index, path, change) {
+    assert.instanceOf(index, NodeGit.Index);
+    assert.isString(path);
+    assert.isNumber(change);
+
+    if (RepoStatus.FILESTATUS.REMOVED !== change) {
+        yield index.addByPath(path);
+    }
+    else {
+        try {
+            yield index.remove(path, -1);
+        }
+        catch (e) {
+            // NOOP: this case will be hit if the removal of `path` has
+            // already been staged; we don't have any way that I can see to
+            // check for this other than just trying to remove it.
+        }
+    }
+});
+
+/**
  * Commit changes in the specified `repo`.  If the specified `doAll` is true,
- * commit staged and unstaged files; otherwise, commit only staged files.  Use
- * the specified `message` as the commit message.  If there are no files to
+ * stage files indicated that they are to be committed in the `staged` section.
+ * Use the specified `message` as the commit message.  If there are no files to
  * commit and `false === force`, do nothing and return null; otherwise, return
  * the created commit object.  Ignore submodules.  Use the specified
  * `signature` to identify the commit creator.
@@ -68,45 +97,30 @@ const TreeUtil            = require("./tree_util");
  * @return {NodeGit.Oid|null}
  */
 const commitRepo = co.wrap(function *(repo,
-                                      repoStatus,
+                                      changes,
                                       doAll,
                                       message,
                                       force,
                                       signature) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(repoStatus, RepoStatus);
+    assert.isObject(changes);
     assert.isBoolean(doAll);
     assert.isString(message);
     assert.isBoolean(force);
     assert.instanceOf(signature, NodeGit.Signature);
 
-    let areStagedFiles = 0 !== Object.keys(repoStatus.staged).length || force;
+    const doCommit = 0 !== Object.keys(changes).length || force;
 
     // If we're auto-staging files, loop through workdir and stage them.
 
     if (doAll) {
-        let indexUpdated = false;
         const index = yield repo.index();
-        const workdir = repoStatus.workdir;
-        for (let path in workdir) {
-            switch (workdir[path]) {
-                case RepoStatus.FILESTATUS.MODIFIED:
-                    yield index.addByPath(path);
-                    indexUpdated = true;
-                    areStagedFiles = true;
-                    break;
-                case RepoStatus.FILESTATUS.REMOVED:
-                    yield index.remove(path, -1);
-                    indexUpdated = true;
-                    areStagedFiles = true;
-                    break;
-            }
+        for (let path in changes) {
+            yield exports.stageChange(index, path, changes[path]);
         }
-        if (indexUpdated) {
-            yield index.write();
-        }
+        yield index.write();
     }
-    if (areStagedFiles) {
+    if (doCommit) {
         return yield repo.createCommitOnHead([],
                                              signature,
                                              signature,
@@ -132,28 +146,19 @@ function prefixWithPound(text) {
 }
 
 /**
- * Return text describing the changes in the specified `status`; including in
- * the changes to be committed section modified working directory files if the
- * specified `all` is true.  Use the specified `cwd` to show relative paths.
+ * Return text describing the changes in the specified `status`.  Use the
+ * specified `cwd` to show relative paths.
  *
  * @param {RepoStatus} status
  * @param {String}     cwd
- * @param {Boolean}    all
  */
-exports.formatStatus = function (status, cwd, all) {
+exports.formatStatus = function (status, cwd) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
-    assert.isBoolean(all);
 
     let result = "";
 
-    // If `all` is true, roll the workdir changes into the staged changes.
-
     const statuses = PrintStatusUtil.accumulateStatus(status);
-    if (all) {
-        statuses.staged = statuses.staged.concat(statuses.workdir);
-        statuses.workdir = [];
-    }
 
     result += `Changes to be committed:\n`;
     result += PrintStatusUtil.printStatusDescriptors(statuses.staged,
@@ -180,22 +185,19 @@ exports.formatStatus = function (status, cwd, all) {
 /**
  * Return a string describing the specified `status` that is appropriate as a
  * description in the editor prompting for a commit message; adjust paths to be
- * relative to the specified `cwd`.  Show that everything (other than
- * untracked) will be committed if the specified `all` is true.
+ * relative to the specified `cwd`.
  *
  * @param {RepoStatus} status
  * @param {String}     cwd
- * @param {Boolean}    all
  * @return {String}
  */
-exports.formatEditorPrompt  = function (status, cwd, all) {
+exports.formatEditorPrompt  = function (status, cwd) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
-    assert.isBoolean(all);
 
     let result = editorMessagePrefix + branchStatusLine(status);
 
-    result += exports.formatStatus(status, cwd, all);
+    result += exports.formatStatus(status, cwd);
 
     const prefixed = prefixWithPound(result);
     return "\n" + prefixed + "\n";
@@ -224,10 +226,11 @@ const stageOpenSubmodules = co.wrap(function *(index, submodules) {
  * Create a commit across modified repositories and the specified `metaRepo`
  * with the specified `message`, if provided, prompting the user if no message
  * is provided.  If the specified `all` is provided, automatically stage
- * modified files.  If a commit is generated, return an object that lists the
- * sha of the created meta-repo commit and the shas of any commits generated in
- * submodules. The behavior is undefined if there are entries in `.gitmodules`
- * for submodules having no commits.
+ * files listed to be committed as `staged` (note that some of these may
+ * already be staged).  If a commit is generated, return an object that lists
+ * the sha of the created meta-repo commit and the shas of any commits
+ * generated in submodules. The behavior is undefined if there are entries in
+ * `.gitmodules` for submodules having no commits.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
@@ -260,7 +263,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
         if (null !== repoStatus) {
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
             committed = yield commitRepo(subRepo,
-                                         repoStatus,
+                                         repoStatus.staged,
                                          all,
                                          message,
                                          false,
@@ -302,7 +305,7 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     yield stageOpenSubmodules(index, submodules);
 
     const metaResult = yield commitRepo(metaRepo,
-                                        metaStatus,
+                                        metaStatus.staged,
                                         all,
                                         message,
                                         subsChanged,
@@ -624,7 +627,21 @@ const getHeadParentTree = co.wrap(function *(repo) {
 
 const getAmendStatusForRepo = co.wrap(function *(repo, all) {
     const tree = yield getHeadParentTree(repo);
-    return yield DiffUtil.getRepoStatus(repo, tree, [], all, true);
+    const normal = yield DiffUtil.getRepoStatus(repo, tree, [], false, true);
+
+    if (!all) {
+        return normal;                                                // RETURN
+    }
+
+    // If we're ignoring the index, need calculate the changes in two steps.
+    // We've already got the "normal" comparison now we need to get changes
+    // directly against the workdir.
+
+    const toWorkdir = yield DiffUtil.getRepoStatus(repo, tree, [], true, true);
+
+    // And use `calculateAllStatus` to create the final value.
+
+    return exports.calculateAllStatus(normal.staged, toWorkdir.workdir);
 });
 
 
@@ -744,7 +761,8 @@ exports.amendRepo = co.wrap(function *(repo, message) {
  * Amend the specified meta `repo` and the shas of the created commits.  Amend
  * the head of `repo` and submodules listed in the specified `subsToAmend`
  * array.  Create new commits for other modified submodules described in the
- * specified `status`.  If the specified `all` is true, stage (tracked) files.
+ * specified `status`.  If the specified `all` is true, stage files marked as
+ * `staged` preemptively (some of these files may already be staged).
  * Use the specified `message` for all commits.  The behavior is undefined if
  * the amend should result in the first commit of a submodule being stripped,
  * or any meta-repo commit being stripped (i.e., when there would be no
@@ -774,13 +792,10 @@ exports.amendMetaRepo = co.wrap(function *(repo,
     const head = yield repo.getHeadCommit();
     const signature = head.author();
 
-
-    const stageFiles = co.wrap(function *(repo, workdir, index) {
+    const stageFiles = co.wrap(function *(repo, staged, index) {
         if (all) {
-            yield Object.keys(workdir).map(co.wrap(function *(path) {
-                if (RepoStatus.FILESTATUS.ADDED !== workdir[path]) {
-                    yield index.addByPath(path);
-                }
+            yield Object.keys(staged).map(co.wrap(function *(path) {
+                yield exports.stageChange(index, path, staged[path]);
             }));
         }
         yield index.write();
@@ -809,25 +824,11 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         if (amendSubSet.has(subName)) {
             // First, we check to see if this submodule needs to have its last
             // commit stripped.  That will be the case if we have no files
-            // staged or to be staged, indicating that if we were to do an
-            // amend, it would create an empty commit.
+            // staged indicated as staged.
 
-
-            // We have workdir changes only if we're including them (with
-            // 'all') and we have one that's not ADDED.
-
-            let workdirChanges = false;
             assert.isNotNull(repoStatus);
             const staged = repoStatus.staged;
-            const workdir = repoStatus.workdir;
-            if (all) {
-                Object.keys(workdir).forEach(path => {
-                    workdirChanges = workdirChanges ||
-                        RepoStatus.FILESTATUS.ADDED !== workdir[path];
-                });
-            }
-            if (!workdirChanges &&
-                0 === Object.keys(staged).length) {
+            if (0 === Object.keys(staged).length) {
                 const head = yield subRepo.getHeadCommit();
                 const parent = yield GitUtil.getParentCommit(subRepo, head);
                 const TYPE = NodeGit.Reset.TYPE;
@@ -837,13 +838,13 @@ exports.amendMetaRepo = co.wrap(function *(repo,
 
             }
             const subIndex = yield subRepo.index();
-            yield stageFiles(subRepo, workdir, subIndex);
+            yield stageFiles(subRepo, staged, subIndex);
             subCommits[subName] = yield exports.amendRepo(subRepo, message);
             return;                                                   // RETURN
         }
 
         const commit = yield commitRepo(subRepo,
-                                        repoStatus,
+                                        repoStatus.staged,
                                         all,
                                         message,
                                         false,
@@ -855,7 +856,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
 
     const index = yield repo.index();
     yield stageOpenSubmodules(index, subs);
-    yield stageFiles(repo, status.workdir, index);
+    yield stageFiles(repo, status.staged, index);
 
     const metaCommit = yield exports.amendRepo(repo, message);
     return {
@@ -883,13 +884,11 @@ exports.formatAmendEditorPrompt = function (commitSig,
                                             repoSig,
                                             status,
                                             cwd,
-                                            all,
                                             date) {
     assert.instanceOf(commitSig, NodeGit.Signature);
     assert.instanceOf(repoSig, NodeGit.Signature);
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
-    assert.isBoolean(all);
     assert.isString(date);
 
     let result = editorMessagePrefix;
@@ -905,7 +904,7 @@ Author:    ${commitSig.name()} <${commitSig.email()}>
 
     result += `Date:      ${date}\n\n`;
     result += branchStatusLine(status);
-    result += exports.formatStatus(status, cwd, all);
+    result += exports.formatStatus(status, cwd);
     return "\n" + prefixWithPound(result) + "\n";
 };
 
@@ -1076,3 +1075,199 @@ exports.areSubmodulesIncompatibleWithPathCommits = function (status) {
     }
     return false;
 };
+
+/**
+ * Return the staged changes to be committed or left uncommitted for an all
+ * commit given the specified `staged` index files and specified `workdir`
+ * differences.
+ *
+ * @param {Object} staged     map from path to {RepoStatus.FILESTATUS}
+ * @param {Object} workdir  map from path to {RepoStatus.FILESTATUS}
+ * @return {Object}
+ * @return {Object} return.staged   map from path to {RepoStatus.FileStatus}
+ * @return {Object} return.workdir  map from path to {RepoStatus.FileStatus}
+ */
+exports.calculateAllStatus = function (staged, workdir) {
+    assert.isObject(staged);
+    assert.isObject(workdir);
+
+    const ADDED = RepoStatus.FILESTATUS.ADDED;
+    const resultIndex = {};
+    const resultWorkdir = {};
+
+    Object.keys(workdir).forEach(filename => {
+        const workdirStatus = workdir[filename];
+
+        // If untracked, store this change in the workdir section; otherwise,
+        // store it in the staged section.
+
+        if (ADDED === workdirStatus && ADDED !== staged[filename]) {
+            resultWorkdir[filename] = workdirStatus;
+        }
+        else {
+            resultIndex[filename] = workdirStatus;
+        }
+    });
+
+    return {
+        staged: resultIndex,
+        workdir: resultWorkdir,
+    };
+};
+
+/**
+ * Return a `RepoStatus` object reflecting the commit that would be made for a
+ * repository having the specified `normalStatus` (indicating HEAD -> index ->
+ * workdir changes) and the specified `toWorkdirStatus` (indicating HEAD ->
+ * workdir changes).  All workdir changes in `toWorkdirStatus` will be turned
+ * into staged changes, except when `toWorkdirStatus` indicates that a file has
+ * been added but `normalStatus` does not, i.e., the file is untracked.  The
+ * behavior is undefined if `normalStatus` and `toWorkdirStatus` to not have
+ * the same values for fields other than `staged` and `workdir` in the main
+ * repo status or that of any submodules.
+ *
+ * @param {RepoStatus} normalStatus
+ * @param {RepoStatus} toWorkdirStatus
+ * @return {RepoStatus}
+ */
+exports.calculateAllRepoStatus = function (normalStatus, toWorkdirStatus) {
+    assert.instanceOf(normalStatus, RepoStatus);
+    assert.instanceOf(toWorkdirStatus, RepoStatus);
+
+    function convertOneRepo(normal, toWorkdir) {
+        const index = normal.staged;
+        const workdir = toWorkdir.workdir;
+        const converted = exports.calculateAllStatus(index, workdir);
+        return normal.copy({
+            staged: converted.staged,
+            workdir: converted.workdir,
+        });
+    }
+
+    // Convert the status for the meta-repo.
+
+    const base = convertOneRepo(normalStatus, toWorkdirStatus);
+
+
+    // Then do the same for each submodule.
+
+    const subs = base.submodules;
+    const workdirSubs = toWorkdirStatus.submodules;
+    const resultSubs = {};
+    Object.keys(subs).forEach(subName => {
+        const sub = subs[subName];
+        const normalSubWorkdir = sub.workdir;
+        if (null === normalSubWorkdir) {
+            // If the submodule isn't open, take it as is.
+
+            resultSubs[subName] = sub;
+            return;                                                   // RETURN
+        }
+
+        // Otherwise, when the submodule is open, we need to pull out the
+        // `RepoStatus` objects from both the normal and workdir sides and
+        // apply `convertOneRepo`.
+
+        const toWorkdirSub = workdirSubs[subName];
+        assert.notEqual(undefined, toWorkdirSub);
+        const toWorkdirSubWorkdir = toWorkdirSub.workdir;
+        assert.isNotNull(toWorkdirSubWorkdir);
+        const newStatus = convertOneRepo(normalSubWorkdir.status,
+                                         toWorkdirSubWorkdir.status);
+        const newWorkdir = new RepoStatus.Submodule.Workdir(
+                                                    newStatus,
+                                                    normalSubWorkdir.relation);
+        resultSubs[subName] = sub.copy({
+            workdir: newWorkdir,
+        });
+    });
+    return base.copy({
+        submodules: resultSubs,
+    });
+};
+
+/**
+ * Return the status of the specified `repo` indicating a commit that would be
+ * performed, including all (tracked) modified files if the specified `all` is
+ * provided (default false) and the state of them meta-repo if the specified
+ * `showMetaChanges` is true (default is false).  Restrict status to the
+ * specified `paths` if nonempty (default []), using the specified `cwd` to
+ * resolve their meaning.  The behavior undefined unless
+ * `0 === paths.length || !all`.
+ * 
+ * @param {NodeGit.Repository} repo
+ * @param {String}             cwd
+ * @param {Object}             [options]
+ * @param {Boolean}            [options.all]
+ * @param {Boolean}            [options.showMetaChanges]
+ * @return {RepoStatus}
+ */
+exports.getCommitStatus = co.wrap(function *(repo, cwd, options) {
+    if (undefined === options) {
+        options = {};
+    }
+    else {
+        assert.isObject(options);
+    }
+    if (undefined === options.all) {
+        options.all = false;
+    }
+    else {
+        assert.isBoolean(options.all);
+    }
+    if (undefined === options.showMetaChanges) {
+        options.showMetaChanges = false;
+    }
+    else {
+        assert.isBoolean(options.showMetaChanges);
+    }
+    if (undefined === options.paths) {
+        options.paths = [];
+    }
+    else {
+        assert.isArray(options.paths);
+    }
+    assert(0 === options.paths.length || !options.all,
+           "paths not compatible with auto-staging");
+
+    // The `baseStatus` object holds the "normal" status reflecting the
+    // difference between HEAD -> index and index -> workdir.  This status is
+    // used to calculate all other types such as for `all` and with `paths.
+
+    const baseStatus = yield StatusUtil.getRepoStatus(repo, {
+        showMetaChanges: options.showMetaChanges,
+    });
+
+    if (0 !== options.paths.length) {
+        // Doing path-based status.  First, we need to compute the
+        // `commitStatus` object that reflects the paths requested by the user.
+        // First, we need to resolve the relative paths.
+
+        const paths = yield options.paths.map(filename => {
+            return GitUtil.resolveRelativePath(repo.workdir(), cwd, filename);
+        });
+
+        // Now we get the path-based status.
+
+        const requestedStatus = yield StatusUtil.getRepoStatus(repo, {
+            showMetaChanges: options.showMetaChanges,
+            paths: paths,
+        });
+
+        return exports.calculatePathCommitStatus(baseStatus, requestedStatus);
+    }
+    if (options.all) {
+        // If we're auto-staging, we have to compute the commit status
+        // differently, comparing the workdir directly to the tree rather than
+        // the index, but still avoiding untracked files.
+
+        const workdirStatus = yield StatusUtil.getRepoStatus(repo, {
+            showMetaChanges: options.showMetaChanges,
+            ignoreIndex: true,
+        });
+        return exports.calculateAllRepoStatus(baseStatus, workdirStatus);
+    }
+    // If no special options, just return `baseStatus` as is.
+
+    return baseStatus;
+});
