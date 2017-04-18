@@ -704,9 +704,7 @@ exports.editMessage = co.wrap(function *(repo, initialContents) {
                              ["-c", `${editorCommand} '${messagePath}'`], {
         stdio: "inherit",
     });
-    const result = yield fs.readFile(messagePath, "utf8");
-    yield fs.unlink(messagePath);
-    return result;
+    return yield fs.readFile(messagePath, "utf8");
 });
 
 /**
