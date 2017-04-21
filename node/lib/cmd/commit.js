@@ -71,15 +71,6 @@ exports.configureParser = function (parser) {
 Include changes to the meta-repo; disabled by default to prevent mistakes.`,
         defaultValue: false,
     });
-    parser.addArgument(["--closed"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the index for closed submodules, a very rare situation \
-that is expensive to check.`,
-        defaultValue: false,
-    });
     parser.addArgument(["--amend"], {
         required: false,
         action: "storeConst",
@@ -88,6 +79,14 @@ that is expensive to check.`,
 Amend the last commit, including newly staged chnages and, (if -a is \
 specified) modifications.  Will fail unless all submodules changed in HEAD \
 have matching commits and have no new commits.`,
+    });
+    parser.addArgument(["-i", "--interactive"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `\
+Interactively choose which meta- and sub-repositories to commit, and what
+message to use with each one.`,
     });
     parser.addArgument(["file"], {
         type: "string",
@@ -161,8 +160,6 @@ const doCommit = co.wrap(function *(args) {
                   "Please stage changes in new submodules before committing.");
     }
 
-    let commitStatus = repoStatus;
-
     // If we're using paths, the status of what we're committing needs to be
     // calculated.  Also, we need to see if there are any submodule
     // configuration changes.
@@ -170,37 +167,58 @@ const doCommit = co.wrap(function *(args) {
     const usingPaths = 0 !== args.file.length;
 
     // If we're doing a path based commit, validate that we are in a supported
-    // configuration.
+    // configuration, unless it's interactive, where the user can see that
+    // things other than the paths chosen will be committed.
 
-    if (usingPaths) {
+    if (usingPaths && !args.interactive) {
         checkForPathIncompatibleSubmodules(repoStatus, relCwd);
     }
 
-    // If there are no staged changes, warn the user and exit early.
+    // If there is nothing possible to commit, exit early.
 
-    if (repoStatus.isIndexDeepClean()) {
+    if (!Commit.shouldCommit(repoStatus, false, undefined)) {
         process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
                                                              relCwd));
         return;
     }
 
-    // If no message on the command line, prompt for one.
+    let message = args.message;
+    let subMessages;
 
-    if (null === args.message) {
-        const initialMessage = Commit.formatEditorPrompt(commitStatus, cwd);
+    if (args.interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
+
+        const prompt = Commit.formatSplitCommitEditorPrompt(repoStatus);
+        const userText = yield GitUtil.editMessage(repo, prompt);
+        const userData = Commit.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
+
+        // Check if there's actually anything to commit.
+
+        if (!Commit.shouldCommit(repoStatus, message === null, subMessages)) {
+            console.log("Nothing to commit.");
+            return;
+        }
+    }
+    else if (null === message) {
+        // If no message on the command line, prompt for one.
+
+        const initialMessage = Commit.formatEditorPrompt(repoStatus, cwd);
         const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
-        args.message = GitUtil.stripMessage(rawMessage);
+        message = GitUtil.stripMessage(rawMessage);
     }
 
-    if ("" === args.message) {
+    if ("" === message) {
         abortForNoMessage();
     }
 
     if (usingPaths) {
-        yield Commit.commitPaths(repo, repoStatus, args.message);
+        yield Commit.commitPaths(repo, repoStatus, message, subMessages);
     }
     else {
-        yield Commit.commit(repo, args.all, repoStatus, args.message);
+        yield Commit.commit(repo, args.all, repoStatus, message, subMessages);
     }
 });
 
@@ -218,6 +236,11 @@ const doAmend = co.wrap(function *(args) {
 
     if (usingPaths) {
         throw new UserError("Paths not supported with amend yet.");
+    }
+
+    if (args.interactive) {
+        throw new UserError(`\
+TODO: interactive commits are not yet supported with '--amend'.`);
     }
 
     const repo = yield GitUtil.getCurrentRepo();
@@ -323,6 +346,10 @@ const doAmend = co.wrap(function *(args) {
 exports.executeableSubcommand = function (args) {
     if (args.all && 0 !== args.file.length) {
         console.error("The use of '-a' and files does not make sense.");
+        process.exit(1);
+    }
+    if (args.message && args.interactive) {
+        console.error("The use of '-i' and '-m' does not make sense.");
         process.exit(1);
     }
     if (args.amend) {

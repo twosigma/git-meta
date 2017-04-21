@@ -888,6 +888,43 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("stripMessageLines", function () {
+        const cases = {
+            "trivial": {
+                input: [],
+                expected: "",
+            },
+            "almost trivial": {
+                input: [""],
+                expected: "",
+            },
+            "simple": {
+                input: ["a"],
+                expected: "a\n",
+            },
+            "all blank": {
+                input: ["", "", ""],
+                expected: "",
+            },
+            "all comments": {
+                input: ["#", " ", "#"],
+                expected: "",
+            },
+            "lines before": {
+                input: ["", "", "", "a"],
+                expected: "a\n",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = GitUtil.stripMessageLines(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+
     describe("stripMessage", function () {
         const cases = {
             "trivial": {

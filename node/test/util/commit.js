@@ -43,25 +43,25 @@ const RepoStatus      = require("../../lib/util/repo_status");
 const StatusUtil      = require("../../lib/util/status_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const TestUtil        = require("../../lib/util/test_util");
+const UserError       = require("../../lib/util/user_error");
 
 
 // We'll always commit the repo named 'x'.  If a new commit is created ni the
 // meta-repo, it will be named 'x'.  New commits created in sub-repos will be
 // identified as their submodule name.
 
-const committer = co.wrap(function *(doAll, message, repos) {
+const committer = co.wrap(function *(doAll, message, repos, subMessages) {
     const x = repos.x;
     const status = yield Commit.getCommitStatus(x,
                                                 x.workdir(), {
         showMetaChanges: true,
         all: doAll,
     });
-    const result = yield Commit.commit(x, doAll, status, message);
-    if (null === result) {
-        return undefined;                                             // RETURN
-    }
+    const result = yield Commit.commit(x, doAll, status, message, subMessages);
     let commitMap = {};
-    commitMap[result.metaCommit] = "x";
+    if (null !== result.metaCommit) {
+        commitMap[result.metaCommit] = "x";
+    }
     Object.keys(result.submoduleCommits).forEach(subName => {
         const newCommit = result.submoduleCommits[subName];
         commitMap[newCommit] = subName;
@@ -126,8 +126,52 @@ describe("Commit", function () {
         });
     });
 
+    describe("prefixWithPound", function () {
+        const cases = {
+            "empty": {
+                input: "",
+                expected: "",
+            },
+            "one line": {
+                input: "a\n",
+                expected: "# a\n",
+            },
+            "one blank": {
+                input: "\n",
+                expected: "#\n",
+            },
+            "mixed": {
+                input: `\
+
+a
+
+b
+
+`,
+                expected: `\
+#
+# a
+#
+# b
+#
+`
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.prefixWithPound(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
     describe("formatStatus", function () {
         const cases = {
+            "nothing": {
+                status: new RepoStatus(),
+                expected: "",
+            },
             "workdir": {
                 status: new RepoStatus({
                     currentBranchName: "master",
@@ -226,6 +270,315 @@ Untracked files:
                 const resultLines = result.split("\n");
                 const expectedLines = c.expected.split("\n");
                 assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
+
+    describe("shouldCommit", function () {
+        const cases = {
+            "trivial": {
+                status: new RepoStatus(),
+                skipMeta: false,
+                subMessages: {},
+                expected: false,
+            },
+            "staged meta": {
+                status: new RepoStatus({
+                    staged: {
+                        foo: FILESTATUS.ADDED,
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: staged meta": {
+                status: new RepoStatus({
+                    staged: {
+                        foo: FILESTATUS.ADDED,
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "unchanged sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: false,
+            },
+            "unchanged open sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: false,
+            },
+            "index commit change in sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("2",
+                                                       "/a",
+                                                       RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: index commit change in sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("2",
+                                                       "/a",
+                                                       RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "index url change in sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/b",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: index url change in sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/b",
+                                                       RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "deleted sub in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: null,
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: deleted sub in index": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: null,
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "new sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: null,
+                            index: new Submodule.Index("1", "/a", null),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: new sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: null,
+                            index: new Submodule.Index("1", "/a", null),
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "new workdir commit": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "2",
+                            }), RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: true,
+            },
+            "skip meta: new workdir commit": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "2",
+                            }), RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {},
+                expected: false,
+            },
+            "skip meta: staged workdir change": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    foo: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: true,
+                subMessages: {
+                    "foo": "meh",
+                },
+                expected: true,
+            },
+            "staged workdir change -- undefined subMessages": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    foo: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: undefined,
+                expected: true,
+            },
+            "staged workdir change -- missing from subMessages": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    foo: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {},
+                expected: false,
+            },
+            "unstaged workdir change": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                workdir: {
+                                    foo: FILESTATUS.ADDED,
+                                },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                skipMeta: false,
+                subMessages: {
+                    "foo": "meh",
+                },
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.shouldCommit(c.status,
+                                                   c.skipMeta,
+                                                   c.subMessages);
+                assert.equal(result, c.expected);
             });
         });
     });
@@ -371,24 +724,12 @@ Untracked files:
     });
 
     describe("commit", function () {
-        function makeCommitter(doAll, message) {
-            return function (repos, maps) {
-                return committer(doAll, message, repos, maps);
+        function makeCommitter(doAll, message, subMessages) {
+            return function (repos) {
+                return committer(doAll, message, repos, subMessages);
             };
         }
         const cases = {
-            "simple nothing": {
-                initial: "x=S",
-                doAll: false,
-                message: "",
-                expected: {},
-            },
-            "nothing with all": {
-                initial: "x=S",
-                doAll: true,
-                message: "",
-                expected: {},
-            },
             "staged addition": {
                 initial: "x=S:I a=b",
                 doAll: true,
@@ -413,35 +754,11 @@ Untracked files:
                 message: "message",
                 expected: "x=S:Cx-1 README.md=yyy;Bmaster=x",
             },
-            "unstaged addition": {
-                initial: "x=S:W a=b",
-                message: "foo",
-                doAll: false,
-                expected: {},
-            },
-            "unstaged addition, auto-stage": {
-                initial: "x=S:W a=b",
-                message: "foo",
-                doAll: true,
-                expected: {},
-            },
-            "unstaged deletion": {
-                initial: "x=S:W README.md",
-                message: "foo",
-                doAll: false,
-                expected: {},
-            },
             "unstaged deletion, auto-stage": {
                 initial: "x=S:W README.md",
                 message: "message",
                 doAll: true,
                 expected: "x=S:Cx-1 README.md;Bmaster=x",
-            },
-            "unstaged modification": {
-                initial: "x=S:W README.md=foo",
-                message: "foo",
-                doAll: false,
-                expected: {},
             },
             "unstaged modification, auto-stage": {
                 initial: "x=S:W README.md=foo",
@@ -474,24 +791,12 @@ Untracked files:
                 expected:
                     "x=U:Cx-2 s=Sa:s;Os Cs-1 u=v!H=s;Bmaster=x",
             },
-            "wd change in submodule": {
-                initial: "a=S|x=U:Os W README.md=bar",
-                message: "foo",
-                doAll: false,
-                expected: {},
-            },
             "wd change in submodule -- auto-stage": {
                 initial: "a=S|x=U:Os W README.md=bar",
                 message: "message",
                 doAll: true,
                 expected: `
 x=U:Cx-2 s=Sa:s;Os Cs-1 README.md=bar!H=s;Bmaster=x`,
-            },
-            "wd addition in submodule -- auto-stage": {
-                initial: "a=S|x=U:Os W foo=baz",
-                message: "foo",
-                doAll: true,
-                expected: {},
             },
 
             // Note that Git will put the first commit on branch `master`
@@ -520,11 +825,38 @@ q=B:Cz-1;Bmaster=z|x=S:C2-1 s=Sq:1;I s=Sq:z,x=Sq:1;Bmaster=2;Os H=1`,
                 expected: `
 x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
             },
+            "staged change in submodule, mentioned": {
+                initial: "a=S|x=U:Os I u=v",
+                doAll: false,
+                message: null,
+                subMessages: {
+                    s: "this message",
+                },
+                expected: "x=E:Os Cthis message#s-1 u=v!H=s",
+            },
+            "staged change in submodule with commit override": {
+                initial: "a=S|x=U:Os I u=v",
+                doAll: false,
+                message: "message",
+                subMessages: {
+                    s: "this message",
+                },
+                expected:
+                    "x=U:Cx-2 s=Sa:s;Os Cthis message#s-1 u=v!H=s;Bmaster=x",
+            },
+            "new commit in a submodule": {
+                initial: "a=S|x=U:Ca-1;Bx=a;I s=Sa:a;Ba=a",
+                message: "message",
+                expected: "x=E:Cx-2 s=Sa:a;Bmaster=x;I s=~",
+                doAll: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
-                const manipulator = makeCommitter(c.doAll, c.message);
+                const manipulator = makeCommitter(c.doAll,
+                                                  c.message,
+                                                  c.subMessages);
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                                c.expected,
                                                                manipulator,
@@ -1864,6 +2196,418 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 const c = cases[caseName];
                 const result = Commit.calculateAllRepoStatus(c.normal,
                                                              c.toWorkdir);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
+    describe("removeSubmoduleChanges", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: new RepoStatus(),
+            },
+            "some data in base": {
+                input: new RepoStatus({
+                    headCommit: "1",
+                    currentBranchName: "foo",
+                }),
+                expected: new RepoStatus({
+                    headCommit: "1",
+                    currentBranchName: "foo",
+                }),
+            },
+            "closed sub": {
+                input: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                        }),
+                    },
+                }),
+                expected: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                        }),
+                    },
+                }),
+            },
+            "open and unchanged": {
+                input: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                expected: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+            },
+            "open and changed": {
+                input: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                    staged: { foo: FILESTATUS.ADDED },
+                                    workdir: { bar: FILESTATUS.MODIFIED },
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                expected: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.removeSubmoduleChanges(c.input);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+
+    describe("formatSplitCommitEditorPrompt", function () {
+        // Here, we don't need to test the details of formatting that are
+        // tested elsewhere, just that we pull it all together, including,
+        // especially
+        const cases = {
+            // This case couldn't actually be used to generate a commit, but it
+            // is the simplest case.
+
+            "just on a branch": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                }),
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch master.
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+
+            "changes to the meta": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    staged: {
+                        baz: FILESTATUS.ADDED,
+                    },
+                }),
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch foo.
+# Changes to be committed:
+# \tnew file:     baz
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+            "sub-repo with staged change": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("2",
+                                                       "/a",
+                                                       RELATION.AHEAD),
+                        }),
+                    },
+                }),
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch foo.
+# Changes to be committed:
+# \tmodified:     bar (submodule, new commits)
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+            "sub-repo with just unstaged changes": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                    workdir: {
+                                        foo: FILESTATUS.MODIFIED,
+                                    },
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch foo.
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+            "sub-repo with staged changes": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                    staged: {
+                                        foo: FILESTATUS.MODIFIED,
+                                    },
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch foo.
+# -----------------------------------------------------------------------------
+
+# <bar> enter message for 'bar' above this line; delete this line to skip \
+committing 'bar'
+# Changes to be committed:
+# \tmodified:     foo
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.formatSplitCommitEditorPrompt(c.input);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
+
+    describe("parseSplitCommitMessages", function () {
+        const cases = {
+            "trivial": {
+                input: "",
+                expected: {
+                    metaMessage: null,
+                    subMessages: {},
+                },
+            },
+            "some meta": {
+                input: `\
+# just thinking
+This is my commit.
+
+and a little more.
+# but not this
+
+# or this
+# <*>
+`,
+                expected: {
+                    metaMessage: `\
+This is my commit.
+
+and a little more.
+`,
+                    subMessages: {},
+                },
+            },
+            "tag with trail": {
+                input: `\
+my message
+# <*> trailing stuff
+`,
+                expected: {
+                    metaMessage: `my message\n`,
+                    subMessages: {},
+                },
+            },
+            "just a sub": {
+                input: `\
+
+
+hello sub
+# <my-sub>
+`,
+                expected: {
+                    metaMessage: null,
+                    subMessages: {
+                        "my-sub": `\
+hello sub
+`,
+                    },
+                },
+            },
+            "double sub": {
+                input: `\
+# <sub>
+# <sub>
+`,
+                fails: true,
+            },
+            "sub, no meta": {
+                input: "# <sub>\n",
+                expected: {
+                    metaMessage: null,
+                    subMessages: {},
+                },
+            },
+            "inherited sub message": {
+                input: `\
+meta message
+# <*>
+# <a-sub>
+`,
+                expected: {
+                    metaMessage: "meta message\n",
+                    subMessages: {
+                        "a-sub": "meta message\n",
+                    },
+                },
+            },
+            "mixed": {
+                input: `\
+# intro
+my meta message
+# <*>
+
+my a message
+# <a>
+
+# hmm
+# <b>
+
+this is for c
+# <c>
+
+and for d
+# <d>
+`,
+                expected: {
+                    metaMessage: "my meta message\n",
+                    subMessages: {
+                        a: "my a message\n",
+                        b: "my meta message\n",
+                        c: "this is for c\n",
+                        d: "and for d\n",
+                    },
+                },
+            },
+            "empty meta": {
+                input: "# <*> meta meta\n",
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                let result;
+                try {
+                    result = Commit.parseSplitCommitMessages(c.input);
+                }
+                catch (e) {
+                    if (c.fails && (e instanceof UserError)) {
+                        return;                                       // RETURN
+                    }
+                    throw e;
+                }
+                assert(!c.fails, "should fail");
                 assert.deepEqual(result, c.expected);
             });
         });

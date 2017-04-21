@@ -50,6 +50,7 @@ const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
+const UserError           = require("./user_error");
 
 /**
  * Stage the specified `filename` having the specified `change` in the
@@ -141,9 +142,41 @@ function branchStatusLine(status) {
     return `On detached head ${GitUtil.shortSha(status.headCommit)}.\n`;
 }
 
-function prefixWithPound(text) {
-    return text.replace(/^/mg, "# ").replace(/^# $/mg, "#");
-}
+/**
+ * Return a string having the same value as the specified `text` except that
+ * each empty line is replaced with "#", and each non-empty line is prefixed
+ * with "# ".  The result of calling with the empty string is the empty string.
+ * The behavior is undefined unless `"" === text || text.endsWith("\n")`.
+ *
+ * @param {String} text
+ * @return {String}
+ */
+exports.prefixWithPound = function (text) {
+    assert.isString(text);
+    if ("" === text) {
+        return "";                                                    // RETURN
+    }
+    assert(text.endsWith("\n"));
+    const lines = text.split("\n");
+    const resultLines = lines.map((line, i) => {
+
+        // The split operation makes an empty line that we don't want to
+        // prefix.
+
+        if (i === lines.length - 1) {
+            return "";
+        }
+
+        // Empty lines don't get "# ", just "#".
+
+        if ("" === line) {
+            return "#";                                               // RETURN
+        }
+
+        return `# ${line}`;
+    });
+    return resultLines.join("\n");
+};
 
 /**
  * Return text describing the changes in the specified `status`.  Use the
@@ -160,10 +193,12 @@ exports.formatStatus = function (status, cwd) {
 
     const statuses = PrintStatusUtil.accumulateStatus(status);
 
-    result += `Changes to be committed:\n`;
-    result += PrintStatusUtil.printStatusDescriptors(statuses.staged,
-                                                     x => x,
-                                                     cwd);
+    if (0 !== statuses.staged.length) {
+        result += `Changes to be committed:\n`;
+        result += PrintStatusUtil.printStatusDescriptors(statuses.staged,
+                                                         x => x,
+                                                         cwd);
+    }
 
     if (0 !== statuses.workdir.length) {
         result += "\n";
@@ -199,8 +234,8 @@ exports.formatEditorPrompt  = function (status, cwd) {
 
     result += exports.formatStatus(status, cwd);
 
-    const prefixed = prefixWithPound(result);
-    return "\n" + prefixed + "\n";
+    const prefixed = exports.prefixWithPound(result);
+    return "\n" + prefixed + "#\n";
 };
 
 /**
@@ -223,29 +258,112 @@ const stageOpenSubmodules = co.wrap(function *(index, submodules) {
 });
 
 /**
+ * Return true if a commit should be generated for the repo having the
+ * specified `status`.  Ignore the possibility of generating a meta-repo commit
+ * if the specified `skipMeta` is true.  If the specified `subMessages` is
+ * provided, ignore staged changes in submodules unless they have entries in
+ * `subMessages`.
+ *
+ * @param {RepoStatus} status
+ * @param {Boolean}    skipMeta
+ * @param {Object}     [subMessages]
+ * @return {Boolean}
+ */
+exports.shouldCommit = function (status, skipMeta, subMessages) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isBoolean(skipMeta);
+    if (undefined !== subMessages) {
+        assert.isObject(subMessages);
+    }
+
+    // If the meta-repo has staged commits, we must commit.
+
+    if (!skipMeta && !status.isIndexClean()) {
+        return true;                                                  // RETURN
+    }
+
+    const subs = status.submodules;
+    const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
+
+    // Look through the submodules looking for one that would require a new
+    // commit in the meta-repo.
+
+    for (let name in subs) {
+        const sub = subs[name];
+        const commit = sub.commit;
+        const index = sub.index;
+        const workdir = sub.workdir;
+        if (null !== workdir) {
+            if (!skipMeta && SAME !== workdir.relation) {
+                // changed commit in workdir
+
+                return true;                                          // RETURN
+            }
+            if ((undefined === subMessages || (name in subMessages)) &&
+                     !workdir.status.isIndexClean()) {
+                // If this sub-repo is to be committed, and it has a dirty
+                // index, then we must commit.
+
+                return true;                                          // RETURN
+            }
+        }
+
+        if (!skipMeta &&
+            (null === index ||                // deleted
+             null === commit ||               // added
+             SAME !== index.relation ||       // changed commit
+             commit.url !== index.url)) {     // changed URL
+            // changed commit in index
+
+            return true;                                              // RETURN
+        }
+    }
+
+    return false;
+};
+
+/**
  * Create a commit across modified repositories and the specified `metaRepo`
- * with the specified `message`, if provided, prompting the user if no message
- * is provided.  If the specified `all` is provided, automatically stage
+ * with the specified `message`; if `null === message`, do not create a commit
+ * for the meta-repo.  If the specified `all` is provided, automatically stage
  * files listed to be committed as `staged` (note that some of these may
- * already be staged).  If a commit is generated, return an object that lists
- * the sha of the created meta-repo commit and the shas of any commits
- * generated in submodules. The behavior is undefined if there are entries in
- * `.gitmodules` for submodules having no commits.
+ * already be staged).  If the optionally specified `subMessages` is provided,
+ * use the messages it contains for the commit messages of the respective
+ * submodules in it, and create no commits for submodules with no entries in
+ * `subMessages`.  Return an object that lists the sha of the created meta-repo
+ * commit and the shas of any commits generated in submodules. The behavior is
+ * undefined if there are entries in `.gitmodules` for submodules having no
+ * commits, or if `null === message && undefined === subMessages`.  The
+ * behavior is undefined unless there is somthing to commit.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
  * @param {Boolean}            all
  * @param {RepoStatus}         metaStatus
- * @param {String}             message
- * @return {Object|null}
- * @return {String} return.metaCommit
- * @return {Object} submoduleCommits map from submodule name to new commit
+ * @param {String|null}        message
+ * @param {Object}             [subMessages] map from submodule to message
+ * @return {Object}
+ * @return {String|null} return.metaCommit
+ * @return {Object} return.submoduleCommits map submodule name to new commit
  */
-exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
+exports.commit = co.wrap(function *(metaRepo,
+                                    all,
+                                    metaStatus,
+                                    message,
+                                    subMessages) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isBoolean(all);
     assert.instanceOf(metaStatus, RepoStatus);
-    assert.isString(message);
+    assert(exports.shouldCommit(metaStatus, message === null, subMessages),
+           "nothing to commit");
+    if (null !== message) {
+        assert.isString(message);
+    }
+    if (undefined !== subMessages) {
+        assert.isObject(subMessages);
+    }
+    assert(null !== message || undefined !== subMessages,
+           "if no meta message, sub messages must be specified");
 
     const signature = metaRepo.defaultSignature();
     const submodules = metaStatus.submodules;
@@ -255,69 +373,56 @@ exports.commit = co.wrap(function *(metaRepo, all, metaStatus, message) {
     // workdir changes.
 
     const subCommits = {};
-    let subsChanged = false;
     const commitSubmodule = co.wrap(function *(name) {
+        let subMessage = message;
+
+        // If we're explicitly providing submodule messages, look the commit
+        // message up for this submodule and return early if there isn't one.
+
+        if (undefined !== subMessages) {
+            subMessage = subMessages[name];
+            if (undefined === subMessage) {
+                return;                                               // RETURN
+            }
+        }
         const status = submodules[name];
         const repoStatus = (status.workdir && status.workdir.status) || null;
-        let committed = null;
-        if (null !== repoStatus) {
+        if (null !== repoStatus &&
+            0 !== Object.keys(repoStatus.staged).length) {
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
-            committed = yield commitRepo(subRepo,
-                                         repoStatus.staged,
-                                         all,
-                                         message,
-                                         false,
-                                         signature);
-        }
-        if (null !== committed) {
-            subCommits[name] = committed.tostrS();
-        }
-
-        // Note that we need to stage the submodule in the meta-repo if:
-        // - we made a commit
-        // - there was already a new commit in the workdir
-
-        if (null !== committed ||
-            (null !== repoStatus &&
-             (repoStatus.headCommit !== status.index.sha))) {
-            subsChanged = true;
-        }
-
-        // Othwerise, note that we even if we don't need to stage the sub, we
-        // did have a change if:
-        // - the sub was added
-        // - the sub was removed
-        // - the sub had a new commit in the index
-        // - the sub had a URL change
-
-        else if (status.commit === null ||
-                 status.index === null ||
-                 status.commit.sha !== status.index.sha ||
-                 status.commit.url !== status.index.url) {
-            subsChanged = true;
+            const commit = yield commitRepo(subRepo,
+                                            repoStatus.staged,
+                                            all,
+                                            subMessage,
+                                            false,
+                                            signature);
+            subCommits[name] = commit.tostrS();
         }
     });
 
     const subCommitters = Object.keys(submodules).map(commitSubmodule);
     yield subCommitters;
 
+    const result = {
+        metaCommit: null,
+        submoduleCommits: subCommits,
+    };
+
+    if (null === message) {
+        return result;                                                // RETURN
+    }
+
     const index = yield metaRepo.index();
     yield stageOpenSubmodules(index, submodules);
 
-    const metaResult = yield commitRepo(metaRepo,
-                                        metaStatus.staged,
-                                        all,
-                                        message,
-                                        subsChanged,
-                                        signature);
+    result.metaCommit = yield commitRepo(metaRepo,
+                                         metaStatus.staged,
+                                         all,
+                                         message,
+                                         true,
+                                         signature);
 
-    if (null !== metaResult) {
-        return {
-            metaCommit: metaResult,
-            submoduleCommits: subCommits,
-        };
-    }
-    return null;
+    return result;
 });
 
 /**
@@ -905,7 +1010,7 @@ Author:    ${commitSig.name()} <${commitSig.email()}>
     result += `Date:      ${date}\n\n`;
     result += branchStatusLine(status);
     result += exports.formatStatus(status, cwd);
-    return "\n" + prefixWithPound(result) + "\n";
+    return "\n" + exports.prefixWithPound(result) + "#\n";
 };
 
 /**
@@ -1271,3 +1376,181 @@ exports.getCommitStatus = co.wrap(function *(repo, cwd, options) {
 
     return baseStatus;
 });
+
+/**
+ * Return a `RepoStatus` object having the same value as the specified `status`
+ * but with all staged and workdir changes removed from all submodules.
+ *
+ * @param {RepoStatus} status
+ * @return {RepoStatus}
+ */
+exports.removeSubmoduleChanges = function (status) {
+    assert.instanceOf(status, RepoStatus);
+    const newSubs = {};
+    const subs = status.submodules;
+    Object.keys(subs).forEach(subName => {
+        const sub = subs[subName];
+        const workdir = sub.workdir;
+        if (null !== workdir) {
+            // If the sub is open, make a copy of its status that is the same
+            // except for the removal of all staged and workdir changes.
+
+            const workdirStatus = workdir.status;
+            const newWorkdirStatus = workdirStatus.copy({
+                staged: {},
+                workdir: {},
+            });
+            const newWorkdir = new RepoStatus.Submodule.Workdir(
+                                                             newWorkdirStatus,
+                                                             workdir.relation);
+            const newSub = sub.copy({ workdir: newWorkdir });
+            newSubs[subName] = newSub;
+        }
+        else {
+            // If the sub is closed just copy it over as is.
+
+            newSubs[subName] = sub;
+        }
+    });
+    return status.copy({
+        submodules: newSubs,
+    });
+};
+
+/**
+ * Return a string to use as a prompt for creating a split commit from the
+ * specified `status`.
+ *
+ * @param {RepoStatus} status
+ * @return {String}
+ */
+exports.formatSplitCommitEditorPrompt = function (status) {
+    assert.instanceOf(status, RepoStatus);
+
+    // Put a prompt for the meta repo and its status first.
+
+    let result = `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+`;
+
+    result += exports.prefixWithPound(branchStatusLine(status));
+
+    // Remove submodule changes because we're going to display them under each
+    // submodule.
+
+    const metaStatus = exports.removeSubmoduleChanges(status);
+    result += exports.prefixWithPound(exports.formatStatus(metaStatus, ""));
+
+    const submodules = status.submodules;
+    const subNames = Object.keys(submodules).sort();
+
+    // Now, add a section for each submodule that has changes to be committed.
+
+    subNames.forEach(subName => {
+        const sub = submodules[subName];
+
+        const workdir = sub.workdir;
+        if (null === workdir) {
+            // Cannot generate a commit for a closed submodule.
+
+            return;                                                   // RETURN
+        }
+        const subStat = workdir.status;
+        if (subStat.isIndexClean()) {
+            // No need to do anything if the submodule has no staged files.
+
+            return;                                                   // RETURN
+        }
+
+        result += `\
+# -----------------------------------------------------------------------------
+
+# <${subName}> enter message for '${subName}' above this line; delete this \
+line to skip committing '${subName}'
+`;
+
+        result += exports.prefixWithPound(exports.formatStatus(subStat, ""));
+    });
+
+    result += `\
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`;
+
+    return result;
+};
+
+/**
+ * Parse the specified `text` and return an object indicating what (if any)
+ * commit messages to use for the meta-repo and each sub-repo.  The meta-repo
+ * commit message consists of the non-comment lines prior to the first sub-repo
+ * tag.  A sub-repo tag is a line in the form of `# <${sub-repo name}>`.  The
+ * commit message for a sub-repo consists of the non-comment lines between its
+ * tag and the next sub-repo tag, or the end of the file.  If the tag exists
+ * for a sub-repo, but its message is blank, the commit message for the
+ * meta-repo is used. if it has one.  Throw a `UserError` if the same sub-repo
+ * tag is found more than once.
+ *
+ * @param {String} text
+ * @return {Object}
+ * @return {String|null} return.metaMessage commit message for the meta-repo
+ * @return {Object} return.subMessages commit messages for submodules
+ */
+exports.parseSplitCommitMessages = function (text) {
+    assert.isString(text);
+    let metaMessage = null;
+    const seen = new Set();
+    const subMessages = {};
+    const lines = text.split("\n");
+    let start = 0;  // start of current block of lines
+
+    function consumeCurrentBlock(tag, start, end) {
+        if (seen.has(tag)) {
+            throw new UserError(`${tag} was used more than once.`);
+        }
+        seen.add(tag);
+
+        const blockLines = lines.slice(start, end);
+        const message = GitUtil.stripMessageLines(blockLines);
+        if ("*" === tag) {
+            if ("" !== message) {
+                metaMessage = message;
+            }
+            else {
+                throw new UserError("Empty meta-repo commit message.");
+            }
+        }
+        else {
+            if ("" === message) {
+                if (null !== metaMessage) {
+                    subMessages[tag] = metaMessage;
+                }
+            }
+            else {
+                subMessages[tag] = message;
+            }
+        }
+    }
+
+    const tagMatcher = /# <(.*)>.*$/;
+
+    for (let i = 0; i < lines.length; ++i) {
+        const line = lines[i];
+        const match = tagMatcher.exec(line);
+        if (null !== match) {
+            consumeCurrentBlock(match[1], start, i);
+            start = i + 1;
+        }
+    }
+    return {
+        metaMessage: metaMessage,
+        subMessages: subMessages,
+    };
+};

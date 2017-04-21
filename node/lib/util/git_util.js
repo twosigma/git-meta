@@ -733,17 +733,15 @@ exports.isBlank = function (line) {
 };
 
 /**
- * Return the specified `message` with all comment lines removed (i.e., lines
- * where the first non-whitepsace character is a '#'), and all leading and
- * trailing blank (i.e., those containing only whitespace) lines removed.  Note
- * that any result that is not "" is terminated by a newline.
+ * Return the text contained in the specified array of `lines` after removing
+ * all comment (i.e., those whose first non-whitespace character is a '#') and
+ * leading and trailing blank (i.e., those containing only whitespce) lines. 
  *
- * @param {String} message
+ * @param {String[]} lines
  * @return {String}
  */
-exports.stripMessage = function (message) {
-    const lines = message.split("\n");
-
+exports.stripMessageLines = function (lines) {
+    assert.isArray(lines);
     // First, remove all lines that are comments.
 
     const noComments = lines.filter(line => !exports.isComment(line));
@@ -769,6 +767,21 @@ exports.stripMessage = function (message) {
     // lines.
 
     return noComments.slice(firstContent, lastContent + 1).join("\n") + "\n";
+};
+
+/**
+ * Return the specified `message` with all comment lines removed (i.e., lines
+ * where the first non-whitepsace character is a '#'), and all leading and
+ * trailing blank (i.e., those containing only whitespace) lines removed.  Note
+ * that any result that is not "" is terminated by a newline.
+ *
+ * @param {String} message
+ * @return {String}
+ */
+exports.stripMessage = function (message) {
+    assert.isString(message);
+    const lines = message.split("\n");
+    return exports.stripMessageLines(lines);
 };
 
 /**
