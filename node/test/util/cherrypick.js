@@ -135,7 +135,14 @@ Ot Cct-a c=c!H=ct",
 a=B|
 x=U:C8-2;C4-2 t=Sa:1;Bmaster=4;Bfoo=8`,
             expected: "x=E:C9-4 8=8;Bmaster=9",
-        }
+        },
+        "don't pick subs from older commit": {
+            input: `
+a=B:Cr-1;Cq-r;Bq=q|
+x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q;C8-3 t=Sa:q;Bmaster=2;Bfoo=8`,
+            expected: `
+x=E:C9-2 t=Sa:qt;Bmaster=9;Ot Cqt-1 q=q!H=qt`,
+        },
     };
 
     Object.keys(cases).forEach(caseName => {
