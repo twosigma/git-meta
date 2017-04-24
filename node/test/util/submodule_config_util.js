@@ -93,6 +93,11 @@ describe("SubmoduleConfigUtil", function () {
                 rel: "./b",
                 expected: "foo/bar/b",
             },
+            "dot": {
+                base: "foo/bar",
+                rel: ".",
+                expected: "foo/bar",
+            },
             "inside trailing /": {
                 base: "foo/bar/",
                 rel: "./b",

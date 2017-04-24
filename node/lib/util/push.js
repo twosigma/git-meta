@@ -88,7 +88,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     catch (e) {
         throw new UserError(`No remote named colors.red(${remoteName}).`);
     }
-    const remoteUrl = remote.url();
+    const remoteUrl = yield GitUtil.getRemoteUrl(repo, remote);
 
     // First, push the submodules.
 

@@ -622,7 +622,7 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
     let repoPaths = {};
     let urlMap = {};
     for (let repoName in repos) {
-        const repoPath = path.join(rootDirectory, repoName, "/");
+        const repoPath = path.join(rootDirectory, repoName);
         repoPaths[repoName] = repoPath;
         urlMap[repoPath] = repoName;
     }

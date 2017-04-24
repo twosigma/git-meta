@@ -131,6 +131,33 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("getRemoteUrl", function () {
+        const cases = {
+            "simple": {
+                i: "a=B|x=Ca",
+                name: "origin",
+                expected: "a",
+            },
+            "relative": {
+                i: "a=B|x=S:Rups=../a",
+                name: "ups",
+                expected: "a",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createMultiRepos(c.i);
+                const x = written.repos.x;
+                const remote = yield x.getRemote(c.name);
+                const result = yield GitUtil.getRemoteUrl(x, remote);
+                const expectedRepo = written.repos[c.expected];
+                const expected = yield fs.realpath(expectedRepo.path());
+                assert.equal(result, expected);
+            }));
+        });
+    });
+
     describe("getOriginUrl", function () {
         it("url from branch remote", co.wrap(function *() {
             // TODO: don't have it in my shorthand to associate a branch with
@@ -156,6 +183,10 @@ describe("GitUtil", function () {
             },
             "bad": { i: "x=S", e: null},
             "no head and empty": { i: "x=N", e: null },
+            "relative origin": {
+                i: "a=B|x=S:Rorigin=../a/",
+                e: "a",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

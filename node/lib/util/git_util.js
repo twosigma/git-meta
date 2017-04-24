@@ -152,6 +152,25 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
 });
 
 /**
+ * Return the URL for the specified `remote` in the specified `repo`, resolving
+ * it to an actual path if necessary.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Remote}     remote
+ * @return {String}
+ */
+exports.getRemoteUrl = co.wrap(function *(repo, remote) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(remote, NodeGit.Remote);
+    const url = remote.url();
+    if (url.startsWith(".")) {
+        const resolved = path.resolve(repo.workdir(), url);
+        return yield fs.realpath(resolved);                           // RETURN
+    }
+    return url;
+});
+
+/**
  * Return the URL for the remote from which to fetch submodule refs in the
  * specified `repo`, or null if no remote can be found.  If `repo` has a
  * current branch, and that branch has an upstream, return the URL for the
@@ -165,27 +184,34 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
 exports.getOriginUrl = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    let currentBranch = null;
-    try {
-        currentBranch = yield repo.getCurrentBranch();
-    }
-    catch (e) {
-        // this can fail, e.g., if the repo is empty
-    }
-    if (null !== currentBranch) {
-        const remote = yield exports.getRemoteForBranch(repo, currentBranch);
-        if (null !== remote) {
-            return remote.url();                                      // RETURN
+    const helper = co.wrap(function *() {
+        let currentBranch = null;
+        try {
+            currentBranch = yield repo.getCurrentBranch();
         }
+        catch (e) {
+            // this can fail, e.g., if the repo is empty
+        }
+        if (null !== currentBranch) {
+            const fromBranch = yield exports.getRemoteForBranch(repo,
+                                                                currentBranch);
+            if (null !== fromBranch) {
+                return fromBranch;
+            }
+        }
+        try {
+            return yield repo.getRemote("origin");
+        }
+        catch (e) {
+            return null;
+        }
+    });
+    const remote = yield helper();
+
+    if (null !== remote) {
+        return exports.getRemoteUrl(repo, remote);
     }
-    let remote;
-    try {
-        remote = yield repo.getRemote("origin");
-    }
-    catch (e) {
-        return null;
-    }
-    return remote.url();
+    return null;
 });
 
 /**
