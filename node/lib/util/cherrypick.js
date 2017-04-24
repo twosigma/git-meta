@@ -76,6 +76,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     // - finalize commit in meta-repo
 
     const head = yield metaRepo.getHeadCommit();
+    const changes = yield SubmoduleUtil.getSubmoduleChanges(metaRepo, commit);
 
     yield NodeGit.Cherrypick.cherrypick(metaRepo, commit, {});
 
@@ -140,9 +141,10 @@ ${colors.green(commitSha)}.`);
         }
     });
 
-    // Create a submodule picker for each submodule in the index.
 
-    Object.keys(headSubs).forEach(subName => {
+    // Cherry-pick each submodule changed in `commit`.
+
+    changes.changed.forEach(subName => {
         const headSub = headSubs[subName];
         const commitSub = commitSubs[subName];
         const headSha = headSub.sha;
