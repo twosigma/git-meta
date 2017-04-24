@@ -42,4 +42,37 @@ describe("Submodule", function () {
         assert.equal(s.url, "foo");
         assert.equal(s.sha, "bar");
     });
+    describe("equal", function () {
+        const cases = {
+            "same": {
+                xUrl: "/a",
+                xSha: "1",
+                yUrl: "/a",
+                ySha: "1",
+                expected: true,
+            },
+            "diff url": {
+                xUrl: "/b",
+                xSha: "1",
+                yUrl: "/a",
+                ySha: "1",
+                expected: false,
+            },
+            "diff sha": {
+                xUrl: "/a",
+                xSha: "2",
+                yUrl: "/a",
+                ySha: "1",
+                expected: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const x = new Submodule(c.xUrl, c.xSha);
+                const y = new Submodule(c.yUrl, c.ySha);
+                assert.equal(x.equal(y), c.expected);
+            });
+        });
+    });
 });

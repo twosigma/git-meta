@@ -228,8 +228,6 @@ const doAmend = co.wrap(function *(args) {
 
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
-    const PrintStatusUtil = require("../util/print_status_util");
-    const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;
@@ -244,66 +242,37 @@ TODO: interactive commits are not yet supported with '--amend'.`);
     }
 
     const repo = yield GitUtil.getCurrentRepo();
-    const cwd = process.cwd();
     const workdir = repo.workdir();
+    const cwd = process.cwd();
     const relCwd = path.relative(workdir, cwd);
-    let status = yield Commit.getCommitStatus(repo,
-                                              cwd, {
+    const amendStatus = yield Commit.getAmendStatus(repo, {
         showMetaChanges: args.meta,
         all: args.all,
         paths: args.file,
+        cwd: relCwd,
     });
+
+    const status = amendStatus.status;
+    const subsToAmend = amendStatus.subsToAmend;
 
     const head = yield repo.getHeadCommit();
 
-    // Load up the set of submodules in existence on the previous commit, if
-    // any.
+    const repoMeta = Commit.getCommitMetaData(head);
+    const mismatched = Object.keys(subsToAmend).filter(name => {
+        const meta = subsToAmend[name];
+        return !repoMeta.equivalent(meta);
+    });
 
-    let oldSubs = {};
-    const parent = yield GitUtil.getParentCommit(repo, head);
-    if (null !== parent) {
-        oldSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+    if (0 !== mismatched.length) {
+        let error = `\
+Cannot amend because the signatures of the affected commits in the
+following sub-repos do not match that of the meta-repo:
+`;
+        mismatched.forEach(name => {
+            error += `    ${colors.red(name)}\n`;
+        });
+        throw new UserError(error);
     }
-
-    // Check to see if the repo is in a valid state to be amended.
-
-    const amendable = yield Commit.checkIfRepoIsAmendable(repo,
-                                                          status,
-                                                          oldSubs);
-    let bad = "";
-    Object.keys(amendable.newCommits).forEach(sub => {
-        const relation = amendable.newCommits[sub];
-        const description = PrintStatusUtil.getRelationDescription(relation);
-        bad += `${colors.red(sub)} : ${description}`;
-    });
-    amendable.mismatchCommits.forEach(sub => {
-        bad += `The commit for ${colors.red(sub)} does not match.`;
-    });
-    amendable.deleted.forEach(sub => {
-        bad += `${colors.red(sub)} was deleted.\n`;
-    });
-    if ("" !== bad) {
-        throw new UserError("Cannot make amend commit:\n" + bad);
-    }
-
-    // May have opened repos, so we need to update 'status'.
-
-    status = amendable.status;
-
-    // Calculate the changes that will be made by this amend -- so we know:
-    // (a) which subs to amend
-    // (b) what changes to stage (if any)
-    // (c) if an editor prompt is required, what information to display
-
-    const amendChanges = yield Commit.getAmendChanges(repo,
-                                                      oldSubs,
-                                                      status,
-                                                      args.meta,
-                                                      args.all);
-
-    // Update 'status' to reflect changes to be applied with amend.
-
-    status = amendChanges.status;
 
     // If no message, use editor.
 
@@ -330,7 +299,7 @@ TODO: interactive commits are not yet supported with '--amend'.`);
 
     yield Commit.amendMetaRepo(repo,
                                status,
-                               amendChanges.subsToAmend,
+                               Object.keys(subsToAmend),
                                args.all,
                                args.message);
 });

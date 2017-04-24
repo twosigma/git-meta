@@ -70,6 +70,19 @@ class Submodule {
     get sha() {
         return this.d_sha;
     }
+
+    /**
+     * Return true if the specified `other` and this object have the same
+     * value.  Two `Submodule` objects have the same value if their `url` and
+     * `sha` properties are the same.
+     *
+     * @param {Submodule} other
+     * @return {Boolean}
+     */
+    equal(other) {
+        assert.instanceOf(other, Submodule);
+        return this.d_url === other.d_url && this.d_sha === other.d_sha;
+    }
 }
 
 module.exports = Submodule;
