@@ -36,7 +36,7 @@
 Git-meta allows developers to work with extremely large codebases --
 performance only degrades very slowly when physical size, number of
 files, number of contributors increases, or the depth of history grows.
-You can use granualar ACLs with git-meta to help refine the scope of work.
+You can use granular ACLs with git-meta to help refine the scope of work.
 Users only need to clone the subsets of the code that they need, yet they
 can still make atomic commits across the entire codebase.  Development and
 collaboration are done mostly using normal Git commands; we provide a Git
