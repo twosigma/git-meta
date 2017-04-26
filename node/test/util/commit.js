@@ -32,7 +32,6 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -73,8 +72,80 @@ const committer = co.wrap(function *(doAll, message, repos, subMessages) {
 
 describe("Commit", function () {
     const FILESTATUS = RepoStatus.FILESTATUS;
-    const Submodule = RepoStatus.Submodule;
-    const RELATION = RepoStatus.Submodule.COMMIT_RELATION;
+    const Submodule  = RepoStatus.Submodule;
+    const RELATION   = RepoStatus.Submodule.COMMIT_RELATION;
+    const SAME       = RELATION.SAME;
+    describe("CommitMetaData", function () {
+        it("breathing", function () {
+            const message = "hello";
+            const sig = NodeGit.Signature.now("me", "me@me");
+            const data = new Commit.CommitMetaData(sig, message);
+            assert.equal(data.signature, sig);
+            assert.equal(data.message, message);
+        });
+        describe("equivalent", function () {
+            const cases = {
+                "same": {
+                    xName: "foo",
+                    xEmail: "foo@bar",
+                    xMessage: "because",
+                    yName: "foo",
+                    yEmail: "foo@bar",
+                    yMessage: "because",
+                    expected: true,
+                },
+                "diff name": {
+                    xName: "baz",
+                    xEmail: "foo@bar",
+                    xMessage: "because",
+                    yName: "foo",
+                    yEmail: "foo@bar",
+                    yMessage: "because",
+                    expected: false,
+                },
+                "diff email": {
+                    xName: "foo",
+                    xEmail: "foo@baz",
+                    xMessage: "because",
+                    yName: "foo",
+                    yEmail: "foo@bar",
+                    yMessage: "because",
+                    expected: false,
+                },
+                "diff message": {
+                    xName: "foo",
+                    xEmail: "foo@bar",
+                    xMessage: "because",
+                    yName: "foo",
+                    yEmail: "foo@bar",
+                    yMessage: "why",
+                    expected: false,
+                },
+                "all different": {
+                    xName: "bar",
+                    xEmail: "bam@bar",
+                    xMessage: "because",
+                    yName: "foo",
+                    yEmail: "foo@bar",
+                    yMessage: "why",
+                    expected: false,
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                it(caseName, function () {
+                    const xSig = NodeGit.Signature.now(c.xName, c.xEmail);
+                    const x = new Commit.CommitMetaData(xSig, c.xMessage);
+                    const ySig = NodeGit.Signature.now(c.yName, c.yEmail);
+                    const y = new Commit.CommitMetaData(ySig, c.yMessage);
+                    const result = x.equivalent(y);
+                    assert.equal(result, c.expected);
+                });
+            });
+        });
+    });
+
+
 
     describe("stageChange", function () {
         const cases = {
@@ -588,8 +659,6 @@ Untracked files:
         // are tested elsewhere.  We just need to test that all the arguments
         // are read and handled properly.
 
-        const SAME = RELATION.SAME;
-
         const base = new RepoStatus({
             currentBranchName: "master",
             headCommit: "1",
@@ -901,76 +970,6 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
         });
     });
 
-    describe("CommitMetaData", function () {
-        it("breathing", function () {
-            const message = "hello";
-            const sig = NodeGit.Signature.now("me", "me@me");
-            const data = new Commit.CommitMetaData(sig, message);
-            assert.equal(data.signature, sig);
-            assert.equal(data.message, message);
-        });
-        describe("equivalent", function () {
-            const cases = {
-                "same": {
-                    xName: "foo",
-                    xEmail: "foo@bar",
-                    xMessage: "because",
-                    yName: "foo",
-                    yEmail: "foo@bar",
-                    yMessage: "because",
-                    expected: true,
-                },
-                "diff name": {
-                    xName: "baz",
-                    xEmail: "foo@bar",
-                    xMessage: "because",
-                    yName: "foo",
-                    yEmail: "foo@bar",
-                    yMessage: "because",
-                    expected: false,
-                },
-                "diff email": {
-                    xName: "foo",
-                    xEmail: "foo@baz",
-                    xMessage: "because",
-                    yName: "foo",
-                    yEmail: "foo@bar",
-                    yMessage: "because",
-                    expected: false,
-                },
-                "diff message": {
-                    xName: "foo",
-                    xEmail: "foo@bar",
-                    xMessage: "because",
-                    yName: "foo",
-                    yEmail: "foo@bar",
-                    yMessage: "why",
-                    expected: false,
-                },
-                "all different": {
-                    xName: "bar",
-                    xEmail: "bam@bar",
-                    xMessage: "because",
-                    yName: "foo",
-                    yEmail: "foo@bar",
-                    yMessage: "why",
-                    expected: false,
-                },
-            };
-            Object.keys(cases).forEach(caseName => {
-                const c = cases[caseName];
-                it(caseName, function () {
-                    const xSig = NodeGit.Signature.now(c.xName, c.xEmail);
-                    const x = new Commit.CommitMetaData(xSig, c.xMessage);
-                    const ySig = NodeGit.Signature.now(c.yName, c.yEmail);
-                    const y = new Commit.CommitMetaData(ySig, c.yMessage);
-                    const result = x.equivalent(y);
-                    assert.equal(result, c.expected);
-                });
-            });
-        });
-    });
-
     it("getCommitMetaData", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const sig = NodeGit.Signature.now("me", "me@me");
@@ -1163,7 +1162,6 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
     });
 
     describe("getAmendStatus", function () {
-        const SAME = RELATION.SAME;
         const cases = {
             "trivial": {
                 state: "x=S",
@@ -1549,6 +1547,45 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 expected: `x=U:Cfoo#am-2 3=3,s=Sa:a;Bmaster=am;Os`,
                 all: true,
             },
+            "skipped meta repo": {
+                input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
+                message: null,
+                subMessages: {
+                    s: "hi",
+                },
+                expected: `x=E:Os Chi#as-1 a=a!H=as`,
+            },
+            "skipped non-amend": {
+                input: "a=B|x=U:C3-2;Bmaster=3;I q=r;Os I y=z;B3=3",
+                subMessages: {},
+                expected: "x=E:Cam-2 3=3,q=r;I q=~;Bmaster=am",
+            },
+            "non-amend with own message": {
+                input: "a=B|x=U:C3-2;Bmaster=3;Os I y=z;B3=3",
+                subMessages: {
+                    s: "hola",
+                },
+                expected: `
+x=E:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Chola#as-1 y=z!H=as`,
+            },
+            "amended subrepo skipped with subMessage": {
+                input: `
+a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
+                subMessages: {},
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 foo=moo,s=Sa:a;Bmaster=am;Os`,
+            },
+            "amended subrepo skipped with own message": {
+                input: `
+a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
+                subMessages: {
+                    s: "meh",
+                },
+                message: "hi",
+                expected: `
+x=U:Chi#am-2 foo=moo,s=Sa:as;Bmaster=am;Os Cmeh#as-1 a=a!H=as`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -1562,12 +1599,17 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                         includeMeta: true,
                     });
                     const subsToAmend = Object.keys(amend.subsToAmend);
-                    const message = c.message || "message";
+                    const subMessages = c.subMessages || null;
+                    let message = "message";
+                    if (undefined !== c.message) {
+                        message = c.message;
+                    }
                     const result = yield Commit.amendMetaRepo(repo,
                                                               amend.status,
                                                               subsToAmend,
                                                               all,
-                                                              message);
+                                                              message,
+                                                              subMessages);
                     const commitMap = {};
                     commitMap[result.meta] = "am";
                     Object.keys(result.subs).forEach(subName => {
@@ -1583,14 +1625,54 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
         });
     });
 
+    describe("formatAmendSignature", function () {
+        const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
+        const sigYouName = NodeGit.Signature.create("youName", "me@me", 4, 60);
+        const sigYouEmail = NodeGit.Signature.create("me", "u@u", 5, 60);
+        const cases = {
+            "same": {
+                current: sig,
+                last: sig,
+                expected: "Date:      12/31/1969, 19:00:03 -100\n\n",
+            },
+            "different": {
+                current: sig,
+                last: sigYouName,
+                expected: `\
+Author:    youName <me@me>
+Date:      12/31/1969, 19:00:04 100
+
+`,
+            },
+            "different email": {
+                current: sig,
+                last: sigYouEmail,
+                expected: `\
+Author:    me <u@u>
+Date:      12/31/1969, 19:00:05 100
+
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = Commit.formatAmendSignature(c.current, c.last);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
+
     describe("formatAmendEditorPrompt", function () {
         // Mostly, this method chains some other methods together.  We just
         // need to do a couple of tests to validate that things are hooked up,
         // and that it omits the author when it's unchanged between the current
         // and previous signatures.
 
-        const defaultSig = NodeGit.Signature.now("bob", "bob@bob");
-
+        const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
+        const last = new Commit.CommitMetaData(sig, "my message");
         const cases = {
             "change to meta": {
                 status: new RepoStatus({
@@ -1599,36 +1681,14 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                         "bam/baz": FILESTATUS.ADDED,
                     },
                 }),
-                date: "NOW",
+                currentSig: sig,
+                lastCommitData: last,
                 expected: `\
-
+my message
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
 #
-# Date:      NOW
-#
-# On branch a-branch.
-# Changes to be committed:
-# \tnew file:     bam/baz
-#
-`,
-            },
-            "change to meta, different author": {
-                status: new RepoStatus({
-                    currentBranchName: "a-branch",
-                    staged: {
-                        "bam/baz": FILESTATUS.ADDED,
-                    },
-                }),
-                date: "NOW",
-                commitSig: NodeGit.Signature.now("jill", "jill@jill"),
-                expected: `\
-
-# Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.
-#
-# Author:    jill <jill@jill>
-# Date:      NOW
+# Date:      12/31/1969, 19:00:03 -100
 #
 # On branch a-branch.
 # Changes to be committed:
@@ -1643,14 +1703,15 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                         "bam/baz": FILESTATUS.ADDED,
                     },
                 }),
+                currentSig: sig,
+                lastCommitData: last,
                 cwd: "bam",
-                date: "NOW",
                 expected: `\
-
+my message
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
 #
-# Date:      NOW
+# Date:      12/31/1969, 19:00:03 -100
 #
 # On branch a-branch.
 # Changes to be committed:
@@ -1662,14 +1723,11 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const commitSig = c.commitSig || defaultSig;
-                const repoSig = c.repoSig || defaultSig;
                 const cwd = c.cwd || "";
-                const result = Commit.formatAmendEditorPrompt(commitSig,
-                                                              repoSig,
+                const result = Commit.formatAmendEditorPrompt(c.currentSig,
+                                                              c.lastCommitData,
                                                               c.status,
-                                                              cwd,
-                                                              c.date);
+                                                              cwd);
 
                 const resultLines = result.split("\n");
                 const expectedLines = c.expected.split("\n");
@@ -2521,6 +2579,9 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
         // Here, we don't need to test the details of formatting that are
         // tested elsewhere, just that we pull it all together, including,
         // especially
+
+        const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
+
         const cases = {
             // This case couldn't actually be used to generate a commit, but it
             // is the simplest case.
@@ -2543,7 +2604,27 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
 # message for the meta-repo will be used.
 `,
             },
-
+            "with commit meta data": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                }),
+                metaCommitData: new Commit.CommitMetaData(sig, "hiya"),
+                expected: `\
+hiya
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# Date:      12/31/1969, 19:00:03 -100
+#
+# On branch master.
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
             "changes to the meta": {
                 input: new RepoStatus({
                     currentBranchName: "foo",
@@ -2671,11 +2752,117 @@ committing 'bar'
 # message for the meta-repo will be used.
 `,
             },
+            "sub-repo with staged changes and meta data": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                    staged: {
+                                        foo: FILESTATUS.MODIFIED,
+                                    },
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                subCommitData: {
+                    bar: new Commit.CommitMetaData(sig, "yoyoyo"),
+                },
+                expected: `\
+
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# On branch foo.
+# -----------------------------------------------------------------------------
+yoyoyo
+# <bar> enter message for 'bar' above this line; delete this line to skip \
+committing 'bar'
+# If this sub-repo is skipped, it will not be amended and the original commit
+# will be used.
+# Date:      12/31/1969, 19:00:03 -100
+#
+# Changes to be committed:
+# \tmodified:     foo
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
+            "sub-repo with staged changes and meta data, dupe meta message": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Submodule.Commit("1", "/a"),
+                            index: new Submodule.Index("1",
+                                                       "/a",
+                                                       RELATION.SAME),
+                            workdir: new Submodule.Workdir(
+                                new RepoStatus({
+                                    headCommit: "1",
+                                    staged: {
+                                        foo: FILESTATUS.MODIFIED,
+                                    },
+                                }),
+                                RELATION.SAME
+                            ),
+                        }),
+                    },
+                }),
+                metaCommitData: new Commit.CommitMetaData(sig, "yoyoyo"),
+                subCommitData: {
+                    bar: new Commit.CommitMetaData(sig, "yoyoyo"),
+                },
+                expected: `\
+yoyoyo
+# <*> enter meta-repo message above this line; delete to commit only submodules
+# Date:      12/31/1969, 19:00:03 -100
+#
+# On branch foo.
+# -----------------------------------------------------------------------------
+
+# <bar> enter message for 'bar' above this line; delete this line to skip \
+committing 'bar'
+# If this sub-repo is skipped, it will not be amended and the original commit
+# will be used.
+# Date:      12/31/1969, 19:00:03 -100
+#
+# Changes to be committed:
+# \tmodified:     foo
+#
+# Please enter the commit message(s) for your changes.  The message for a
+# repo will be composed of all lines not beginning with '#' that come before
+# its tag, but after any other tag (or the beginning of the file).  Tags are
+# lines beginning with '# <sub-repo-name>', or '# <*>' for the meta-repo.
+# If the tag for a repo is removed, no commit will be generated for that repo.
+# If you do not provide a commit message for a sub-repo, the commit
+# message for the meta-repo will be used.
+`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = Commit.formatSplitCommitEditorPrompt(c.input);
+                const currentSig = c.currentSignature || sig;
+                const metaCommitData = c.metaCommitData || null;
+                const subCommitData = c.subCommitData || {};
+                const result = Commit.formatSplitCommitEditorPrompt(
+                                                                c.input,
+                                                                currentSig,
+                                                                metaCommitData,
+                                                                subCommitData);
                 const resultLines = result.split("\n");
                 const expectedLines = c.expected.split("\n");
                 assert.deepEqual(resultLines, expectedLines);

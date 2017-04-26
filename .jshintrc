@@ -13,5 +13,8 @@
     "node"     : true,
     "unused"   : true,
     "esnext"   : true,
-    "varstmt"  : true
+    "varstmt"  : true,
+    "predef": [
+        "Intl"
+    ]
 }

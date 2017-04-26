@@ -236,11 +236,6 @@ const doAmend = co.wrap(function *(args) {
         throw new UserError("Paths not supported with amend yet.");
     }
 
-    if (args.interactive) {
-        throw new UserError(`\
-TODO: interactive commits are not yet supported with '--amend'.`);
-    }
-
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd = process.cwd();
@@ -256,42 +251,61 @@ TODO: interactive commits are not yet supported with '--amend'.`);
     const subsToAmend = amendStatus.subsToAmend;
 
     const head = yield repo.getHeadCommit();
+    const defaultSig = repo.defaultSignature();
+    const headMeta = Commit.getCommitMetaData(head);
+    let message;
+    let subMessages;
+    if (args.interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
 
-    const repoMeta = Commit.getCommitMetaData(head);
-    const mismatched = Object.keys(subsToAmend).filter(name => {
-        const meta = subsToAmend[name];
-        return !repoMeta.equivalent(meta);
-    });
+        const prompt = Commit.formatSplitCommitEditorPrompt(status,
+                                                            defaultSig,
+                                                            headMeta,
+                                                            subsToAmend);
+        const userText = yield GitUtil.editMessage(repo, prompt);
+        const userData = Commit.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
 
-    if (0 !== mismatched.length) {
-        let error = `\
+        // Check if there's actually anything to commit.
+
+        if (!Commit.shouldCommit(status, message === null, subMessages)) {
+            console.log("Nothing to commit.");
+            return;
+        }
+    }
+    else {
+        const mismatched = Object.keys(subsToAmend).filter(name => {
+            const meta = subsToAmend[name];
+            return !headMeta.equivalent(meta);
+        });
+        if (0 !== mismatched.length) {
+            let error = `\
 Cannot amend because the signatures of the affected commits in the
 following sub-repos do not match that of the meta-repo:
 `;
-        mismatched.forEach(name => {
-            error += `    ${colors.red(name)}\n`;
-        });
-        throw new UserError(error);
+            mismatched.forEach(name => {
+                error += `    ${colors.red(name)}\n`;
+            });
+            error += `\
+You can make this commit using the interactive ('-i') commit option.`;
+            throw new UserError(error);
+        }
+
+        // If no message, use editor.
+
+        if (null === args.message) {
+            const prompt = Commit.formatAmendEditorPrompt(defaultSig,
+                                                          headMeta,
+                                                          status,
+                                                          relCwd);
+            const rawMessage = yield GitUtil.editMessage(repo, prompt);
+            message = GitUtil.stripMessage(rawMessage);
+        }
     }
 
-    // If no message, use editor.
-
-    if (null === args.message) {
-        const headSig = head.author();
-        const time = headSig.when();
-        const date = new Date(time.time() * 1000);
-        const defaultSig = repo.defaultSignature();
-        const statusMessage = Commit.formatAmendEditorPrompt(headSig,
-                                                             defaultSig,
-                                                             status,
-                                                             relCwd,
-                                                             `${date}`);
-        const initialMessage = head.message() + statusMessage;
-        const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
-        args.message = GitUtil.stripMessage(rawMessage);
-    }
-
-    if ("" === args.message) {
+    if ("" === message) {
         abortForNoMessage();
     }
 
@@ -301,7 +315,8 @@ following sub-repos do not match that of the meta-repo:
                                status,
                                Object.keys(subsToAmend),
                                args.all,
-                               args.message);
+                               message,
+                               subMessages);
 });
 
 /**

@@ -90,6 +90,64 @@ const getAmendStatusForRepo = co.wrap(function *(repo, all) {
 });
 
 /**
+ * This class reprents the meta-data associated with a commit.
+ */
+class CommitMetaData {
+    /**
+     * Create a new `CommitMetaData` object having the specified `signature`
+     * and `message`.
+     *
+     * @param {NodeGit.Signature} signature
+     * @param {String}            message
+     */
+    constructor(signature, message) {
+        assert.instanceOf(signature, NodeGit.Signature);
+        assert.isString(message);
+
+        this.d_signature = signature;
+        this.d_message = message;
+
+        Object.freeze(this);
+    }
+
+    /**
+     * the signature associated with a commit
+     *
+     * @property {NodeGit.Signature} signature
+     */
+    get signature() {
+        return this.d_signature;
+    }
+
+    /**
+     * the message associated with a commit
+     *
+     * @property {String} message
+     */
+    get message() {
+        return this.d_message;
+    }
+
+    /**
+     * Return true if the specified `other` represents an equivalent value to
+     * this object and false otherwise.  Two `CommitMetaData` values are
+     * equivalent if they have the same `message`, `signature.name()`, and
+     * `signature.email()` values.
+     *
+     * @param {CommitMetaData} other
+     * @return {Boolean}
+     */
+    equivalent(other) {
+        assert.instanceOf(other, CommitMetaData);
+        return this.d_message === other.d_message &&
+            this.d_signature.name() === other.d_signature.name() &&
+            this.d_signature.email() === other.d_signature.email();
+    }
+}
+
+exports.CommitMetaData = CommitMetaData;
+
+/**
  * Stage the specified `filename` having the specified `change` in the
  * specified `index`.
  *
@@ -643,64 +701,6 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
 });
 
 /**
- * This class reprents the meta-data associated with a commit.
- */
-class CommitMetaData {
-    /**
-     * Create a new `CommitMetaData` object having the specified `signature`
-     * and `message`.
-     *
-     * @param {NodeGit.Signature} signature
-     * @param {String}            message
-     */
-    constructor(signature, message) {
-        assert.instanceOf(signature, NodeGit.Signature);
-        assert.isString(message);
-
-        this.d_signature = signature;
-        this.d_message = message;
-
-        Object.freeze(this);
-    }
-
-    /**
-     * the signature associated with a commit
-     *
-     * @property {NodeGit.Signature} signature
-     */
-    get signature() {
-        return this.d_signature;
-    }
-
-    /**
-     * the message assocated with a commit
-     *
-     * @property {String} message
-     */
-    get message() {
-        return this.d_message;
-    }
-
-    /**
-     * Return true if the specified `other` represents an equivalent value to
-     * this object and false otherwise.  Two `CommitMetaData` values are
-     * equivalent if they have the same `message`, `signature.name()`, and
-     * `signature.email()` values.
-     *
-     * @param {CommitMetaData} other
-     * @return {Boolean}
-     */
-    equivalent(other) {
-        assert.instanceOf(other, CommitMetaData);
-        return this.d_message === other.d_message &&
-            this.d_signature.name() === other.d_signature.name() &&
-            this.d_signature.email() === other.d_signature.email();
-    }
-}
-
-exports.CommitMetaData = CommitMetaData;
-
-/**
  * Return the meta-data for the specified `commit`.
  *
  * @param {NodeGit.Commit} commit
@@ -750,7 +750,7 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
         };
     }
 
-    // We'll do an amend of this sub only if:
+    // We'll create an amend commit for of this sub only if:
     // - it's not gone in the index
     // - it wasn't removed in the last commit
     // - it wasn't added in the last commit
@@ -1001,7 +1001,8 @@ exports.amendRepo = co.wrap(function *(repo, message) {
  * @param {RepoStatus}         status
  * @param {String[]}           subsToAmend
  * @param {Boolean}            all
- * @param {String}             message
+ * @param {String|null}        message
+ * @param {Object|null}        subMessages
  * @return {Object}
  * @return {String} return.meta sha of new commit on meta-repo
  * @return {Object} return.subs map from sub name to sha of created commit
@@ -1010,12 +1011,20 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                                            status,
                                            subsToAmend,
                                            all,
-                                           message) {
+                                           message,
+                                           subMessages) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isArray(subsToAmend);
     assert.isBoolean(all);
-    assert.isString(message);
+    if (null !== message) {
+        assert.isString(message);
+    }
+    if (null !== subMessages) {
+        assert.isObject(subMessages);
+    }
+    assert(null !== message || null !== subMessages,
+           "if no meta message, sub messages must be specified");
 
     const head = yield repo.getHeadCommit();
     const signature = head.author();
@@ -1034,6 +1043,16 @@ exports.amendMetaRepo = co.wrap(function *(repo,
     const amendSubSet = new Set(subsToAmend);
 
     yield Object.keys(subs).map(co.wrap(function *(subName) {
+        // If we're providing specific sub messages, use it if provided and
+        // skip committing the submodule otherwise.
+
+        let subMessage = message;
+        if (null !== subMessages) {
+            subMessage = subMessages[subName];
+            if (undefined === subMessage) {
+                return;                                               // RETURN
+            }
+        }
         const subStatus = subs[subName];
 
         // If the sub-repo doesn't have an open status, and there are no amend
@@ -1067,14 +1086,14 @@ exports.amendMetaRepo = co.wrap(function *(repo,
             }
             const subIndex = yield subRepo.index();
             yield stageFiles(subRepo, staged, subIndex);
-            subCommits[subName] = yield exports.amendRepo(subRepo, message);
+            subCommits[subName] = yield exports.amendRepo(subRepo, subMessage);
             return;                                                   // RETURN
         }
 
         const commit = yield commitRepo(subRepo,
                                         repoStatus.staged,
                                         all,
-                                        message,
+                                        subMessage,
                                         false,
                                         signature);
         if (null !== commit) {
@@ -1082,16 +1101,67 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
     }));
 
-    const index = yield repo.index();
-    yield stageOpenSubmodules(index, subs);
-    yield stageFiles(repo, status.staged, index);
+    let metaCommit = null;
+    if (null !== message) {
 
-    const metaCommit = yield exports.amendRepo(repo, message);
+        const index = yield repo.index();
+        yield stageOpenSubmodules(index, subs);
+        yield stageFiles(repo, status.staged, index);
+        metaCommit = yield exports.amendRepo(repo, message);
+    }
     return {
         meta: metaCommit,
         subs: subCommits,
     };
 });
+
+/**
+ * Return a string describing the signature of an amend commit, to be used in
+ * an editor prompt, based on the specified `currentSignature` that is the
+ * current signature used in a normal commit, and the specified `lastSignature`
+ * used on the commit to be amended.
+ *
+ * @param {NodeGit.Signature} currentSignature
+ * @param {NodeGit.Signature} lastSignature
+ * @return {String}
+ */
+exports.formatAmendSignature = function (currentSignature, lastSignature) {
+    assert.instanceOf(currentSignature, NodeGit.Signature);
+    assert.instanceOf(lastSignature, NodeGit.Signature);
+
+    let result = "";
+    if (lastSignature.name() !== currentSignature.name() ||
+        lastSignature.email() !== currentSignature.email()) {
+        result += `\
+Author:    ${lastSignature.name()} <${lastSignature.email()}>
+`;
+    }
+    const time = lastSignature.when();
+    const signPrefix = time.offset() < 0 ? "-" : "";
+
+    //  TODO: something better than rounding offset, though I think we can live
+    //  without showing minute-specific TZ diffs for a long time.
+
+    const offset = Math.floor(time.offset() / 60);
+    const date = new Date(time.time() * 1000);
+
+    // TODO: do something user-locale-aware.
+
+    const formatted = new Intl.DateTimeFormat("en-US", {
+        hour12: false,
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+    }).format(date);
+    result += `\
+Date:      ${formatted} ${signPrefix}${Math.abs(offset)}00
+
+`;
+    return result;
+};
 
 /**
  * Return the text with which to prompt a user prior to making an amend commit
@@ -1100,40 +1170,30 @@ exports.amendMetaRepo = co.wrap(function *(repo,
  * specified `all` is true.  Format paths relative to the specified `cwd`.
  * Display the specified `date` value for the date section of the message.
  *
- * @param {Signature}  commitSig
- * @param {Signature}  repoSig
- * @param {RepoStatus} status
- * @param {String}     cwd
- * @param {Booelan}    all
- * @param {String}     date
+ * @param {Signature}      repoSignature
+ * @param {CommitMetaData} metaCommitData
+ * @param {RepoStatus}     status
+ * @param {String}         cwd
  * @return {String}
  */
-exports.formatAmendEditorPrompt = function (commitSig,
-                                            repoSig,
+exports.formatAmendEditorPrompt = function (currentSignature,
+                                            lastCommitData,
                                             status,
-                                            cwd,
-                                            date) {
-    assert.instanceOf(commitSig, NodeGit.Signature);
-    assert.instanceOf(repoSig, NodeGit.Signature);
+                                            cwd) {
+    assert.instanceOf(currentSignature, NodeGit.Signature);
+    assert.instanceOf(lastCommitData, CommitMetaData);
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
-    assert.isString(date);
 
-    let result = editorMessagePrefix;
+    let result = editorMessagePrefix + "\n";
 
-    result += "\n";
+    result += exports.formatAmendSignature(currentSignature,
+                                           lastCommitData.signature);
 
-    if (commitSig.name() !== repoSig.name() ||
-        commitSig.email() !== repoSig.email()) {
-        result += `\
-Author:    ${commitSig.name()} <${commitSig.email()}>
-`;
-    }
-
-    result += `Date:      ${date}\n\n`;
     result += branchStatusLine(status);
     result += exports.formatStatus(status, cwd);
-    return "\n" + exports.prefixWithPound(result) + "#\n";
+    return lastCommitData.message + "\n" + exports.prefixWithPound(result) +
+        "#\n";
 };
 
 /**
@@ -1542,20 +1602,46 @@ exports.removeSubmoduleChanges = function (status) {
 
 /**
  * Return a string to use as a prompt for creating a split commit from the
- * specified `status`.
+ * specified `status`.  If the specified `metaCommitData` is provided, supply
+ * information from it and the specified `currentSignature` in the prompt for
+ * the meta-repo commit.  Similarly, if there is an entry in`subAmendData` for
+ * a submodule, us that entry in the prompt for that submodule and display
+ * amend-specific information, but do not prompt with the previous commit
+ * message for a submodule if it matches the meta-repo message.
  *
- * @param {RepoStatus} status
+ * @param {RepoStatus}          status
+ * @param {NodeGit.Signature}   currentSignature
+ * @param {CommitMetaData|null} metaCommitData
+ * @param {Object}              subAmendData  map from name to CommitMetaData
  * @return {String}
  */
-exports.formatSplitCommitEditorPrompt = function (status) {
+exports.formatSplitCommitEditorPrompt = function (status,
+                                                  currentSignature,
+                                                  metaCommitData,
+                                                  subAmendData) {
     assert.instanceOf(status, RepoStatus);
+    assert.instanceOf(currentSignature, NodeGit.Signature);
+    if (null !== metaCommitData) {
+        assert.instanceOf(metaCommitData, CommitMetaData);
+    }
+    assert.isObject(subAmendData);
 
     // Put a prompt for the meta repo and its status first.
 
-    let result = `\
+    let result = "";
+    if (metaCommitData) {
+        result += metaCommitData.message;
+    }
+    result += `\
 
 # <*> enter meta-repo message above this line; delete to commit only submodules
 `;
+
+    if (metaCommitData) {
+        const text = exports.formatAmendSignature(currentSignature,
+                                                  metaCommitData.signature);
+        result += exports.prefixWithPound(text);
+    }
 
     result += exports.prefixWithPound(branchStatusLine(status));
 
@@ -1588,11 +1674,33 @@ exports.formatSplitCommitEditorPrompt = function (status) {
 
         result += `\
 # -----------------------------------------------------------------------------
+`;
+        const subData = subAmendData[subName];
+
+        // Prompt with the preexisting commit message for an amended sub,
+        // unless that message matches that of the preexisting meta-repo commit
+        // message.
+
+        if (undefined !== subData &&
+            (null === metaCommitData ||
+                metaCommitData.message !== subData.message)) {
+            result += subData.message;
+        }
+
+        result += `\
 
 # <${subName}> enter message for '${subName}' above this line; delete this \
 line to skip committing '${subName}'
 `;
-
+        if (undefined !== subData) {
+            result += `\
+# If this sub-repo is skipped, it will not be amended and the original commit
+# will be used.
+`;
+            const text = exports.formatAmendSignature(currentSignature,
+                                                      subData.signature);
+            result += exports.prefixWithPound(text);
+        }
         result += exports.prefixWithPound(exports.formatStatus(subStat, ""));
     });
 
