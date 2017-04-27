@@ -426,3 +426,39 @@ Untracked files:
 
     return result;
 };
+
+/**
+ * Print a string describing the status of the submodules in the specified
+ * `status`; show closed submodules if the specified `showClosed` is true; show
+ * names relative to the specified `relCwd`.
+ *
+ * @param {RepoStatus}  status
+ * @param {String}      relCwd
+ * @param {Boolean}     showClosed
+ * @return {String}
+ */
+exports.printSubmoduleStatus = function (status, relCwd, showClosed) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(relCwd);
+    assert.isBoolean(showClosed);
+    let result = "";
+    const subStats = status.submodules;
+    if (showClosed) {
+        result = `${colors.grey("All submodules:")}\n`;
+    }
+    else {
+        result = `${colors.grey("Open submodules:")}\n`;
+    }
+    const names = Object.keys(subStats).sort();
+    names.forEach(name => {
+        const relName = path.relative(relCwd, name);
+        const sub = subStats[name];
+        const isVis = null !== sub.workdir;
+        const visStr = isVis ? " " : "-";
+        const sha = (sub.index && sub.index.sha) || "<deleted>";
+        if (isVis || showClosed) {
+            result += `${visStr} ${sha}  ${colors.cyan(relName)}\n`;
+        }
+    });
+    return result;
+};

@@ -109,48 +109,27 @@ ancestor of M (or M itself) that references S (or a descendant of S)`,
 };
 
 const doStatusCommand = co.wrap(function *(paths, verbose) {
-    const colors = require("colors");
     const path   = require("path");
 
-    const GitUtil       = require("../util/git_util");
-    const StatusUtil    = require("../util/status_util");
+    const GitUtil         = require("../util/git_util");
+    const PrintStatusUtil = require("../util/print_status_util");
+    const StatusUtil      = require("../util/status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd = process.cwd();
 
-    // TODO: move this into the util and add a test driver.
-
     paths = yield paths.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
+    const status = yield StatusUtil.getRepoStatus(repo, {
         paths: paths,
         showMetaChanges: false,
     });
-    const subStats = repoStatus.submodules;
     const relCwd = path.relative(workdir, cwd);
-    function doSummary(showClosed) {
-        Object.keys(subStats).forEach(name => {
-            const relName = path.relative(relCwd, name);
-            const sub = subStats[name];
-            const isVis = null !== sub.repoStatus;
-            const visStr = isVis ? " " : "-";
-            const sha = (sub.index && sub.index.sha) || "<deleted>";
-            if (isVis || showClosed) {
-                console.log(`${visStr} ${sha}  ${colors.cyan(relName)}`);
-            }
-        });
-    }
-
-    if (verbose) {
-        console.log(`${colors.grey("All submodules: ")}`);
-        doSummary(true);
-    }
-    else {
-        console.log(`${colors.grey("Open submodules: ")}`);
-        doSummary(false);
-    }
+    process.stdout.write(PrintStatusUtil.printSubmoduleStatus(status,
+                                                              relCwd,
+                                                              verbose));
 });
 
 const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {
