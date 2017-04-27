@@ -118,6 +118,9 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd = process.cwd();
+
+    // TODO: move this into the util and add a test driver.
+
     paths = yield paths.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
@@ -133,7 +136,7 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
             const sub = subStats[name];
             const isVis = null !== sub.repoStatus;
             const visStr = isVis ? " " : "-";
-            const sha = sub.indexSha || "<deleted>";
+            const sha = (sub.index && sub.index.sha) || "<deleted>";
             if (isVis || showClosed) {
                 console.log(`${visStr} ${sha}  ${colors.cyan(relName)}`);
             }
