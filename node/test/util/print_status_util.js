@@ -769,4 +769,146 @@ Changes to be committed:
             });
         });
     });
+
+    describe("printSubmoduleStatus", function () {
+        const cases = {
+            "empty show closed": {
+                status: new RepoStatus(),
+                relCwd: "",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+`,
+            },
+            "empty no show closed": {
+                status: new RepoStatus(),
+                relCwd: "",
+                showClosed: false,
+                expected: `\
+${colors.grey("Open submodules:")}
+`,
+            },
+            "a closed sub, not shown": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                        }),
+                    },
+                }),
+                relCwd: "",
+                showClosed: false,
+                expected: `\
+${colors.grey("Open submodules:")}
+`,
+            },
+            "a closed sub, shown": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                        }),
+                    },
+                }),
+                relCwd: "",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+- 1  ${colors.cyan("foo")}
+`,
+            },
+            "an open sub": {
+                status: new RepoStatus({
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                relCwd: "",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+  1  ${colors.cyan("bar")}
+`,
+            },
+            "an open sub and closed": {
+                status: new RepoStatus({
+                    submodules: {
+                        foo: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                        }),
+                        bar: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                relCwd: "",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+  1  ${colors.cyan("bar")}
+- 1  ${colors.cyan("foo")}
+`,
+            },
+            "with relative workdir": {
+                status: new RepoStatus({
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: new Index("1", "/a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                relCwd: "q",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+  1  ${colors.cyan("../bar")}
+`,
+            },
+            "deleted": {
+                status: new RepoStatus({
+                    submodules: {
+                        bar: new Submodule({
+                            commit: new Commit("1", "/a"),
+                            index: null,
+                        }),
+                    },
+                }),
+                relCwd: "",
+                showClosed: true,
+                expected: `\
+${colors.grey("All submodules:")}
+- <deleted>  ${colors.cyan("bar")}
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = PrintStatusUtil.printSubmoduleStatus(
+                                                                 c.status,
+                                                                 c.relCwd,
+                                                                 c.showClosed);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
+            });
+        });
+    });
 });
