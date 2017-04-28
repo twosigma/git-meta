@@ -40,6 +40,7 @@ const TestUtil            = require("../../lib/util/test_util");
 const Submodule           = require("../../lib/util/submodule");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
+const UserError           = require("../../lib/util/user_error");
 
 describe("SubmoduleUtil", function () {
     after(TestUtil.cleanup);
@@ -545,10 +546,11 @@ describe("SubmoduleUtil", function () {
                 state: "x=S",
                 expected: [],
             },
-            "ignore bad": {
+            "bad path": {
                 state: "x=S",
                 paths: ["a-bad-path"],
                 expected: [],
+                fails: true,
             },
             "no subs in path": {
                 state: "x=S:C2-1 foo/bar=baz;Bmaster=2",
@@ -583,11 +585,22 @@ describe("SubmoduleUtil", function () {
                     cwd = path.join(c.workdir(), cwd);
                 }
                 const paths = c.paths || [];
-                const result = yield SubmoduleUtil.resolveSubmoduleNames(
+                let result;
+                try {
+                    result = yield SubmoduleUtil.resolveSubmoduleNames(
                                                                    x.workdir(),
                                                                    cwd,
                                                                    subs,
                                                                    paths);
+                }
+                catch (e) {
+                    if (!(e instanceof UserError)) {
+                        throw e;
+                    }
+                    assert(c.fails);
+                    return;
+                }
+                assert(!c.fails);
                 assert.deepEqual(result.sort(), c.expected.sort());
             }));
         });
