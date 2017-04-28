@@ -44,7 +44,6 @@ const path    = require("path");
 const GitUtil             = require("./git_util");
 const Submodule           = require("./submodule");
 const SubmoduleConfigUtil = require("./submodule_config_util");
-const UserError           = require("./user_error");
 
 /**
  * Return the names of the submodules (visible or otherwise) for the index
@@ -415,8 +414,8 @@ exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
  * Return the list of submodules found in the specified `paths` in the
  * specified meta-repo `workdir`, containing the submodules having the
  * specified `submoduleNames`.  Treat paths as being relative to the specified
- * `cwd`.  Log errors for invalid paths and warnings for valid paths containing
- * no submodules.
+ * `cwd`.  Throw a `UserError` if an invalid path is encountered, and log
+ * warnings for valid paths containing no submodules.
  *
  * @async
  * @param {String} workdir
@@ -437,19 +436,9 @@ exports.resolveSubmoduleNames = co.wrap(function *(workdir,
     const subLists = yield paths.map(co.wrap(function *(filename) {
         // Compute the relative path for `filename` from the root of the repo,
         // and check for invalid values.
-        let relPath;
-        try {
-            relPath = yield GitUtil.resolveRelativePath(workdir,
-                                                        cwd,
-                                                        filename);
-        }
-        catch (e) {
-            if (e instanceof UserError) {
-                console.error(e.message);
-                return null;                                          // RETURN
-            }
-            throw e;
-        }
+        const relPath = yield GitUtil.resolveRelativePath(workdir,
+                                                          cwd,
+                                                          filename);
         const result = yield exports.getSubmodulesInPath(workdir,
                                                          relPath,
                                                          submoduleNames);
@@ -459,9 +448,7 @@ No submodules found from ${colors.yellow(filename)}.`);
         }
         return result;
     }));
-    return subLists.reduce((a, b) => {
-        return b === null ? a : a.concat(b);
-    }, []);
+    return subLists.reduce((a, b) => a.concat(b), []);
 });
 
 /**
