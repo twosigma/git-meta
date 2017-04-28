@@ -201,45 +201,45 @@ exports.getRelation = co.wrap(function *(repo, from, to) {
 });
 
 /**
- * Return the `RepoStatus.Submodule` for the submodule having the specified
- * `name` in the specified `metaRepo`.  The specified `indexUrl` contains the
- * configured url for this submodule, unless it has been removed in the index.
- * The specified `commitUrl` contains the configured url for this submodule,
- * unless it has just been added to the index. The specified `isVisible` is
- * true if the submodule has an open repository.  Use the specified
- * `readRepoStatus` to read the status of a repository.  The specified `index`
- * and `commitTree` are used to read the shas for the meta repository index and
- * current commit, respectively.  Note that this method follows the git-meta
- * model wherein the HEAD of an open repository for a submodule is assumed to
- * be auto-staged  Thus, when a submodule has an open repository, this method
- * will return as `index.sha` the HEAD of the open repo, and as
- * `index.relation` the comparison between the HEAD of the open repo and the
- * commit registered in the HEAD of the meta-repo for that submodule.
- *
- * Note also that this method is mostly exposed to make it easier to test, and
- * the `readRepoStatus` parameter is provided to break a cycle between this
- * method and `getRepoStatus`.
- *
+ * Return a new `RepoStatus.Submodule` object for the submodule having the
+ * optionally specified `repo`, and workdir `status` if open, the optionally
+ * specified `indexUrl` and `indexSha` if the submodule exists in the index,
+ * and the optionally specified `commitUrl` and `commitSha` if it exists in the
+ * HEAD commit.
  * @async
  * @private
- * @param {String}                          name
- * @param {NodeGit.Repository}              metaRepo
- * @param {String}                          [indexUrl]
- * @param {String}                          [commitUrl]
- * @param {NodeGit.Index}                   index
- * @param {NodeGit.Tree}                    commitTree
- * @param {Boolean}                         isVisible
- * @param {(repo) => Promise -> RepoStatus} readRepoStatus
+ * @param {NodeGit.Repository|null}         repo
+ * @param {RepoStatus|null}                 status
+ * @param {String|null}                     indexUrl
+ * @param {String|null}                     commitUrl
+ * @param {String|null}                     indexSha
+ * @param {String|null}                     commitSha
  * @return {RepoStatus.Submodule}
  */
-exports.getSubmoduleStatus = co.wrap(function *(name,
-                                                metaRepo,
+exports.getSubmoduleStatus = co.wrap(function *(repo,
+                                                status,
                                                 indexUrl,
                                                 commitUrl,
-                                                index,
-                                                commitTree,
-                                                isVisible,
-                                                readRepoStatus) {
+                                                indexSha,
+                                                commitSha) {
+    if (null !== repo) {
+        assert.instanceOf(repo, NodeGit.Repository);
+    }
+    if (null !== status) {
+        assert.instanceOf(status, RepoStatus);
+    }
+    if (null !== indexUrl) {
+        assert.isString(indexUrl);
+    }
+    if (null !== commitUrl) {
+        assert.isString(commitUrl);
+    }
+    if (null !== indexSha) {
+        assert.isString(indexSha);
+    }
+    if (null !== commitSha) {
+        assert.isString(commitSha);
+    }
     const Submodule = RepoStatus.Submodule;
     const COMMIT_RELATION = Submodule.COMMIT_RELATION;
 
@@ -248,8 +248,7 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     // up the commit sha.
 
     let commit = null;
-    if (null !== commitUrl) {
-        const commitSha = (yield commitTree.entryByPath(name)).sha();
+    if (null !== commitSha) {
         commit = new Submodule.Commit(commitSha, commitUrl);
     }
 
@@ -260,15 +259,9 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
         return new Submodule({ commit: commit });                     // RETURN
     }
 
-    let indexSha = null;
-    const entry = index.getByPath(name);
-    if (entry) {
-        indexSha = entry.id.tostrS();
-    }
-
     // We've done all we can for non-visible sub-repos.
 
-    if (!isVisible) {
+    if (null === repo) {
         const indexRelation = (() => {
             if (null === commit) {
                 return null;
@@ -283,9 +276,6 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
         });                                                           // RETURN
     }
 
-    const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
-    const subStatus = yield readRepoStatus(subRepo);
-
     // Compute the relations between the commits specifed in the workdir,
     // index, and commit.  We care only about the relationship between the
     // workdir commit and the commit from the tree, but we show the change as
@@ -293,12 +283,12 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     // can provide flags to control this behavior if needed, but it's not
     // needed right now.
 
-    indexSha = subStatus.headCommit || indexSha;  // if empty, use index sha
+    indexSha = status.headCommit || indexSha;  // if empty, use index sha
 
     let relation = null;
 
     if (null !== commit) {
-        relation = yield exports.getRelation(subRepo, commit.sha, indexSha);
+        relation = yield exports.getRelation(repo, commit.sha, indexSha);
     }
     const workdirRelation = (null === indexSha) ?
         null :
@@ -306,7 +296,7 @@ exports.getSubmoduleStatus = co.wrap(function *(name,
     return new RepoStatus.Submodule({
         commit: commit,
         index: new Submodule.Index(indexSha, indexUrl, relation),
-        workdir: new Submodule.Workdir(subStatus, workdirRelation),
+        workdir: new Submodule.Workdir(status, workdirRelation),
     });
 });
 
@@ -453,25 +443,34 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         // Make a list of promises to read the status for each submodule, then
         // evaluate them in parallel.
 
-        const getSubRepo = function (subName, subRepo) {
-            const paths = filtering ? filterPaths[subName] : [];
-            return exports.getRepoStatus(subRepo, {
-                paths: paths,
-                showAllUntracked: options.showAllUntracked,
-                ignoreIndex: options.ignoreIndex,
-            });
-        };
-
-        const subStatMakers = subsToList.map(name => {
-            return exports.getSubmoduleStatus(name,
-                                              repo,
-                                              indexUrls[name] || null,
-                                              headUrls[name] || null,
-                                              index,
-                                              commitTree,
-                                              openSet.has(name),
-                                              repo => getSubRepo(name, repo));
-        });
+        const subStatMakers = subsToList.map(co.wrap(function *(name) {
+            const headUrl = headUrls[name];
+            let headSha = null;
+            if (undefined !== headUrl) {
+                headSha = (yield commitTree.entryByPath(name)).sha();
+            }
+            let indexSha = null;
+            const entry = index.getByPath(name);
+            if (entry) {
+                indexSha = entry.id.tostrS();
+            }
+            let subRepo = null;
+            let status = null;
+            if (openSet.has(name)) {
+                subRepo = yield SubmoduleUtil.getRepo(repo, name);
+                status = yield exports.getRepoStatus(subRepo, {
+                    paths: filtering ? filterPaths[name] : [],
+                    showAllUntracked: options.showAllUntracked,
+                    ignoreIndex: options.ignoreIndex,
+                });
+            }
+            return yield exports.getSubmoduleStatus(subRepo,
+                                                    status,
+                                                    indexUrls[name] || null,
+                                                    headUrls[name] || null,
+                                                    indexSha,
+                                                    headSha);
+        }));
         const subStats = yield subStatMakers;
 
         // And copy them into the arguments.

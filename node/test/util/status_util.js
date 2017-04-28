@@ -257,20 +257,6 @@ describe("StatusUtil", function () {
     describe("getSubmoduleStatus", function () {
         // We will use `x` for the repo name and `s` for the submodule name.
 
-        /**
-         * We're going to cheat here.  We know that `getSubmoduleStatus` will
-         * call this method to get repo status.  We just need to make sure that
-         * it does so, and that it correctly uses the `headCommit` field, which
-         * is all we need to load to do so.
-         */
-        const getRepoStatus = co.wrap(function *(repo) {
-            const head = yield repo.getHeadCommit();
-            const headCommit = head && head.id().tostrS();
-            return new RepoStatus({
-                headCommit: headCommit,
-            });
-        });
-
         const cases = {
             "unchanged": {
                 state: "a=S|x=S:C2-1 s=Sa:1;Bmaster=2",
@@ -438,17 +424,33 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                                                                        commit);
                 const indexUrl = indexUrls.s || null;
                 const commitUrl = commitUrls.s || null;
-                const commitTree = yield commit.getTree();
+                let indexSha = null;
+                const entry = index.getByPath("s");
+                if (entry) {
+                    indexSha = entry.id.tostrS();
+                }
+                let commitSha = null;
+                if (commitUrl) {
+                    const commitTree = yield commit.getTree();
+                    commitSha = (yield commitTree.entryByPath("s")).sha();
+                }
                 const isVisible = yield SubmoduleUtil.isVisible(repo, "s");
-                const result = yield StatusUtil.getSubmoduleStatus(
-                                                                "s",
-                                                                repo,
-                                                                indexUrl,
-                                                                commitUrl,
-                                                                index,
-                                                                commitTree,
-                                                                isVisible,
-                                                                getRepoStatus);
+                let subRepo = null;
+                let subStatus = null;
+                if (isVisible) {
+                    subRepo = yield SubmoduleUtil.getRepo(repo, "s");
+                    const head = yield subRepo.getHeadCommit();
+                    const headCommit = head && head.id().tostrS();
+                    subStatus = new RepoStatus({
+                        headCommit: headCommit,
+                    });
+                }
+                const result = yield StatusUtil.getSubmoduleStatus(subRepo,
+                                                                   subStatus,
+                                                                   indexUrl,
+                                                                   commitUrl,
+                                                                   indexSha,
+                                                                   commitSha);
                 assert.instanceOf(result, Submodule);
                 const mappedResult = StatusUtil.remapSubmodule(result,
                                                                w.commitMap,
@@ -689,6 +691,28 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                expected: new RepoStatus({
                    headCommit: "1",
                    currentBranchName: "master",
+               }),
+           },
+           "ignore index in sub": {
+               state: "a=B|x=U:Os I a=b",
+               options: {
+                   ignoreIndex: true,
+               },
+               expected: new RepoStatus({
+                   headCommit: "2",
+                   currentBranchName: "master",
+                   submodules: {
+                       s: new Submodule({
+                           commit: new Commit("1", "a"),
+                           index: new Index("1", "a", RELATION.SAME),
+                           workdir: new Workdir(new RepoStatus({
+                               headCommit: "1",
+                               workdir: {
+                                   a: FILESTATUS.ADDED,
+                               },
+                           }), RELATION.SAME),
+                       }),
+                   },
                }),
            },
        };

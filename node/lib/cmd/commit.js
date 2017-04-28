@@ -228,8 +228,6 @@ const doAmend = co.wrap(function *(args) {
 
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
-    const PrintStatusUtil = require("../util/print_status_util");
-    const SubmoduleUtil   = require("../util/submodule_util");
     const UserError       = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;
@@ -238,91 +236,76 @@ const doAmend = co.wrap(function *(args) {
         throw new UserError("Paths not supported with amend yet.");
     }
 
-    if (args.interactive) {
-        throw new UserError(`\
-TODO: interactive commits are not yet supported with '--amend'.`);
-    }
-
     const repo = yield GitUtil.getCurrentRepo();
-    const cwd = process.cwd();
     const workdir = repo.workdir();
+    const cwd = process.cwd();
     const relCwd = path.relative(workdir, cwd);
-    let status = yield Commit.getCommitStatus(repo,
-                                              cwd, {
+    const amendStatus = yield Commit.getAmendStatus(repo, {
         showMetaChanges: args.meta,
         all: args.all,
         paths: args.file,
+        cwd: relCwd,
     });
+
+    const status = amendStatus.status;
+    const subsToAmend = amendStatus.subsToAmend;
 
     const head = yield repo.getHeadCommit();
+    const defaultSig = repo.defaultSignature();
+    const headMeta = Commit.getCommitMetaData(head);
+    let message;
+    let subMessages;
+    if (args.interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
 
-    // Load up the set of submodules in existence on the previous commit, if
-    // any.
+        const prompt = Commit.formatSplitCommitEditorPrompt(status,
+                                                            defaultSig,
+                                                            headMeta,
+                                                            subsToAmend);
+        const userText = yield GitUtil.editMessage(repo, prompt);
+        const userData = Commit.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
 
-    let oldSubs = {};
-    const parent = yield GitUtil.getParentCommit(repo, head);
-    if (null !== parent) {
-        oldSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+        // Check if there's actually anything to commit.
+
+        if (!Commit.shouldCommit(status, message === null, subMessages)) {
+            console.log("Nothing to commit.");
+            return;
+        }
     }
+    else {
+        const mismatched = Object.keys(subsToAmend).filter(name => {
+            const meta = subsToAmend[name];
+            return !headMeta.equivalent(meta);
+        });
+        if (0 !== mismatched.length) {
+            let error = `\
+Cannot amend because the signatures of the affected commits in the
+following sub-repos do not match that of the meta-repo:
+`;
+            mismatched.forEach(name => {
+                error += `    ${colors.red(name)}\n`;
+            });
+            error += `\
+You can make this commit using the interactive ('-i') commit option.`;
+            throw new UserError(error);
+        }
 
-    // Check to see if the repo is in a valid state to be amended.
+        // If no message, use editor.
 
-    const amendable = yield Commit.checkIfRepoIsAmendable(repo,
+        if (null === args.message) {
+            const prompt = Commit.formatAmendEditorPrompt(defaultSig,
+                                                          headMeta,
                                                           status,
-                                                          oldSubs);
-    let bad = "";
-    Object.keys(amendable.newCommits).forEach(sub => {
-        const relation = amendable.newCommits[sub];
-        const description = PrintStatusUtil.getRelationDescription(relation);
-        bad += `${colors.red(sub)} : ${description}`;
-    });
-    amendable.mismatchCommits.forEach(sub => {
-        bad += `The commit for ${colors.red(sub)} does not match.`;
-    });
-    amendable.deleted.forEach(sub => {
-        bad += `${colors.red(sub)} was deleted.\n`;
-    });
-    if ("" !== bad) {
-        throw new UserError("Cannot make amend commit:\n" + bad);
+                                                          relCwd);
+            const rawMessage = yield GitUtil.editMessage(repo, prompt);
+            message = GitUtil.stripMessage(rawMessage);
+        }
     }
 
-    // May have opened repos, so we need to update 'status'.
-
-    status = amendable.status;
-
-    // Calculate the changes that will be made by this amend -- so we know:
-    // (a) which subs to amend
-    // (b) what changes to stage (if any)
-    // (c) if an editor prompt is required, what information to display
-
-    const amendChanges = yield Commit.getAmendChanges(repo,
-                                                      oldSubs,
-                                                      status,
-                                                      args.meta,
-                                                      args.all);
-
-    // Update 'status' to reflect changes to be applied with amend.
-
-    status = amendChanges.status;
-
-    // If no message, use editor.
-
-    if (null === args.message) {
-        const headSig = head.author();
-        const time = headSig.when();
-        const date = new Date(time.time() * 1000);
-        const defaultSig = repo.defaultSignature();
-        const statusMessage = Commit.formatAmendEditorPrompt(headSig,
-                                                             defaultSig,
-                                                             status,
-                                                             relCwd,
-                                                             `${date}`);
-        const initialMessage = head.message() + statusMessage;
-        const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
-        args.message = GitUtil.stripMessage(rawMessage);
-    }
-
-    if ("" === args.message) {
+    if ("" === message) {
         abortForNoMessage();
     }
 
@@ -330,9 +313,10 @@ TODO: interactive commits are not yet supported with '--amend'.`);
 
     yield Commit.amendMetaRepo(repo,
                                status,
-                               amendChanges.subsToAmend,
+                               Object.keys(subsToAmend),
                                args.all,
-                               args.message);
+                               message,
+                               subMessages);
 });
 
 /**
