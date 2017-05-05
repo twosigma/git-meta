@@ -65,7 +65,7 @@ const astFromSimpleRepo = co.wrap(function *(repo) {
     });
     return new RepoAST({
         commits: commits,
-        branches: { "master": commit },
+        branches: { "master": new RepoAST.Branch(commit, null) },
         head: commit,
         currentBranchName: "master",
     });
@@ -111,8 +111,8 @@ const repoWithCommit = co.wrap(function *() {
     const expected = new RepoAST({
         commits: commits,
         branches: {
-            "master": firstCommit,
-            "foo": secondCommit,
+            "master": new RepoAST.Branch(firstCommit, null),
+            "foo": new RepoAST.Branch(secondCommit, null),
         },
         head: secondCommit,
         currentBranchName: "foo",
@@ -156,7 +156,7 @@ const repoWithDeeperCommits = co.wrap(function *() {
     });
     const expected = new RepoAST({
         commits: commits,
-        branches: { "master": secondCommit},
+        branches: { "master": new RepoAST.Branch(secondCommit, null) },
         head: secondCommit,
         currentBranchName: "master",
     });
@@ -215,7 +215,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
         });
@@ -238,7 +238,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             refs: { "foo/bar": commit },
             head: commit,
             currentBranchName: "master",
@@ -272,7 +272,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": secondSha },
+            branches: { "master": new RepoAST.Branch(secondSha, null), },
             head: secondSha,
             currentBranchName: "master",
         });
@@ -302,7 +302,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": delSha },
+            branches: { "master": new RepoAST.Branch(delSha, null), },
             head: delSha,
             currentBranchName: "master",
         });
@@ -345,8 +345,8 @@ describe("readRAST", function () {
         const expected = new RepoAST({
             commits: commits,
             branches: {
-                "master": commit,
-                "foo": commit
+                "master": new RepoAST.Branch(commit, null),
+                "foo": new RepoAST.Branch(commit, null),
             },
             head: commit,
             currentBranchName: "foo",
@@ -383,7 +383,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             bare: true,
@@ -451,7 +451,7 @@ describe("readRAST", function () {
                     }
                 }),
             },
-            branches: { master: commit },
+            branches: { master: new RepoAST.Branch(commit, "origin/master"), },
             currentBranchName: "master",
             head: commit,
         });
@@ -474,7 +474,7 @@ describe("readRAST", function () {
         const expected = new RepoAST({
             commits: commits,
             remotes: { badremote: new RepoAST.Remote(url), },
-            branches: { master: commit },
+            branches: { master: new RepoAST.Branch(commit, null), },
             currentBranchName: "master",
             head: commit,
         });
@@ -514,7 +514,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: commit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(commit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: commit.id().tostrS(),
         });
@@ -560,7 +562,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: commit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(commit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: commit.id().tostrS(),
             index: {
@@ -619,7 +623,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: lastCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(lastCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: lastCommit.id().tostrS(),
         });
@@ -646,7 +652,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { "README.md": "foo" },
@@ -674,7 +680,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { "foo": "foo" },
@@ -704,7 +710,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { "foo": "foo" },
@@ -733,7 +739,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { "README.md": null },
@@ -761,7 +767,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: headCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(headCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
             index: {
@@ -812,7 +820,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: commit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(commit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: commit.id().tostrS(),
             index: {
@@ -835,7 +845,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: headCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(headCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
             workdir: { "README.md": null },
@@ -855,7 +867,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: headCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(headCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
             workdir: { foo: "x" },
@@ -875,7 +889,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: headCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(headCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
             workdir: { "README.md": "x" },
@@ -899,7 +915,9 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { master: headCommit.id().tostrS() },
+            branches: {
+                master: new RepoAST.Branch(headCommit.id().tostrS(), null),
+            },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
             index: { "README.md": "x" },
@@ -989,8 +1007,8 @@ describe("readRAST", function () {
             head: mergeSha,
             currentBranchName: "master",
             branches: {
-                master: mergeSha,
-                b: bSha,
+                master: new RepoAST.Branch(mergeSha, null),
+                b: new RepoAST.Branch(bSha, null),
             },
             commits: commits,
         });
@@ -1131,8 +1149,8 @@ describe("readRAST", function () {
             head: mergeSha,
             currentBranchName: "master",
             branches: {
-                master: mergeSha,
-                wham: whamSha,
+                master: new RepoAST.Branch(mergeSha, null),
+                wham: new RepoAST.Branch(whamSha, null),
             },
             commits: commits,
             openSubmodules: {
@@ -1283,8 +1301,8 @@ describe("readRAST", function () {
             head: mergeSha,
             currentBranchName: "master",
             branches: {
-                master: mergeSha,
-                wham: whamSha,
+                master: new RepoAST.Branch(mergeSha, null),
+                wham: new RepoAST.Branch(whamSha, null),
             },
             commits: commits,
             openSubmodules: {
@@ -1330,7 +1348,7 @@ describe("readRAST", function () {
                     "refs/notes/test" : note
             },
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
         });
@@ -1435,7 +1453,7 @@ describe("readRAST", function () {
         });
         expected = expected.copy({
             branches: {
-                master: finalSha,
+                master: new RepoAST.Branch(finalSha, null),
             },
             head: finalSha,
             commits: commits,
@@ -1474,7 +1492,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { x: new RepoAST.Submodule("foo", null) },
@@ -1534,7 +1552,7 @@ describe("readRAST", function () {
         });
         const expected = new RepoAST({
             commits: commits,
-            branches: { "master": commit },
+            branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
             index: { x: new RepoAST.Submodule("foo", null) },

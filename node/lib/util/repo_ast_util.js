@@ -287,10 +287,10 @@ function diffASTs(actual, expected) {
     function compareBranches(branch) {
         const actualBranch = actual.branches[branch];
         const expectedBranch = expected.branches[branch];
-        if (actualBranch !== expectedBranch) {
+        if (!deeper(actualBranch, expectedBranch)) {
             result.push(`\
-branch ${colorBad(branch)} is ${colorAct(actualBranch)} but expected \
-${colorExp(expectedBranch)}`
+branch ${colorBad(branch)} is ${colorAct(JSON.stringify(actualBranch))} but \
+expected ${colorExp(JSON.stringify(expectedBranch))}`
                        );
         }
     }
@@ -644,11 +644,13 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         }
     }
 
-    // Then branches -- they're strings that map to commit ids.
+    // Then branches
 
     let branches = {};
     for (let branchName in ast.branches) {
-        branches[branchName] = mapCommitId(ast.branches[branchName]);
+        const oldBranch = ast.branches[branchName];
+        const newId = mapCommitId(oldBranch.sha);
+        branches[branchName] = new RepoAST.Branch(newId, oldBranch.tracking);
     }
 
     // Then refs -- they're strings that map to commit ids, like branches
@@ -752,9 +754,9 @@ exports.cloneRepo = function (original, url) {
 
     const originalBranches = original.branches;
     for (let name in originalBranches) {
-        const commitId = originalBranches[name];
-        addCommit(commitId);
-        remoteBranches[name] = commitId;
+        const branch = originalBranches[name];
+        addCommit(branch.sha);
+        remoteBranches[name] = branch.sha;
     }
 
     // Be sure to traverse the `head` if it's not null.
@@ -769,13 +771,14 @@ exports.cloneRepo = function (original, url) {
     const originalBranch = original.currentBranchName;
     let head = original.head;
     if (null !== originalBranch) {
-        const defaultBranchCommit = originalBranches[originalBranch];
-        branches[originalBranch] = defaultBranchCommit;
+        const defaultBranch = originalBranches[originalBranch];
+        branches[originalBranch] = new RepoAST.Branch(
+                                                   defaultBranch.sha,
+                                                   `origin/${originalBranch}`);
         if (null === head) {
-            head = defaultBranchCommit;
+            head = defaultBranch.sha;
         }
     }
-
 
     // May be a bare repo with a default branch.
 

@@ -327,18 +327,16 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
     const makeRef = co.wrap(function *(name, commit) {
         const newSha = commitMap[commit];
         const newId = NodeGit.Oid.fromString(newSha);
-        yield NodeGit.Reference.create(repo, name, newId, 0, "made ref");
+        return yield NodeGit.Reference.create(repo,
+                                              name,
+                                              newId,
+                                              0,
+                                              "made ref");
     });
 
     let newHeadSha = null;
     if (null !== ast.head) {
         newHeadSha = commitMap[ast.head];
-    }
-
-    // Then create the branches we want.
-
-    for (let branch in ast.branches) {
-        yield makeRef("refs/heads/" + branch, ast.branches[branch]);
     }
 
     // Then create the refs
@@ -358,6 +356,16 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
         for (let branchName in remote.branches) {
             yield makeRef(`refs/remotes/${remoteName}/${branchName}`,
                           remote.branches[branchName]);
+        }
+    }
+
+    // Then create the branches we want.
+
+    for (let branch in ast.branches) {
+        const astBranch = ast.branches[branch];
+        const ref = yield makeRef("refs/heads/" + branch, astBranch.sha);
+        if (null !== astBranch.tracking) {
+            yield NodeGit.Branch.setUpstream(ref, astBranch.tracking);
         }
     }
 

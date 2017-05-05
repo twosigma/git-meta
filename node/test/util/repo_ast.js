@@ -36,6 +36,19 @@ const RepoAST = require("../../lib/util/repo_ast");
 
 describe("RepoAST", function () {
 
+    describe("Branch", function () {
+        it("breath", function () {
+            const b = new RepoAST.Branch("name", "upstream");
+            assert.isFrozen(b);
+            assert.equal(b.sha, "name");
+            assert.equal(b.tracking, "upstream");
+        });
+        it("null tracking", function () {
+            const b = new RepoAST.Branch("name", null);
+            assert.isNull(b.tracking);
+        });
+    });
+
     describe("Submodule", function () {
         it("breath", function () {
             const s = new RepoAST.Submodule("foo", "bar");
@@ -219,12 +232,12 @@ describe("RepoAST", function () {
                 }, undefined, true),
                 "branchCommit": m({
                     commits: {"1":c1, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     head: "1",
                     currentBranchName: null,
                 }, {
                     commits: {"1":c1, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     head: "1",
                 }, false),
                 "refCommit": m({
@@ -249,12 +262,12 @@ describe("RepoAST", function () {
                 }, true),
                 "with submodule": m({
                     commits: {"1":cWithSubmodule, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     head: "1",
                     currentBranchName: null,
                 }, {
                     commits: {"1":cWithSubmodule, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     head: "1",
                 }, false),
                 "remotes": m({
@@ -267,17 +280,19 @@ describe("RepoAST", function () {
                 "badParent": m({ commits: { "2": cWithPar }},
                                undefined,
                                true),
-                "badBranch": m({ branches: { "master": "3"}}, undefined, true),
+                "badBranch": m({
+                    branches: { "master": new RepoAST.Branch("3", null) },
+                }, undefined, true),
                 "badRef": m({ refs: { "a/b": "3"}}, undefined, true),
                 "badHead": m({ head: "3"}, undefined, true),
                 "branch": m({
                     commits: {"1": c1},
-                    branches: {"master": "1"},
+                    branches: {"master": new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                 }, {
                     commits: {"1": c1},
-                    branches: {"master": "1"},
+                    branches: {"master": new RepoAST.Branch("1", null) },
                     head: "1",
                     branch: "master",
                 }, false),
@@ -297,7 +312,7 @@ describe("RepoAST", function () {
                 }, true),
                 "badBranch with good commit": m({
                     commits: {"1": c1},
-                    branches: {"aster": "1"},
+                    branches: {"aster": new RepoAST.Branch("1", null) },
                     head: null,
                     currentBranchName: "master",
                 }, undefined, true),
@@ -322,12 +337,12 @@ describe("RepoAST", function () {
                 }, false),
                 "bare with current branch": m({
                     commits: {"1":c1, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     head: null,
                     currentBranchName: "master",
                 }, {
                     commits: {"1":c1, "2": cWithPar},
-                    branches: {"master": "2"},
+                    branches: {"master": new RepoAST.Branch("2", null) },
                     branch: "master",
                     head: null,
                 }, false),
@@ -635,7 +650,7 @@ describe("RepoAST", function () {
             const Rebase = RepoAST.Rebase;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
-                branches: { "master": "1" },
+                branches: { "master": new RepoAST.Branch("1", null) },
                 refs: { "a/b": "1"},
                 head: "1",
                 currentBranchName: "master",
@@ -646,7 +661,7 @@ describe("RepoAST", function () {
             });
             const newArgs = {
                 commits: { "2": new RepoAST.Commit()},
-                branches: { "foo": "2" },
+                branches: { "foo": new RepoAST.Branch("2", null) },
                 refs: { "foo/bar": "2" },
                 head: "2",
                 currentBranchName: "foo",
@@ -674,7 +689,7 @@ describe("RepoAST", function () {
                     },
                     e: new RepoAST({
                         commits: { "1": new RepoAST.Commit()},
-                        branches: { "master": "1" },
+                        branches: { "master": new RepoAST.Branch("1", null) },
                         refs: { "a/b": "1"},
                         head: "1",
                         currentBranchName: "master",
