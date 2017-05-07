@@ -53,9 +53,18 @@ exports.configureParser = function (parser) {
 
     parser.addArgument(["committish"], {
         type: "string",
-        help: "commit to check out",
+        help: `
+commit to check out.  If this <committish> is not found, but does \
+match a single remote tracking branch, treat as equivalent to \
+'checkout -b <committish> -t <remote>/<committish>'`,
         defaultValue: null,
         nargs: "?",
+    });
+
+    parser.addArgument(["-t", "--track"], {
+        help: "Set tracking branch.",
+        action: "storeConst",
+        constant: true,
     });
 };
 
@@ -67,31 +76,89 @@ exports.configureParser = function (parser) {
  * @param {String} args.committish
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("colors");
+    const colors  = require("colors");
 
     const Checkout  = require("../util/checkout");
     const GitUtil   = require("../util/git_util");
-
-    let committish = args.committish;
     let newBranch = null;
 
     const newBranchNameArr = args["new branch name"];
     if (newBranchNameArr) {
         newBranch = newBranchNameArr[0];
     }
-
     const repo = yield GitUtil.getCurrentRepo();
-    if (null !== committish) {
-        yield Checkout.checkout(repo, committish);
+
+    // Validate and determine what operation we're actually doing.
+
+    const op = yield Checkout.deriveCheckoutOperation(repo,
+                                                      args.committish,
+                                                      newBranch,
+                                                      args.track || false);
+
+    // If we're already on this branch, note it and exit.
+
+    if (null === op.newBranch && null !== op.switchBranch) {
+        const current = yield GitUtil.getCurrentBranchName(repo);
+        if (current === op.switchBranch) {
+            console.log(`Already on branch ${colors.green(current)}.`);
+            return;                                                   // RETURN
+        }
     }
-    if (null !== newBranch) {
-        const branch = yield GitUtil.createBranchFromHead(repo, newBranch);
-        yield repo.setHead(branch.name());
-        console.log(`Switched to new branch ${colors.green(newBranch)}.`);
+
+    // Remember if we were detached so we can tell the users if we become
+    // detached.
+
+    const wasDetached = repo.headDetached() !== 0;
+
+    // Now, do the actual operation.
+
+    yield Checkout.executeCheckout(repo,
+                                   op.commit,
+                                   op.newBranch,
+                                   op.switchBranch);
+
+    // Tell the user what we just did.
+
+    if (null !== op.commit && null === op.switchBranch) {
+        // In this case, we're not making a branch; just let the user know what
+        // we checked out.
+
+        console.log(`Checked out ${colors.green(args.committish)}.`);
     }
-    else if (null !== committish) {
-        // TODO display info about whether this is a branch, detached head,
-        // etc.
-        console.log(`Switched to ${colors.green(committish)}.`);
+
+    // If we made a new branch, let the user know about it.
+
+    const newB = op.newBranch;
+
+    if (null !== newB) {
+        const name = newB.name;
+        console.log(`Created branch ${colors.green(name)}.`);
+        const tracking = newB.tracking;
+        if (null !== tracking) {
+            if (null === tracking.remoteName) {
+                console.log(`\
+Configured ${colors.green(name)} to track local branch \
+${colors.blue(tracking.branchName)}.`);
+            }
+            else {
+                console.log(`\
+Configured ${colors.green(name)} to track remote branch \
+${colors.blue(tracking.branchName)} from \
+${colors.blue(tracking.remoteName)}.`);
+            }
+        }
+    }
+    if (null !== op.switchBranch) {
+        // Let the user know if we switched branches.
+
+        console.log(`Switched to branch ${colors.green(op.switchBranch)}.`);
+    }
+    else if (null !== op.commit) {
+        // If we just did a checkout and didn't switch branches, let the user
+        // know if we transitioned to a detached state.
+
+        if (!wasDetached) {
+            console.log(`You are now in 'detached HEAD' state.`);
+        }
     }
 });
