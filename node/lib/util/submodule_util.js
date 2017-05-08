@@ -43,6 +43,7 @@ const path    = require("path");
 
 const GitUtil             = require("./git_util");
 const Submodule           = require("./submodule");
+const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
@@ -523,3 +524,64 @@ exports.resolvePaths = co.wrap(function *(workdir,
     return result;
 });
 
+/**
+ * Create references having the specified `refs` names in each of the specified
+ * `submodules`, in the specified `repo` with each created reference being
+ * assigned to the commit indicated for that respective submodule by the ref
+ * with that name in the meta-repo.  Do not create a reference in a submodule
+ * when for references indicating commits in which that submodule does not
+ * exist.  Note that if a reference is the *current* branch of a sub-repo, it
+ * is not adjusted. The behavior is undefined unless each `ref` is a valid
+ * reference name in `repo`, and each submodule in `submodules` is open.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String[]}           refs
+ * @param {String[]}           submodules
+ */
+exports.addRefs = co.wrap(function *(repo, refs, submodules) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isArray(refs);
+    assert.isArray(submodules);
+
+    const subRepos = {};
+    yield submodules.map(co.wrap(function *(name) {
+        subRepos[name] = yield exports.getRepo(repo, name);
+    }));
+
+    yield refs.map(co.wrap(function *(name) {
+        const ref = yield NodeGit.Reference.lookup(repo, name);
+        const commit = yield repo.getCommit(ref.target());
+        const tree = yield commit.getTree();
+        const fetcher = new SubmoduleFetcher(repo, commit);
+        yield submodules.map(co.wrap(function *(subName) {
+            const subRepo = subRepos[subName];
+            const head = yield subRepo.head();
+
+            // Skip if this sub is on the branch 'name'.
+
+            if (!head.isBranch() || head.name() !== name) {
+                let entry = null;
+                try {
+                    entry = yield tree.entryByPath(subName);
+                }
+                catch (e) {
+                    // If we fail, the sub doesn't exist on this commit.
+                    // Catching this exception is the only way to know.
+
+                    return;                                           // RETURN
+                }
+                const sha = entry.sha();
+
+                // Make sure we have this commit.
+
+                yield fetcher.fetchSha(subRepo, subName, sha);
+
+                yield NodeGit.Reference.create(subRepo,
+                                               name,
+                                               NodeGit.Oid.fromString(sha),
+                                               1,
+                                               "addRefs");
+            }
+        }));
+    }));
+});

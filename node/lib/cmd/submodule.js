@@ -80,6 +80,19 @@ submodule is closed, followed by the current SHA-1 for \
 that submodule, followed by its name. `
     });
 
+    const addRefsParser = subParsers.addParser("addrefs", {
+        help: "create references in sub-repos matching refs in the meta-repo",
+        description: `\
+Create references in sub-repos pointing to the commits indicated by the \
+reference having that name in the meta-repo.  The default behavior is to \
+map every reference in the meta-repo into every open sub-repo.`,
+    });
+
+    addRefsParser.addArgument(["path"], {
+        help: "if provided, open only submodules in selected paths",
+        nargs: "*",
+    });
+
     const findMetaParser = subParsers.addParser("find-meta", {
         help: "find the meta-repo commit from a submodule commit",
         description: `\
@@ -247,6 +260,31 @@ meta-repo.`);
     }
 });
 
+const doAddRefs = co.wrap(function *(paths) {
+    const NodeGit = require("nodegit");
+
+    const GitUtil             = require("../util/git_util");
+    const SubmoduleUtil       = require("../util/submodule_util");
+
+    const repo = yield GitUtil.getCurrentRepo();
+    let subs   = yield SubmoduleUtil.listOpenSubmodules(repo);
+
+    if (0 !== paths.length) {
+        const workdir = repo.workdir();
+        const cwd     = process.cwd();
+        const names   = yield SubmoduleUtil.getSubmoduleNames(repo);
+
+        const includedSubs = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
+                                                                       cwd,
+                                                                       names,
+                                                                       paths);
+        const includedSet = new Set(includedSubs);
+        subs = subs.filter(name => includedSet.has(name));
+    }
+    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
+    yield SubmoduleUtil.addRefs(repo, refs, subs);
+});
+
 /**
  * Execute the `submodule` command according to the specified `args`.
  *
@@ -259,6 +297,9 @@ meta-repo.`);
 exports.executeableSubcommand = function (args) {
     if ("status" === args.command) {
         return doStatusCommand(args.path, args.verbose);
+    }
+    else if ("addrefs" === args.command) {
+        return doAddRefs(args.path);
     }
     return doFindCommand(args.path,
                          args.meta_committish,

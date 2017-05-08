@@ -692,6 +692,49 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
-
+    describe("addRefs", function () {
+        const cases = {
+            "trivial": {
+                input: "x=S",
+                refs: [],
+                subs: [],
+            },
+            "copy one": {
+                input: "a=B|x=U:Os",
+                refs: ["refs/heads/master"],
+                subs: ["s"],
+                expected: "x=E:Os Bmaster=1",
+            },
+            "overwrite ref": {
+                input: "a=B|x=U:Os C6-1!Bmaster=6",
+                refs: ["refs/heads/master"],
+                subs: ["s"],
+                expected: "x=E:Os Bmaster=1",
+            },
+            "don't overwrite ref if current": {
+                input: "a=B|x=U:Os C6-1!Bmaster=6!*=master",
+                refs: ["refs/heads/master"],
+                subs: ["s"],
+            },
+            "for ref w/o sub": {
+                input: "a=B|x=U:Os;Bfoo=1",
+                refs: ["refs/heads/foo"],
+                subs: ["s"],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const addRefs = co.wrap(function *(repos) {
+                    const repo = repos.x;
+                    yield SubmoduleUtil.addRefs(repo, c.refs, c.subs);
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               addRefs,
+                                                               c.fails);
+            }));
+        });
+    });
 });
 
