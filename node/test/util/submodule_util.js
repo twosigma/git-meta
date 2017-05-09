@@ -736,5 +736,30 @@ describe("SubmoduleUtil", function () {
             }));
         });
     });
+    describe("cacheSubmodules", function () {
+        it("breathing", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            function op(r) {
+                assert.equal(repo, r);
+                return Promise.resolve(3);
+            }
+            const result = yield SubmoduleUtil.cacheSubmodules(repo, op);
+            assert.equal(result, 3);
+        }));
+        it("exception", co.wrap(function *() {
+            class MyException {}
+            function op() {
+                throw new MyException();
+            }
+            const repo = yield TestUtil.createSimpleRepository();
+            try {
+                yield SubmoduleUtil.cacheSubmodules(repo, op);
+            }
+            catch (e) {
+                assert.instanceOf(e, MyException);
+                return;
+            }
+            assert(false, "should have thrown");
+        }));
+    });
 });
-

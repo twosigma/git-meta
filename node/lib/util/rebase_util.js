@@ -684,11 +684,13 @@ up-to-date.`);
                 yield NodeGit.AnnotatedCommit.fromRef(metaRepo, currentBranch);
         const ontoAnnotatedCommit =
                       yield NodeGit.AnnotatedCommit.lookup(metaRepo, commitId);
-        const rebase = yield NodeGit.Rebase.init(metaRepo,
-                                                 fromAnnotedCommit,
-                                                 ontoAnnotatedCommit,
-                                                 null,
-                                                 null);
+        const rebase = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
+            return NodeGit.Rebase.init(metaRepo,
+                                       fromAnnotedCommit,
+                                       ontoAnnotatedCommit,
+                                       null,
+                                       null);
+        });
         console.log(`Rewinding to ${colors.green(commitId.tostrS())}.`);
         yield callNext(rebase);
         return rebase;
@@ -707,7 +709,9 @@ up-to-date.`);
 exports.abort = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const rebase = yield NodeGit.Rebase.open(repo);
+    const rebase = yield SubmoduleUtil.cacheSubmodules(repo, () => {
+        return NodeGit.Rebase.open(repo);
+    });
     rebase.abort();
 
     const head = yield repo.head();
@@ -753,7 +757,9 @@ exports.continue = co.wrap(function *(repo) {
         console.log(`Continuing rebase from \
 ${colors.green(rebaseInfo.originalHead)} onto \
 ${colors.green(rebaseInfo.onto)}.`);
-        const rebase = yield NodeGit.Rebase.open(repo);
+        const rebase = yield SubmoduleUtil.cacheSubmodules(repo, () => {
+            return NodeGit.Rebase.open(repo);
+        });
         const curIdx = rebase.operationCurrent();
         const curOper = rebase.operationByIndex(curIdx);
         const curSha = curOper.id().tostrS();
