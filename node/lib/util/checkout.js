@@ -59,6 +59,8 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(committish);
 
+    metaRepo.submoduleCacheAll();
+
     const annotated = yield GitUtil.resolveCommitish(metaRepo, committish);
     if (null === annotated) {
         throw new UserError(`Could not resolve ${colors.red(committish)}.`);
@@ -165,4 +167,6 @@ exports.checkout = co.wrap(function *(metaRepo, committish) {
     if (null !== branch) {
         yield metaRepo.checkoutBranch(branch);
     }
+
+    metaRepo.submoduleCacheClear();
 });

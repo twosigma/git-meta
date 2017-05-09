@@ -585,3 +585,27 @@ exports.addRefs = co.wrap(function *(repo, refs, submodules) {
         }));
     }));
 });
+
+/**
+ * Cache the submodules before invoking the specified `operation` and uncache
+ * them after the operation is completed, or before allowing an exception to
+ * propagte.  Return the result of `operation`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {(repo ) => Promise} operation
+ */
+exports.cacheSubmodules = co.wrap(function *(repo, operation) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isFunction(operation);
+    repo.submoduleCacheAll();
+    let result;
+    try {
+        result = yield operation(repo);
+    }
+    catch (e) {
+        repo.submoduleCacheClear();
+        throw e;
+    }
+    repo.submoduleCacheClear();
+    return result;
+});

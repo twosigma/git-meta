@@ -983,7 +983,7 @@ describe("readRAST", function () {
         commits[mergeSha] = new Commit({
             parents: [cSha, bSha],
             changes: { foo: "foo" },
-            message: "Merged b into master",
+            message: "Merge branch 'b'",
         });
         const expected = new RepoAST({
             head: mergeSha,

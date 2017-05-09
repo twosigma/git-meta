@@ -78,7 +78,9 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
     const head = yield metaRepo.getHeadCommit();
     const changes = yield SubmoduleUtil.getSubmoduleChanges(metaRepo, commit);
 
-    yield NodeGit.Cherrypick.cherrypick(metaRepo, commit, {});
+    yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
+        return NodeGit.Cherrypick.cherrypick(metaRepo, commit, {});
+    });
 
     let errorMessage = "";
     let indexChanged = false;

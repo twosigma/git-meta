@@ -80,7 +80,9 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
     // First, reset the meta-repo.
 
-    yield NodeGit.Reset.reset(repo, commit, resetType);
+    yield SubmoduleUtil.cacheSubmodules(repo, () => {
+        return NodeGit.Reset.reset(repo, commit, resetType);
+    });
 
     // Then, all open subs.
 

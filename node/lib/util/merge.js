@@ -140,10 +140,13 @@ ${colors.red(commitSha)}.`);
     // anything, has no effect.
 
     const head = yield metaRepo.getCommit(metaRepoStatus.headCommit);
-    const metaIndex = yield NodeGit.Merge.commits(metaRepo,
-                                                  head,
-                                                  commit,
-                                                  null);
+
+    const metaIndex = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
+        return NodeGit.Merge.commits(metaRepo,
+                                     head,
+                                     commit,
+                                     null);
+    });
 
     let errorMessage = "";
 
