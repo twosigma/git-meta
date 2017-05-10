@@ -212,7 +212,7 @@ describe("push", function () {
             fails: true,
         },
         "no-ffwd success": {
-            initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+            initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3 origin/master",
             manipulator: pusher("b", "origin", "master", "master", true),
             expected: "a=B:C3-1;Bmaster=3|b=Ca",
         },

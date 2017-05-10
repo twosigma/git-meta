@@ -47,8 +47,6 @@ const UserError           = require("../../lib/util/user_error");
 const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("GitUtil", function () {
-    after(TestUtil.cleanup);
-
     describe("getRemoteForBranch", function () {
         it("no upstream", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createRepo("S");
@@ -379,7 +377,7 @@ describe("GitUtil", function () {
                 manipulator: pusher("b", "origin", "foo", "foo", true),
             },
             "update a branch": {
-                input: "a=B|b=Ca:C2-1;Bmaster=2",
+                input: "a=B|b=Ca:C2-1;Bmaster=2 origin/master",
                 expected: "a=B:C2-1;Bmaster=2|b=Ca",
                 manipulator: pusher("b", "origin", "master", "master"),
             },

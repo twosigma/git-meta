@@ -920,7 +920,7 @@ x=E:Cx-1 s=Sa:s;I s=~;Os Cs q=r!*=master!Bmaster=s;Bmaster=x`,
                 initial: "a=B|x=Ca:I s=S.:;Os Cz!H=z",
                 doAll: false,
                 message: "message",
-                expected: `x=E:Cx-1 s=S.:z;Bmaster=x;I s=~`,
+                expected: `x=E:Cx-1 s=S.:z;Bmaster=x origin/master;I s=~`,
             },
             "staged commit in index undone in workdir": {
                 initial: `
