@@ -152,7 +152,7 @@ describe("RepoAstUtil", function () {
             "everything there": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     refs: { "a/b": "1" },
                     head: "1",
                     currentBranchName: "master",
@@ -165,7 +165,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     refs: { "a/b": "1" },
                     head: "1",
                     currentBranchName: "master",
@@ -187,7 +187,7 @@ describe("RepoAstUtil", function () {
                     commits: {
                         "1": new Commit({ changes: { x: "z" } }),
                     },
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -197,7 +197,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -210,7 +210,7 @@ describe("RepoAstUtil", function () {
             "missing branch": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -220,7 +220,10 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1", foo: "1" },
+                    branches: {
+                        master: new RepoAST.Branch("1", null),
+                        foo: new RepoAST.Branch("1", null),
+                    },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -233,7 +236,7 @@ describe("RepoAstUtil", function () {
             "missing ref": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     refs: { "a/b": "1" },
                     head: "1",
                     currentBranchName: "master",
@@ -244,7 +247,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     refs: { "a/b": "1", "e/d": "1" },
                     head: "1",
                     currentBranchName: "master",
@@ -258,7 +261,10 @@ describe("RepoAstUtil", function () {
             "wrong head": {
                 actual: new AST({
                     commits: { "1": aCommit, "2": aCommit },
-                    branches: { master: "1", bar: "2" },
+                    branches: {
+                        master: new RepoAST.Branch("1", null),
+                        bar: new RepoAST.Branch("2", null),
+                    },
                     head: "2",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
@@ -267,7 +273,10 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit, "2": aCommit },
-                    branches: { master: "1", bar: "2" },
+                    branches: {
+                        master: new RepoAST.Branch("1", null),
+                        bar: new RepoAST.Branch("2", null),
+                    },
                     head: "1",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
@@ -279,7 +288,9 @@ describe("RepoAstUtil", function () {
             "no current branch": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: {
+                        master: new RepoAST.Branch("1", null),
+                    },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -289,7 +300,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
@@ -301,7 +312,7 @@ describe("RepoAstUtil", function () {
             "extra remote": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote, yyyy: aRemote },
@@ -311,7 +322,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -324,7 +335,7 @@ describe("RepoAstUtil", function () {
             "wrong index": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -334,7 +345,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -347,7 +358,7 @@ describe("RepoAstUtil", function () {
             "bad workdir": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -357,7 +368,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null),  },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -370,7 +381,7 @@ describe("RepoAstUtil", function () {
             "missing open sub": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null), },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -379,7 +390,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null), },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -392,7 +403,7 @@ describe("RepoAstUtil", function () {
             "different open sub": {
                 actual: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null), },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -402,7 +413,7 @@ describe("RepoAstUtil", function () {
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null), },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
@@ -456,13 +467,13 @@ describe("RepoAstUtil", function () {
                 actual: new AST({
                     commits: { "1": aCommit, "2": aCommit},
                     head: "1",
-                    branches: { master: "2" },
+                    branches: { master: new RepoAST.Branch("2", null), },
                     rebase: new Rebase("foo", "2", "1"),
                 }),
                 expected: new AST({
                     commits: { "1": aCommit, "2": aCommit},
                     head: "1",
-                    branches: { master: "2" },
+                    branches: { master: new RepoAST.Branch("2", null), },
                     rebase: new Rebase("foo", "1", "1"),
                 }),
                 fails: true,
@@ -471,13 +482,13 @@ describe("RepoAstUtil", function () {
                 actual: new AST({
                     commits: { "1": aCommit, "2": aCommit},
                     head: "1",
-                    branches: { master: "2" },
+                    branches: { master: new RepoAST.Branch("2", null), },
                     rebase: new Rebase("foo", "1", "2"),
                 }),
                 expected: new AST({
                     commits: { "1": aCommit, "2": aCommit},
                     head: "1",
-                    branches: { master: "2" },
+                    branches: { master: new RepoAST.Branch("2", null), },
                     rebase: new Rebase("foo", "1", "1"),
                 }),
                 fails: true,
@@ -562,12 +573,12 @@ describe("RepoAstUtil", function () {
             "branches": {
                 i: new RepoAST({
                     commits: { "1": c1 },
-                    branches: { "aaa": "1"},
+                    branches: { "aaa": new RepoAST.Branch("1", null), },
                 }),
                 m: { "1": "2"},
                 e: new RepoAST({
                     commits: { "2": c1 },
-                    branches: { "aaa": "2"},
+                    branches: { "aaa": new RepoAST.Branch("2", null), },
                 }),
             },
             "refs": {
@@ -584,14 +595,14 @@ describe("RepoAstUtil", function () {
             "current branch": {
                 i: new RepoAST({
                     commits: { "1": c1 },
-                    branches: { "aaa": "1"},
+                    branches: { "aaa": new RepoAST.Branch("1", null), },
                     head: "1",
                     currentBranchName: "aaa",
                 }),
                 m: { "1": "2"},
                 e: new RepoAST({
                     commits: { "2": c1 },
-                    branches: { "aaa": "2"},
+                    branches: { "aaa": new RepoAST.Branch("2", null), },
                     head: "2",
                     currentBranchName: "aaa",
                 }),
@@ -889,7 +900,10 @@ describe("RepoAstUtil", function () {
             "with branches and commits": {
                 original: new AST({
                     commits: { "1": c1, "2": c2 },
-                    branches: { x: "1", y: "2" },
+                    branches: {
+                        x: new RepoAST.Branch("1", null),
+                        y: new RepoAST.Branch("2", null),
+                    },
                 }),
                 url: "foo",
                 expected: new AST({
@@ -907,7 +921,10 @@ describe("RepoAstUtil", function () {
             "with refs": {
                 original: new AST({
                     commits: { "1": c1, "2": c2 },
-                    branches: { x: "1", y: "2" },
+                    branches: {
+                        x: new RepoAST.Branch("1", null),
+                        y: new RepoAST.Branch("2", null),
+                    },
                     refs: { q: "1", r: "2" },
                 }),
                 url: "foo",
@@ -953,7 +970,7 @@ describe("RepoAstUtil", function () {
                 original: new AST({
                     commits: { "1": c1 },
                     head: "1",
-                    branches: { foo: "1" },
+                    branches: { foo: new RepoAST.Branch("1", null), },
                     currentBranchName: "foo"
                 }),
                 url: "foo",
@@ -964,7 +981,7 @@ describe("RepoAstUtil", function () {
                             branches: { foo: "1" },
                         })
                     },
-                    branches: { foo: "1" },
+                    branches: { foo: new RepoAST.Branch("1", "origin/foo"), },
                     currentBranchName: "foo",
                     head: "1",
                 }),
@@ -990,14 +1007,16 @@ describe("RepoAstUtil", function () {
             "from bare": {
                 original: new AST({
                     commits: { "1": c1 },
-                    branches: { master: "1" },
+                    branches: { master: new RepoAST.Branch("1", null), },
                     currentBranchName: "master",
                     head: null,
                 }),
                 url: "foo",
                 expected: new AST({
                     commits: { "1": c1 },
-                    branches: { master: "1" },
+                    branches: {
+                        master: new RepoAST.Branch("1", "origin/master"),
+                    },
                     currentBranchName: "master",
                     head: "1",
                     remotes: {

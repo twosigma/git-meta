@@ -136,7 +136,17 @@ describe("ShorthandParserUtil", function () {
         const cases = {
             "just type": { i: "S", e: m({ type: "S"})},
             "just another type": { i: "B", e: m({ type: "B"})},
-            "branch": { i: "S:Bm=2", e: m({ branches: { m: "2"}})},
+            "branch": { i: "S:Bm=2", e: m({
+                branches: { m: new RepoAST.Branch("2", null), },
+            })},
+            "branch with tracking": {
+                i: "S:Bm=2 foo/bar",
+                e: m({
+                    branches: {
+                        m: new RepoAST.Branch("2", "foo/bar"),
+                    },
+                }),
+            },
             "ref": { i: "S:Ffoo/bar=2", e: m({ refs: { "foo/bar": "2"}})},
             "null branch": { i: "S:Bm=", e: m({ branches: { m: null}})},
             "commit": { i: "S:C1-2", e: m({
@@ -266,8 +276,8 @@ describe("ShorthandParserUtil", function () {
                 i: "S:Bm=1;By=2;Bz=",
                 e: m({
                     branches: {
-                        m: "1",
-                        y: "2",
+                        m: new RepoAST.Branch("1", null),
+                        y: new RepoAST.Branch("2", null),
                         z: null,
                     },
                 }),
@@ -348,7 +358,7 @@ describe("ShorthandParserUtil", function () {
                 e: m({
                     type: "C",
                     typeData: "x x x",
-                    branches: { baz: "1" },
+                    branches: { baz: new RepoAST.Branch("1", null), },
                 }),
             },
             "commit with submodule": {
@@ -375,7 +385,7 @@ describe("ShorthandParserUtil", function () {
                             message: "message",
                         }),
                     },
-                    branches: { master: "2"},
+                    branches: { master: new RepoAST.Branch("2", null), },
                 }),
             },
             "index change": {
@@ -445,7 +455,12 @@ describe("ShorthandParserUtil", function () {
                 i: "S:Oy Bmaster=foo",
                 e: m({
                     openSubmodules: {
-                        y: m({ type: null, branches: { master: "foo" }}),
+                        y: m({
+                            type: null,
+                            branches: {
+                                master: new RepoAST.Branch("foo", null),
+                            }
+                        }),
                     },
                 }),
             },
@@ -455,8 +470,28 @@ describe("ShorthandParserUtil", function () {
                     openSubmodules: {
                         y: m({
                             type: null,
-                            branches: { master: "foo" },
+                            branches: {
+                                master: new RepoAST.Branch("foo", null),
+                            },
                             workdir: { x: "z" },
+                        }),
+                    },
+                }),
+            },
+            "open submodule with head": {
+                i: "S:I foo=Sa:1;Ofoo Bmaster=1!*=master",
+                e: m({
+                    index: {
+                        foo: new RepoAST.Submodule("a", "1"),
+                    },
+                    openSubmodules: {
+                        foo: m({
+                            type: null,
+                            currentBranchName: "master",
+                            head: "1",
+                            branches: {
+                                master: new RepoAST.Branch("1", null),
+                            },
                         }),
                     },
                 }),
@@ -627,7 +662,7 @@ describe("ShorthandParserUtil", function () {
                     head: "1",
                     currentBranchName: "x",
                     branches: {
-                        x: "1",
+                        x: new RepoAST.Branch("1", null),
                     },
                 }),
             },
@@ -651,7 +686,7 @@ describe("ShorthandParserUtil", function () {
                         }),
                     },
                     branches: {
-                        "master": "2",
+                        "master": new RepoAST.Branch("2", null),
                     },
                     head: "2",
                 }),
@@ -668,7 +703,7 @@ describe("ShorthandParserUtil", function () {
                         }),
                     },
                     branches: {
-                        master: "xyz",
+                        master: new RepoAST.Branch("xyz", null),
                     },
                     head: "xyz",
                     currentBranchName: "master",
@@ -686,7 +721,7 @@ describe("ShorthandParserUtil", function () {
                 i: "S:C2-1;Bmaster=2",
                 e: S.copy({
                     head: "2",
-                    branches: { master: "2"},
+                    branches: { master: new RepoAST.Branch("2", null), },
                     commits: (() => {
                         let commits = S.commits;
                         commits[2] = new Commit({
@@ -703,7 +738,10 @@ describe("ShorthandParserUtil", function () {
                 e: S.copy({
                     head: "2",
                     currentBranchName: "foo",
-                    branches: { master: "1", foo: "2"},
+                    branches: {
+                        master: new RepoAST.Branch("1", null),
+                        foo: new RepoAST.Branch("2", null),
+                    },
                     commits: (() => {
                         let commits = S.commits;
                         commits[2] = new Commit({
@@ -800,7 +838,7 @@ describe("ShorthandParserUtil", function () {
                             }),
                         },
                         branches: {
-                            "master": "2",
+                            "master": new RepoAST.Branch("2", null),
                         },
                         head: "2",
                     }),
@@ -847,7 +885,7 @@ describe("ShorthandParserUtil", function () {
                 i: "a=S|b=Ca",
                 e: {
                     a: "S",
-                    b: "S:Rorigin=a master=1",
+                    b: "S:Rorigin=a master=1;Bmaster=1 origin/master",
                 },
             },
             "clone with overrides": {
@@ -855,21 +893,21 @@ describe("ShorthandParserUtil", function () {
                 e: {
                     a: "S:C2-1;Bfoo=2;*=foo",
                     b:
-                  "S:C2-1;Rorigin=a master=1,foo=2;*=foo;Bg=1;Bfoo=2;Bmaster=",
+       "S:C2-1;Rorigin=a master=1,foo=2;*=foo;Bg=1;Bfoo=2 origin/foo;Bmaster=",
                 },
             },
             "clone with remote update": {
                 i: "a=S|b=Ca:Rorigin= baz=1",
                 e: {
                     a: "S",
-                    b: "S:Rorigin=a master=1,baz=1",
+                    b: "S:Rorigin=a master=1,baz=1;Bmaster=1 origin/master",
                 },
             },
             "clone with remote update deleting branch": {
                 i: "a=S|b=Ca:Rorigin= master=",
                 e: {
                     a: "S",
-                    b: "S:Rorigin=a",
+                    b: "S:Rorigin=a;Bmaster=1 origin/master",
                 },
             },
             "bad type data": {
@@ -924,7 +962,7 @@ describe("ShorthandParserUtil", function () {
                         index: { foo: new Submodule("a", "1") },
                         openSubmodules: {
                             foo: RepoASTUtil.cloneRepo(S, "a").copy({
-                                branches: { m: "1" },
+                                branches: { m: new RepoAST.Branch("1", null) },
                                 currentBranchName: null,
                                 remotes: { origin: new Remote("a") },
                             })
@@ -953,7 +991,10 @@ describe("ShorthandParserUtil", function () {
                                         message: "message",
                                     }),
                                 },
-                                branches: { m: "1", aa: "2" },
+                                branches: {
+                                    m: new RepoAST.Branch("1", null),
+                                    aa: new RepoAST.Branch("2", null),
+                                },
                                 currentBranchName: null,
                                 remotes: { origin: new Remote("a") },
                             })
@@ -987,7 +1028,7 @@ describe("ShorthandParserUtil", function () {
                         currentBranchName: "master",
                         head: "2",
                         branches: {
-                            master: "2",
+                            master: new RepoAST.Branch("2", null),
                         },
                         commits: {
                             "1": new Commit({
@@ -1015,7 +1056,7 @@ describe("ShorthandParserUtil", function () {
                         currentBranchName: "master",
                         head: "2",
                         branches: {
-                            master: "2",
+                            master: new RepoAST.Branch("2", null),
                         },
                         commits: {
                             "1": new Commit({
@@ -1063,7 +1104,9 @@ describe("ShorthandParserUtil", function () {
                                         message: "message",
                                     }),
                                 },
-                                branches: { x: "2" },
+                                branches: {
+                                    x: new RepoAST.Branch("2", null),
+                                },
                                 currentBranchName: null,
                                 remotes: { origin: new Remote("a") },
                             })
@@ -1075,7 +1118,10 @@ describe("ShorthandParserUtil", function () {
                 i: "a=S:Bfoo=1",
                 existing: { b: S },
                 e: {
-                    a: S.copy({ branches: { master: "1", foo: "1" }}),
+                    a: S.copy({ branches: {
+                        master: new RepoAST.Branch("1", null),
+                        foo: new RepoAST.Branch("1", null),
+                    }}),
                     b: S,
                 },
             },
@@ -1108,7 +1154,9 @@ describe("ShorthandParserUtil", function () {
                                 message: "message",
                             }),
                         },
-                        branches: { master: "2" },
+                        branches: {
+                            master: new RepoAST.Branch("2", null),
+                        },
                         head: "2",
                         currentBranchName: "master",
                     }),
@@ -1132,7 +1180,7 @@ describe("ShorthandParserUtil", function () {
                             }),
                         },
                         branches: {
-                            master: "8",
+                            master: new RepoAST.Branch("8", null),
                         },
                         currentBranchName: "master",
                         head: "8",
@@ -1174,8 +1222,8 @@ x=S:Efoo,8,9`,
                             }),
                         },
                         branches: {
-                            master: "8",
-                            foo: "9",
+                            master: new RepoAST.Branch("8", null),
+                            foo: new RepoAST.Branch("9", null),
                         },
                         head: "8",
                     }),

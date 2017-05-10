@@ -40,6 +40,45 @@ const deepCopy = require("deepcopy");
 const Rebase = require("./rebase");
 
 /**
+ * @class {Branch}
+ *
+ * This class represents a branch in a repository.
+ */
+class Branch {
+    /**
+     * Create a `Branch` having the specified `sha` and optionally specified
+     * `tracking` branch.
+     *
+     * @constructor
+     * @param {String}      sha
+     * @param {String|null} tracking
+     */
+    constructor(sha, tracking) {
+        assert.isString(sha);
+        if (null !== tracking) {
+            assert.isString(tracking);
+        }
+        this.d_sha = sha;
+        this.d_tracking = tracking;
+        Object.freeze(this);
+    }
+
+    /**
+     * @property {String} sha the commit pointed to by this branch
+     */
+    get sha() {
+        return this.d_sha;
+    }
+
+    /**
+     * @property {String|null} tracking the branch tracked by this one, if any
+     */
+    get tracking() {
+        return this.d_tracking;
+    }
+}
+
+/**
  * @class {Submodule}
  *
  * This class represents the definition of a submodule in a repository.
@@ -344,8 +383,8 @@ in commit ${id}.`);
         const branches = ("branches" in args) ? args.branches : {};
         for (let name in branches) {
             const branch = branches[name];
-            assert.isString(branch, name);
-            checkAndTraverse(branch, `branch ${branch}`);
+            assert.instanceOf(branch, Branch);
+            checkAndTraverse(branch.sha, `branch ${branch}`);
             this.d_branches[name] = branch;
         }
 
@@ -390,7 +429,7 @@ in commit ${id}.`);
             assert.property(this.d_branches, currentBranchName);
             if (null !== this.d_head) {
                 assert.equal(this.d_head,
-                             this.d_branches[currentBranchName],
+                             this.d_branches[currentBranchName].sha,
                              "current head and branch differ");
             }
             this.d_currentBranchName = currentBranchName;
@@ -517,18 +556,14 @@ in commit ${id}.`);
      * @property {Object} commits from (string) commit id to `Commit` object
      */
     get commits() {
-        let result = {};
-        for (let c in this.d_commits) {
-            result[c] = this.d_commits[c];
-        }
-        return result;
+        return Object.assign({}, this.d_commits);
     }
 
     /**
      * @property {Object} branches map from branch name to expected commit id
      */
     get branches() {
-        return deepCopy(this.d_branches);
+        return Object.assign({}, this.d_branches);
     }
 
     /**
@@ -736,6 +771,7 @@ in commit ${id}.`);
     }
 }
 
+AST.Branch = Branch;
 AST.Commit = Commit;
 AST.Rebase = Rebase;
 AST.Remote = Remote;

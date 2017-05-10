@@ -392,6 +392,7 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
                 a: new RepoAST(),
             },
             "new sub open w/o SHA": "a=B|x=S:I s=Sa:;Os",
+            "cloned": "a=B|x=Ca",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];

@@ -337,7 +337,19 @@ exports.readRAST = co.wrap(function *(repo) {
             remoteMap[remoteName].branches[branchName] = id.tostrS();
         }
         else if (branch.isBranch()) {
-            branchTargets[branch.shorthand()] = id.tostrS();
+            let tracking = null;
+            let upstream = null;
+            try {
+                upstream = yield NodeGit.Branch.upstream(branch);
+            }
+            catch (e) {
+                // No way to check if it's valid.
+            }
+            if (null !== upstream) {
+                tracking = upstream.shorthand();
+            }
+            branchTargets[branch.shorthand()] =
+                                     new RepoAST.Branch(id.tostrS(), tracking);
         }
         else if (!branch.isNote()) {
             refTargets[branch.shorthand()] = id.tostrS();

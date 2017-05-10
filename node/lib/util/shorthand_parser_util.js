@@ -61,7 +61,8 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
- * branch         = 'B'<name>'='<commit>|<nothing>     nothing deletes branch
+ * branch         = 'B'<name>'='<commit> [tracking branch] |
+ *                   <nothing>     nothing deletes branch
  * ref            = 'F'<name>'='<commit>|<nothing>     nothing deletes ref
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
@@ -213,6 +214,9 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * b=E:Bfoo=2;*=foo           -- `b` is the same as the "existing" `b`, but
  *                               with a new branch named `foo` that is set
  *                               to be the current branch.
+ * a=B|x=Ca:Bfoo origin/master;*=foo
+ *                            -- 'x' is a clone of 'a'.  It's current branch,
+ *                               'foo' is tracking 'origin/master'.
  */
 
                          // Begin module-local methods
@@ -366,7 +370,7 @@ function prepareASTArguments(baseAST, rawRepo) {
 
         if (null !== resultArgs.head) {
             resultArgs.head =
-                             resultArgs.branches[resultArgs.currentBranchName];
+                         resultArgs.branches[resultArgs.currentBranchName].sha;
         }
     }
 
@@ -543,10 +547,8 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      * @param {String}
      * @return {String|null}
      */
-    function parseSimpleAssign(begin, end) {
-        assert.equal(shorthand[begin],
-                     "=",
-                     "no assignment for HEAD override");
+    function parseSimpleAssign(begin, end, desc) {
+        assert.equal(shorthand[begin], "=", desc);
         begin += 1;
         return begin === end ? null : shorthand.substr(begin, end - begin);
     }
@@ -558,34 +560,54 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      * @param {Object} dest
      * @param {String} type
      */
-    function parseRefOverride(dest, type) {
-        return function (begin, end) {
-            let nameEnd = begin;
+    function parseRefOverride(begin, end) {
+        const nameEnd = findChar(shorthand, "=", begin, end);
 
-            while (end !== nameEnd && "=" !== shorthand[nameEnd]) {
-                ++nameEnd;
+        assert(null !== nameEnd, "invalid reference override");
+
+        const name = shorthand.substr(begin, nameEnd - begin);
+        let sha = null;
+        const shaBegin = nameEnd + 1;  // skip "="
+        if (end !== shaBegin) {
+            sha = shorthand.substr(shaBegin, end - shaBegin);
+        }
+        assert.notProperty(refs,
+                           name,
+                           `multiple overrides for same reference`);
+
+        refs[name] = sha;
+    }
+
+    function parseBranchOverride(begin, end) {
+        const nameEnd = findChar(shorthand, "=", begin, end);
+
+        assert(null !== nameEnd, "invalid branch override");
+        const branchBegin = nameEnd + 1;  // skip "="
+        let branch = null;
+        if (end !== branchBegin) {
+            const space = findChar(shorthand, " ", branchBegin, end);
+            let sha;
+            let tracking = null;
+            if (null === space) {
+                sha = shorthand.substr(branchBegin, end - branchBegin);
             }
-            assert.notEqual(end, nameEnd, `invalid ${type} override`);
-            assert.equal(shorthand[nameEnd],
-                         "=",
-                         `missing ${type} assignment`);
-
-            let branchOverride = null;
-
-            let assignmentBegin = nameEnd + 1;  // skip "="
-            if (assignmentBegin !== end) {
-                branchOverride = shorthand.substr(assignmentBegin,
-                                                  end - assignmentBegin);
+            else {
+                const trackingBegin = space + 1;
+                assert(branchBegin !== space && trackingBegin !== end,
+                       "invalid tracking specification");
+                sha = shorthand.substr(branchBegin, space - branchBegin);
+                tracking = shorthand.substr(trackingBegin,
+                                            end - trackingBegin);
             }
+            branch = new RepoAST.Branch(sha, tracking);
+        }
+        const name = shorthand.substr(begin, nameEnd - begin);
 
-            const name = shorthand.substr(begin, nameEnd - begin);
+        assert.notProperty(branches,
+                           name,
+                           `multiple overrides for same branch`);
 
-            assert.notProperty(dest,
-                               name,
-                               `multiple overrides for same ${type}`);
-
-            dest[name] = branchOverride;
-        };
+        branches[name] = branch;
     }
 
     /**
@@ -599,7 +621,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         assert.isUndefined(head, "multiple head overrides");
         assert.isUndefined(currentBranchName,
                            "* and H cannot be used together");
-        head = parseSimpleAssign(begin, end);
+        head = parseSimpleAssign(begin,
+                                 end,
+                                 "no assignment for HEAD override");
     }
 
     /**
@@ -612,7 +636,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     function parseCurrentBranchOverride(begin, end) {
         assert.isUndefined(currentBranchName, "multiple head overrides");
         assert.isUndefined(head, "* and H cannot be used together");
-        currentBranchName = parseSimpleAssign(begin, end);
+        currentBranchName = parseSimpleAssign(begin,
+                                              end,
+                                              "no assign for current branch");
     }
 
     /**
@@ -848,8 +874,8 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         const parser = (() => {
             switch(override) {
                 case "*": return parseCurrentBranchOverride;
-                case "B": return parseRefOverride(branches, "branch");
-                case "F": return parseRefOverride(refs, "ref");
+                case "B": return parseBranchOverride;
+                case "F": return parseRefOverride;
                 case "C": return parseNewCommit;
                 case "H": return parseHeadOverride;
                 case "R": return parseRemote;
@@ -885,7 +911,10 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         openSubmodules: openSubmodules,
     };
     if (undefined === head && undefined !== currentBranchName) {
-        head = branches[currentBranchName];
+        const branch = branches[currentBranchName];
+        if (undefined !== branch) {
+            head = branch.sha;
+        }
     }
     if (undefined !== head) {
         result.head = head;
@@ -979,7 +1008,7 @@ function getBaseRepo(type, data) {
         return new RepoAST({
             commits: commits,
             branches: {
-                master: data,
+                master: new RepoAST.Branch(data, null),
             },
             head: data,
             currentBranchName: "master",
@@ -1139,7 +1168,7 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
             copyCommitAndParents(resultArgs.commits, commits, id);
         }
         for (let branch in resultArgs.branches) {
-            includeCommit(resultArgs.branches[branch]);
+            includeCommit(resultArgs.branches[branch].sha);
         }
         for (let ref in resultArgs.refs) {
             includeCommit(resultArgs.refs[ref]);
@@ -1181,12 +1210,16 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                             `parent for clone ${name} not defined`);
             const parentRepo = result[url];
             const parentBranches = parentRepo.branches;
+            const branches = {};
+            for (let name in parentBranches) {
+                branches[name] = parentBranches[name].sha;
+            }
             let baseArgs = {
                 currentBranchName: parentRepo.currentBranchName,
                 commits: {},
                 remotes: {
                     origin: new RepoAST.Remote(url, {
-                        branches: parentBranches,
+                        branches: branches,
                     }),
                 },
             };
@@ -1196,14 +1229,15 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
             Object.keys(parentBranches).forEach(
                 branch => copyCommitAndParents(baseArgs.commits,
                                                commits,
-                                               parentBranches[branch]));
+                                               parentBranches[branch].sha));
 
             if (null !== parentRepo.currentBranchName) {
-                const currentCommit =
-                                  parentBranches[parentRepo.currentBranchName];
-                baseArgs.head = currentCommit;
+                const branchName = parentRepo.currentBranchName;
+                const sha = parentBranches[branchName].sha;
+                baseArgs.head = sha;
                 let branches = {};
-                branches[parentRepo.currentBranchName] = currentCommit;
+                branches[branchName] =
+                               new RepoAST.Branch(sha, `origin/${branchName}`);
                 baseArgs.branches = branches;
             }
             baseAST = new RepoAST(baseArgs);
@@ -1332,7 +1366,7 @@ exports.RepoType = (() => {
                 }),
             },
             branches: {
-                "master": "1",
+                "master": new RepoAST.Branch("1", null),
             },
             head: "1",
             currentBranchName: "master",
@@ -1363,7 +1397,7 @@ exports.RepoType = (() => {
                 }),
             },
             branches: {
-                master: "2",
+                master: new RepoAST.Branch("2", null),
             },
             head: "2",
             currentBranchName: "master"
