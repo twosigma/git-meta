@@ -458,7 +458,7 @@ const driveRebase = co.wrap(function *(metaRepo,
                 // in the right place in case it was ffwded.
 
                 if (visibleSubs.has(e.path)) {
-                    const name = e.path; 
+                    const name = e.path;
                     const sha = shas[name];
                     const newSha = id.tostrS();
                     if (sha !== newSha) {
@@ -565,7 +565,10 @@ There is a conflict in ${colors.red(e.path)}.\n`;
         // original commit ID to the new one.
 
         yield index.write();
-        const newCommit = rebase.commit(null, signature, null);
+        const newCommit = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
+            const commit = rebase.commit(null, signature, null);
+            return Promise.resolve(commit);
+        });
         const newCommitSha = newCommit.tostrS();
         const originalSha = rebaseOper.id().tostrS();
         if (originalSha !== newCommitSha) {
@@ -575,6 +578,9 @@ There is a conflict in ${colors.red(e.path)}.\n`;
 
     let idx = rebase.operationCurrent();
     const total = rebase.operationEntrycount();
+    function makeCallNext() {
+        return callNext(rebase);
+    }
     while (idx < total) {
         const rebaseOper = rebase.operationByIndex(idx);
         console.log(`Applying ${colors.green(rebaseOper.id().tostrS())}.`);
@@ -584,7 +590,7 @@ There is a conflict in ${colors.red(e.path)}.\n`;
                                                              currentCommit);
         fetcher = new SubmoduleFetcher(metaRepo, currentCommit);
         yield processRebase(rebaseOper);
-        yield callNext(rebase);
+        yield SubmoduleUtil.cacheSubmodules(metaRepo, makeCallNext);
         ++idx;
     }
 
@@ -684,16 +690,17 @@ up-to-date.`);
                 yield NodeGit.AnnotatedCommit.fromRef(metaRepo, currentBranch);
         const ontoAnnotatedCommit =
                       yield NodeGit.AnnotatedCommit.lookup(metaRepo, commitId);
-        const rebase = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
-            return NodeGit.Rebase.init(metaRepo,
-                                       fromAnnotedCommit,
-                                       ontoAnnotatedCommit,
-                                       null,
-                                       null);
-        });
-        console.log(`Rewinding to ${colors.green(commitId.tostrS())}.`);
-        yield callNext(rebase);
-        return rebase;
+        return yield SubmoduleUtil.cacheSubmodules(metaRepo,
+                                                   co.wrap(function *() {
+            const rebase = yield NodeGit.Rebase.init(metaRepo,
+                                                     fromAnnotedCommit,
+                                                     ontoAnnotatedCommit,
+                                                     null,
+                                                     null);
+            console.log(`Rewinding to ${colors.green(commitId.tostrS())}.`);
+            yield callNext(rebase);
+            return rebase;
+        }));
     });
     return yield driveRebase(metaRepo, initialize, fromCommit, commit);
 });
@@ -709,10 +716,10 @@ up-to-date.`);
 exports.abort = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const rebase = yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return NodeGit.Rebase.open(repo);
-    });
-    rebase.abort();
+    yield SubmoduleUtil.cacheSubmodules(repo, co.wrap(function*() {
+        const rebase = yield NodeGit.Rebase.open(repo);
+        rebase.abort();
+    }));
 
     const head = yield repo.head();
     console.log(`Set HEAD back to ${colors.green(head.target().tostrS())}.`);
