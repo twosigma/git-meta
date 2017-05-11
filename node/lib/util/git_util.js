@@ -111,15 +111,15 @@ exports.findBranch = co.wrap(function *(repo, branchName) {
 });
 
 /**
- * Return the remote associated with the upstream reference of the specified
- * `branch` in the specified `repo`.
+ * Return the tracking information for the specified `branch`, or null if it
+ * has none.
  *
- * @param {NodeGit.Repo}      repo
  * @param {NodeGit.Reference} branch
- * @return {NodeGit.Remote|null}
+ * @return {Object|null}
+ * @return {String|null} return.remoteName
+ * @return {String} return.branchName
  */
-exports.getRemoteForBranch = co.wrap(function *(repo, branch) {
-    assert.instanceOf(repo, NodeGit.Repository);
+exports.getTrackingInfo = co.wrap(function *(branch) {
     assert.instanceOf(branch, NodeGit.Reference);
     let upstream;
     try {
@@ -130,8 +130,43 @@ exports.getRemoteForBranch = co.wrap(function *(repo, branch) {
         return null;
     }
     const name = upstream.shorthand();
-    const remoteName = name.split("/")[0];
-    return yield NodeGit.Remote.lookup(repo, remoteName);
+    const parts = name.split("/");
+    if (1 === parts.length) {
+        return {
+            branchName: parts[0],
+            remoteName: null,
+        };
+    }
+    return {
+        branchName: parts[1],
+        remoteName: parts[0],
+    };
+});
+
+/**
+ * Return the remote associated with the upstream reference of the specified
+ * `branch` in the specified `repo`.
+ *
+ * @param {NodeGit.Repo}      repo
+ * @param {NodeGit.Reference} branch
+ * @return {NodeGit.Remote|null}
+ */
+exports.getRemoteForBranch = co.wrap(function *(repo, branch) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(branch, NodeGit.Reference);
+    const trackingInfo = yield exports.getTrackingInfo(branch);
+    if (null === trackingInfo || null === trackingInfo.remoteName) {
+        return null;
+    }
+    let upstream;
+    try {
+        upstream = yield NodeGit.Branch.upstream(branch);
+    }
+    catch (e) {
+        // No way to check for this other than to catch.
+        return null;
+    }
+    return yield NodeGit.Remote.lookup(repo, trackingInfo.remoteName);
 });
 
 /**

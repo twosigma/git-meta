@@ -57,7 +57,7 @@ exports.configureParser = function (parser) {
     parser.addArgument(["repository"], {
         type: "string",
         nargs: "?",
-        defaultValue: "origin",
+        defaultValue: null,
         help: `name of remote from which to pull; 'origin' used if not
 specified`,
     });
@@ -97,13 +97,18 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         throw new UserError("Non-rebase pull not supported.");
     }
 
-    let source = args.source;
-    if (null === source) {
-        const branch = yield repo.getCurrentBranch();
-        source = branch.shorthand();
-    }
+    const branch = yield repo.getCurrentBranch();
+    const tracking = yield GitUtil.getTrackingInfo(branch);
 
-    const remoteName = args.repository || "origin";
+    // The source branch is (in order of preference): the name passed on the
+    // commandline, the tracking branch name, or the current branch name.
+
+    const source = args.source || tracking.branchName || branch.shorthand();
+
+    // The repo is the value passed by the user, the tracking branch's remote,
+    // or just "origin", in order of preference.
+
+    const remoteName = args.repository || tracking.remoteName || "origin";
 
     return yield pull.pull(repo, remoteName, source);
 });
