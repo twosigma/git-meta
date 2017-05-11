@@ -47,6 +47,41 @@ const UserError           = require("../../lib/util/user_error");
 const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("GitUtil", function () {
+    describe("getTrackingInfo", function () {
+        const cases = {
+            "no tracking": {
+                state: "S",
+                branch: "master",
+                expected: null,
+            },
+            "local tracking": {
+                state: "S:Bfoo=1 master",
+                branch: "foo",
+                expected: {
+                    remoteName: null,
+                    branchName: "master",
+                },
+            },
+            "with remote": {
+                state: "S:Rhoo=/a gob=1;Bbar=1 hoo/gob",
+                branch: "bar",
+                expected: {
+                    remoteName: "hoo",
+                    branchName: "gob",
+                },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const branch = yield repo.getBranch(c.branch);
+                const result = yield GitUtil.getTrackingInfo(branch);
+                assert.deepEqual(result, c.expected);
+            }));
+        });
+    });
     describe("getRemoteForBranch", function () {
         it("no upstream", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createRepo("S");
