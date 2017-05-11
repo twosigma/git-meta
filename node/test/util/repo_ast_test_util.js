@@ -36,6 +36,7 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
+const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
@@ -231,8 +232,9 @@ describe("RepoASTTestUtil", function () {
             },
             "new repos with clone": {
                 i: "a=S",
-                e: { b:
-                   "S:Rorigin=a master=1;C2-1 README.md=hello worlddata;Bfoo=2"
+                e: { b: `
+S:Rorigin=a master=1;C2-1 README.md=hello worlddata;Bfoo=2;
+Bmaster=1 origin/master`,
                 },
                 m: makeClone,
             },
@@ -280,7 +282,7 @@ describe("RepoASTTestUtil", function () {
                     expectedTransformer: (expected) => {
                         const x = expected.x;
                         let branches = x.branches;
-                        branches.foo = "1";
+                        branches.foo = new RepoAST.Branch("1", null);
                         return {
                             x: x.copy({ branches: branches}),
                         };
@@ -302,7 +304,8 @@ describe("RepoASTTestUtil", function () {
                         const x = expected.x;
                         let branches = x.branches;
                         const commitId = mappings.reverseCommitMap["1"];
-                        branches[`foo-${commitId}`] = "1";
+                        branches[`foo-${commitId}`] =
+                                                 new RepoAST.Branch("1", null);
                         return {
                             x: x.copy({ branches: branches}),
                         };

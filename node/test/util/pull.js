@@ -63,7 +63,7 @@ describe("pull", function () {
             initial: "a=B:C2-1;Bfoo=2|x=Ca",
             remote: "origin",
             source: "foo",
-            expected: "x=E:Bmaster=2",
+            expected: "x=E:Bmaster=2 origin/master",
         },
     };
     Object.keys(cases).forEach(caseName => {
