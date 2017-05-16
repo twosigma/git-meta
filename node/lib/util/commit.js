@@ -38,7 +38,6 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
-const path    = require("path");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -538,7 +537,6 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
 
-    const workdir = repo.workdir();
     const headCommit = yield repo.getHeadCommit();
     const changes = {};
     const staged = status.staged;
@@ -559,15 +557,8 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
             changes[filename] = null;
         }
         else {
-            const filePath = path.join(workdir, filename);
-
-            // 'createFromDisk' is unfinished; instead of returning an id, it
-            // takes an ID object and writes into it, unlike the rest of its
-            // brethern on `Blob`.  TODO: patch nodegit with corrected API.
-
-            const idPlaceholder = headCommit.id();  // need a place to load ids
-            NodeGit.Blob.createFromDisk(idPlaceholder, repo, filePath);
-            changes[filename] = new Change(idPlaceholder, FILEMODE.BLOB);
+            const blobId = TreeUtil.hashFile(repo, filename);
+            changes[filename] = new Change(blobId, FILEMODE.BLOB);
 
             yield index.addByPath(filename);
         }

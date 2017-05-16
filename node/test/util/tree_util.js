@@ -32,10 +32,13 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
-const TestUtil = require("../../lib/util/test_util");
-const TreeUtil = require("../../lib/util/tree_util");
+const RepoStatus = require("../../lib/util/repo_status");
+const TestUtil   = require("../../lib/util/test_util");
+const TreeUtil   = require("../../lib/util/tree_util");
 
 describe("TreeUtil", function () {
     const Change = TreeUtil.Change;
@@ -231,6 +234,130 @@ describe("TreeUtil", function () {
             });
             const entry = yield secondTree.entryByPath("foo");
             assert.equal(entry.id().tostrS(), newId.tostrS());
+        }));
+    });
+    describe("hashFile", function () {
+        it("breathing", co.wrap(function *() {
+            const content = "abcdefg";
+            const repo = yield TestUtil.createSimpleRepository();
+            const filename = "foo";
+            const filepath = path.join(repo.workdir(), filename);
+            yield fs.writeFile(filepath, content);
+            const result = TreeUtil.hashFile(repo, filename);
+            const db = yield repo.odb();
+            const BLOB = 3;
+            const expected = yield db.write(content, content.length, BLOB);
+            assert.equal(result.tostrS(), expected.tostrS());
+        }));
+    });
+    describe("listWorkdirChanges", function () {
+        const Change     = TreeUtil.Change;
+        const FILESTATUS = RepoStatus.FILESTATUS;
+        const Submodule  = RepoStatus.Submodule;
+        const RELATION   = Submodule.COMMIT_RELATION;
+        const FILEMODE   = NodeGit.TreeEntry.FILEMODE;
+        it("removal", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const status = new RepoStatus({
+                workdir: { foo: FILESTATUS.REMOVED },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            assert.deepEqual(result, { foo: null });
+        }));
+        it("modified", co.wrap(function *() {
+            const content = "abcdefg";
+            const repo = yield TestUtil.createSimpleRepository();
+            const filename = "foo";
+            const filepath = path.join(repo.workdir(), filename);
+            yield fs.writeFile(filepath, content);
+            const status = new RepoStatus({
+                workdir: { foo: FILESTATUS.MODIFIED },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const db = yield repo.odb();
+            const BLOB = 3;
+            const id  = yield db.write(content, content.length, BLOB);
+            assert.deepEqual(Object.keys(result), ["foo"]);
+            assert.equal(result.foo.id.tostrS(), id.tostrS());
+            assert.equal(result.foo.mode, FILEMODE.BLOB);
+        }));
+        it("unchanged submodule", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = "1111111111111111111111111111111111111111";
+            const status = new RepoStatus({
+                submodules: {
+                    "sub": new RepoStatus.Submodule({
+                        commit: new Submodule.Commit(commit, "/a"),
+                        index: new Submodule.Index(commit,
+                                                   "/a",
+                                                   RELATION.SAME),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: commit,
+                        }), RELATION.SAME),
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            assert.deepEqual(result, {});
+        }));
+        it("submodule", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = "1111111111111111111111111111111111111111";
+            const status = new RepoStatus({
+                submodules: {
+                    "sub": new RepoStatus.Submodule({
+                        commit: new Submodule.Commit("1", "/a"),
+                        index: new Submodule.Index("1", "/a", RELATION.SAME),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: commit,
+                        }), RELATION.AHEAD),
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            assert.deepEqual(result, {
+                sub: new Change(NodeGit.Oid.fromString(commit),
+                                FILEMODE.COMMIT),
+            });
+        }));
+        it("untracked and index", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const status = new RepoStatus({
+                index: {
+                    foo: FILESTATUS.MODIFIED,
+                },
+                workdir: {
+                    bar: FILESTATUS.ADDED,
+                },
+                submodules: {
+                    baz: new Submodule({
+                        commit: new Submodule.Commit("1", "/a"),
+                        index: new Submodule.Index("1", "/a", RELATION.SAME),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: "1",
+                        }), RELATION.SAME),
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            assert.deepEqual(result, {});
+        }));
+        it("added, with includeUnstaged", co.wrap(function *() {
+            const content = "abcdefg";
+            const repo = yield TestUtil.createSimpleRepository();
+            const filename = "foo";
+            const filepath = path.join(repo.workdir(), filename);
+            yield fs.writeFile(filepath, content);
+            const status = new RepoStatus({
+                workdir: { foo: FILESTATUS.ADDED, },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            const db = yield repo.odb();
+            const BLOB = 3;
+            const id  = yield db.write(content, content.length, BLOB);
+            assert.deepEqual(Object.keys(result), ["foo"]);
+            assert.equal(result.foo.id.tostrS(), id.tostrS());
+            assert.equal(result.foo.mode, FILEMODE.BLOB);
         }));
     });
 });
