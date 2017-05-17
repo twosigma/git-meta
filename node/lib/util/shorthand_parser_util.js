@@ -517,7 +517,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      */
     function parseChanges(begin, end) {
         let changes = {};
-        assert.notEqual(begin, end, "must be at least one change");
         while (end !== begin) {
             const currentEnd = findSeparator(shorthand, ",", begin, end) ||
                                { begin: end, end: end};
