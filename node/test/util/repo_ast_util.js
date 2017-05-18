@@ -56,6 +56,10 @@ describe("RepoAstUtil", function () {
                     message: "foo",
                 }),
             },
+            "catch all message": {
+                actual: new Commit({ message: "foo"}),
+                expected: new Commit({ message: "*"}),
+            },
             "bad parents": {
                 actual: new Commit({
                     parents: ["1"],
