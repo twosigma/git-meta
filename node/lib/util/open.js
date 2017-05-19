@@ -67,7 +67,6 @@ exports.openOnCommit = co.wrap(function *(fetcher,
     if (null !== templatePath) {
         assert.isString(templatePath);
     }
-
     const metaRepoUrl = yield fetcher.getMetaOriginUrl();
     const metaRepo = fetcher.repo;
     const submoduleUrl = yield fetcher.getSubmoduleUrl(submoduleName);
