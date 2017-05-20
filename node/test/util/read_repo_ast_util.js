@@ -1568,6 +1568,29 @@ describe("readRAST", function () {
         });
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
+    it("stash commit", co.wrap(function *() {
+        // I'm not testing the accuracy of what's read here, just that we can
+        // read it.  Previously, it would attempt to process the diffs for all
+        // the children made for the stash commit and result in an illogical
+        // change set rejected by the constructor of `RepoAST`.
 
+        const repo = yield TestUtil.createSimpleRepository();
+        const repoPath = repo.workdir();
+        console.log(repoPath);
+        const readmePath = path.join(repoPath, "README.md");
+        const foobarPath = path.join(repoPath, "foobar");
+        const bazPath    = path.join(repoPath, "baz");
+        yield fs.appendFile(readmePath, "bleh");
+        yield fs.writeFile(foobarPath, "meh");
+        yield fs.writeFile(bazPath, "baz");
+        const index = yield repo.index();
+        yield index.addByPath("foobar");
+        yield index.write();
+        yield NodeGit.Stash.save(repo,
+                                 repo.defaultSignature(),
+                                 "stash",
+                                 NodeGit.Stash.FLAGS.INCLUDE_UNTRACKED);
+        yield ReadRepoASTUtil.readRAST(repo);
+    }));
 });
 
