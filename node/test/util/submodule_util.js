@@ -465,6 +465,11 @@ describe("SubmoduleUtil", function () {
                 commit: "3",
                 expected: { x: new Submodule("/a", "2") },
             },
+             "none": {
+                 state: "S:Cu 1=1;Bu=u",
+                 commit: "u",
+                 expected: {},
+             },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
