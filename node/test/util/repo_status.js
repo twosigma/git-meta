@@ -229,6 +229,20 @@ describe("RepoStatus", function () {
                 }),
                 expected: true,
             },
+            "new files in open repo, but all": {
+                input: new Submodule({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({
+                        headCommit: "1",
+                        workdir: {
+                            foo: FILESTATUS.ADDED,
+                        },
+                    }), RELATION.SAME),
+                }),
+                all: true,
+                expected: false,
+            },
             "changed files in open repo": {
                 input: new Submodule({
                     commit: new Commit("1", "a"),
@@ -256,7 +270,8 @@ describe("RepoStatus", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isWorkdirClean();
+                const all = c.all || false;
+                const result = c.input.isWorkdirClean(all);
                 assert.equal(result, c.expected);
             });
         });
@@ -587,17 +602,46 @@ describe("RepoStatus", function () {
                 }),
                 expected: true,
             },
+            "all": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    staged: { x: FILESTATUS.MODIFIED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                                workdir: { x: FILESTATUS.ADDED },
+                                staged: { q: FILESTATUS.MODIFIED },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                all: true,
+                expected: false,
+            },
             "workdir": {
                 input: new RepoStatus({
                     workdir: { x: FILESTATUS.MODIFIED },
                 }),
                 expected: false,
             },
+            "workdir all": {
+                input: new RepoStatus({
+                    workdir: { x: FILESTATUS.MODIFIED },
+                }),
+                all: true,
+                expected: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isWorkdirClean();
+                const all = c.all || false;
+                const result = c.input.isWorkdirClean(all);
                 assert.equal(result, c.expected);
             });
         });
@@ -687,6 +731,21 @@ describe("RepoStatus", function () {
                 }),
                 expected: true,
             },
+            "all possible and still clean, but all": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                        }),
+                    },
+                }),
+                all: true,
+                expected: false,
+            },
             "staged": {
                 input: new RepoStatus({
                     staged: { x: FILESTATUS.ADDED },
@@ -717,11 +776,30 @@ describe("RepoStatus", function () {
                 }),
                 expected: false,
             },
+            "dirty sub with all": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                                workdir: { x: FILESTATUS.ADDED },
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                all: true,
+                expected: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isWorkdirDeepClean();
+                const all = c.all || false;
+                const result = c.input.isWorkdirDeepClean(all);
                 assert.equal(result, c.expected);
             });
         });
@@ -796,6 +874,21 @@ describe("RepoStatus", function () {
                 }),
                 expected: true,
             },
+            "all": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            index: new Index("1", "a", RELATION.SAME),
+                        }),
+                    },
+                }),
+                all: true,
+                expected: false,
+            },
             "staged": {
                 input: new RepoStatus({
                     staged: { x: FILESTATUS.ADDED },
@@ -848,7 +941,8 @@ describe("RepoStatus", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = c.input.isDeepClean();
+                const all = c.all || false;
+                const result = c.input.isDeepClean(all);
                 assert.equal(result, c.expected);
             });
         });

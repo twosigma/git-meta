@@ -436,13 +436,15 @@ class Submodule {
 
     /**
      * Return true if this repo is closed or has a clean workdir, and false
-     * otherwise.
+     * otherwise.  If the specified `all` is true, consider untracked files to
+     * be dirty.
      *
+     * @param {Boolean} all
      * @return {Boolean}
      */
-    isWorkdirClean() {
+    isWorkdirClean(all) {
         return null === this.d_workdir ||
-            this.d_workdir.status.isWorkdirClean();
+            this.d_workdir.status.isWorkdirClean(all);
     }
 
     /**
@@ -583,12 +585,12 @@ class RepoStatus {
     /**
      * Return true if there are no staged or modified files in this repository.
      * Note that untracked files and changes to submodules do not count as
-     * modifications.
+     * modifications unless the specified `all` is true.
      *
      * @return {Boolean}
      */
-    isClean() {
-        return this.isIndexClean() && this.isWorkdirClean();
+    isClean(all) {
+        return this.isIndexClean() && this.isWorkdirClean(all);
     }
 
     /**
@@ -603,13 +605,15 @@ class RepoStatus {
 
     /**
      * Return true there are no changes to the working directory of this repo
-     * and false otherwise.
+     * and false otherwise.  If the specified `all` is true consider untracked
+     * files to be dirty.
      *
+     * @param {Boolean} all
      * @return {Boolean}
      */
-    isWorkdirClean() {
+    isWorkdirClean(all) {
         for (let path in this.d_workdir) {
-            if (FILESTATUS.ADDED !== this.d_workdir[path]) {
+            if (all || FILESTATUS.ADDED !== this.d_workdir[path]) {
                 return false;
             }
         }
@@ -618,12 +622,14 @@ class RepoStatus {
 
     /**
      * Return true if `this.isClean()` is true for this repository and all of
-     * its submodules, and false otherwise.
+     * its submodules, and false otherwise.  If the specified `all` is true,
+     * consider untracked submodules to be dirty.
      *
+     * @param {Boolean} all to include untracked files
      * @return {Boolean}
      */
-    isDeepClean() {
-        return this.isIndexDeepClean() && this.isWorkdirDeepClean();
+    isDeepClean(all) {
+        return this.isIndexDeepClean() && this.isWorkdirDeepClean(all);
     }
 
     /**
@@ -646,16 +652,18 @@ class RepoStatus {
 
     /*
      * Return true if `this.isWorkdirClean()` is true for this repository and
-     * all of its submodules, and false otherwise.
+     * all of its submodules, and false otherwise.  If the specified `all` is
+     * true, consider untracked files to be dirty.
      *
+     * @param {Boolean} all
      * @return {Boolean}
      */
-    isWorkdirDeepClean() {
-        if (!this.isWorkdirClean()) {
+    isWorkdirDeepClean(all) {
+        if (!this.isWorkdirClean(all)) {
             return false;
         }
         for (let sub in this.d_submodules) {
-            if (!this.d_submodules[sub].isWorkdirClean()) {
+            if (!this.d_submodules[sub].isWorkdirClean(all)) {
                 return false;
             }
         }
