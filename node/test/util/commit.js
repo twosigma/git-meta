@@ -1624,7 +1624,6 @@ x=U:Chi#am-2 foo=moo,s=Sa:as;Bmaster=am;Os Cmeh#as-1 a=a!H=as`,
             }));
         });
     });
-
     describe("formatAmendSignature", function () {
         const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
         const sigYouName = NodeGit.Signature.create("youName", "me@me", 4, 60);
@@ -1633,14 +1632,14 @@ x=U:Chi#am-2 foo=moo,s=Sa:as;Bmaster=am;Os Cmeh#as-1 a=a!H=as`,
             "same": {
                 current: sig,
                 last: sig,
-                expected: "Date:      12/31/1969, 19:00:03 -100\n\n",
+                expected: "Date:      12/31/1969, 23:00:03 -100\n\n",
             },
             "different": {
                 current: sig,
                 last: sigYouName,
                 expected: `\
 Author:    youName <me@me>
-Date:      12/31/1969, 19:00:04 100
+Date:      1/1/1970, 01:00:04 100
 
 `,
             },
@@ -1649,7 +1648,7 @@ Date:      12/31/1969, 19:00:04 100
                 last: sigYouEmail,
                 expected: `\
 Author:    me <u@u>
-Date:      12/31/1969, 19:00:05 100
+Date:      1/1/1970, 01:00:05 100
 
 `,
             },
@@ -1688,7 +1687,7 @@ my message
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
 #
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # On branch a-branch.
 # Changes to be committed:
@@ -1711,7 +1710,7 @@ my message
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
 #
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # On branch a-branch.
 # Changes to be committed:
@@ -2612,7 +2611,7 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 expected: `\
 hiya
 # <*> enter meta-repo message above this line; delete to commit only submodules
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # On branch master.
 #
@@ -2786,7 +2785,7 @@ yoyoyo
 committing 'bar'
 # If this sub-repo is skipped, it will not be amended and the original commit
 # will be used.
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # Changes to be committed:
 # \tmodified:     foo
@@ -2828,7 +2827,7 @@ committing 'bar'
                 expected: `\
 yoyoyo
 # <*> enter meta-repo message above this line; delete to commit only submodules
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # On branch foo.
 # -----------------------------------------------------------------------------
@@ -2837,7 +2836,7 @@ yoyoyo
 committing 'bar'
 # If this sub-repo is skipped, it will not be amended and the original commit
 # will be used.
-# Date:      12/31/1969, 19:00:03 -100
+# Date:      12/31/1969, 23:00:03 -100
 #
 # Changes to be committed:
 # \tmodified:     foo
