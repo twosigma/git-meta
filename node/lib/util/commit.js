@@ -1143,12 +1143,13 @@ Author:    ${lastSignature.name()} <${lastSignature.email()}>
     //  without showing minute-specific TZ diffs for a long time.
 
     const offset = Math.floor(time.offset() / 60);
-    const date = new Date(time.time() * 1000);
+    const date = new Date((time.time() + (time.offset() * 60)) * 1000);
 
     // TODO: do something user-locale-aware.
 
     const formatted = new Intl.DateTimeFormat("en-US", {
         hour12: false,
+        timeZone: "UTC",
         year: "numeric",
         month: "numeric",
         day: "numeric",
