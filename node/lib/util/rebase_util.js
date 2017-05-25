@@ -153,14 +153,18 @@ function SubmoduleRebaser(submoduleName, repo, submoduleCommits, getFetcher) {
      *
      * @async
      * @private
+     * @param {String} localSha
      * @param {String} remoteCommitSha
      */
-    const init = co.wrap(function *(remoteCommitSha) {
+    const init = co.wrap(function *(localSha, remoteCommitSha) {
         if (null !== rebase) {
             return;                                                   // RETURN
         }
         const fetcher = getFetcher();
+        yield fetcher.fetchSha(repo, submoduleName, localSha);
         yield fetcher.fetchSha(repo, submoduleName, remoteCommitSha);
+        const localCommit = yield repo.getCommit(localSha);
+        yield NodeGit.Reset.reset(repo, localCommit, NodeGit.Reset.TYPE.HARD);
         const head = yield repo.head();
         const localAnnotated =
                              yield NodeGit.AnnotatedCommit.fromRef(repo, head);
@@ -229,6 +233,7 @@ head to ${colors.green(commitSha)}.`);
 rebase.`);
             yield callFinish(repo, rebase);
             finishedRebase = true;
+            rebase = null;
             return true;                                              // RETURN
         }
         const result = yield processOper(commitSha, oper);
@@ -268,6 +273,7 @@ ${colors.green(subInfo.onto)}.`);
             return false;                                             // RETURN
         }
         yield index.addByPath(submoduleName);
+        yield index.conflictRemove(submoduleName);
         return yield next(curSha);
     });
 
@@ -330,8 +336,6 @@ const driveRebase = co.wrap(function *(metaRepo,
     };
 
     const submoduleRebasers = {};  // Cache of opened submodules
-    const subs = yield SubmoduleUtil.getSubmodulesForCommit(metaRepo,
-                                                            fromCommit);
 
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
     const visibleSubs = new Set(openSubs);
@@ -343,9 +347,8 @@ const driveRebase = co.wrap(function *(metaRepo,
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
 
     /**
-     * Return the submodule rebaser for the specified `path`, or null if
-     * `path` does not correspond to a submodule.  Open the subodule if it is
-     * not open.
+     * Return the submodule rebaser for the specified `path`.  Open the
+     * subodule if it is not open.
      */
     const getSubmoduleRebaser = co.wrap(function *(path) {
         assert.isString(path);
@@ -354,25 +357,20 @@ const driveRebase = co.wrap(function *(metaRepo,
             return yield submoduleRebasers[path];
         }
 
-        if (!(path in subs)) {
-            return null;                                              // RETURN
-        }
-
         const promise = co(function *() {
             let repo;
-            const submodule = subs[path];
             // Open the submodule if it's not open.
 
             if (visibleSubs.has(path)) {
-                visibleSubs.add(path);
                 repo = yield SubmoduleUtil.getRepo(metaRepo, path);
             }
             else { 
                 console.log(`Submodule ${colors.blue(path)}: opening`);
                 repo = yield Open.openOnCommit(fetcher,
                                                path,
-                                               submodule.sha,
+                                               shas[path],
                                                templatePath);
+                visibleSubs.add(path);
             }
             return new SubmoduleRebaser(path,
                                         repo,
@@ -447,6 +445,7 @@ const driveRebase = co.wrap(function *(metaRepo,
         for (let i = 0; i < entries.length; ++i) {
             const e = entries[i];
             const id = e.id;
+            const isSubmodule = e.mode === NodeGit.TreeEntry.FILEMODE.COMMIT;
 
             // From libgit2 index.h.  This information is not documented in the
             // nodegit or libgit2 documentation.
@@ -470,8 +469,8 @@ const driveRebase = co.wrap(function *(metaRepo,
                 }
                 break;
             case RepoStatus.STAGE.OURS:
-                const initRebaser = yield getSubmoduleRebaser(e.path);
-                if (null !== initRebaser) {
+                if (isSubmodule) {
+                    const initRebaser = yield getSubmoduleRebaser(e.path);
 
                     // This case is an indication that we have a conflict with
                     // an upstream commit.  Initialize a rebase for the
@@ -481,7 +480,8 @@ const driveRebase = co.wrap(function *(metaRepo,
                     // GIT_INDEX_STAGE_THEIRS will contain the id of the commit
                     // that we are rebasing FROM.
 
-                    inits.push(initRebaser.init(id.tostrS()));
+                    const sha = shas[e.path];
+                    inits.push(initRebaser.init(sha, id.tostrS()));
                 }
                 else {
                     if (SubmoduleConfigUtil.modulesFileName === e.path) {
@@ -518,8 +518,8 @@ There is a conflict in ${colors.red(e.path)}.\n`;
                  break;
              case RepoStatus.STAGE.THEIRS:
                  const theirPath = e.path;
-                 const theirRebaser = yield getSubmoduleRebaser(theirPath);
-                 if (null !== theirRebaser) {
+                 if (isSubmodule) {
+                     const theirRebaser = yield getSubmoduleRebaser(theirPath);
 
                      // Found the part of a conflict that corresponds to the
                      // branch we're rebasing from.  Need to schedule a call
@@ -585,8 +585,12 @@ There is a conflict in ${colors.red(e.path)}.\n`;
         const rebaseOper = rebase.operationByIndex(idx);
         console.log(`Applying ${colors.green(rebaseOper.id().tostrS())}.`);
         currentCommit = yield metaRepo.getCommit(rebaseOper.id());
+        const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                metaRepo,
+                                                                currentCommit);
+        const names = Object.keys(urls);
         shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
-                                                             openSubs,
+                                                             names,
                                                              currentCommit);
         fetcher = new SubmoduleFetcher(metaRepo, currentCommit);
         yield processRebase(rebaseOper);
@@ -615,9 +619,10 @@ There is a conflict in ${colors.red(e.path)}.\n`;
                                                              openSubs,
                                                              ontoCommit);
         yield openSubs.map(co.wrap(function *(name) {
+            const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+            const head = yield subRepo.head();
             const sha = shas[name];
-            if (sha !== subs[name].sha) {
-                const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+            if (head.target().tostrS() !== sha) {
                 yield fetcher.fetchSha(subRepo, name, sha);
                 yield setHead(subRepo, sha);
             }

@@ -141,6 +141,33 @@ x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os H=b",
                 rebaser: rebaser("x", "4"),
                 expected: "x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!H=bs",
             },
+            "rebase change in sub with two commits": {
+                initial: "\
+a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
+x=U:C4-2;C5-4 s=Sa:b;C3-2 s=Sa:c;Bmaster=5;Bfoo=5;Bother=3;Os H=b",
+                rebaser: rebaser("x", "3"),
+                expected: `
+x=E:C5M-4M s=Sa:bs;C4M-3 4=4;Bmaster=5M;Os Cbs-c b=b!H=bs`,
+            },
+            "rebase change in sub with two intervening commits": {
+                initial: `
+a=Aa:Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
+x=U:C4-2;C5-4 s=Sa:c;C6-5;C7-6 s=Sa:d;C3-2 s=Sa:b;Bmaster=7;Bfoo=7;Bother=3`,
+                rebaser: rebaser("x", "3"),
+                expected: `
+x=E:C7M-6M s=Sa:ds;C6M-5M 6=6;C5M-4M s=Sa:cs;C4M-3 4=4;Bmaster=7M;
+    Os Cds-cs d=d!Ccs-b c=c!H=ds`,
+            },
+            "rebase change in sub with two intervening commits, open": {
+                initial: `
+a=Aa:Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
+x=U:C4-2;C5-4 s=Sa:c;C6-5;C7-6 s=Sa:d;C3-2 s=Sa:b;Bmaster=7;Bfoo=7;Bother=3;
+    Os H=d`,
+                rebaser: rebaser("x", "3"),
+                expected: `
+x=E:C7M-6M s=Sa:ds;C6M-5M 6=6;C5M-4M s=Sa:cs;C4M-3 4=4;Bmaster=7M;
+    Os Cds-cs d=d!Ccs-b c=c!H=ds`,
+            },
             "ffwd, but not sub (should ffwd anyway)": {
                 initial: "\
 a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
