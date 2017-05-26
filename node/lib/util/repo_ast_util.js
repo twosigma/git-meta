@@ -168,7 +168,7 @@ ${colorAct(actual.parents)}`
                    );
     }
     result = result.concat(diffChanges(actual.changes, expected.changes));
-    if (actual.message !== expected.message) {
+    if (actual.message !== expected.message && "*" !== expected.message) {
         result.push(`
 Expected message to be ${colorExp(expected.message)} but it is \
 ${colorAct(actual.message)}.`

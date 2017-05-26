@@ -36,8 +36,6 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const Open                = require("../util/open");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
-const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("../util/submodule_util");
 const UserError           = require("../util/user_error");
 
@@ -92,30 +90,15 @@ exports.cherryPick = co.wrap(function *(metaRepo, commit) {
                                                                   commit);
 
     const metaIndex = yield metaRepo.index();
-
-    const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(metaRepo));
-
+    const opener = new Open.Opener(metaRepo, null);
     let submoduleCommits = {};
-    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
-    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
+    const subFetcher = yield opener.fetcher();
 
     const picker = co.wrap(function *(subName, headSha, commitSha) {
         let commitMap = {};
         submoduleCommits[subName] = commitMap;
+        const repo = yield opener.getSubrepo(subName);
 
-        // If closed, open this submodule.
-
-        let repo;
-        if (!openSubs.has(subName)) {
-            console.log(`Opening ${colors.blue(subName)}.`);
-            repo = yield Open.openOnCommit(subFetcher,
-                                           subName,
-                                           headSubs[subName].sha,
-                                           templatePath);
-        }
-        else {
-            repo = yield SubmoduleUtil.getRepo(metaRepo, subName);
-        }
         console.log(`Sub-repo ${colors.blue(subName)}: cherry-picking commit \
 ${colors.green(commitSha)}.`);
 

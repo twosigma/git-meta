@@ -151,7 +151,6 @@ const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {
     const GitUtil             = require("../util/git_util");
     const LogUtil             = require("../util/log_util");
     const Open                = require("../util/open");
-    const SubmoduleConfigUtil = require("../util/submodule_config_util");
     const SubmoduleFetcher    = require("../util/submodule_fetcher");
     const SubmoduleUtil       = require("../util/submodule_util");
     const UserError           = require("../util/user_error");
@@ -200,26 +199,8 @@ Could not find ${colors.red(metaCommittish)} in the meta-repo.`);
     const fetcher = new SubmoduleFetcher(repo, head);
 
     const subName = paths[0];
-    let subRepo;
-
-    // Open the submodule if it's closed.
-
-    if (-1 === openSubNames.findIndex(x => x === subName)) {
-        console.log(`Opening ${colors.blue(subName)}.`);
-        const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
-                                                                   [subName],
-                                                                   head);
-        const subSha = shas[subName];
-        const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
-        subRepo = yield Open.openOnCommit(fetcher,
-                                          subName,
-                                          subSha,
-                                          templatePath);
-    }
-    else {
-        subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-    }
-
+    const opener = new Open.Opener(repo, null);
+    const subRepo = yield opener.getSubrepo(subName);
     const metaCommit = yield repo.getCommit(metaAnnotated.id());
 
     // Now that we have an open submodule, we can attempt to resolve

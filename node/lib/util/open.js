@@ -34,9 +34,12 @@
  */
 const assert  = require("chai").assert;
 const co      = require("co");
+const colors  = require("colors");
+const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
 const DeinitUtil          = require("./deinit_util");
+const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 
@@ -64,7 +67,6 @@ exports.openOnCommit = co.wrap(function *(fetcher,
     if (null !== templatePath) {
         assert.isString(templatePath);
     }
-
     const metaRepoUrl = yield fetcher.getMetaOriginUrl();
     const metaRepo = fetcher.repo;
     const submoduleUrl = yield fetcher.getSubmoduleUrl(submoduleName);
@@ -97,3 +99,80 @@ exports.openOnCommit = co.wrap(function *(fetcher,
 
     return submoduleRepo;
 });
+
+/**
+ * @class {Opener}
+ * class for opening and retrieving submodule repositories on-demand
+ */
+class Opener {
+    /**
+     * Create a new object for retreiving submodule repositories on-demand in
+     * the specified `repo`.
+     *
+     * @param {NodeGit.Repository} repo
+     * @param {NodeGit.Commit}     commit
+     */
+    constructor(repo, commit) {
+        assert.instanceOf(repo, NodeGit.Repository);
+        if (null !== commit) {
+            assert.instanceOf(commit, NodeGit.Commit);
+        }
+        this.d_repo = repo;
+        this.d_commit = commit;
+        this.d_initialized = false;
+    }
+}
+
+Opener.prototype._initialize = co.wrap(function *() {
+    if (null === this.d_commit) {
+        this.d_commit = yield this.d_repo.getHeadCommit();
+    }
+    this.d_subRepos = {};
+    const openSubsList = yield SubmoduleUtil.listOpenSubmodules(this.d_repo);
+    this.d_openSubs = new Set(openSubsList);
+    this.d_subs = yield SubmoduleUtil.getSubmodulesForCommit(this.d_repo,
+                                                             this.d_commit);
+    this.d_templatePath =
+                        yield SubmoduleConfigUtil.getTemplatePath(this.d_repo);
+    this.d_fetcher = new SubmoduleFetcher(this.d_repo, this.d_commit);
+    this.d_initialized = true;
+});
+
+Opener.prototype.fetcher = co.wrap(function *() {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    return this.d_fetcher;
+});
+
+/**
+ * Return the repository for the specified `submoduleName`, opening it if
+ * necessary.
+ *
+ * @param {String} subName
+ * @return {NodeGit.Repository}
+ */
+Opener.prototype.getSubrepo = co.wrap(function *(subName) {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    let subRepo = this.d_subRepos[subName];
+    if (undefined !== subRepo) {
+        return subRepo;  // it was found
+    }
+    if (this.d_openSubs.has(subName)) {
+        subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
+    }
+    else {
+        const sha = this.d_subs[subName].sha;
+        console.log(`\
+Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
+        subRepo = yield exports.openOnCommit(this.d_fetcher,
+                                             subName,
+                                             sha,
+                                             this.d_templatePath);
+    }
+    this.d_subRepos[subName] = subRepo;
+    return subRepo;
+});
+exports.Opener = Opener;

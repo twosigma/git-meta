@@ -38,9 +38,6 @@ const NodeGit = require("nodegit");
 const GitUtil          = require("./git_util");
 const Open             = require("./open");
 const RepoStatus       = require("./repo_status");
-const StatusUtil       = require("./status_util");
-const SubmoduleConfigUtil = require("../util/submodule_config_util");
-const SubmoduleFetcher = require("./submodule_fetcher");
 const SubmoduleUtil    = require("./submodule_util");
 const UserError        = require("./user_error");
 
@@ -161,8 +158,8 @@ ${colors.red(commitSha)}.`);
 
     const subs = metaRepoStatus.submodules;
 
-    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
-    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
+    const opener = new Open.Opener(metaRepo, null);
+    const subFetcher = yield opener.fetcher();
 
     const mergeEntry = co.wrap(function *(entry) {
         const path = entry.path;
@@ -196,20 +193,15 @@ ${colors.red(commitSha)}.`);
             return;                                                   // RETURN
         }
 
-        let subRepoStatus = (sub.workdir && sub.workdir.status) || null;
         let subRepo;
-        if (null === subRepoStatus) {
+        if (null === sub.workdir) {
             // If this submodule's not open, open it.
 
             console.log(`Opening ${colors.blue(path)}.`);
-            subRepo = yield Open.openOnCommit(subFetcher,
-                                              path,
-                                              subHeadSha,
-                                              templatePath);
-            subRepoStatus = yield StatusUtil.getRepoStatus(subRepo);
+            subRepo = yield opener.getSubrepo(path);
         }
         else {
-            subRepo = yield SubmoduleUtil.getRepo(metaRepo, path);
+            subRepo = yield opener.getSubrepo(path);
         }
 
         // Fetch commit to merge.

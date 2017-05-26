@@ -158,6 +158,15 @@ describe("ShorthandParserUtil", function () {
                     }),
                 }
             })},
+            "empty commit": { i: "S:C1-2 ", e: m({
+                commits: {
+                    "1": new Commit({
+                        parents: ["2"],
+                        changes: {},
+                        message: "message",
+                    }),
+                }
+            })},
             "commit without a parent": {
                 i: "S:C1 y=2",
                 e: m({
