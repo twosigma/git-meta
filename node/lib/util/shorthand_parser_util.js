@@ -110,7 +110,9 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * second is its parent.  A new commit introduces a change with a file having
  * the same name as its id and content that is also its id, unless changes are
  * specified.  If no commit message is specified, the default value is
- * "message".
+ * "message".  Note that in a test case, an expected commit message of "*"
+ * indicates that any message is acceptable; this is necessary to match
+ * generated messages.
  *
  * A remote specifies a name, an optional url, and an optional list of
  * branches.  If no url is specified for a remote, the intention is top provide
@@ -517,7 +519,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      */
     function parseChanges(begin, end) {
         let changes = {};
-        assert.notEqual(begin, end, "must be at least one change");
         while (end !== begin) {
             const currentEnd = findSeparator(shorthand, ",", begin, end) ||
                                { begin: end, end: end};

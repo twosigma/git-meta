@@ -251,30 +251,28 @@ exports.readRAST = co.wrap(function *(repo) {
             const submodules =
                yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, commit);
             const diffs = yield commit.getDiff();
-            const differs = diffs.map(co.wrap(function *(diff) {
-                for (let i = 0; i < diff.numDeltas(); ++i) {
-                    const delta = diff.getDelta(i);
-                    const path = delta.newFile().path();
+            const diff = diffs[0];
+            for (let i = 0; i < diff.numDeltas(); ++i) {
+                const delta = diff.getDelta(i);
+                const path = delta.newFile().path();
 
-                    // We ignore the `.gitmodules` file.  Changes to it are an
-                    // implementation detail and will be reflected in changes
-                    // to submodule paths.
+                // We ignore the `.gitmodules` file.  Changes to it are an
+                // implementation detail and will be reflected in changes
+                // to submodule paths.
 
-                    if (SubmoduleConfigUtil.modulesFileName === path) {
-                        continue;
-                    }
-                    if (NodeGit.Diff.DELTA.DELETED === delta.status()) {
-                        changes[path] = null;
-                    }
-                    else if (!(path in submodules)) {
-                        // Skip submodules; we handle them later.
-                        const entry = yield commit.getEntry(path);
-                        const blob = yield entry.getBlob();
-                        changes[path] = blob.toString();
-                    }
+                if (SubmoduleConfigUtil.modulesFileName === path) {
+                    continue;
                 }
-            }));
-            yield differs;
+                if (NodeGit.Diff.DELTA.DELETED === delta.status()) {
+                    changes[path] = null;
+                }
+                else if (!(path in submodules)) {
+                    // Skip submodules; we handle them later.
+                    const entry = yield commit.getEntry(path);
+                    const blob = yield entry.getBlob();
+                    changes[path] = blob.toString();
+                }
+            }
 
             // Now get a list of parent commits.  We don't need to process them
             // (recursively) because the `ids` returned by `fastwalk` contains

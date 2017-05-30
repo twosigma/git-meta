@@ -36,9 +36,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("colors");
 const NodeGit = require("nodegit");
-const path    = require("path");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -47,8 +45,6 @@ const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
-const SubmoduleFetcher    = require("./submodule_fetcher");
-const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
@@ -538,7 +534,6 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
 
-    const workdir = repo.workdir();
     const headCommit = yield repo.getHeadCommit();
     const changes = {};
     const staged = status.staged;
@@ -559,15 +554,8 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
             changes[filename] = null;
         }
         else {
-            const filePath = path.join(workdir, filename);
-
-            // 'createFromDisk' is unfinished; instead of returning an id, it
-            // takes an ID object and writes into it, unlike the rest of its
-            // brethern on `Blob`.  TODO: patch nodegit with corrected API.
-
-            const idPlaceholder = headCommit.id();  // need a place to load ids
-            NodeGit.Blob.createFromDisk(idPlaceholder, repo, filePath);
-            changes[filename] = new Change(idPlaceholder, FILEMODE.BLOB);
+            const blobId = TreeUtil.hashFile(repo, filename);
+            changes[filename] = new Change(blobId, FILEMODE.BLOB);
 
             yield index.addByPath(filename);
         }
@@ -891,8 +879,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     }
 
     const submodules = baseStatus.submodules;  // holds resulting sub statuses
-    const subFetcher = new SubmoduleFetcher(repo, head);
-    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
+    const opener = new Open.Opener(repo, null);
 
     const subsToAmend = {};  // holds map of subs to amend to their commit info
 
@@ -903,18 +890,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     yield Object.keys(submodules).map(co.wrap(function *(name) {
         const currentSub = submodules[name];
         const old = oldSubs[name] || null;
-        const getRepo = co.wrap(function *() {
-            if (null === currentSub.workdir) {
-                console.log(`Opening ${colors.blue(name)}.`);
-                // Update `submodules` to reflect that this one is now open.
-
-                return yield Open.openOnCommit(subFetcher,
-                                               name,
-                                               currentSub.index.sha,
-                                               templatePath);
-            }
-            return yield SubmoduleUtil.getRepo(repo, name);
-        });
+        const getRepo = () => opener.getSubrepo(name);
 
         const result = yield exports.getSubmoduleAmendStatus(currentSub,
                                                              old,

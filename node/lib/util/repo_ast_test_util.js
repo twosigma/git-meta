@@ -277,7 +277,9 @@ exports.testMultiRepoManipulator =
                               commitMap,
                               commit,
                              `commit already mapped to ${commitMap[commit]}.`);
-                commitMap[commit] = manipulated.commitMap[commit];
+                const newVal = manipulated.commitMap[commit];
+                commitMap[commit] = newVal;
+                mappings.reverseCommitMap[newVal] = commit;
             }
         }
         if ("urlMap" in manipulated) {

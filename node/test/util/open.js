@@ -37,6 +37,7 @@ const NodeGit = require("nodegit");
 const Open             = require("../../lib/util/open");
 const RepoASTTestUtil  = require("../../lib/util/repo_ast_test_util");
 const SubmoduleFetcher = require("../../lib/util/submodule_fetcher");
+const SubmoduleUtil    = require("../../lib/util/submodule_util");
 
 describe("openOnCommit", function () {
     // Assumption is that 'x' is the target repo.
@@ -82,6 +83,49 @@ describe("openOnCommit", function () {
                                                            c.expected,
                                                            manipulator,
                                                            c.fails);
+        }));
+    });
+    describe("Opener", function () {
+        it("already open", co.wrap(function *() {
+            const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U:Os");
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const s1 = yield opener.getSubrepo("s");
+            const s2 = yield opener.getSubrepo("s");
+            const base = yield SubmoduleUtil.getRepo(repo, "s");
+            assert.equal(s1, s2, "not re-opened");
+            assert.equal(s1.workdir(), base.workdir(), "right path");
+        }));
+        it("not open", co.wrap(function *() {
+            const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U");
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const s1 = yield opener.getSubrepo("s");
+            const s2 = yield opener.getSubrepo("s");
+            const base = yield SubmoduleUtil.getRepo(repo, "s");
+            assert.equal(s1, s2, "not re-opened");
+            assert.equal(s1.workdir(), base.workdir(), "right path");
+        }));
+        it("different commit", co.wrap(function *() {
+            const state = "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const commitMap = w.reverseCommitMap;
+            const baseSha = commitMap["3"];
+            const subSha = commitMap.a;
+            const repo = w.repos.x;
+            const commit = yield repo.getCommit(baseSha);
+            const opener = new Open.Opener(repo, commit);
+            const s = yield opener.getSubrepo("s");
+            const head = yield s.getHeadCommit();
+            assert.equal(head.id().tostrS(), subSha);
+        }));
+        it("fetcher", co.wrap(function *() {
+            const state = "x=S";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const fetcher = yield opener.fetcher();
+            assert.instanceOf(fetcher, SubmoduleFetcher);
         }));
     });
 });
