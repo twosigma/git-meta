@@ -86,7 +86,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
         remote = yield repo.getRemote(remoteName);
     }
     catch (e) {
-        throw new UserError(`No remote named colors.red(${remoteName}).`);
+        throw new UserError(`No remote named ${colors.red(remoteName)}.`);
     }
     const remoteUrl = yield GitUtil.getRemoteUrl(repo, remote);
 
