@@ -36,6 +36,11 @@ const co = require("co");
  * this module is the entrypoint for the `commit` command.
  */
 
+// TODO: I need to move the bodies of `doCommit` and `doAmend` into the util
+// and create test drivers for them.  I hadn't yet because these methods
+// may require user interaction, but I think that's actually pretty easy to
+// stub out.
+
 /**
  * help text for the `commit` command
  *
@@ -254,7 +259,7 @@ const doAmend = co.wrap(function *(args) {
     const defaultSig = repo.defaultSignature();
     const headMeta = Commit.getCommitMetaData(head);
     let message;
-    let subMessages;
+    let subMessages = null;
     if (args.interactive) {
         // If 'interactive' mode is requested, ask the user to specify which
         // repos are committed and with what commit messages.
