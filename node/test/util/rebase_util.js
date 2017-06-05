@@ -342,9 +342,9 @@ a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
 x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
     Bmaster=3;Bfoo=4;Bold=3;
     Erefs/heads/master,3,4;
-    Os EHEAD,q,r!I q=q`,
+    Os EHEAD,q,r!I q=q!Bq=q!Br=r`,
                 expected: `
-x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E`
+x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r`
             },
             "with rebase in submodule, staged commit in another submodule": {
                 initial: `
@@ -352,11 +352,12 @@ a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
     Bmaster=3;Bfoo=4;Bold=3;
     Erefs/heads/master,3,4;
-    Os EHEAD,q,r!I q=q;
+    Os EHEAD,q,r!I q=q!Bq=q!Br=r;
     Ot H=s;
     I t=Sa:s`,
                 expected: `
-x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;Os Cqs-r q=q!H=qs!E;I t=~;Ot`
+x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
+    Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;I t=~;Ot`
             },
             "with rebase in submodule, workdir commit in another submodule": {
                 initial: `
@@ -364,18 +365,20 @@ a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
     Bmaster=3;Bfoo=4;Bold=3;
     Erefs/heads/master,3,4;
-    Os EHEAD,q,r!I q=q;
+    Os EHEAD,q,r!I q=q!Bq=q!Br=r;
     Ot H=s`,
                 expected: `
-x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;Os Cqs-r q=q!H=qs!E;Ot H=s`
+x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
+    Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;
+    Ot H=s`
             },
             "staged fix in submodule": {
                 initial: `
 a=B:Ca-1 q=r;Cb-1 q=s;Bmaster=a;Bfoo=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Erefs/heads/master,3,4;Bold=3;
-    Os EHEAD,a,b!I q=z`,
+    Os EHEAD,a,b!I q=z!Ba=a!Bb=b`,
                 expected: `
-x=E:C3M-4 s=Sa:as;E;Bmaster=3M;Os Cas-b q=z!H=as`,
+x=E:C3M-4 s=Sa:as;E;Bmaster=3M;Os Cas-b q=z!H=as!Ba=a!Bb=b`,
             },
             "multiple in subs": {
                 initial: `
@@ -384,12 +387,12 @@ b=B:Cb1-1 q=r;Cb2-1 q=s;Bmaster=b1;Bfoo=b2|
 x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:a1,t=Sb:b1;C4-2 s=Sa:a2,t=Sb:b2;
     Bmaster=3;Bfoo=4;Bold=3;
     Erefs/heads/master,3,4;
-    Os EHEAD,a1,a2!I f=z;
-    Ot EHEAD,b1,b2!I q=t`,
+    Os EHEAD,a1,a2!I f=z!Ba1=a1!Ba2=a2;
+    Ot EHEAD,b1,b2!I q=t!Bb1=b1!Bb2=b2`,
                 expected: `
 x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;E;Bmaster=3M;
-    Os Ca1s-a2 f=z!H=a1s;
-    Ot Cb1t-b2 q=t!H=b1t`
+    Os Ca1s-a2 f=z!H=a1s!Ba1=a1!Ba2=a2;
+    Ot Cb1t-b2 q=t!H=b1t!Bb1=b1!Bb2=b2`
             },
         };
         Object.keys(cases).forEach(caseName => {
