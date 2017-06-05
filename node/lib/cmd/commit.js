@@ -258,7 +258,7 @@ const doAmend = co.wrap(function *(args) {
     const head = yield repo.getHeadCommit();
     const defaultSig = repo.defaultSignature();
     const headMeta = Commit.getCommitMetaData(head);
-    let message;
+    let message = args.message;
     let subMessages = null;
     if (args.interactive) {
         // If 'interactive' mode is requested, ask the user to specify which
@@ -300,7 +300,7 @@ You can make this commit using the interactive ('-i') commit option.`;
 
         // If no message, use editor.
 
-        if (null === args.message) {
+        if (null === message) {
             const prompt = Commit.formatAmendEditorPrompt(defaultSig,
                                                           headMeta,
                                                           status,
