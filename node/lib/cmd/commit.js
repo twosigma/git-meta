@@ -88,6 +88,7 @@ have matching commits and have no new commits.`,
     parser.addArgument(["-i", "--interactive"], {
         required: false,
         action: "storeConst",
+        defaultValue: false,
         constant: true,
         help: `\
 Interactively choose which meta- and sub-repositories to commit, and what
@@ -110,121 +111,21 @@ function abortForNoMessage() {
     process.exit(1);
 }
 
-function errorWithStatus(status, relCwd, message) {
-    const colors = require("colors");
-    const PrintStatusUtil = require("../util/print_status_util");
-
-    process.stderr.write(PrintStatusUtil.printRepoStatus(status, relCwd));
-    console.error(colors.yellow(message));
-    process.exit(1);
-}
-
-function checkForPathIncompatibleSubmodules(repoStatus, relCwd) {
-
-    const Commit = require("../util/commit");
-
-    if (Commit.areSubmodulesIncompatibleWithPathCommits(repoStatus)) {
-            errorWithStatus(repoStatus, relCwd, `\
-Cannot use path-based commit on submodules with staged commits or
-configuration changes.`);
-    }
-}
-
 const doCommit = co.wrap(function *(args) {
-    const path = require("path");
-
-    const Commit          = require("../util/commit");
-    const GitUtil         = require("../util/git_util");
-    const PrintStatusUtil = require("../util/print_status_util");
+    const Commit  = require("../util/commit");
+    const GitUtil = require("../util/git_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
-    const workdir = repo.workdir();
-    const relCwd = path.relative(workdir, cwd);
-    const repoStatus = yield Commit.getCommitStatus(repo,
-                                                    cwd, {
-        showMetaChanges: args.meta,
-        all: args.all,
-        paths: args.file,
-    });
 
-    // Abort if there are uncommittable submodules; we don't want to commit a
-    // .gitmodules file with references to a submodule that doesn't have a
-    // commit.
-    //
-    // TODO: potentially do somthing more intelligent like committing a
-    // different versions of .gitmodules than what is on disk to omit
-    // "uncommittable" submodules.  Considering that this situation should be
-    // relatively rare, I don't think it's worth the additional complexity at
-    // this time.
-
-    if (repoStatus.areUncommittableSubmodules()) {
-        errorWithStatus(
-                  repoStatus,
-                  relCwd,
-                  "Please stage changes in new submodules before committing.");
-    }
-
-    // If we're using paths, the status of what we're committing needs to be
-    // calculated.  Also, we need to see if there are any submodule
-    // configuration changes.
-
-    const usingPaths = 0 !== args.file.length;
-
-    // If we're doing a path based commit, validate that we are in a supported
-    // configuration, unless it's interactive, where the user can see that
-    // things other than the paths chosen will be committed.
-
-    if (usingPaths && !args.interactive) {
-        checkForPathIncompatibleSubmodules(repoStatus, relCwd);
-    }
-
-    // If there is nothing possible to commit, exit early.
-
-    if (!Commit.shouldCommit(repoStatus, false, undefined)) {
-        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
-                                                             relCwd));
-        return;
-    }
-
-    let message = args.message;
-    let subMessages;
-
-    if (args.interactive) {
-        // If 'interactive' mode is requested, ask the user to specify which
-        // repos are committed and with what commit messages.
-
-        const prompt = Commit.formatSplitCommitEditorPrompt(repoStatus);
-        const userText = yield GitUtil.editMessage(repo, prompt);
-        const userData = Commit.parseSplitCommitMessages(userText);
-        message = userData.metaMessage;
-        subMessages = userData.subMessages;
-
-        // Check if there's actually anything to commit.
-
-        if (!Commit.shouldCommit(repoStatus, message === null, subMessages)) {
-            console.log("Nothing to commit.");
-            return;
-        }
-    }
-    else if (null === message) {
-        // If no message on the command line, prompt for one.
-
-        const initialMessage = Commit.formatEditorPrompt(repoStatus, cwd);
-        const rawMessage = yield GitUtil.editMessage(repo, initialMessage);
-        message = GitUtil.stripMessage(rawMessage);
-    }
-
-    if ("" === message) {
-        abortForNoMessage();
-    }
-
-    if (usingPaths) {
-        yield Commit.commitPaths(repo, repoStatus, message, subMessages);
-    }
-    else {
-        yield Commit.commit(repo, args.all, repoStatus, message, subMessages);
-    }
+    yield Commit.doCommitCommand(repo,
+                                 cwd,
+                                 args.message,
+                                 args.meta,
+                                 args.all,
+                                 args.file,
+                                 args.interactive,
+                                 GitUtil.editMessage);
 });
 
 const doAmend = co.wrap(function *(args) {

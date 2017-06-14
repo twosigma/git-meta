@@ -30,13 +30,18 @@
  */
 "use strict";
 
+// TODO: This module is getting to be too big and we need to split it, probably
+// into `commit_util` and `commit_status_util`.
+
 /**
  * This module contains methods for committing.
  */
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const colors  = require("colors");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -1762,3 +1767,168 @@ exports.parseSplitCommitMessages = function (text) {
         subMessages: subMessages,
     };
 };
+
+function errorWithStatus(status, relCwd, message) {
+    throw new UserError(`\
+${PrintStatusUtil.printRepoStatus(status, relCwd)}
+${colors.yellow(message)}
+`);
+}
+
+function checkForPathIncompatibleSubmodules(repoStatus, relCwd) {
+
+    const Commit = require("../util/commit");
+
+    if (Commit.areSubmodulesIncompatibleWithPathCommits(repoStatus)) {
+            errorWithStatus(repoStatus, relCwd, `\
+Cannot use path-based commit on submodules with staged commits or
+configuration changes.`);
+    }
+}
+
+function abortForNoMessage() {
+    throw new UserError("Aborting commit due to empty commit message.");
+}
+
+/**
+ * Perform the commit command in the specified `repo`.  Use the specified `cwd`
+ * directory to interpret and format paths.  If the optionally specified
+ * `message` is provided use it for the commit message; otherwise, prompt the
+ * user to enter a message.  If the specified `all` is true, include
+ * (tracked) modified but unstaged changes.  If the specified `paths` is
+ * non-empty, include only the files indicated in those `paths` in the commit.
+ * If the specified `interactive` is true, prompt the user to create an
+ * "interactive" message, allowing for different commit messages for each
+ * changed submodules.  Use the specified `editMessage` function to invoke an
+ * editor when needed.  The behavior is undefined if
+ * `null !== message && true === interactive` or if
+ * `0 !== paths.length && all`.
+ *
+ * @param {NodeGit.Repository}             repo
+ * @param {String}                         cwd
+ * @param {String|null}                    message
+ * @param {Boolean}                        meta
+ * @param {Boolean}                        all
+ * @param {String[]}                       paths
+ * @param {Boolean}                        interactive
+ * @param {(repo, txt) -> Promise(String)} editMessage
+ * @return {Object}
+ * @return {String} return.metaCommit
+ * @return {Object} return.submoduleCommits  map from sub name to commit id
+ */
+exports.doCommitCommand = co.wrap(function *(repo,
+                                             cwd,
+                                             message,
+                                             meta,
+                                             all,
+                                             paths,
+                                             interactive,
+                                             editMessage) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(cwd);
+    if (null !== message) {
+        assert.isString(message);
+    }
+    assert.isBoolean(meta);
+    assert.isBoolean(all);
+    assert.isArray(paths);
+    assert.isBoolean(interactive);
+
+    const workdir = repo.workdir();
+    const relCwd = path.relative(workdir, cwd);
+    const repoStatus = yield exports.getCommitStatus(repo, cwd, {
+        showMetaChanges: meta,
+        all: all,
+        paths: paths,
+    });
+
+    // Abort if there are uncommittable submodules; we don't want to commit a
+    // .gitmodules file with references to a submodule that doesn't have a
+    // commit.
+    //
+    // TODO: potentially do somthing more intelligent like committing a
+    // different versions of .gitmodules than what is on disk to omit
+    // "uncommittable" submodules.  Considering that this situation should be
+    // relatively rare, I don't think it's worth the additional complexity at
+    // this time.
+
+    if (repoStatus.areUncommittableSubmodules()) {
+        errorWithStatus(
+                  repoStatus,
+                  relCwd,
+                  "Please stage changes in new submodules before committing.");
+    }
+
+    // If we're using paths, the status of what we're committing needs to be
+    // calculated.  Also, we need to see if there are any submodule
+    // configuration changes.
+
+    const usingPaths = 0 !== paths.length;
+
+    // If we're doing a path based commit, validate that we are in a supported
+    // configuration.
+
+    if (usingPaths) {
+        checkForPathIncompatibleSubmodules(repoStatus, relCwd);
+    }
+
+    // If there is nothing possible to commit, exit early.
+
+    if (!exports.shouldCommit(repoStatus, false, undefined)) {
+        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
+                                                             relCwd));
+        return;
+    }
+
+    let subMessages;
+
+    if (interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
+
+        const head = yield repo.getHeadCommit();
+        const sig = repo.defaultSignature();
+        const headMeta = exports.getCommitMetaData(head);
+        const prompt = exports.formatSplitCommitEditorPrompt(repoStatus,
+                                                             sig,
+                                                             headMeta,
+                                                             {});
+        const userText = yield editMessage(repo, prompt);
+        const userData = exports.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
+
+        // Check if there's actually anything to commit.
+
+        if (!exports.shouldCommit(repoStatus, message === null, subMessages)) {
+            console.log("Nothing to commit.");
+            return;
+        }
+    }
+    else if (null === message) {
+        // If no message on the command line, prompt for one.
+
+        const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
+        const rawMessage = yield editMessage(repo, initialMessage);
+        message = GitUtil.stripMessage(rawMessage);
+    }
+
+    if ("" === message) {
+        abortForNoMessage();
+    }
+
+    if (usingPaths) {
+        return yield exports.commitPaths(repo,
+                                         repoStatus,
+                                         message,
+                                         subMessages);
+    }
+    else {
+        return yield exports.commit(repo,
+                                    all,
+                                    repoStatus,
+                                    message,
+                                    subMessages);
+    }
+});
+

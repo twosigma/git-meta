@@ -45,6 +45,23 @@ const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
 
 
+function mapCommitResult(commitResult) {
+    // Return a map from physical to computed logical sha for the commit ids in
+    // the specified `commitResul` (as returned by `Commit.commit` and
+    // `Commit.doCommitCommand`), s.t. the meta-repo commit is named "x" and
+    // the submodules commits are named after their submodule.
+
+    let commitMap = {};
+    if (null !== commitResult.metaCommit) {
+        commitMap[commitResult.metaCommit] = "x";
+    }
+    Object.keys(commitResult.submoduleCommits).forEach(subName => {
+        const newCommit = commitResult.submoduleCommits[subName];
+        commitMap[newCommit] = subName;
+    });
+    return commitMap;
+}
+
 // We'll always commit the repo named 'x'.  If a new commit is created ni the
 // meta-repo, it will be named 'x'.  New commits created in sub-repos will be
 // identified as their submodule name.
@@ -57,16 +74,8 @@ const committer = co.wrap(function *(doAll, message, repos, subMessages) {
         all: doAll,
     });
     const result = yield Commit.commit(x, doAll, status, message, subMessages);
-    let commitMap = {};
-    if (null !== result.metaCommit) {
-        commitMap[result.metaCommit] = "x";
-    }
-    Object.keys(result.submoduleCommits).forEach(subName => {
-        const newCommit = result.submoduleCommits[subName];
-        commitMap[newCommit] = subName;
-    });
     return {
-        commitMap: commitMap,
+        commitMap: mapCommitResult(result),
     };
 });
 
@@ -3000,6 +3009,111 @@ and for d
                 assert(!c.fails, "should fail");
                 assert.deepEqual(result, c.expected);
             });
+        });
+    });
+    describe("doCommitCommand", function () {
+        // We don't need to retest core functionality, but we do need to ensure
+        // that all flags are passed through and/or handled appropriately.
+
+        const cases = {
+            "nothing to commit": {
+                initial: "x=S",
+            },
+            "no meta, no commit": {
+                initial: "x=S:I a=b",
+                meta: false,
+            },
+            "meta commit": {
+                initial: "x=S:I a=b",
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 a=b;Bmaster=x",
+            },
+            "meta commit, with editor": {
+                initial: "x=S:I a=b",
+                editor: () => Promise.resolve("haha"),
+                expected: "x=S:Chaha\n#x-1 a=b;Bmaster=x",
+            },
+            "no all": {
+                initial: "x=S:W README.md=2",
+            },
+            "all": {
+                initial: "x=S:W README.md=2",
+                all: true,
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 README.md=2;Bmaster=x",
+            },
+            "paths, cwd": {
+                initial: "x=S:I a/b=b,b=d",
+                message: "foo",
+                paths: ["b"],
+                cwd: "a",
+                expected: "x=S:Cfoo#x-1 a/b=b;I b=d;Bmaster=x",
+            },
+            "uncommitable": {
+                initial: "a=B|x=S:I a=Sa:;Oa",
+                message: "foo",
+                fails: true,
+            },
+            "not path-compatible": {
+                initial: "x=S:I s=S.:1,a=b",
+                message: "foo",
+                paths: ["a"],
+                fails: true,
+            },
+            "interactive": {
+                initial: "a=B|x=U:Os I a=b",
+                interactive: true,
+                editor: () => Promise.resolve(`\
+foo
+# <*>
+bar
+# <s>
+`),
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Os Cbar\n#s-1 a=b!H=s;Bmaster=x`,
+            },
+            "interactive, no commit": {
+                initial: "a=B|x=U:Os I a=b",
+                interactive: true,
+                editor: () => Promise.resolve(""),
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const doCommit = co.wrap(function *(repos) {
+                const repo = repos.x;
+                let cwd = "";
+                if (undefined !== c.cwd) {
+                    cwd = path.join(repo.workdir(), c.cwd);
+                }
+                else {
+                    cwd = repo.workdir();
+                }
+                const editor = c.editor || (() => {
+                    assert(false, "no editor");
+                });
+                const meta = undefined === c.meta ? true : false;
+                const result = yield Commit.doCommitCommand(
+                                                        repo,
+                                                        cwd,
+                                                        c.message || null,
+                                                        meta,
+                                                        c.all || false,
+                                                        c.paths || [],
+                                                        c.interactive || false,
+                                                        editor);
+                if (undefined !== result) {
+                    return {
+                        commitMap: mapCommitResult(result),
+                    };
+                }
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                               c.expected,
+                                                               doCommit,
+                                                               c.fails);
+            }));
         });
     });
 });
