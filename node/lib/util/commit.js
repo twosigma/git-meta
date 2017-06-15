@@ -985,8 +985,8 @@ exports.amendRepo = co.wrap(function *(repo, message) {
  * @param {String|null}        message
  * @param {Object|null}        subMessages
  * @return {Object}
- * @return {String} return.meta sha of new commit on meta-repo
- * @return {Object} return.subs map from sub name to sha of created commit
+ * @return {String} return.metaCommit sha of new commit on meta-repo
+ * @return {Object} return.submoduleCommits  from sub name to sha
  */
 exports.amendMetaRepo = co.wrap(function *(repo,
                                            status,
@@ -1091,8 +1091,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         metaCommit = yield exports.amendRepo(repo, message);
     }
     return {
-        meta: metaCommit,
-        subs: subCommits,
+        metaCommit: metaCommit,
+        submoduleCommits: subCommits,
     };
 });
 
@@ -1791,18 +1791,18 @@ function abortForNoMessage() {
 }
 
 /**
- * Perform the commit command in the specified `repo`.  Use the specified `cwd`
- * directory to interpret and format paths.  If the optionally specified
+ * Perform the commit command in the specified `repo`. Consider the values in
+ * the specified `paths` to be relative to the specified `cwd`, and format
+ * paths displayed to the user according to `cwd`.  If the optionally specified
  * `message` is provided use it for the commit message; otherwise, prompt the
- * user to enter a message.  If the specified `all` is true, include
- * (tracked) modified but unstaged changes.  If the specified `paths` is
- * non-empty, include only the files indicated in those `paths` in the commit.
- * If the specified `interactive` is true, prompt the user to create an
- * "interactive" message, allowing for different commit messages for each
- * changed submodules.  Use the specified `editMessage` function to invoke an
- * editor when needed.  The behavior is undefined if
- * `null !== message && true === interactive` or if
- * `0 !== paths.length && all`.
+ * user to enter a message.  If the specified `all` is true, include (tracked)
+ * modified but unstaged changes.  If `paths` is non-empty, include only the
+ * files indicated in those `paths` in the commit.  If the specified
+ * `interactive` is true, prompt the user to create an "interactive" message,
+ * allowing for different commit messages for each changed submodules.  Use the
+ * specified `editMessage` function to invoke an editor when needed.  The
+ * behavior is undefined if `null !== message && true === interactive` or if `0
+ * !== paths.length && all`.
  *
  * @param {NodeGit.Repository}             repo
  * @param {String}                         cwd
@@ -1833,6 +1833,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
     assert.isBoolean(all);
     assert.isArray(paths);
     assert.isBoolean(interactive);
+    assert.isFunction(editMessage);
 
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
@@ -1932,3 +1933,114 @@ exports.doCommitCommand = co.wrap(function *(repo,
     }
 });
 
+/**
+ * Perform the amend commit command in the specified `repo`.  Use the specified
+ * `cwd` to format paths displayed to the user.  If the optionally specified
+ * `message` is provided use it for the commit message; otherwise, prompt the
+ * user to enter a message.  If the specified `all` is true, include (tracked)
+ * modified but unstaged changes.  If the specified `interactive` is true,
+ * prompt the user to create an "interactive" message, allowing for different
+ * commit messages for each changed submodules.  Use the specified
+ * `editMessage` function to invoke an editor when needed.  The behavior is
+ * undefined if `null !== message && true === interactive`.
+ *
+ * @param {NodeGit.Repository}             repo
+ * @param {String}                         cwd
+ * @param {String|null}                    message
+ * @param {Boolean}                        meta
+ * @param {Boolean}                        all
+ * @param {Boolean}                        interactive
+ * @param {(repo, txt) -> Promise(String)} editMessage
+ * @return {Object}
+ * @return {String} return.metaCommit
+ * @return {Object} return.submoduleCommits  map from sub name to commit id
+ */
+exports.doAmendCommand = co.wrap(function *(repo,
+                                            cwd,
+                                            message,
+                                            meta,
+                                            all,
+                                            interactive,
+                                            editMessage) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(cwd);
+    if (null !== message) {
+        assert.isString(message);
+    }
+    assert.isBoolean(meta);
+    assert.isBoolean(all);
+    assert.isBoolean(interactive);
+    assert.isFunction(editMessage);
+
+    const workdir = repo.workdir();
+    const relCwd = path.relative(workdir, cwd);
+    const amendStatus = yield exports.getAmendStatus(repo, {
+        includeMeta: meta,
+        all: all,
+        cwd: relCwd,
+    });
+
+    const status = amendStatus.status;
+    const subsToAmend = amendStatus.subsToAmend;
+
+    const head = yield repo.getHeadCommit();
+    const defaultSig = repo.defaultSignature();
+    const headMeta = exports.getCommitMetaData(head);
+    let subMessages = null;
+    if (interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
+
+        const prompt = exports.formatSplitCommitEditorPrompt(status,
+                                                             defaultSig,
+                                                             headMeta,
+                                                             subsToAmend);
+        const userText = yield editMessage(repo, prompt);
+        const userData = exports.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
+    }
+    else {
+        const mismatched = Object.keys(subsToAmend).filter(name => {
+            const meta = subsToAmend[name];
+            return !headMeta.equivalent(meta);
+        });
+        if (0 !== mismatched.length) {
+            let error = `\
+Cannot amend because the signatures of the affected commits in the
+following sub-repos do not match that of the meta-repo:
+`;
+            mismatched.forEach(name => {
+                error += `    ${colors.red(name)}\n`;
+            });
+            error += `\
+You can make this commit using the interactive ('-i') commit option.`;
+            throw new UserError(error);
+        }
+
+        // If no message, use editor.
+
+        if (null === message) {
+            const prompt = exports.formatAmendEditorPrompt(defaultSig,
+                                                           headMeta,
+                                                           status,
+                                                           relCwd);
+            const rawMessage = yield editMessage(repo, prompt);
+            message = GitUtil.stripMessage(rawMessage);
+        }
+    }
+
+    if ("" === message) {
+        abortForNoMessage();
+    }
+
+    // Finally, perform the operation.
+
+    return yield exports.amendMetaRepo(repo,
+                                       status,
+                                       Object.keys(subsToAmend),
+                                       all,
+                                       message,
+                                       subMessages);
+
+});

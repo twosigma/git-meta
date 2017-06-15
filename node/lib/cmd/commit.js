@@ -106,11 +106,6 @@ the URL of submodules).`,
     });
 };
 
-function abortForNoMessage() {
-    console.error("Aborting commit due to empty commit message.");
-    process.exit(1);
-}
-
 const doCommit = co.wrap(function *(args) {
     const Commit  = require("../util/commit");
     const GitUtil = require("../util/git_util");
@@ -129,9 +124,6 @@ const doCommit = co.wrap(function *(args) {
 });
 
 const doAmend = co.wrap(function *(args) {
-    const colors = require("colors");
-    const path   = require("path");
-
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
     const UserError       = require("../util/user_error");
@@ -143,86 +135,14 @@ const doAmend = co.wrap(function *(args) {
     }
 
     const repo = yield GitUtil.getCurrentRepo();
-    const workdir = repo.workdir();
-    const cwd = process.cwd();
-    const relCwd = path.relative(workdir, cwd);
-    const amendStatus = yield Commit.getAmendStatus(repo, {
-        showMetaChanges: args.meta,
-        all: args.all,
-        paths: args.file,
-        cwd: relCwd,
-    });
 
-    const status = amendStatus.status;
-    const subsToAmend = amendStatus.subsToAmend;
-
-    const head = yield repo.getHeadCommit();
-    const defaultSig = repo.defaultSignature();
-    const headMeta = Commit.getCommitMetaData(head);
-    let message = args.message;
-    let subMessages = null;
-    if (args.interactive) {
-        // If 'interactive' mode is requested, ask the user to specify which
-        // repos are committed and with what commit messages.
-
-        const prompt = Commit.formatSplitCommitEditorPrompt(status,
-                                                            defaultSig,
-                                                            headMeta,
-                                                            subsToAmend);
-        const userText = yield GitUtil.editMessage(repo, prompt);
-        const userData = Commit.parseSplitCommitMessages(userText);
-        message = userData.metaMessage;
-        subMessages = userData.subMessages;
-
-        // Check if there's actually anything to commit.
-
-        if (!Commit.shouldCommit(status, message === null, subMessages)) {
-            console.log("Nothing to commit.");
-            return;
-        }
-    }
-    else {
-        const mismatched = Object.keys(subsToAmend).filter(name => {
-            const meta = subsToAmend[name];
-            return !headMeta.equivalent(meta);
-        });
-        if (0 !== mismatched.length) {
-            let error = `\
-Cannot amend because the signatures of the affected commits in the
-following sub-repos do not match that of the meta-repo:
-`;
-            mismatched.forEach(name => {
-                error += `    ${colors.red(name)}\n`;
-            });
-            error += `\
-You can make this commit using the interactive ('-i') commit option.`;
-            throw new UserError(error);
-        }
-
-        // If no message, use editor.
-
-        if (null === message) {
-            const prompt = Commit.formatAmendEditorPrompt(defaultSig,
-                                                          headMeta,
-                                                          status,
-                                                          relCwd);
-            const rawMessage = yield GitUtil.editMessage(repo, prompt);
-            message = GitUtil.stripMessage(rawMessage);
-        }
-    }
-
-    if ("" === message) {
-        abortForNoMessage();
-    }
-
-    // Finally, perform the operation.
-
-    yield Commit.amendMetaRepo(repo,
-                               status,
-                               Object.keys(subsToAmend),
-                               args.all,
-                               message,
-                               subMessages);
+    yield Commit.doAmendCommand(repo,
+                                process.cwd(),
+                                args.message,
+                                args.meta,
+                                args.all,
+                                args.interactive,
+                                GitUtil.editMessage);
 });
 
 /**
