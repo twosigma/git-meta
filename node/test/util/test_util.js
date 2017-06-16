@@ -39,8 +39,6 @@ const path    = require("path");
 const TestUtil = require("../../lib/util/test_util");
 
 describe("TestUtil", function () {
-    after(TestUtil.cleanup);
-
     describe("makeTempDir", function () {
 
         // I don't know if we can verify that the returned directories are
@@ -142,16 +140,6 @@ describe("TestUtil", function () {
             const fakePath = path.join(repoDir, "not-a-path-in-the-repo");
             const fakeExists = yield TestUtil.pathExists(fakePath);
             assert.isFalse(fakeExists);
-        }));
-    });
-
-    describe("cleanup", function () {
-        it("cleanup", co.wrap(function *() {
-            const repo = yield TestUtil.createSimpleRepository();
-            const repoPath = repo.workdir();
-            yield TestUtil.cleanup();
-            const exists = yield TestUtil.pathExists(repoPath);
-            assert.isFalse(exists, "repo not removed");
         }));
     });
 

@@ -40,8 +40,6 @@ const UserError     = require("../../lib/util/user_error");
 
 describe("include", function () {
     describe("includeNonExistingRepo", function () {
-        after(TestUtil.cleanup);
-
         let repo;
         beforeEach(co.wrap(function *() {
             repo = yield TestUtil.createSimpleRepository();
@@ -75,8 +73,6 @@ describe("include", function () {
     });
 
     describe("includeExistingRepo", function () {
-        after(TestUtil.cleanup);
-
         // for these tests, "externalRepo" represents the repository to be 
         // included and "submoduleRepo" represents the submodule once it 
         // has been included inside "repo"  
