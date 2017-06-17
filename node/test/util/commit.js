@@ -45,6 +45,23 @@ const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
 
 
+function mapCommitResult(commitResult) {
+    // Return a map from physical to computed logical sha for the commit ids in
+    // the specified `commitResul` (as returned by `Commit.commit` and
+    // `Commit.doCommitCommand`), s.t. the meta-repo commit is named "x" and
+    // the submodules commits are named after their submodule.
+
+    let commitMap = {};
+    if (null !== commitResult.metaCommit) {
+        commitMap[commitResult.metaCommit] = "x";
+    }
+    Object.keys(commitResult.submoduleCommits).forEach(subName => {
+        const newCommit = commitResult.submoduleCommits[subName];
+        commitMap[newCommit] = subName;
+    });
+    return commitMap;
+}
+
 // We'll always commit the repo named 'x'.  If a new commit is created ni the
 // meta-repo, it will be named 'x'.  New commits created in sub-repos will be
 // identified as their submodule name.
@@ -57,16 +74,8 @@ const committer = co.wrap(function *(doAll, message, repos, subMessages) {
         all: doAll,
     });
     const result = yield Commit.commit(x, doAll, status, message, subMessages);
-    let commitMap = {};
-    if (null !== result.metaCommit) {
-        commitMap[result.metaCommit] = "x";
-    }
-    Object.keys(result.submoduleCommits).forEach(subName => {
-        const newCommit = result.submoduleCommits[subName];
-        commitMap[newCommit] = subName;
-    });
     return {
-        commitMap: commitMap,
+        commitMap: mapCommitResult(result),
     };
 });
 
@@ -1447,104 +1456,104 @@ x=N:Cfoo#x README.md=hello world;*=master;Bmaster=x`,
         const cases = {
             "trivial": {
                 input: "x=N:Cm#1;H=1",
-                expected: "x=N:Cam 1=1;H=am",
+                expected: "x=N:Cx 1=1;H=x",
             },
             "meta change": {
                 input: "x=S:C2-1;Bmaster=2;I README.md=3",
-                expected: "x=S:Cam-1 README.md=3,2=2;Bmaster=am",
+                expected: "x=S:Cx-1 README.md=3,2=2;Bmaster=x",
             },
             "meta staged": {
                 input: "x=S:C2-1;Bmaster=2;W README.md=3",
-                expected: "x=S:Cam-1 README.md=3,2=2;Bmaster=am",
+                expected: "x=S:Cx-1 README.md=3,2=2;Bmaster=x",
                 all: true,
             },
             "repo with new sha in index": {
                 input: "a=B:Ca-1;Bmaster=a|x=U:C3-2;I s=Sa:a;Bmaster=3",
-                expected: "x=U:Cam-2 3=3,s=Sa:a;Bmaster=am",
+                expected: "x=U:Cx-2 3=3,s=Sa:a;Bmaster=x",
             },
             "repo with new head in workdir": {
                 input: "a=B:Ca-1;Bmaster=a|x=U:C3-2;Bmaster=3;Os H=a",
-                expected: "x=U:Cam-2 3=3,s=Sa:a;Bmaster=am;Os",
+                expected: "x=U:Cx-2 3=3,s=Sa:a;Bmaster=x;Os",
             },
             "repo with staged workdir changes": {
                 input: "a=B|x=U:C3-2;Bmaster=3;Os I x=x",
-                expected: `x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 x=x!H=as`,
+                expected: `x=U:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Cs-1 x=x!H=s`,
             },
             "repo with unstaged workdir changes": {
                 input: "a=B|x=U:C3-2;Bmaster=3;Os W README.md=3",
                 expected: `
-x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 README.md=3!H=as`,
+x=U:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Cs-1 README.md=3!H=s`,
                 all: true,
             },
             "repo with staged and unstaged workdir changes": {
                 input: "a=B|x=U:C3-2;Bmaster=3;Os I a=b!W README.md=3",
                 expected: `
-x=U:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Cas-1 a=b,README.md=3!H=as`,
+x=U:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Cs-1 a=b,README.md=3!H=s`,
                 all: true,
             },
             "amended subrepo": {
                 input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a!H=as`,
+x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a!H=s`,
             },
             "amended subrepo with index change": {
                 input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os I q=4",
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a,q=4!H=as`,
+x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a,q=4!H=s`,
             },
             "amended subrepo with unstaged change": {
                 input: `
 a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a!H=as!W README.md=2`,
+x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a!H=s!W README.md=2`,
             },
             "amended subrepo with change to stage": {
                 input: `
 a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 s=Sa:as;Bmaster=am;Os Chi#as-1 a=a,README.md=2!H=as`,
+x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a,README.md=2!H=s`,
                 all: true,
             },
             "strip submodule commit": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os`,
+                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os`,
             },
             "strip submodule commit, leave untracked": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W x=y;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os W x=y`,
+                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os W x=y`,
             },
             "strip submodule commit, leave modified": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W README.md=2;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#am-2 3=3;Bmaster=am;Os W README.md=2`,
+                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os W README.md=2`,
             },
             "strip submodule commit unchange from index": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os I a=a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#am-2 3=3,s=Sa:a;Bmaster=am;Os`
+                expected: `x=U:Cfoo#x-2 3=3,s=Sa:a;Bmaster=x;Os`
             },
             "not strip submodule commit unchange from workdir": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 message: "foo",
                 expected: `
-x=U:Cfoo#am-2 3=3,s=Sa:as;Bmaster=am;Os Cfoo#as-a a=9!W a=a`
+x=U:Cfoo#x-2 3=3,s=Sa:s;Bmaster=x;Os Cfoo#s-a a=9!W a=a`
             },
             "strip submodule commit unchange from workdir, when all": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#am-2 3=3,s=Sa:a;Bmaster=am;Os`,
+                expected: `x=U:Cfoo#x-2 3=3,s=Sa:a;Bmaster=x;Os`,
                 all: true,
             },
             "skipped meta repo": {
@@ -1553,12 +1562,12 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 subMessages: {
                     s: "hi",
                 },
-                expected: `x=E:Os Chi#as-1 a=a!H=as`,
+                expected: `x=E:Os Chi#s-1 a=a!H=s`,
             },
             "skipped non-amend": {
                 input: "a=B|x=U:C3-2;Bmaster=3;I q=r;Os I y=z;B3=3",
                 subMessages: {},
-                expected: "x=E:Cam-2 3=3,q=r;I q=~;Bmaster=am",
+                expected: "x=E:Cx-2 3=3,q=r;I q=~;Bmaster=x",
             },
             "non-amend with own message": {
                 input: "a=B|x=U:C3-2;Bmaster=3;Os I y=z;B3=3",
@@ -1566,7 +1575,7 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                     s: "hola",
                 },
                 expected: `
-x=E:Cam-2 3=3,s=Sa:as;Bmaster=am;Os Chola#as-1 y=z!H=as`,
+x=E:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Chola#s-1 y=z!H=s`,
             },
             "amended subrepo skipped with subMessage": {
                 input: `
@@ -1574,7 +1583,7 @@ a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
                 subMessages: {},
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 foo=moo,s=Sa:a;Bmaster=am;Os`,
+x=U:Chi#x-2 foo=moo,s=Sa:a;Bmaster=x;Os`,
             },
             "amended subrepo skipped with own message": {
                 input: `
@@ -1584,7 +1593,7 @@ a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
                 },
                 message: "hi",
                 expected: `
-x=U:Chi#am-2 foo=moo,s=Sa:as;Bmaster=am;Os Cmeh#as-1 a=a!H=as`,
+x=U:Chi#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh#s-1 a=a!H=s`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -1610,12 +1619,7 @@ x=U:Chi#am-2 foo=moo,s=Sa:as;Bmaster=am;Os Cmeh#as-1 a=a!H=as`,
                                                               all,
                                                               message,
                                                               subMessages);
-                    const commitMap = {};
-                    commitMap[result.meta] = "am";
-                    Object.keys(result.subs).forEach(subName => {
-                        commitMap[result.subs[subName]] = "a" + subName;
-                    });
-                    return { commitMap: commitMap, };
+                    return { commitMap: mapCommitResult(result) };
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                                c.expected,
@@ -3000,6 +3004,225 @@ and for d
                 assert(!c.fails, "should fail");
                 assert.deepEqual(result, c.expected);
             });
+        });
+    });
+    describe("doCommitCommand", function () {
+        // We don't need to retest core functionality, but we do need to ensure
+        // that all flags are passed through and/or handled appropriately.
+
+        const cases = {
+            "nothing to commit": {
+                initial: "x=S",
+            },
+            "no meta, no commit": {
+                initial: "x=S:I a=b",
+                meta: false,
+            },
+            "meta commit": {
+                initial: "x=S:I a=b",
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 a=b;Bmaster=x",
+            },
+            "meta commit, with editor": {
+                initial: "x=S:I a=b",
+                editor: () => Promise.resolve("haha"),
+                expected: "x=S:Chaha\n#x-1 a=b;Bmaster=x",
+            },
+            "no all": {
+                initial: "x=S:W README.md=2",
+            },
+            "all": {
+                initial: "x=S:W README.md=2",
+                all: true,
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 README.md=2;Bmaster=x",
+            },
+            "paths, cwd": {
+                initial: "x=S:I a/b=b,b=d",
+                message: "foo",
+                paths: ["b"],
+                cwd: "a",
+                expected: "x=S:Cfoo#x-1 a/b=b;I b=d;Bmaster=x",
+            },
+            "uncommitable": {
+                initial: "a=B|x=S:I a=Sa:;Oa",
+                message: "foo",
+                fails: true,
+            },
+            "not path-compatible": {
+                initial: "x=S:I s=S.:1,a=b",
+                message: "foo",
+                paths: ["a"],
+                fails: true,
+            },
+            "interactive": {
+                initial: "a=B|x=U:Os I a=b",
+                interactive: true,
+                editor: () => Promise.resolve(`\
+foo
+# <*>
+bar
+# <s>
+`),
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Os Cbar\n#s-1 a=b!H=s;Bmaster=x`,
+            },
+            "interactive, no commit": {
+                initial: "a=B|x=U:Os I a=b",
+                interactive: true,
+                editor: () => Promise.resolve(""),
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const doCommit = co.wrap(function *(repos) {
+                const repo = repos.x;
+                let cwd = "";
+                if (undefined !== c.cwd) {
+                    cwd = path.join(repo.workdir(), c.cwd);
+                }
+                else {
+                    cwd = repo.workdir();
+                }
+                const editor = c.editor || (() => {
+                    assert(false, "no editor");
+                });
+                const meta = undefined === c.meta ? true : false;
+                const result = yield Commit.doCommitCommand(
+                                                        repo,
+                                                        cwd,
+                                                        c.message || null,
+                                                        meta,
+                                                        c.all || false,
+                                                        c.paths || [],
+                                                        c.interactive || false,
+                                                        editor);
+                if (undefined !== result) {
+                    return {
+                        commitMap: mapCommitResult(result),
+                    };
+                }
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                               c.expected,
+                                                               doCommit,
+                                                               c.fails);
+            }));
+        });
+    });
+    describe("doAmendCommand", function () {
+        // We don't need to retest core functionality, but we do need to ensure
+        // that all flags are passed through and/or handled appropriately.
+
+        const cases = {
+            "interactive": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=U:C3-2 s=Sa:a;Bmaster=3`,
+                interactive: true,
+                editor: () => Promise.resolve(`\
+hola
+# <*>
+there
+# <s>
+`),
+                expected: `
+x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
+
+            },
+            "simple amend": {
+                initial: "x=S:C2-1 README.md=foo;Bmaster=2",
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 README.md=foo;Bmaster=x",
+            },
+            "amend with change": {
+                initial: "x=S:C2-1 README.md=foo;Bmaster=2;I a=b",
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 README.md=foo,a=b;Bmaster=x",
+            },
+            "amend with no all": {
+                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
+                message: "foo",
+                expected: "x=S:Cfoo#x-1 2=2;Bmaster=x;W README.md=8",
+            },
+            "amend with all": {
+                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
+                message: "foo",
+                all: true,
+                expected: "x=S:Cfoo#x-1 2=2,README.md=8;Bmaster=x",
+            },
+            "amend with all but no meta": {
+                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
+                message: "foo",
+                all: true,
+                meta: false,
+                expected: "x=S:Cfoo#x-1 2=2;Bmaster=x;W README.md=8",
+            },
+            "mismatch": {
+                initial: `
+a=B:Chello#a-1;Ba=a|x=U:Cworld#3-2 s=Sa:a;Bmaster=3`,
+                message: "hahaha",
+                expected: "x=E:Os",
+                fails: true,
+            },
+            "mismatch interactive": {
+                initial: `
+a=B:Chello#a-1;Ba=a|x=U:Cworld#3-2 s=Sa:a;Bmaster=3`,
+                interactive: true,
+                editor: () => Promise.resolve(`\
+hola
+# <*>
+there
+# <s>
+`),
+                expected: `
+x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
+            },
+            "simple amend with editor": {
+                initial: "x=S:C2-1 README.md=foo;Bmaster=2",
+                editor: () => Promise.resolve("heya"),
+                expected: "x=S:Cheya\n#x-1 README.md=foo;Bmaster=x",
+            },
+            "simple amend with editor, no message": {
+                initial: "x=S:C2-1 README.md=foo;Bmaster=2",
+                editor: () => Promise.resolve(""),
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const doAmend = co.wrap(function *(repos) {
+                const repo = repos.x;
+                let cwd = "";
+                if (undefined !== c.cwd) {
+                    cwd = path.join(repo.workdir(), c.cwd);
+                }
+                else {
+                    cwd = repo.workdir();
+                }
+                const editor = c.editor || (() => {
+                    assert(false, "no editor");
+                });
+                const meta = undefined === c.meta ? true : false;
+                const result = yield Commit.doAmendCommand(
+                                                        repo,
+                                                        cwd,
+                                                        c.message || null,
+                                                        meta,
+                                                        c.all || false,
+                                                        c.interactive || false,
+                                                        editor);
+                return {
+                    commitMap: mapCommitResult(result),
+                };
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
+                                                               c.expected,
+                                                               doAmend,
+                                                               c.fails);
+            }));
         });
     });
 });

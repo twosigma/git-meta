@@ -100,8 +100,6 @@ const makeClone = co.wrap(function *(repos, maps) {
 });
 
 describe("RepoASTTestUtil", function () {
-    after(TestUtil.cleanup);
-
     describe("createRepo", function () {
         // This method is pretty simple; we'll make sure it works with both
         // shorthand and ASTs.

@@ -43,8 +43,6 @@ const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const UserError           = require("../../lib/util/user_error");
 
 describe("SubmoduleUtil", function () {
-    after(TestUtil.cleanup);
-
     describe("getSubmoduleNames", function () {
         const cases = {
             "none": {

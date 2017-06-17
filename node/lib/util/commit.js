@@ -30,13 +30,18 @@
  */
 "use strict";
 
+// TODO: This module is getting to be too big and we need to split it, probably
+// into `commit_util` and `commit_status_util`.
+
 /**
  * This module contains methods for committing.
  */
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const colors  = require("colors");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -980,8 +985,8 @@ exports.amendRepo = co.wrap(function *(repo, message) {
  * @param {String|null}        message
  * @param {Object|null}        subMessages
  * @return {Object}
- * @return {String} return.meta sha of new commit on meta-repo
- * @return {Object} return.subs map from sub name to sha of created commit
+ * @return {String} return.metaCommit sha of new commit on meta-repo
+ * @return {Object} return.submoduleCommits  from sub name to sha
  */
 exports.amendMetaRepo = co.wrap(function *(repo,
                                            status,
@@ -1086,8 +1091,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         metaCommit = yield exports.amendRepo(repo, message);
     }
     return {
-        meta: metaCommit,
-        subs: subCommits,
+        metaCommit: metaCommit,
+        submoduleCommits: subCommits,
     };
 });
 
@@ -1762,3 +1767,280 @@ exports.parseSplitCommitMessages = function (text) {
         subMessages: subMessages,
     };
 };
+
+function errorWithStatus(status, relCwd, message) {
+    throw new UserError(`\
+${PrintStatusUtil.printRepoStatus(status, relCwd)}
+${colors.yellow(message)}
+`);
+}
+
+function checkForPathIncompatibleSubmodules(repoStatus, relCwd) {
+
+    const Commit = require("../util/commit");
+
+    if (Commit.areSubmodulesIncompatibleWithPathCommits(repoStatus)) {
+            errorWithStatus(repoStatus, relCwd, `\
+Cannot use path-based commit on submodules with staged commits or
+configuration changes.`);
+    }
+}
+
+function abortForNoMessage() {
+    throw new UserError("Aborting commit due to empty commit message.");
+}
+
+/**
+ * Perform the commit command in the specified `repo`. Consider the values in
+ * the specified `paths` to be relative to the specified `cwd`, and format
+ * paths displayed to the user according to `cwd`.  If the optionally specified
+ * `message` is provided use it for the commit message; otherwise, prompt the
+ * user to enter a message.  If the specified `all` is true, include (tracked)
+ * modified but unstaged changes.  If `paths` is non-empty, include only the
+ * files indicated in those `paths` in the commit.  If the specified
+ * `interactive` is true, prompt the user to create an "interactive" message,
+ * allowing for different commit messages for each changed submodules.  Use the
+ * specified `editMessage` function to invoke an editor when needed.  The
+ * behavior is undefined if `null !== message && true === interactive` or if `0
+ * !== paths.length && all`.
+ *
+ * @param {NodeGit.Repository}             repo
+ * @param {String}                         cwd
+ * @param {String|null}                    message
+ * @param {Boolean}                        meta
+ * @param {Boolean}                        all
+ * @param {String[]}                       paths
+ * @param {Boolean}                        interactive
+ * @param {(repo, txt) -> Promise(String)} editMessage
+ * @return {Object}
+ * @return {String} return.metaCommit
+ * @return {Object} return.submoduleCommits  map from sub name to commit id
+ */
+exports.doCommitCommand = co.wrap(function *(repo,
+                                             cwd,
+                                             message,
+                                             meta,
+                                             all,
+                                             paths,
+                                             interactive,
+                                             editMessage) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(cwd);
+    if (null !== message) {
+        assert.isString(message);
+    }
+    assert.isBoolean(meta);
+    assert.isBoolean(all);
+    assert.isArray(paths);
+    assert.isBoolean(interactive);
+    assert.isFunction(editMessage);
+
+    const workdir = repo.workdir();
+    const relCwd = path.relative(workdir, cwd);
+    const repoStatus = yield exports.getCommitStatus(repo, cwd, {
+        showMetaChanges: meta,
+        all: all,
+        paths: paths,
+    });
+
+    // Abort if there are uncommittable submodules; we don't want to commit a
+    // .gitmodules file with references to a submodule that doesn't have a
+    // commit.
+    //
+    // TODO: potentially do somthing more intelligent like committing a
+    // different versions of .gitmodules than what is on disk to omit
+    // "uncommittable" submodules.  Considering that this situation should be
+    // relatively rare, I don't think it's worth the additional complexity at
+    // this time.
+
+    if (repoStatus.areUncommittableSubmodules()) {
+        errorWithStatus(
+                  repoStatus,
+                  relCwd,
+                  "Please stage changes in new submodules before committing.");
+    }
+
+    // If we're using paths, the status of what we're committing needs to be
+    // calculated.  Also, we need to see if there are any submodule
+    // configuration changes.
+
+    const usingPaths = 0 !== paths.length;
+
+    // If we're doing a path based commit, validate that we are in a supported
+    // configuration.
+
+    if (usingPaths) {
+        checkForPathIncompatibleSubmodules(repoStatus, relCwd);
+    }
+
+    // If there is nothing possible to commit, exit early.
+
+    if (!exports.shouldCommit(repoStatus, false, undefined)) {
+        process.stdout.write(PrintStatusUtil.printRepoStatus(repoStatus,
+                                                             relCwd));
+        return;
+    }
+
+    let subMessages;
+
+    if (interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
+
+        const head = yield repo.getHeadCommit();
+        const sig = repo.defaultSignature();
+        const headMeta = exports.getCommitMetaData(head);
+        const prompt = exports.formatSplitCommitEditorPrompt(repoStatus,
+                                                             sig,
+                                                             headMeta,
+                                                             {});
+        const userText = yield editMessage(repo, prompt);
+        const userData = exports.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
+
+        // Check if there's actually anything to commit.
+
+        if (!exports.shouldCommit(repoStatus, message === null, subMessages)) {
+            console.log("Nothing to commit.");
+            return;
+        }
+    }
+    else if (null === message) {
+        // If no message on the command line, prompt for one.
+
+        const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
+        const rawMessage = yield editMessage(repo, initialMessage);
+        message = GitUtil.stripMessage(rawMessage);
+    }
+
+    if ("" === message) {
+        abortForNoMessage();
+    }
+
+    if (usingPaths) {
+        return yield exports.commitPaths(repo,
+                                         repoStatus,
+                                         message,
+                                         subMessages);
+    }
+    else {
+        return yield exports.commit(repo,
+                                    all,
+                                    repoStatus,
+                                    message,
+                                    subMessages);
+    }
+});
+
+/**
+ * Perform the amend commit command in the specified `repo`.  Use the specified
+ * `cwd` to format paths displayed to the user.  If the optionally specified
+ * `message` is provided use it for the commit message; otherwise, prompt the
+ * user to enter a message.  If the specified `all` is true, include (tracked)
+ * modified but unstaged changes.  If the specified `interactive` is true,
+ * prompt the user to create an "interactive" message, allowing for different
+ * commit messages for each changed submodules.  Use the specified
+ * `editMessage` function to invoke an editor when needed.  The behavior is
+ * undefined if `null !== message && true === interactive`.
+ *
+ * @param {NodeGit.Repository}             repo
+ * @param {String}                         cwd
+ * @param {String|null}                    message
+ * @param {Boolean}                        meta
+ * @param {Boolean}                        all
+ * @param {Boolean}                        interactive
+ * @param {(repo, txt) -> Promise(String)} editMessage
+ * @return {Object}
+ * @return {String} return.metaCommit
+ * @return {Object} return.submoduleCommits  map from sub name to commit id
+ */
+exports.doAmendCommand = co.wrap(function *(repo,
+                                            cwd,
+                                            message,
+                                            meta,
+                                            all,
+                                            interactive,
+                                            editMessage) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(cwd);
+    if (null !== message) {
+        assert.isString(message);
+    }
+    assert.isBoolean(meta);
+    assert.isBoolean(all);
+    assert.isBoolean(interactive);
+    assert.isFunction(editMessage);
+
+    const workdir = repo.workdir();
+    const relCwd = path.relative(workdir, cwd);
+    const amendStatus = yield exports.getAmendStatus(repo, {
+        includeMeta: meta,
+        all: all,
+        cwd: relCwd,
+    });
+
+    const status = amendStatus.status;
+    const subsToAmend = amendStatus.subsToAmend;
+
+    const head = yield repo.getHeadCommit();
+    const defaultSig = repo.defaultSignature();
+    const headMeta = exports.getCommitMetaData(head);
+    let subMessages = null;
+    if (interactive) {
+        // If 'interactive' mode is requested, ask the user to specify which
+        // repos are committed and with what commit messages.
+
+        const prompt = exports.formatSplitCommitEditorPrompt(status,
+                                                             defaultSig,
+                                                             headMeta,
+                                                             subsToAmend);
+        const userText = yield editMessage(repo, prompt);
+        const userData = exports.parseSplitCommitMessages(userText);
+        message = userData.metaMessage;
+        subMessages = userData.subMessages;
+    }
+    else {
+        const mismatched = Object.keys(subsToAmend).filter(name => {
+            const meta = subsToAmend[name];
+            return !headMeta.equivalent(meta);
+        });
+        if (0 !== mismatched.length) {
+            let error = `\
+Cannot amend because the signatures of the affected commits in the
+following sub-repos do not match that of the meta-repo:
+`;
+            mismatched.forEach(name => {
+                error += `    ${colors.red(name)}\n`;
+            });
+            error += `\
+You can make this commit using the interactive ('-i') commit option.`;
+            throw new UserError(error);
+        }
+
+        // If no message, use editor.
+
+        if (null === message) {
+            const prompt = exports.formatAmendEditorPrompt(defaultSig,
+                                                           headMeta,
+                                                           status,
+                                                           relCwd);
+            const rawMessage = yield editMessage(repo, prompt);
+            message = GitUtil.stripMessage(rawMessage);
+        }
+    }
+
+    if ("" === message) {
+        abortForNoMessage();
+    }
+
+    // Finally, perform the operation.
+
+    return yield exports.amendMetaRepo(repo,
+                                       status,
+                                       Object.keys(subsToAmend),
+                                       all,
+                                       message,
+                                       subMessages);
+
+});
