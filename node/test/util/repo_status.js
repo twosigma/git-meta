@@ -133,7 +133,6 @@ describe("RepoStatus", function () {
             const c = cases[caseName];
             it(caseName, function () {
                 const result = new Submodule(c.args);
-                assert.isFrozen(result);
                 const e = c.expected;
                 assert.deepEqual(result.commit, e.commit);
                 assert.deepEqual(result.index, e.index);

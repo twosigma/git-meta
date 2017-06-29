@@ -222,24 +222,6 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
                                                 commitUrl,
                                                 indexSha,
                                                 commitSha) {
-    if (null !== repo) {
-        assert.instanceOf(repo, NodeGit.Repository);
-    }
-    if (null !== status) {
-        assert.instanceOf(status, RepoStatus);
-    }
-    if (null !== indexUrl) {
-        assert.isString(indexUrl);
-    }
-    if (null !== commitUrl) {
-        assert.isString(commitUrl);
-    }
-    if (null !== indexSha) {
-        assert.isString(indexSha);
-    }
-    if (null !== commitSha) {
-        assert.isString(commitSha);
-    }
     const Submodule = RepoStatus.Submodule;
     const COMMIT_RELATION = Submodule.COMMIT_RELATION;
 
@@ -419,7 +401,6 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         const headUrls =
            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, headCommit);
 
-
         // No paths specified, so we'll do all submodules, restricing to open
         // ones based on options.
 
@@ -440,7 +421,6 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
                                     Object.keys(headUrls).concat(indexNames)));
         }
         const commitTree = yield headCommit.getTree();
-
 
         // Make a list of promises to read the status for each submodule, then
         // evaluate them in parallel.
@@ -473,6 +453,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
                                                     indexSha,
                                                     headSha);
         }));
+
         const subStats = yield subStatMakers;
 
         // And copy them into the arguments.

@@ -89,11 +89,8 @@ class Commit {
      * @param {String} url
      */
     constructor(sha, url) {
-        assert.isString(sha);
-        assert.isString(url);
         this.d_sha = sha;
         this.d_url = url;
-        Object.freeze(this);
     }
 
     /**
@@ -130,13 +127,6 @@ class Index {
      * @param {Submodule.COMMIT_RELATION|null} relation
      */
     constructor(sha, url, relation) {
-        if (null !== sha) {
-            assert.isString(sha);
-        }
-        assert.isString(url);
-        if (null !== relation) {
-            assert.isNumber(relation);
-        }
         this.d_sha = sha;
         this.d_url = url;
         this.d_relation = relation;
@@ -250,105 +240,9 @@ class Submodule {
         if (undefined === status) {
             status = {};
         }
-        else {
-            assert.isObject(status);
-        }
-        this.d_commit  = null;
-        this.d_index   = null;
-        this.d_workdir = null;
-
-        // Copy in arguments and verify their types.
-
-        if ("commit" in status) {
-            if (null !== status.commit) {
-                assert.instanceOf(status.commit, Commit);
-            }
-            this.d_commit = status.commit;
-        }
-        if ("index" in status) {
-            if (null !== status.index) {
-                assert.instanceOf(status.index, Index);
-            }
-            this.d_index = status.index;
-        }
-        if ("workdir" in status) {
-            if (null !== status.workdir) {
-                assert.instanceOf(status.workdir, Workdir);
-            }
-            this.d_workdir = status.workdir;
-        }
-
-        // Validate non-type preconditions.
-
-        // If the submodule has been deleted -- as indicated by lack of `index`
-        // -- it cannot be open.  Also, a submodule cannot be both deleted and
-        // added.
-
-        if (null === this.d_index) {
-            assert.isNull(this.d_workdir, "deleted submodule can't be open");
-            assert.isNotNull(this.d_commit,
-                             "cannot be both deleted and added");
-        }
-
-        // If the submodule has been added, there can be no relation between
-        // the index and the commit.
-
-        if (null === this.d_commit) {
-            assert.isNull(
-                      this.d_index.relation,
-                      "cannot have index to commit relation in new submodule");
-        }
-
-        // Otherwise, there *must* be a relation between the index and the
-        // commit.
-
-        else if (null !== this.d_index) {
-            assert.isNotNull(this.d_index.relation,
-                             "must have relation between index and commit");
-        }
-
-        // Check that the `relation` between the index and the commit isn't in
-        // conflict with equality relationship between their shas.
-
-        if (null !== this.d_commit && null !== this.d_index) {
-            if (this.d_commit.sha === this.d_index.sha) {
-                assert.equal(this.d_index.relation,
-                             COMMIT_RELATION.SAME,
-                             "same shas implies relationship is SAME");
-            }
-            else {
-                assert.notEqual(this.d_index.relation,
-                                COMMIT_RELATION.SAME,
-                                "different shas implies not SAME");
-            }
-        }
-        if (null !== this.d_workdir) {
-
-            // If the index has a commit and the workdir has a HEAD, it must
-            // have a relation to the index.
-
-            if (null !== this.d_index.sha &&
-                null !== this.d_workdir.headCommit) {
-
-                assert.isNotNull(this.d_workdir.relation);
-
-                // As above, validate that the workdir `relation` and the
-                // equality relationship of the index and workdir commits do
-                // not conflict.
-
-                if (this.d_index.sha === this.d_workdir.status.headCommit) {
-                    assert.equal(this.d_workdir.relation,
-                                 COMMIT_RELATION.SAME,
-                                 "same shas implies relationship is SAME");
-                }
-                else {
-                    assert.notEqual(this.d_workdir.relation,
-                                    COMMIT_RELATION.SAME,
-                                    "different shas implies not SAME");
-                }
-            }
-        }
-        Object.freeze(this);
+        this.d_commit  = status.commit || null;
+        this.d_index   = status.index || null;
+        this.d_workdir = status.workdir || null;
     }
 
     /**
@@ -458,9 +352,6 @@ class Submodule {
         if (undefined === args) {
             args = {};
         }
-        else {
-            assert.isObject(args);
-        }
         return new Submodule({
             commit: ("commit" in args) ? args.commit : this.d_commit,
             index: ("index" in args) ? args.index : this.d_index,
@@ -562,12 +453,7 @@ class RepoStatus {
             }
         }
         if ("submodules" in args) {
-            const submodules = args.submodules;
-            for (let name in submodules) {
-                const submodule = submodules[name];
-                assert.instanceOf(submodule, Submodule);
-                this.d_submodules[name] = submodule;
-            }
+            this.d_submodules = Object.assign({}, args.submodules);
         }
 
         if ("rebase" in args) {

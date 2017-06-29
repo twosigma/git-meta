@@ -49,7 +49,6 @@ const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
 const StatusUtil          = require("./status_util");
-const Submodule           = require("./submodule");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
@@ -720,16 +719,6 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
                                                      old,
                                                      getRepo,
                                                      all) {
-    assert.instanceOf(status, RepoStatus.Submodule);
-    if (null !== old) {
-        assert.instanceOf(old, Submodule);
-    }
-    else {
-        old = null;
-    }
-    assert.isFunction(getRepo);
-    assert.isBoolean(all);
-
     const index = status.index;
     const commit = status.commit;
     const workdir = status.workdir;
@@ -940,6 +929,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
         workdir: metaWorkdir,
         submodules: submodules,
     });
+
     return {
         status: resultStatus,
         subsToAmend: subsToAmend,
