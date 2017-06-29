@@ -120,6 +120,7 @@ class Opener {
         this.d_repo = repo;
         this.d_commit = commit;
         this.d_initialized = false;
+        this.d_shas = {};
     }
 }
 
@@ -130,12 +131,11 @@ Opener.prototype._initialize = co.wrap(function *() {
     this.d_subRepos = {};
     const openSubsList = yield SubmoduleUtil.listOpenSubmodules(this.d_repo);
     this.d_openSubs = new Set(openSubsList);
-    this.d_subs = yield SubmoduleUtil.getSubmodulesForCommit(this.d_repo,
-                                                             this.d_commit);
     this.d_templatePath =
                         yield SubmoduleConfigUtil.getTemplatePath(this.d_repo);
     this.d_fetcher = new SubmoduleFetcher(this.d_repo, this.d_commit);
     this.d_initialized = true;
+    this.d_tree = yield this.d_commit.getTree();
 });
 
 Opener.prototype.fetcher = co.wrap(function *() {
@@ -164,7 +164,12 @@ Opener.prototype.getSubrepo = co.wrap(function *(subName) {
         subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
     }
     else {
-        const sha = this.d_subs[subName].sha;
+        let sha = this.d_shas[subName];
+        if (undefined === sha) {
+            const entry = yield this.d_tree.entryByPath(subName);
+            sha = entry.sha();
+            this.d_shas[subName] = sha;
+        }
         console.log(`\
 Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
         subRepo = yield exports.openOnCommit(this.d_fetcher,
