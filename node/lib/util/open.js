@@ -120,7 +120,6 @@ class Opener {
         this.d_repo = repo;
         this.d_commit = commit;
         this.d_initialized = false;
-        this.d_shas = {};
     }
 }
 
@@ -164,12 +163,8 @@ Opener.prototype.getSubrepo = co.wrap(function *(subName) {
         subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
     }
     else {
-        let sha = this.d_shas[subName];
-        if (undefined === sha) {
-            const entry = yield this.d_tree.entryByPath(subName);
-            sha = entry.sha();
-            this.d_shas[subName] = sha;
-        }
+        const entry = yield this.d_tree.entryByPath(subName);
+        const sha = entry.sha();
         console.log(`\
 Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
         subRepo = yield exports.openOnCommit(this.d_fetcher,
