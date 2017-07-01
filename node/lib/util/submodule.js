@@ -50,11 +50,8 @@ class Submodule {
      * @param {String} sha
      */
     constructor(url, sha) {
-        assert.isString(url);
-        assert.isString(sha);
         this.d_url = url;
         this.d_sha = sha;
-        Object.freeze(this);
     }
 
     /**

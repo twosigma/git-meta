@@ -38,7 +38,6 @@ describe("Submodule", function () {
     it("breath", function () {
         const s = new Submodule("foo", "bar");
         assert.instanceOf(s, Submodule);
-        assert.isFrozen(s);
         assert.equal(s.url, "foo");
         assert.equal(s.sha, "bar");
     });
