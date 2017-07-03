@@ -68,7 +68,7 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
     // Just fetch the meta-repo; rebase will trigger necessary fetches in
     // sub-repos.
 
-    yield GitUtil.fetch(metaRepo, remoteName);
+    yield GitUtil.fetchBranch(metaRepo, remoteName, source);
     const remoteBranch = yield GitUtil.findRemoteBranch(metaRepo,
                                                         remoteName,
                                                         source);

@@ -581,6 +581,58 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("fetchBranch", function () {
+
+        function fetcher(repoName, remoteName, branch) {
+            return function (repos) {
+                return GitUtil.fetchBranch(repos[repoName],
+                                           remoteName,
+                                           branch);
+            };
+        }
+
+        const cases = {
+            "noop": {
+                input: "a=B|b=Ca",
+                expected: {},
+                manipulator: fetcher("b", "origin", "master"),
+            },
+            "fail": {
+                input: "a=B|b=Ca",
+                expected: {},
+                manipulator: fetcher("b", "baz", "zap"),
+                fail: true,
+            },
+            "pull just one": {
+                input: "a=B:C2-1;Bbaz=2|b=B|c=S:Rorigin=c;Rx=a",
+                expected: "c=S:Rorigin=c;Rx=a master=1",
+                manipulator: fetcher("c", "x", "master"),
+            },
+            "pull other remote": {
+                input: "a=B:C2-1;Bbaz=2|b=B|c=S:Rorigin=c;Rx=a",
+                expected: "c=S:Rorigin=c master=1;Rx=a",
+                manipulator: fetcher("c", "origin", "master"),
+            },
+        };
+
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                try {
+                    yield RepoASTTestUtil.testMultiRepoManipulator(
+                                                                c.input,
+                                                                c.expected,
+                                                                c.manipulator);
+                }
+                catch (e) {
+                    assert(c.fail, e.stack);
+                    return;
+                }
+                assert(!c.fail);
+            }));
+        });
+    });
+
     describe("fetchSha", function () {
         it("already have it, would fail otherwise", co.wrap(function *() {
             const ast = ShorthandParserUtil.parseRepoShorthand("S");
