@@ -65,6 +65,12 @@ describe("pull", function () {
             source: "foo",
             expected: "x=E:Bmaster=2 origin/master",
         },
+        "doesn't pull down unneeded branches": {
+            initial: "a=B:Bfoo=1|x=S:Rorigin=a",
+            remote: "origin",
+            source: "foo",
+            expected: "x=E:Rorigin=a foo=1",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];

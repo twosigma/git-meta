@@ -453,6 +453,35 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 });
 
 /**
+ * Fetch the specified `branch` in the remote having the specified `remoteName
+ * in the specified `repo`.  Throw a `UserError` object if the repository
+ * cannot be fetched.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             remoteName
+ * @param {String}             branch
+ */
+exports.fetchBranch = co.wrap(function *(repo, remoteName, branch) {
+    // TODO: this is an awful hack because I can't yet figure out how to get
+    // nodegit to work with kerberos.  For now, will shell out and use the
+    // 'git' command.
+
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(remoteName);
+    assert.isString(branch);
+
+    const execString = `\
+git -C '${repo.path()}' fetch -q '${remoteName}' '${branch}'`;
+    try {
+        return yield ChildProcess.exec(execString);
+    }
+    catch (e) {
+        throw new UserError(e.message);
+    }
+});
+
+/**
  * Fetch the specified `sha` from the specified `url` into the specified
  * `repo`, if it does not already exist in `repo`.
  *
