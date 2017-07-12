@@ -161,6 +161,13 @@ x=U:C3-2 s=Sa:4;Bfoo=3;Os W bar=r",
                 committish: "foo",
                 expected: "x=E:H=3;Os H=4!W bar=r",
             },
+            "checkout revision missing a sub": {
+                input: `
+a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Or;Os;Ot;Bmaster=3;Bfoo=2`,
+                expected: `
+a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
+                committish: "foo",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

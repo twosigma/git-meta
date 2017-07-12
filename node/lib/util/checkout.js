@@ -126,8 +126,7 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit) {
     // Try the submodules; store the opened repos and loaded commits for use
     // in the actual checkout later.
 
-    let subRepos = [];     // will contain a list of repositories for sub-repos
-    let subCommits = [];   // will contain a list of commits to checkout
+    const cache = {};  // name to { repo, commit}
 
     yield open.map(co.wrap(function *(name) {
         // Open repo but not alive on this commit.
@@ -140,8 +139,7 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit) {
         const sha = shas[name];
         yield subFetcher.fetchSha(repo, name, sha);
         const commit = yield repo.getCommit(sha);
-        subRepos.push(repo);
-        subCommits.push(commit);
+        cache[name] = { repo: repo, commit: commit };
         const error = yield dryRun(repo, commit);
         if (null !== error) {
             errors.push(
@@ -169,16 +167,14 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit) {
 
     yield doCheckout(metaRepo, commit);
 
-    yield open.map(co.wrap(function *(name, index) {
+    yield open.map(co.wrap(function *(name) {
         // Open repo but not alive on this commit.
 
         if (!(name in shas)) {
             return;                                                   // RETURN
         }
-
-        const repo = subRepos[index];
-        const commit = subCommits[index];
-        yield doCheckout(repo, commit);
+        const c = cache[name];
+        yield doCheckout(c.repo, c.commit);
     }));
 
     metaRepo.submoduleCacheClear();
