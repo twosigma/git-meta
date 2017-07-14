@@ -36,6 +36,7 @@
  */
 
 const ArgumentParser = require("argparse").ArgumentParser;
+const NodeGit = require("nodegit");
 
 const add        = require("./cmd/add");
 const checkout   = require("./cmd/checkout");
@@ -57,6 +58,11 @@ const stash      = require("./cmd/stash");
 const status     = require("./cmd/status");
 const UserError  = require("./util/user_error");
 const version    = require("./cmd/version");
+
+// see https://github.com/nodegit/nodegit/issues/827 -- this is required
+// to prevent random hard crashes with e.g. parallelism in index operations.
+// Eventually, this will be nodegit's default.
+NodeGit.setThreadSafetyStatus(NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
 
 /**
  * Configure the specified `parser` to include the command having the specified
