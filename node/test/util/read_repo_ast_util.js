@@ -458,6 +458,42 @@ describe("readRAST", function () {
         RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 
+    it("remote with path in tracking branch", co.wrap(function *() {
+        const base = yield TestUtil.createSimpleRepository();
+        const headId = (yield base.getHeadCommit()).id();
+        const sig = base.defaultSignature();
+        yield base.createBranch("foo/bar", headId, 1, sig, "branch");
+        const clonePath = yield TestUtil.makeTempDir();
+        const clone = yield NodeGit.Clone.clone(base.workdir(), clonePath);
+        const master = yield clone.getBranch("refs/heads/master");
+        yield NodeGit.Branch.setUpstream(master, "origin/foo/bar");
+        const ast = yield ReadRepoASTUtil.readRAST(clone);
+        const commit = headId.tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": ""},
+            message: "first commit",
+        });
+        const workdir = base.workdir();
+        const expected = new RepoAST({
+            commits: commits,
+            remotes: {
+                origin: new RepoAST.Remote(workdir, {
+                    branches: {
+                        master: commit,
+                        "foo/bar": commit,
+                    }
+                }),
+            },
+            branches: {
+                master: new RepoAST.Branch(commit, "origin/foo/bar"),
+            },
+            currentBranchName: "master",
+            head: commit,
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+
     it("missing remote", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const tempDir = yield TestUtil.makeTempDir();
