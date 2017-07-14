@@ -70,6 +70,14 @@ describe("GitUtil", function () {
                     branchName: "gob",
                 },
             },
+            "with slashes in branch name": {
+                state: "S:Rhoo=/a foo/bar=1;Bbar=1 hoo/foo/bar",
+                branch: "bar",
+                expected: {
+                    remoteName: "hoo",
+                    branchName: "foo/bar",
+                },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
