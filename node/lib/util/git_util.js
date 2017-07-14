@@ -137,9 +137,10 @@ exports.getTrackingInfo = co.wrap(function *(branch) {
             remoteName: null,
         };
     }
+    const remoteName = parts.shift();
     return {
-        branchName: parts[1],
-        remoteName: parts[0],
+        branchName: parts.join("/"),
+        remoteName: remoteName,
     };
 });
 
