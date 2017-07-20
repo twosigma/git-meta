@@ -31,6 +31,8 @@
 
 # What is git-meta?
 
+![image](/doc/git-meta-logo.png)
+
 ## TL;DR
 
 Git-meta allows developers to work with extremely large codebases --
