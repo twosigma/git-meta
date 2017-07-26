@@ -339,13 +339,19 @@ A branch named ${colors.red(name)} already exists.`);
             const commit = yield repo.getCommit(annotated.id());
             result.commit = commit;
 
-            // Check to see if the commit refers to a branch name.
+            // Check to see if the commit refers to a branch name.  You would
+            // think that 'findBranch' would return only branches, but it also
+            // returns 'FETCH_HEAD', which is *not a branch*.  "HEAD",
+            // unfortunately, claims to be a branch, and must be special-cased.
 
-            const branch = yield GitUtil.findBranch(repo, committish);
-            if (null !== branch) {
-                committishBranch = branch;
-                if(!branch.isRemote()) {
-                    result.switchBranch = committish;
+            if ("HEAD" !== committish) {
+                const branch = yield GitUtil.findBranch(repo, committish);
+                if (null !== branch &&
+                    (branch.isBranch() || branch.isRemote())) {
+                    committishBranch = branch;
+                    if(!branch.isRemote()) {
+                        result.switchBranch = committish;
+                    }
                 }
             }
         }
