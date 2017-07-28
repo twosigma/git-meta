@@ -28,12 +28,9 @@
     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
 -->
-
-# What is git-meta?
-
 ![image](/doc/git-meta-logo.png)
 
-## TL;DR
+# What is git-meta?
 
 Git-meta allows developers to work with extremely large codebases --
 performance only degrades very slowly when physical size, number of
