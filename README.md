@@ -28,7 +28,10 @@
     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
 -->
-![image](/doc/git-meta-logo.png)
+
+<p align="center">
+<img src="/doc/git-meta-logo.png" width="600">
+</p>
 
 # What is git-meta?
 
