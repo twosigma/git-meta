@@ -113,6 +113,18 @@ function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
 
     const localPath = yield *urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
+    const odb = yield submoduleRepo.odb();
+    (process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES || "").split(":").forEach(
+        function(alt) {
+            if (alt !== "") {
+                odb.addDiskAlternate(alt);
+            }
+        }
+    );
+    const objectDirectory = process.env.GIT_OBJECT_DIRECTORY;
+    if (objectDirectory) {
+        odb.addDiskAlternate();
+    }
     const submoduleCommitId = submoduleEntry.id();
     const branch = exports.getSyntheticBranchForCommit(submoduleCommitId);
     try {
