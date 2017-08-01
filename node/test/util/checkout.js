@@ -193,13 +193,13 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
             // wouldn't have this case in reality, but is in contract
 
             "nothing": {
-                state: "S",
+                state: "x=S",
                 expectedSha: null,
                 expectedNewBranch: null,
                 expectedSwitchBranch: null,
             },
             "tracking, without a new branch": {
-                state: "S:Rmeh=/a foo=1",
+                state: "x=S:Rmeh=/a foo=1",
                 committish: "meh/foo",
                 track: true,
                 expectedSha: "1",
@@ -213,25 +213,25 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "tracking, without a new branch, but dupe name": {
-                state: "S:Rmeh=/a master=1",
+                state: "x=S:Rmeh=/a master=1",
                 committish: "meh/master",
                 track: true,
                 fails: true,
             },
             "tracking, without a new branch, but bad committish": {
-                state: "S:Rmeh=/a master=1",
+                state: "x=S:Rmeh=/a master=1",
                 committish: "origin/master",
                 track: true,
                 fails: true,
             },
             "no name": {
-                state: "S",
+                state: "x=S",
                 committish: null,
                 track: true,
                 fails: true,
             },
             "deduced tracking branch": {
-                state: "S:Rfoo=/a bar=1",
+                state: "x=S:Rfoo=/a bar=1",
                 committish: "bar",
                 track: false,
                 expectedSha: "1",
@@ -245,13 +245,13 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "bar",
             },
             "no match to committish, no new branch": {
-                state: "S",
+                state: "x=S",
                 committish: "bar",
                 track: false,
                 fails: true,
             },
             "commit, no new branch, nameless": {
-                state: "S",
+                state: "x=S",
                 committish: "1",
                 track: false,
                 expectedSha: "1",
@@ -259,15 +259,31 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: null,
             },
             "commit, no new branch, named": {
-                state: "S",
+                state: "x=S",
                 committish: "master",
                 track: false,
                 expectedSha: "1",
                 expectedNewBranch: null,
                 expectedSwitchBranch: "master",
             },
+            "FETCH_HEAD": {
+                state: "x=S",
+                committish: "FETCH_HEAD",
+                track: false,
+                expectedSha: "1",
+                expectedNewBranch: null,
+                expectedSwitchBranch: null,
+            },
+            "HEAD": {
+                state: "x=S",
+                committish: "HEAD",
+                track: false,
+                expectedSha: "1",
+                expectedNewBranch: null,
+                expectedSwitchBranch: null,
+            },
             "commit, no new branch, named but remote": {
-                state: "S:Rorigin=/a foo=1",
+                state: "x=S:Rorigin=/a foo=1",
                 committish: "foo",
                 track: false,
                 expectedSha: "1",
@@ -281,19 +297,19 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "no commit, detached": {
-                state: "S:H=1",
+                state: "x=S:H=1",
                 committish: null,
                 expectedSha: null,
                 expectedNewBranch: null,
                 expectedSwitchBranch: null,
             },
             "new branch, but a dupe": {
-                state: "S",
+                state: "x=S",
                 newBranch: "master",
                 fails: true,
             },
             "new branch": {
-                state: "S",
+                state: "x=S",
                 newBranch: "foo",
                 expectedSha: null,
                 expectedNewBranch: {
@@ -303,7 +319,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "new branch with checkout": {
-                state: "S:C2-1;Bbar=2",
+                state: "x=S:C2-1;Bbar=2",
                 committish: "bar",
                 newBranch: "foo",
                 expectedSha: "2",
@@ -314,7 +330,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "new branch with local tracking": {
-                state: "S:C2-1;Bbar=2",
+                state: "x=S:C2-1;Bbar=2",
                 committish: "bar",
                 newBranch: "foo",
                 track: true,
@@ -329,7 +345,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "new branch with remote tracking": {
-                state: "S:Rhar=/a hey=1",
+                state: "x=S:Rhar=/a hey=1",
                 committish: "har/hey",
                 newBranch: "foo",
                 track: true,
@@ -344,31 +360,32 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expectedSwitchBranch: "foo",
             },
             "tracking on new branch but commit not a branch": {
-                state: "S",
+                state: "x=S",
                 committish: "1",
                 newBranch: "har",
                 track: true,
                 fails: true,
             },
             "tracking on new branch but head not a branch": {
-                state: "S:H=1",
+                state: "x=S:H=1",
                 committish: null,
                 newBranch: "har",
                 track: true,
                 fails: true,
             },
-       };
+        };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
-                const written = yield RepoASTTestUtil.createRepo(c.state);
-                const repo = written.repo;
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = written.repos.x;
                 let committish = c.committish || null;
 
                 // If the test case is a sha, we need to map it to the real
                 // thing.
 
-                const reverse = written.oldCommitMap;
+                const reverse = written.reverseCommitMap;
                 if (null !== committish && committish in reverse) {
                     committish = reverse[committish];
                 }
