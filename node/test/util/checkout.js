@@ -145,12 +145,43 @@ describe("Checkout", function () {
             "sub open, new commit": {
                 input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1!H=5",
                 committish: "foo",
+                fails: true,
+            },
+            "sub open, new commit but same": {
+                input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os H=4",
+                committish: "foo",
+                expected: "x=E:H=3",
+            },
+            "sub open, new commit in index, but same": {
+                input: `
+a=S:C4-1;Bmeh=4;C5-1;Bbah=5|x=U:C3-2 s=Sa:4;Bfoo=3;I s=Sa:4`,
+                committish: "foo",
+                expected: "x=E:H=3;I s=~",
+            },
+            "sub open, new commit forced": {
+                input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1!H=5",
+                committish: "foo",
                 expected: "x=E:H=3;Os H=4",
+                force: true,
+            },
+            "sub open, new commit in index forced": {
+                input: `
+a=S:C4-1;Bmeh=4;C5-1;Bbah=5|x=U:C3-2 s=Sa:4;Bfoo=3;I s=Sa:5`,
+                committish: "foo",
+                expected: "x=E:H=3;I s=~",
+                force: true,
             },
             "sub open, new overlapping commit": {
                 input: `
 a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1 3=x!H=5`,
                 committish: "foo",
+                fails: true,
+            },
+            "sub open, new overlapping commit forced": {
+                input: `
+a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1 3=x!H=5`,
+                committish: "foo",
+                force: true,
                 expected: "x=E:H=3;Os H=4",
             },
             "overlapping change failure": {

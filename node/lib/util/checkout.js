@@ -40,6 +40,8 @@ const NodeGit = require("nodegit");
 
 const GitUtil          = require("./git_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
+const RepoStatus       = require("./repo_status");
+const StatusUtil       = require("./status_util");
 const SubmoduleUtil    = require("./submodule_util");
 const UserError        = require("./user_error");
 
@@ -73,6 +75,133 @@ exports.findTrackingBranch = co.wrap(function *(repo, name) {
 });
 
 /**
+ * Return a map of submodule repos and commit objects in the specified meta
+ * `repo` to be used when checking out on the specified `commit`.  Note that
+ * this cache will contain entries only for submodules that need to be checked
+ * out -- the ones that are both open and also exist on `commit`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @return {Object}                   map from name to { repo, commit }
+ */
+const loadSubmodulesToCheckout = co.wrap(function *(repo, commit) {
+    let open = yield SubmoduleUtil.listOpenSubmodules(repo);
+    const openSet = new Set(open);
+
+    const names = yield SubmoduleUtil.getSubmoduleNamesForCommit(repo, commit);
+
+    // Condense `open` to be open submodules that are also valid submodules on
+    // `commit`.
+
+    open = names.filter(name => openSet.has(name));
+
+    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
+                                                               open,
+                                                               commit);
+
+    const result = {};
+    const subFetcher = new SubmoduleFetcher(repo, commit);
+    yield open.map(co.wrap(function *(name) {
+        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+        const sha = shas[name];
+        yield subFetcher.fetchSha(subRepo, name, sha);
+        const commit = yield subRepo.getCommit(sha);
+        result[name] = { repo: subRepo, commit: commit };
+    }));
+    return result;
+});
+
+/**
+ * Return a list of errors that would be encountered if a non-force attempt was
+ * made to check out the specified `submodules` on the specified `commit` in
+ * the specified `metaRepo`.
+ * TODO: consider exposing this and testing it separately
+ *
+ * @param {NodeGit.Repository} repository
+ * @param {NodeGit.Commit}     commit
+ * @param {Object}             submodules   map from name to { repo, commit }
+ * @return {String []}                       list of errors
+ */
+const dryRun = co.wrap(function *(metaRepo, commit, submodules) {
+    let errors = [];
+
+    /**
+     * If it is possible to check out the specified `commit` in the specified
+     * `repo`, return `null`; otherwise, return an error message.
+     */
+    const runOne = co.wrap(function *(repo, commit) {
+        try {
+            yield NodeGit.Checkout.tree(repo, commit, {
+                checkoutStrategy: NodeGit.Checkout.STRATEGY.NONE,
+            });
+            return null;                                              // RETURN
+        }
+        catch(e) {
+            return e.message;                                         // RETURN
+        }
+    });
+
+    // Check meta
+
+    const metaError = yield runOne(metaRepo, commit);
+    if (null !== metaError) {
+        errors.push(`Unable to check out meta-repo: ${metaError}.`);
+    }
+
+    // Check for new commits in submodules
+
+    const status = yield StatusUtil.getRepoStatus(metaRepo);
+    const subs = status.submodules;
+    Object.keys(submodules).forEach(name => {
+        const sub = subs[name];
+        const commit = sub.commit;
+        const index = sub.index;
+        const wd = sub.workdir;
+        const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
+        const newSha = submodules[name].commit.id().tostrS();
+
+        if (null !== wd) {
+
+            // Check to see if there are new commits on both index and HEAD
+            // of workdir.  If this is the case, we cannot checkout the
+            // submodule without changing its state.
+
+            if (wd.relation !== SAME && index.relation !== SAME) {
+                errors.push(`
+Submodule ${colors.yellow(name)} has new commits in index and HEAD.`);
+                return;                                           // RETURN
+            }
+
+            // New commit in HEAD but not same as commit we're checking
+            // out.
+
+            if (wd.status.headCommit !== commit.sha &&
+                wd.status.headCommit !== newSha) {
+                errors.push(`
+Submodule ${colors.yellow(name)} has a new commit.`);
+                return;                                           // RETURN
+            }
+        }
+    });
+
+    // Try the submodules; store the opened repos and loaded commits for
+    // use in the actual checkout later.
+
+    yield Object.keys(submodules).map(co.wrap(function *(name) {
+        const sub = submodules[name];
+        const repo = sub.repo;
+        const subCommit = sub.commit;
+        const error = yield runOne(repo, subCommit);
+        if (null !== error) {
+            errors.push(`\
+Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
+            }
+    }));
+
+    return errors;
+});
+
+/**
  * Checkout the specified `commit` in the specified `metaRepo`, and update all
  * open submodules to be on the indicated commit, fetching it if necessary.
  * Throw a `UserError` if one of the submodules or the meta-repo cannot be
@@ -90,77 +219,18 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
 
     metaRepo.submoduleCacheAll();
 
-    const open = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
-    const names = yield SubmoduleUtil.getSubmoduleNamesForCommit(metaRepo,
-                                                                 commit);
-    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
-                                                               names,
-                                                               commit);
-    const subFetcher = new SubmoduleFetcher(metaRepo, commit);
+    const subs = yield loadSubmodulesToCheckout(metaRepo, commit);
 
-    // First, do dry runs.
-
-    let errors = [];
-
-    /**
-     * If it is possible to check out the specified `commit` in the specified
-     * `repo`, return `null`; otherwise, return an error message.
-     */
-    const dryRun = co.wrap(function *(repo, commit) {
-        try {
-            yield NodeGit.Checkout.tree(repo, commit, {
-                checkoutStrategy: NodeGit.Checkout.STRATEGY.NONE,
-            });
-            return null;                                              // RETURN
-        }
-        catch(e) {
-            return e.message;                                         // RETURN
-        }
-    });
-
-    const cache = {};  // name to { repo, commit}
-
-    // Load repo/commit cache
-    yield open.map(co.wrap(function *(name) {
-        const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
-        const sha = shas[name];
-        if (name in shas) {
-            yield subFetcher.fetchSha(repo, name, sha);
-            const commit = yield repo.getCommit(sha);
-            cache[name] = { repo: repo, commit: commit };
-        }
-    }));
+    // If we're not forcing the commit, attempt a dry run and fail if it
+    // doesn't pass.
 
     if (!force) {
-
-        // Check meta
-
-        const metaError = yield dryRun(metaRepo, commit);
-        if (null !== metaError) {
-            errors.push(`Unable to check out meta-repo: ${metaError}.`);
-        }
-
-        // Try the submodules; store the opened repos and loaded commits for
-        // use in the actual checkout later.
-
-
-        yield open.map(co.wrap(function *(name) {
-            // Open repo but not alive on this commit.
-
-            if (!(name in shas)) {
-                return;                                               // RETURN
-            }
-            const cached = cache[name];
-            const error = yield dryRun(cached.repo, cached.commit);
-            if (null !== error) {
-                errors.push(`\
-Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
-            }
-        }));
+        const errors = yield dryRun(metaRepo, commit, subs);
 
         // Throw an error if any dry-runs failed.
 
         if (0 !== errors.length) {
+            metaRepo.submoduleCacheClear();
             throw new UserError(errors.join("\n"));
         }
     }
@@ -182,14 +252,11 @@ Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
 
     yield doCheckout(metaRepo, commit);
 
-    yield open.map(co.wrap(function *(name) {
-        // Open repo but not alive on this commit.
-
-        if (!(name in shas)) {
-            return;                                                   // RETURN
-        }
-        const c = cache[name];
-        yield doCheckout(c.repo, c.commit);
+    yield Object.keys(subs).map(co.wrap(function *(name) {
+        const sub = subs[name];
+        const repo = sub.repo;
+        const subCommit = sub.commit;
+        yield doCheckout(repo, subCommit);
     }));
 
     metaRepo.submoduleCacheClear();
@@ -429,7 +496,7 @@ Cannot setup tracking information; starting point is not a branch.`);
  * - configure the new branch to have the specified `newBranch.tracking`
  *   tracking branch
  * - make the specified `switchBranch` the current branch
- * - overwrite local changes unless `true === force`
+ * - overwrite local changes if `true === force`
  *
  * @param {NodeGit.repository}  repo
  * @param {NodeGit.Commit|null} commit
