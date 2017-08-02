@@ -81,10 +81,12 @@ exports.findTrackingBranch = co.wrap(function *(repo, name) {
  * @async
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {Boolean}            force
  */
-exports.checkoutCommit = co.wrap(function *(metaRepo, commit) {
+exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    assert.isBoolean(force);
 
     metaRepo.submoduleCacheAll();
 
@@ -116,49 +118,62 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit) {
         }
     });
 
-    // Check meta
-
-    const metaError = yield dryRun(metaRepo, commit);
-    if (null !== metaError) {
-        errors.push(`Unable to check out meta-repo: ${metaError}.`);
-    }
-
-    // Try the submodules; store the opened repos and loaded commits for use
-    // in the actual checkout later.
-
     const cache = {};  // name to { repo, commit}
 
+    // Load repo/commit cache
     yield open.map(co.wrap(function *(name) {
-        // Open repo but not alive on this commit.
-
-        if (!(name in shas)) {
-            return;                                                   // RETURN
-        }
-
         const repo = yield SubmoduleUtil.getRepo(metaRepo, name);
         const sha = shas[name];
-        yield subFetcher.fetchSha(repo, name, sha);
-        const commit = yield repo.getCommit(sha);
-        cache[name] = { repo: repo, commit: commit };
-        const error = yield dryRun(repo, commit);
-        if (null !== error) {
-            errors.push(
-             `Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
+        if (name in shas) {
+            yield subFetcher.fetchSha(repo, name, sha);
+            const commit = yield repo.getCommit(sha);
+            cache[name] = { repo: repo, commit: commit };
         }
     }));
 
-    // Throw an error if any dry-runs failed.
+    if (!force) {
 
-    if (0 !== errors.length) {
-        throw new UserError(errors.join("\n"));
+        // Check meta
+
+        const metaError = yield dryRun(metaRepo, commit);
+        if (null !== metaError) {
+            errors.push(`Unable to check out meta-repo: ${metaError}.`);
+        }
+
+        // Try the submodules; store the opened repos and loaded commits for
+        // use in the actual checkout later.
+
+
+        yield open.map(co.wrap(function *(name) {
+            // Open repo but not alive on this commit.
+
+            if (!(name in shas)) {
+                return;                                               // RETURN
+            }
+            const cached = cache[name];
+            const error = yield dryRun(cached.repo, cached.commit);
+            if (null !== error) {
+                errors.push(`\
+Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
+            }
+        }));
+
+        // Throw an error if any dry-runs failed.
+
+        if (0 !== errors.length) {
+            throw new UserError(errors.join("\n"));
+        }
     }
 
     /**
      * Checkout and set as head the specified `commit` in the specified `repo`.
      */
     const doCheckout = co.wrap(function *(repo, commit) {
+        const strategy = force ?
+            NodeGit.Checkout.STRATEGY.FORCE :
+            NodeGit.Checkout.STRATEGY.SAFE;
         yield NodeGit.Checkout.tree(repo, commit, {
-            checkoutStrategy: NodeGit.Checkout.STRATEGY.SAFE,
+            checkoutStrategy: strategy,
         });
         repo.setHeadDetached(commit);
     });
@@ -414,6 +429,7 @@ Cannot setup tracking information; starting point is not a branch.`);
  * - configure the new branch to have the specified `newBranch.tracking`
  *   tracking branch
  * - make the specified `switchBranch` the current branch
+ * - overwrite local changes unless `true === force`
  *
  * @param {NodeGit.repository}  repo
  * @param {NodeGit.Commit|null} commit
@@ -423,11 +439,13 @@ Cannot setup tracking information; starting point is not a branch.`);
  * @param {String|null}         newBranch.tracking.remoteName
  * @param {String}              newBranch.tracking.branchName
  * @param {String|null}         switchBranch
+ * @param {Boolean}             force
  */
 exports.executeCheckout = co.wrap(function *(repo,
                                              commit,
                                              newBranch,
-                                             switchBranch) {
+                                             switchBranch,
+                                             force) {
     assert.instanceOf(repo, NodeGit.Repository);
     if (null !== commit) {
         assert.instanceOf(commit, NodeGit.Commit);
@@ -446,11 +464,12 @@ exports.executeCheckout = co.wrap(function *(repo,
     if (null !== switchBranch) {
         assert.isString(switchBranch);
     }
+    assert.isBoolean(force);
 
     // attempt the checkout first.
 
     if (null !== commit) {
-        yield exports.checkoutCommit(repo, commit);
+        yield exports.checkoutCommit(repo, commit, force);
     }
     if (null !== newBranch) {
         const name = newBranch.name;

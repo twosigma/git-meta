@@ -66,6 +66,13 @@ match a single remote tracking branch, treat as equivalent to \
         action: "storeConst",
         constant: true,
     });
+
+    parser.addArgument(["-f", "--force"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `Overwrite conflicting local changes.`,
+    });
 };
 
 /**
@@ -115,7 +122,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     yield Checkout.executeCheckout(repo,
                                    op.commit,
                                    op.newBranch,
-                                   op.switchBranch);
+                                   op.switchBranch,
+                                   args.force || false);
 
     // Tell the user what we just did.
 
