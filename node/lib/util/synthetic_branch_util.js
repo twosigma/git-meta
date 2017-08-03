@@ -264,6 +264,9 @@ function* checkUpdate(repo, oldSha, newSha, handled) {
 function* metaUpdateCheck(repo, updates) {
     const handled = {};
     const checkFailures = updates.map(function*(update) {
+        if (!update.ref.startsWith("refs/heads/")) {
+            return true;
+        }
         const ok = yield checkUpdate(repo, update.oldSha, update.newSha,
                                      handled);
         if (!ok) {
