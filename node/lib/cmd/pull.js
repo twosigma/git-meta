@@ -97,8 +97,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         throw new UserError("Non-rebase pull not supported.");
     }
 
+    // TODO: move the following code into `util/push.js` and add test
+
     const branch = yield repo.getCurrentBranch();
-    const tracking = yield GitUtil.getTrackingInfo(branch);
+    const tracking = (yield GitUtil.getTrackingInfo(branch)) || {};
 
     // The source branch is (in order of preference): the name passed on the
     // commandline, the tracking branch name, or the current branch name.
