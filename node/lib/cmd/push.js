@@ -62,7 +62,7 @@ exports.configureParser = function (parser) {
     parser.addArgument("repository", {
         type: "string",
         nargs: "?",
-        defaultValue: "origin",
+        defaultValue: null,
         help: `remote repository that is the destination of a push; can either
 be a URL or name of a remote; 'origin' used if not specified`,
     });
@@ -98,14 +98,24 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
 
+    // TODO: this all needs to move into the `util` and get a test driver.
+
+    const branch = yield repo.getCurrentBranch();
+    const tracking = (yield GitUtil.getTrackingInfo(branch)) || {};
+
     let strRefspecs = [];
     if (0 === args.refspec.length) {
-        const currentBranch = yield repo.getCurrentBranch();
-        const activeBranchName = currentBranch.shorthand();
-        strRefspecs.push(activeBranchName + ":" + activeBranchName);
+        const activeBranchName = branch.shorthand();
+        const targetName = tracking.branchName || activeBranchName;
+        strRefspecs.push(activeBranchName + ":" + targetName);
     } else {
         strRefspecs = strRefspecs.concat(args.refspec);
     }
+
+    // The repo is the value passed by the user, the tracking branch's remote,
+    // or just "origin", in order of preference.
+
+    const remoteName = args.repository || tracking.remoteName || "origin";
 
     yield strRefspecs.map(co.wrap(function *(strRefspec) {
         const refspec = GitUtil.parseRefspec(strRefspec);
@@ -116,14 +126,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
         if ("" !== refspec.src) {
             yield push.push(repo,
-                            args.repository,
+                            remoteName,
                             refspec.src,
                             refspec.dst,
                             force);
         }
         else {
             yield GitUtil.push(repo,
-                               args.repository,
+                               remoteName,
                                "",
                                refspec.dst,
                                force);
