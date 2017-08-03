@@ -111,6 +111,12 @@ describe("Checkout", function () {
                 committish: "foo",
                 fails: true,
             },
+            "checkout with conflict, but forced": {
+                input: "x=S:C2-1;Bfoo=2;W 2=meh",
+                committish: "foo",
+                expected: "x=E:H=2;W 2=~",
+                force: true,
+            },
             "sub closed": {
                 input: "a=S|x=U:Bfoo=2",
                 committish: "foo",
@@ -139,12 +145,43 @@ describe("Checkout", function () {
             "sub open, new commit": {
                 input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1!H=5",
                 committish: "foo",
+                fails: true,
+            },
+            "sub open, new commit but same": {
+                input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os H=4",
+                committish: "foo",
+                expected: "x=E:H=3",
+            },
+            "sub open, new commit in index, but same": {
+                input: `
+a=S:C4-1;Bmeh=4;C5-1;Bbah=5|x=U:C3-2 s=Sa:4;Bfoo=3;I s=Sa:4`,
+                committish: "foo",
+                expected: "x=E:H=3;I s=~",
+            },
+            "sub open, new commit forced": {
+                input: "a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1!H=5",
+                committish: "foo",
                 expected: "x=E:H=3;Os H=4",
+                force: true,
+            },
+            "sub open, new commit in index forced": {
+                input: `
+a=S:C4-1;Bmeh=4;C5-1;Bbah=5|x=U:C3-2 s=Sa:4;Bfoo=3;I s=Sa:5`,
+                committish: "foo",
+                expected: "x=E:H=3;I s=~",
+                force: true,
             },
             "sub open, new overlapping commit": {
                 input: `
 a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1 3=x!H=5`,
                 committish: "foo",
+                fails: true,
+            },
+            "sub open, new overlapping commit forced": {
+                input: `
+a=S:C4-1;Bmeh=4|x=U:C3-2 s=Sa:4;Bfoo=3;Os C5-1 3=x!H=5`,
+                committish: "foo",
+                force: true,
                 expected: "x=E:H=3;Os H=4",
             },
             "overlapping change failure": {
@@ -153,6 +190,14 @@ a=S:C4-1 README.md=q;Bmeh=4|\
 x=U:C3-2 s=Sa:4;Bfoo=3;Os W README.md=r",
                 committish: "foo",
                 fails: true,
+            },
+            "overlapping change force": {
+                input: "\
+a=S:C4-1 README.md=q;Bmeh=4|\
+x=U:C3-2 s=Sa:4;Bfoo=3;Os W README.md=r",
+                committish: "foo",
+                expected: "x=E:H=3;Os",
+                force: true,
             },
             "non-overlapping change success": {
                 input: "\
@@ -179,7 +224,8 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                                                                  c.committish);
                     assert.isNotNull(annotated);
                     const commit = yield repo.getCommit(annotated.id());
-                    yield Checkout.checkoutCommit(repo, commit);
+                    const force = c.force || false;
+                    yield Checkout.checkoutCommit(repo, commit, force);
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                                c.expected,
@@ -496,10 +542,12 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                         assert.isNotNull(annotated);
                         commit = yield repo.getCommit(annotated.id());
                     }
+                    const force = c.force || false;
                     yield Checkout.executeCheckout(repo,
                                                    commit,
                                                    c.newBranch,
-                                                   c.switchBranch);
+                                                   c.switchBranch,
+                                                   force);
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                                c.expected,

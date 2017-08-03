@@ -127,5 +127,13 @@ describe("openOnCommit", function () {
             const fetcher = yield opener.fetcher();
             assert.instanceOf(fetcher, SubmoduleFetcher);
         }));
+        it("fetcher", co.wrap(function *() {
+            const state = "x=S";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const fetcher = yield opener.fetcher();
+            assert.instanceOf(fetcher, SubmoduleFetcher);
+        }));
     });
 });
