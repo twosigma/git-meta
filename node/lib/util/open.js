@@ -144,6 +144,13 @@ Opener.prototype.fetcher = co.wrap(function *() {
     return this.d_fetcher;
 });
 
+Opener.prototype.getOpenSubs = co.wrap(function*() {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    return this.d_openSubs;
+});
+
 /**
  * Return the repository for the specified `submoduleName`, opening it if
  * necessary.
