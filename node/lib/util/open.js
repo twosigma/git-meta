@@ -144,11 +144,31 @@ Opener.prototype.fetcher = co.wrap(function *() {
     return this.d_fetcher;
 });
 
+/**
+ * Return the set of names of the submodules that were open when this object
+ * was created.
+ *
+ * @return {Set}
+ */
 Opener.prototype.getOpenSubs = co.wrap(function*() {
     if (!this.d_initialized) {
         yield this._initialize();
     }
     return this.d_openSubs;
+});
+
+/**
+ * Return true if the submodule having the specified `subName` is open and
+ * false otherwise.
+ *
+ * @param {String} subName
+ * @return {Boolean}
+ */
+Opener.prototype.isOpen = co.wrap(function *(subName) {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    return this.d_openSubs.has(subName) || (subName in this.d_subRepos);
 });
 
 /**
