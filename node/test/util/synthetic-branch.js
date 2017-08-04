@@ -207,6 +207,7 @@ describe("synthetic-branch-submodule-pre-receive", function () {
             newSha: oid.toString(),
             ref: "refs/commits/" + oid.toString(),
         }]);
+        assert(!fail);
 
         // a push with f to a bogus branch fails
         fail = yield SyntheticBranch.submoduleCheck(repo, [{
