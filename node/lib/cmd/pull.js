@@ -82,7 +82,7 @@ used if not specified`,
  *
  * @async
  * @param {Object}  args
- * @param {Boolean} args.any
+ * @param {Boolean} args.rebase
  * @param {String}  repository
  * @param {String}  [source]
  */
@@ -92,14 +92,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const UserError =  require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
+    const branch = yield repo.getCurrentBranch();
 
-    if (!args.rebase) {
+    if (!(yield pull.userWantsRebase(args, repo, branch))) {
         throw new UserError("Non-rebase pull not supported.");
     }
 
     // TODO: move the following code into `util/push.js` and add test
 
-    const branch = yield repo.getCurrentBranch();
     const tracking = (yield GitUtil.getTrackingInfo(branch)) || {};
 
     // The source branch is (in order of preference): the name passed on the

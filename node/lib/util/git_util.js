@@ -893,3 +893,19 @@ exports.getParentCommit = co.wrap(function *(repo, commit) {
     const parentId = commit.parentId(0);
     return  yield repo.getCommit(parentId);
 });
+
+/**
+ * Returns whether a config variable is, according to git's reckoning,
+ * true.  That is, it's set to 'true', 'yes', or 'on'.
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit} configVar
+ * @return boolean
+ * @throws if the configuration variable doesn't exist
+*/
+exports.configIsTrue = co.wrap(function*(repo, configVar) {
+    const config = yield repo.config();
+    const configured = yield config.getStringBuf(configVar);
+    return (configured === "true" || configured === "yes" ||
+            configured === "on");
+});

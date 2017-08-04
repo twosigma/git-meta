@@ -30,10 +30,16 @@
  */
 "use strict";
 
+const assert = require("assert");
 const co     = require("co");
+const fsp    = require("fs-promise");
+const path     = require("path");
+const NodeGit = require("nodegit");
 
 const Pull            = require("../../lib/util/pull");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const TestUtil        = require("../../lib/util/test_util");
+
 
 describe("pull", function () {
     // Most of the logic for 'pull' is done in terms of fetch and rebase.  We
@@ -85,4 +91,50 @@ describe("pull", function () {
                                                            c.fails);
         }));
     });
+});
+
+describe("userWantsRebase", function () {
+    it("handles args and config", co.wrap(function *() {
+        const root = yield TestUtil.makeTempDir();
+        const rootDirectory = yield fsp.realpath(root);
+        const repo = yield NodeGit.Repository.init(rootDirectory, 0);
+        const index = yield repo.index();
+        yield fsp.writeFile(path.join(repo.workdir(), "f"), "hello world");
+        yield index.addByPath("f");
+        const sig = NodeGit.Signature.create("A U Thor", "author@example.com",
+                                                1475535185, -4*60);
+        yield repo.createCommitOnHead(["f"], sig, sig, "a commit");
+
+        const master = yield repo.getBranch("master");
+        const config = yield repo.config();
+        yield config.setString("pull.rebase", "false");
+
+        assert.equal(false, yield Pull.userWantsRebase({"rebase" : false},
+                                                       null,
+                                                       null));
+
+        assert.equal(true, yield Pull.userWantsRebase({"rebase" : true},
+                                                      null,
+                                                      null));
+
+        assert.equal(false, yield Pull.userWantsRebase({},
+                                                       repo,
+                                                       master));
+        yield config.setString("pull.rebase", "true");
+        assert.equal(true, yield Pull.userWantsRebase({},
+                                                      repo,
+                                                      master));
+
+        yield config.setString("pull.rebase", "false");
+        yield config.setString("branch.master.rebase", "true");
+        assert.equal(true, yield Pull.userWantsRebase({},
+                                                      repo,
+                                                      master));
+
+        config.setString("branch.master.rebase", "false");
+        assert.equal(false, yield Pull.userWantsRebase({},
+                                                       repo,
+                                                       master));
+        
+    }));
 });

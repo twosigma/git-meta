@@ -82,3 +82,36 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
 
     yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
 });
+
+
+
+/**
+ * Return true if the user has requested a rebase (explicitly or
+ * via config).
+ *
+ * @param {Object} args
+ * @param {Boolean} args.rebase
+ * @param {Nodegit.Repository} repo
+ * @param {NodeGit.Branch} branch
+ * @async
+ * @return bool
+ */
+exports.userWantsRebase = co.wrap(function*(args, repo, branch) {
+    if (args.rebase !== undefined) {
+        return args.rebase;
+    }
+
+    try {
+        const configVar = `branch.${branch.shorthand()}.rebase`;
+        return yield GitUtil.configIsTrue(repo, configVar);
+    } catch (e) {
+        // no branch config, try global config
+    }
+
+    try {
+        return yield GitUtil.configIsTrue(repo, "pull.rebase");
+    } catch (e) {
+        // no config, default is false
+        return false;
+    }
+});
