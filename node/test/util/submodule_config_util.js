@@ -243,7 +243,7 @@ describe("SubmoduleConfigUtil", function () {
         });
     });
 
-    describe("parseSubmoduleConfig", function () {
+    describe("parseOpenSubmodules", function () {
         const cases = {
             "trivial": {
                 input: "",
@@ -270,6 +270,22 @@ describe("SubmoduleConfigUtil", function () {
         logallrefupdates = true
         ignorecase = true
         precomposeunicode = true
+[submodule "x/y"]
+        url = /Users/someone/trash/tt/foo
+`,
+                expected: ["x/y"],
+            },
+            "one sub, duped": {
+                input: `\
+[core]
+        repositoryformatversion = 0
+        filemode = true
+        bare = false
+        logallrefupdates = true
+        ignorecase = true
+        precomposeunicode = true
+[submodule "x/y"]
+        url = /Users/someone/trash/tt/foo
 [submodule "x/y"]
         url = /Users/someone/trash/tt/foo
 `,
