@@ -191,15 +191,15 @@ exports.parseOpenSubmodules = function (text) {
 
     const regex = /\[submodule *"(.*)"]/;
     const lines = text.split("\n");
-    const result = [];
+    const result = new Set();
     for (let i = 0; i < lines.length; ++i) {
         const line = lines[i];
         const parseResult = regex.exec(line);
         if (null !== parseResult) {
-            result.push(parseResult[1]);
+            result.add(parseResult[1]);
         }
     }
-    return result;
+    return Array.from(result);
 };
 
 /**
