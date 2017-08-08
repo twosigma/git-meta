@@ -34,8 +34,11 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const GitUtil          = require("./git_util");
+const StatusUtil       = require("./status_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
 const SubmoduleUtil    = require("./submodule_util");
+const UserError        = require("./user_error");
 
 const TYPE = {
     SOFT: "soft",
@@ -102,4 +105,84 @@ exports.reset = co.wrap(function *(repo, commit, type) {
         const subCommit = yield subRepo.getCommit(sha);
         yield NodeGit.Reset.reset(subRepo, subCommit, resetType);
     }));
+});
+
+/**
+ * Helper method for `resolvePaths` to simplify use of `cacheSubmodules`.
+ */
+const resetPathsHelper = co.wrap(function *(repo, commit, resolvedPaths) {
+    // Get a `Status` object reflecting only the values in `paths`.
+
+    const status = yield StatusUtil.getRepoStatus(repo, {
+        showMetaChanges: true,
+        paths: resolvedPaths,
+    });
+
+    // Reset the meta-repo.
+
+    const metaStaged = Object.keys(status.staged);
+    if (0 !== metaStaged.length) {
+        yield NodeGit.Reset.default(repo, commit, metaStaged);
+    }
+
+    const subs = status.submodules;
+    const fetcher = new SubmoduleFetcher(repo, commit);
+    const subNames = Object.keys(subs);
+    const shas =
+         yield SubmoduleUtil.getSubmoduleShasForCommit(repo, subNames, commit);
+
+    yield subNames.map(co.wrap(function *(subName) {
+        const sub = subs[subName];
+        const workdir = sub.workdir;
+        const sha = shas[subName];
+
+        // If the submodule isn't open (no workdir) or didn't exist on `commit`
+        // (i.e., it had no sha there), skip it.
+
+        if (null !== workdir && undefined !== sha) {
+            const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+            yield fetcher.fetchSha(subRepo, subName, sha);
+            const subCommit = yield subRepo.getCommit(sha);
+            const staged = Object.keys(workdir.status.staged);
+            if (0 !== staged.length) {
+                yield NodeGit.Reset.default(subRepo, subCommit, staged);
+            }
+        }
+    }));
+});
+
+/**
+ * Reset the state of the index of the specified `repo` for the specified
+ * `paths` to their state in the specified `commit`; or throw a `UserError` if
+ * any path is invalid.  Use the specified `cwd` to resolve relative paths.
+ * Currently, the behavior is undefined unless `commit` is the head commit of
+ * `repo`.
+ * TODO: It's actually a somewhat more work to support the (presumably,
+ * seldom-used) case of resetting only the index state of a file to what's in a
+ * different commit.  Currently, I'm just looking at the staged files to see
+ * what needs to be reset; this functionality comes for free with
+ * `StatusUtil.getRepoStatus`.  I'll come back and extend this later.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             cwd
+ * @param {NodeGit.Commit}     commit
+ * @param {String []}          paths
+ */
+exports.resetPaths = co.wrap(function *(repo, cwd, commit, paths) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(cwd);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isArray(paths);
+
+    const head = yield repo.getHeadCommit();
+    if (head.id().tostrS() !== commit.id().tostrS()) {
+        throw new UserError("Cannot reset files to a commit that is not HEAD");
+    }
+
+    const resolvedPaths = yield paths.map(filename => {
+        return GitUtil.resolveRelativePath(repo.workdir(), cwd, filename);
+    });
+    yield SubmoduleUtil.cacheSubmodules(repo, () => {
+        return resetPathsHelper(repo, commit, resolvedPaths);
+    });
 });
