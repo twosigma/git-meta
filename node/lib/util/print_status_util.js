@@ -389,6 +389,7 @@ exports.printRepoStatus = function (status, cwd) {
     if (0 !== staged.length) {
         changes += `\
 Changes to be committed:
+  (use "git meta reset HEAD <file>..." to unstage)
 
 `;
         changes += exports.printStatusDescriptors(staged, colors.green, cwd);

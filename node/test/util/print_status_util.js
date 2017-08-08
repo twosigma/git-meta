@@ -744,6 +744,7 @@ Untracked files:
                 exact: `\
 On branch ${colors.green("master")}.
 Changes to be committed:
+  (use "git meta reset HEAD <file>..." to unstage)
 
 \t${colors.green("modified:     zap")} (submodule, new commits)
 
