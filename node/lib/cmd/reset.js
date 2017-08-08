@@ -30,7 +30,8 @@
  */
 "use strict";
 
-const co = require("co");
+const ArgParse = require("argparse");
+const co       = require("co");
 
 /**
  * This submodule provides the entrypoint for the `reset` command.
@@ -68,14 +69,6 @@ for each mode for more information.
  */
 exports.configureParser = function (parser) {
 
-    parser.addArgument(["commitish"], {
-        type: "string",
-        help: "commit to reset the head of the current branch to",
-        defaultValue: null,
-        required: false,
-        nargs: "?",
-    });
-
     parser.addArgument(["--soft"], {
         required: false,
         action: "storeConst",
@@ -98,6 +91,31 @@ This mode is the default.`,
         help: `Discard all changes and reset both working directory and index \
 as specified by the selected commit.`
     });
+
+    parser.addArgument(["commitish"], {
+        type: "string",
+        help: "commit to reset the head of the current branch to",
+        defaultValue: null,
+        required: false,
+        nargs: ArgParse.Const.OPTIONAL,
+    });
+
+    // I want to use `Const.REMAINDER` here, but it doesn't work right; it
+    // doesn't show 'path' in the command line list and doesn't behave any
+    // differently that `ZERO_OR_MORE`; the `--` doesn't serve to delimit paths
+    // from commitishes.
+
+    parser.addArgument(["path"], {
+        type: "string",
+        help: `\
+When paths are provided, git-meta resets the index entries for all <paths> to
+their state at <commitish>. (It does not affect the working tree or the
+current branch.)
+
+This means that git meta reset <paths> is the opposite of git meta add
+<paths>.`,
+        nargs: ArgParse.Const.ZERO_OR_MORE,
+    });
 };
 
 /**
@@ -109,7 +127,6 @@ as specified by the selected commit.`
  * @param {Boolean} args.mixed
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("colors");
     const path   = require("path");
 
     const GitUtil         = require("../util/git_util");
@@ -124,18 +141,45 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // up.  Otherwise, use HEAD.
 
     let commit;
+    let paths = args.path;
     if (args.commitish) {
 
         const commitish = args.commitish;
         const annotated = yield GitUtil.resolveCommitish(repo, commitish);
 
+        // TODO: This is the workaround for the fact that argparse doesn't seem
+        // to handle '--'correctly. E.g., if I set the 'path' argument above to
+        // be 'ArgParse.Const.REMAINDER', and run:
+        //
+        // ```
+        //    $ git meta reset -- foo
+        // ```
+        //
+        // It populates 'committish' with "foo" instead of 'path'.  As I note
+        // above, it also messes with my help text, so I've gone back to using
+        // 'ZERO_OR_MORE'.  So, my logic is going to be that if 'committish'
+        // can be resolved as a commit I'll treat it that way, otherwise I'l
+        // treat it as a path.
+
         if (null === annotated) {
-            throw new UserError(`Could not resolve ${colors.red(commitish)}.`);
+            paths = paths.concat(args.commitish);
         }
-        commit = yield repo.getCommit(annotated.id());
+        else {
+            commit = yield repo.getCommit(annotated.id());
+        }
     }
-    else {
+    if (undefined === commit) {
         commit = yield repo.getHeadCommit();
+    }
+
+    // If we have one or more path, perform a path-based reset.
+
+    if (0 !== paths.length) {
+        if (args.soft || args.mixed || args.hard) {
+            throw new UserError("Cannot specify mode with path-based reset.");
+        }
+        yield Reset.resetPaths(repo, process.cwd(), commit, paths);
+        return;                                                       // RETURN
     }
 
     // Perform the reset.
