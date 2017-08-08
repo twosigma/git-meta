@@ -103,7 +103,9 @@ exports.getSubmoduleNamesForBranch = co.wrap(function *(repo, branchName) {
 /**
  * Return a map from submodule name to string representing the expected sha1
  * for its repository in the specified `repo` on the specified `commit` for the
- * submodules whose names are in the specified `submoduleNames` array.
+ * submodules whose names are in the specified `submoduleNames` array.  Note
+ * that if a submodule in `submoduleNames` does not exist in `commit`, no entry
+ * is populated for it in the returned object.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -127,13 +129,21 @@ exports.getSubmoduleShasForCommit =
 
     const tree = yield commit.getTree();
     const shaGetters = submoduleNames.map(co.wrap(function *(name) {
-        const entry = yield tree.entryByPath(name);
-        return entry.sha();
+        try {
+            const entry = yield tree.entryByPath(name);
+            return entry.sha();
+        }
+        catch (e) {
+            return null;
+        }
     }));
     const shas = yield shaGetters;
     let result = {};
     for (let i = 0; i < submoduleNames.length; ++i) {
-        result[submoduleNames[i]] = shas[i];
+        const sha = shas[i];
+        if (null !== sha) {
+            result[submoduleNames[i]] = sha;
+        }
     }
     return result;
 });

@@ -141,6 +141,12 @@ describe("SubmoduleUtil", function () {
                 commit: "2",
                 expected: { foo: "1" },
             },
+            "missing": {
+                state: "S",
+                names: ["foo"],
+                commit: "1",
+                expected: {},
+            },
             "from later commit": {
                 state: "S:C2-1 x=S/a:1;C3-2 x=S/a:2;H=3",
                 names: ["x"],
