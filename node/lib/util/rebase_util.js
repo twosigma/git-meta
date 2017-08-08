@@ -43,20 +43,8 @@ const GitUtil             = require("./git_util");
 const RepoStatus          = require("./repo_status");
 const RebaseFileUtil      = require("./rebase_file_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
-const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
-
-/**
- * Return a messsage indicating a conflict in the submodule having the
- * specified `name`.
- *
- * @param {String} name
- * @return {String}
- */
-function submoduleConflictMessage(name) {
-    return `Conflict rebasing the submodule ${colors.red(name)}.`;
-}
 
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
@@ -120,193 +108,316 @@ const callFinish = co.wrap(function *(repo, rebase) {
 });
 
 /**
- * @class {SubmoduleRebaser}
- * This is a mechanism class that maintains the state of a submodule through a
- * rebase operation.
+ * Process the specified `rebase` for the submodule having the specified
+ * `name`and open `repo`, beginning with the specified `op` and proceeding
+ * until there are no more commits to rebase.  Return an object describing any
+ * encountered error and commits made.
  *
- * @constructor
- * Create a new `SubmoduleRebaser` for the specified `submodule` having the
- * specified `repo`.  Record commits (from new to old) in the specified
- * `submoduleCommits` map.
- *
- * @param {String}             submoduleName
- * @param {NodeGit.Repository} repo
- * @param {Object}             submoduleCommits writable
- * @param {SubmoduleFetcher}   fetcher
+ * @param {NodeGit.Repository}      rep
+ * @param {String}                  name
+ * @param {NodeGit.Rebase}          rebase
+ * @param {NodeGit.RebaseOperation} op
+ * @return {Object}
+ * @return {Object} return.commits
+ * @return {String|null} return.error
  */
-function SubmoduleRebaser(submoduleName, repo, submoduleCommits, getFetcher) {
-    assert.isString(submoduleName);
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isObject(submoduleCommits);
-    assert.isFunction(getFetcher);
-
-    const commits = {};
+const processSubmoduleRebase = co.wrap(function *(repo,
+                                                  name,
+                                                  rebase,
+                                                  op) {
+    const result = {
+        commits: {},
+        error: null,
+    };
     const signature = repo.defaultSignature();
-    submoduleCommits[submoduleName] = commits;
-
-    let rebase         = null;   // set to `NodeGit.Rebase` object when started
-    let finishedRebase = false;  // true if the rebase was finished
-
-    /**
-     * Begin a rebase for this submodule from the current HEAD onto the
-     * specified `remoteCommitId`.  If a rebase is in progress do nothing.
-     *
-     * @async
-     * @private
-     * @param {String} localSha
-     * @param {String} remoteCommitSha
-     */
-    const init = co.wrap(function *(localSha, remoteCommitSha) {
-        if (null !== rebase) {
-            return;                                                   // RETURN
-        }
-        const fetcher = getFetcher();
-        yield fetcher.fetchSha(repo, submoduleName, localSha);
-        yield fetcher.fetchSha(repo, submoduleName, remoteCommitSha);
-        const localCommit = yield repo.getCommit(localSha);
-        yield NodeGit.Reset.reset(repo, localCommit, NodeGit.Reset.TYPE.HARD);
-        const head = yield repo.head();
-        const localAnnotated =
-                             yield NodeGit.AnnotatedCommit.fromRef(repo, head);
-        const remoteCommitId = NodeGit.Oid.fromString(remoteCommitSha);
-        const remoteAnnotated =
-                    yield NodeGit.AnnotatedCommit.lookup(repo, remoteCommitId);
-        rebase = yield NodeGit.Rebase.init(repo,
-                                           localAnnotated,
-                                           remoteAnnotated,
-                                           null,
-                                           null);
-        console.log(`Submodule ${colors.blue(submoduleName)}: starting \
-rebase; rewinding to ${colors.green(remoteCommitId.tostrS())}.`);
-    });
-
-    /**
-     * Process the specified rebase `oper` on the specified `commitSha`;
-     * staging changed files and creating commits.
-     */
-    const processOper = co.wrap(function *(commitSha, oper) {
-        console.log(`Submodule ${colors.blue(submoduleName)}: applying \
-commit ${colors.green(oper.id().tostrS())}.`);
+    while (null !== op) {
+        console.log(`Submodule ${colors.blue(name)}: applying \
+commit ${colors.green(op.id().tostrS())}.`);
         const index = yield repo.index();
         if (index.hasConflicts()) {
-            return false;                                             // RETURN
+            result.error = `\
+Conflict rebasing the submodule ${colors.red(name)}.`;
+            break;                                                     // BREAK
         }
-        const entries = index.entries();
-        let changed = false;
-        yield entries.map(co.wrap(function *(x) {
-            yield index.addByPath(x.path);
-            changed = true;
-        }));
-        if (changed) {
-            yield index.write();
-            const newCommit = rebase.commit(null, signature, null);
-            const originalCommit = oper.id().tostrS();
-            commits[newCommit.tostrS()] = originalCommit;
-        }
-        return true;
-    });
-
-    /**
-     * Process the commit having the specified `commitId`; set the HEAD of the
-     * repository for this submodule to that commit or the result of having
-     * rebased that commit.  Return true if the commit was successfully
-     * processed and false if it was not and the rebase should stop.
-     *
-     * @async
-     * @private
-     * @param {String} commitSha
-     */
-    const next = co.wrap(function *(commitSha) {
-
-        // If there is no rebase happening, just set the repo to the right
-        // commit.
-
-        if (null === rebase) {
-            console.log(`Submodule ${colors.blue(submoduleName)}: setting \
-head to ${colors.green(commitSha)}.`);
-            yield setHead(repo, commitSha);
-            return true;                                              // RETURN
-        }
-        const oper = yield callNext(rebase);
-        if (null === oper) {
-            console.log(`Submodule ${colors.blue(submoduleName)}: finished \
-rebase.`);
-            yield callFinish(repo, rebase);
-            finishedRebase = true;
-            rebase = null;
-            return true;                                              // RETURN
-        }
-        const result = yield processOper(commitSha, oper);
-        if (!result) {
-            return false;                                             // RETURN
-        }
-
-        return yield next(commitSha);
-    });
-
-    /**
-     * Continue rebasing for this submodule from the specified `curSha` using
-     * the specified rebase `index` position.  Return false if the rebase
-     * cannot be continued and true otherwise.
-     *
-     * @param {String} curSha
-     * @param {Number} index
-     * @return {Boolean}
-     */
-    const continueRebase = co.wrap(function *(curSha, index) {
-        // If the submodule is not rebasing, stage any commits it might have
-        // and return successfully.
-
-        if (!repo.isRebasing()) {
-            yield index.addByPath(submoduleName);
-            return true;                                              // RETURN
-        }
-        const subInfo = yield RebaseFileUtil.readRebase(repo.path());
-        console.log(`Submodule ${colors.blue(submoduleName)} continuing \
-rebase from ${colors.green(subInfo.originalHead)} onto \
-${colors.green(subInfo.onto)}.`);
-        rebase = yield NodeGit.Rebase.open(repo);
-        const idx = rebase.operationCurrent();
-        const oper = rebase.operationByIndex(idx);
-        const result = yield processOper(curSha, oper);
-        if (!result) {
-            return false;                                             // RETURN
-        }
-        yield index.addByPath(submoduleName);
-        yield index.conflictRemove(submoduleName);
-        return yield next(curSha);
-    });
-
-    function path() {
-        return submoduleName;
+        const newCommit = rebase.commit(null, signature, null);
+        const originalCommit = op.id().tostrS();
+        result.commits[newCommit.tostrS()] = originalCommit;
+        op = yield callNext(rebase);
     }
+    if (null === result.error) {
+        console.log(`Submodule ${colors.blue(name)}: finished \
+rebase.`);
+        yield callFinish(repo, rebase);
+    }
+    return result;
+});
 
-    /**
-     * Finish the current rebase.  The behavior is undefined if the rebase has
-     * not been fully processed.  If no rebase is in progress do nothing.
-     *
-     * @private
-     * @async
-     */
-    const finish = co.wrap(function *() {
+/**
+ * Return an object indicating the commits that were created during rebasing
+ * and/or an error message indicating that the rebase was stopped due to a
+ * conflict.
+ *
+ * @param {Open.Opener} opener
+ * @param {String}      name   of the submodule
+ * @param {String}      from   commit rebasing from
+ * @param {String}      onto   commit rebasing onto
+ * @return {Object}
+ * @return {Object}       return.commits  map from original to created commit
+ * @return {Strring|null} return.error    failure message if non-null
+ */
+const rebaseSubmodule = co.wrap(function *(opener, name, from, onto) {
+    const fetcher = yield opener.fetcher();
+    const repo = yield opener.getSubrepo(name);
+    yield fetcher.fetchSha(repo, name, from);
+    yield fetcher.fetchSha(repo, name, onto);
+    const fromCommit = yield repo.getCommit(from);
+    yield NodeGit.Reset.reset(repo, fromCommit, NodeGit.Reset.TYPE.HARD);
+    const head = yield repo.head();
+    const fromAnnotated = yield NodeGit.AnnotatedCommit.fromRef(repo, head);
+    const ontoCommitId = NodeGit.Oid.fromString(onto);
+    const ontoAnnotated =
+                    yield NodeGit.AnnotatedCommit.lookup(repo, ontoCommitId);
+    const rebase = yield NodeGit.Rebase.init(repo,
+                                             fromAnnotated,
+                                             ontoAnnotated,
+                                             null,
+                                             null);
+    console.log(`Submodule ${colors.blue(name)}: starting \
+rebase; rewinding to ${colors.green(ontoCommitId.tostrS())}.`);
 
-        if (null !== rebase && !finishedRebase) {
-            yield next();
-            if (!finishedRebase) {
-                console.warn("Failed to finish rebase for: '" + path() + "'.");
+    let op = yield callNext(rebase);
+    return yield processSubmoduleRebase(repo, name, rebase, op);
+});
+
+/**
+ * Attempt to handle a conflicted `.gitmodules` file in the specified `repo`
+ * having the specified `index`, with changes coming from the specified
+ * `fromCommit` and `ontoCommit` commits.  Return true if the conflict was
+ * resolved and false otherwise.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index
+ * @param {NodeGit.Commit}     fromCommit
+ * @param {NodeGit.Commit}     ontoCommit
+ * @return {Boolean}
+ */
+const mergeModulesFile = co.wrap(function *(repo,
+                                            index,
+                                            fromCommit,
+                                            ontoCommit) {
+    // If there is a conflict in the '.gitmodules' file, attempt to resolve it
+    // by comparing the current change against the original onto commit and the
+    // merge base between the base and onto commits.
+
+    const Conf = SubmoduleConfigUtil;
+    const getSubs = Conf.getSubmodulesFromCommit;
+    const fromNext = yield getSubs(repo, fromCommit);
+
+    const baseId = yield NodeGit.Merge.base(repo,
+                                            fromCommit.id(),
+                                            ontoCommit.id());
+    const mergeBase = yield repo.getCommit(baseId);
+    const baseSubs =
+            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, mergeBase);
+
+    const ontoSubs = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                   repo,
+                                                                   ontoCommit);
+
+    const merged = Conf.mergeSubmoduleConfigs(fromNext, ontoSubs, baseSubs);
+                        // If it was resolved, write out and stage the new
+                        // modules state.
+
+    if (null !== merged) {
+        const newConf = Conf.writeConfigText(merged);
+        yield fs.writeFile(path.join(repo.workdir(), Conf.modulesFileName),
+                           newConf);
+        yield index.addByPath(Conf.modulesFileName);
+        return true;
+    }
+    return false;
+});
+
+/**
+ * Process the specified `entry` from the specified `index`  for the specified
+ * `metaRepo` during a rebase from the specified `fromCommit` on the specified
+ * `ontoCommit`.  Use the specified `opener` to open submodules
+ * as needed, and obtain the SHA for a submodule on the `ontoCommit` from the
+ * specified `ontoShas`.  Return an object indicating that an error occurred,
+ * that a submodule needs to be rebased, or neither.
+ *
+ * @return {Object}
+ * @return {String|null} return.error
+ * @return {String|null} return.subToRebase
+ * @return {String|undefined} return.rebaseFrom  only if `subToRebase !== null`
+ */
+const processMetaRebaseEntry = co.wrap(function *(metaRepo,
+                                                  index,
+                                                  entry,
+                                                  opener,
+                                                  ontoShas,
+                                                  fromCommit,
+                                                  ontoCommit) {
+
+    const id = entry.id;
+    const isSubmodule = entry.mode === NodeGit.TreeEntry.FILEMODE.COMMIT;
+    const fetcher = yield opener.fetcher();
+    const stage = RepoStatus.getStage(entry.flags);
+
+    const result = {
+        error: null,
+        subToRebase: null,
+    };
+
+    switch (stage) {
+    case RepoStatus.STAGE.NORMAL:
+        // If this is an unchanged, visible sub, make sure its sha is in the
+        // right place in case it was ffwded.
+
+        const open = yield opener.isOpen(entry.path);
+        if (open) {
+            const name = entry.path;
+            const ontoSha = ontoShas[name];
+            const fromSha = id.tostrS();
+            if (ontoSha !== fromSha) {
+                const subRepo = yield opener.getSubrepo(name);
+                yield fetcher.fetchSha(subRepo, name, fromSha);
+                yield setHead(subRepo, fromSha);
             }
         }
-    });
+        break;
+    case RepoStatus.STAGE.OURS:
+        if (isSubmodule) {
+            result.subToRebase = entry.path;
+            result.rebaseFrom = id.tostrS();
+        }
+        else {
+            if (SubmoduleConfigUtil.modulesFileName === entry.path) {
+                const succeeded = yield mergeModulesFile(metaRepo,
+                                                         index,
+                                                         fromCommit,
+                                                         ontoCommit);
+                if (succeeded) {
+                    break;                                             // BREAK
+                }
+            }
+            result.error =
+                `There is a conflict in ${colors.red(entry.path)}.\n`;
+        }
+        break;
+    }
+    return result;
+});
 
-    return {
-        init: init,
-        next: next,
-        finish: finish,
-        continueRebase: continueRebase,
-        path: path,
-        repo: repo,
-    };
-}
+/**
+ * Process the specified `op` for the specified `rebase` in the specified
+ * `metaRepo` that maps to the specified `ontoCommit`.  Load the generated
+ * commits into the specified `result`.
+ *
+ * @param {NodeGit.Repository}      metaRepo
+ * @param {NodeGit.Commit}          ontoCommit
+ * @param {NodeGit.Rebase}          rebase
+ * @param {NodeGit.RebaseOperation} op
+ * @param {Object}                  result
+ * @param {Object}                  result.submoduleCommits
+ * @param {Object}                  result.metaCommits
+ */
+const processMetaRebaseOp = co.wrap(function *(metaRepo,
+                                               ontoCommit,
+                                               rebase,
+                                               op,
+                                               result) {
+    // We're going to loop over the entries of the index for the rebase
+    // operation.  We have several tasks (I'll repeat later):
+    //
+    // 1. Stage "normal", un-conflicted, non-submodule changes.  This
+    //    process requires that we set the submodule to the correct commit.
+    // 2. When a conflict is detected in a submodule, call `init` on the
+    //    rebaser for that submodule.
+    // 3. Pass any change in a submodule off to the appropriate submodule
+    //    rebaser.
+
+    const fromCommit = yield metaRepo.getCommit(op.id());
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                metaRepo,
+                                                                fromCommit);
+    const names = Object.keys(urls);
+    const ontoShas = yield SubmoduleUtil.getSubmoduleShasForCommit(
+                                                                metaRepo,
+                                                                names,
+                                                                fromCommit);
+    const opener = new Open.Opener(metaRepo, fromCommit);
+
+    const index = yield metaRepo.index();
+    const subsToRebase = {}; // map from name to sha to rebase onto
+
+    let errorMessage = "";
+
+    const entries = index.entries();
+    for (let i = 0; i < entries.length; ++i) {
+        const ret = yield processMetaRebaseEntry(metaRepo,
+                                                 index,
+                                                 entries[i],
+                                                 opener,
+                                                 ontoShas,
+                                                 fromCommit,
+                                                 ontoCommit);
+        if (null !== ret.error) {
+            console.log("E:", ret.error);
+            errorMessage += ret.error + "\n";
+        }
+        else if (null !== ret.subToRebase) {
+            subsToRebase[ret.subToRebase] = ret.rebaseFrom;
+        }
+    }
+
+    // Clean up conflicts unless we found one in the meta-repo that was not
+    // a submodule change.
+
+    if ("" === errorMessage) {
+        yield index.conflictCleanup();
+    }
+
+    // Process submodule rebases.
+
+    for (let name in subsToRebase) {
+        const from = subsToRebase[name];
+        const ret = yield rebaseSubmodule(opener,
+                                          name,
+                                          ontoShas[name],
+                                          from);
+        yield index.addByPath(name);
+        if (name in result.submoduleCommits) {
+            Object.assign(result.submoduleCommits[name], ret.commits);
+        }
+        else {
+            result.submoduleCommits[name] = ret.commits;
+        }
+
+        if (null !== ret.error) {
+            errorMessage += ret.error + "\n";
+        }
+    }
+
+    if ("" !== errorMessage) {
+        throw new UserError(errorMessage);
+    }
+
+    // Write the index and new commit, recording a mapping from the
+    // original commit ID to the new one.
+
+    yield index.write();
+    const newCommit = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
+        const signature = metaRepo.defaultSignature();
+        const commit = rebase.commit(null, signature, null);
+        return Promise.resolve(commit);
+    });
+    const newCommitSha = newCommit.tostrS();
+    const originalSha = op.id().tostrS();
+    if (originalSha !== newCommitSha) {
+        result.metaCommits[newCommitSha] = originalSha;
+    }
+});
 
 /**
  * Drive a rebase operation in the specified `metaRepo` from the specified
@@ -330,251 +441,16 @@ const driveRebase = co.wrap(function *(metaRepo,
     assert.instanceOf(fromCommit, NodeGit.Commit);
     assert.instanceOf(ontoCommit, NodeGit.Commit);
 
+    const init = yield initializer(metaRepo);
+    const rebase  = init.rebase;
     const result = {
         metaCommits: {},
-        submoduleCommits: {},
+        submoduleCommits: init.submoduleCommits,
     };
-
-    const submoduleRebasers = {};  // Cache of opened submodules
-
-    const openSubs = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
-    const visibleSubs = new Set(openSubs);
-
-    let currentCommit;    // Current NodeGit.Commit being applied
-    let fetcher;          // Set to a SubmoduleFetcher bound to currentCommit
-    let shas;             // submodule shas for current commit
-
-    const templatePath = yield SubmoduleConfigUtil.getTemplatePath(metaRepo);
-
-    /**
-     * Return the submodule rebaser for the specified `path`.  Open the
-     * subodule if it is not open.
-     */
-    const getSubmoduleRebaser = co.wrap(function *(path) {
-        assert.isString(path);
-
-        if (path in submoduleRebasers) {
-            return yield submoduleRebasers[path];
-        }
-
-        const promise = co(function *() {
-            let repo;
-            // Open the submodule if it's not open.
-
-            if (visibleSubs.has(path)) {
-                repo = yield SubmoduleUtil.getRepo(metaRepo, path);
-            }
-            else { 
-                console.log(`Submodule ${colors.blue(path)}: opening`);
-                repo = yield Open.openOnCommit(fetcher,
-                                               path,
-                                               shas[path],
-                                               templatePath);
-                visibleSubs.add(path);
-            }
-            return new SubmoduleRebaser(path,
-                                        repo,
-                                        result.submoduleCommits,
-                                        () => fetcher);
-        });
-
-        submoduleRebasers[path] = promise;
-        return yield promise;
-    });
-
-    const rebase  = yield initializer(openSubs, getSubmoduleRebaser);
-    const signature  = metaRepo.defaultSignature();
-
-    let mergeBase = null; // Will load merge-base into this if needed.
-
-    const getMergeBase = co.wrap(function *() {
-        if (null !== mergeBase) {
-            return mergeBase;                                         // RETURN
-        }
-        const baseId = yield NodeGit.Merge.base(metaRepo,
-                                                currentCommit.id(),
-                                                ontoCommit.id());
-        mergeBase = yield metaRepo.getCommit(baseId);
-        return mergeBase;
-    });
- 
-    let baseSubmodules = null;  // state of submodules at merge-base
-    const getMergeBaseSubs = co.wrap(function *() {
-        if (null !== baseSubmodules) {
-            return baseSubmodules;                                    // RETURN
-        }
-        const base = yield getMergeBase();
-        baseSubmodules =
-              yield SubmoduleConfigUtil.getSubmodulesFromCommit(metaRepo, base);
-        return baseSubmodules;
-    });
-
-    let ontoSubmodules = null;  // state of subs in commit rebasing onto
-    const getOntoSubs = co.wrap(function *() {
-        if (null !== ontoSubmodules) {
-            return ontoSubmodules;                                    // RETURN
-        }
-        ontoSubmodules = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                    metaRepo,
-                                                                    ontoCommit);
-        return ontoSubmodules;
-    });
 
     // Now, iterate over the rebase commits.  We pull the operation out into a
     // separate function to avoid problems associated with creating functions
     // in loops.
-
-    const processRebase = co.wrap(function *(rebaseOper) {
-        // We're going to loop over the entries of the index for the rebase
-        // operation.  We have several tasks (I'll repeat later):
-        //
-        // 1. Stage "normal", un-conflicted, non-submodule changes.  This
-        //    process requires that we set the submodule to the correct commit.
-        // 2. When a conflict is detected in a submodule, call `init` on the
-        //    rebaser for that submodule.
-        // 3. Pass any change in a submodule off to the appropriate submodule
-        //    rebaser.
-
-        const index = yield metaRepo.index();
-        let inits = [];  // `init` operations to run
-        let nexts = [];  // rebaser and id to run `next` on in parallel
-
-        let errorMessage = "";
-
-        const entries = index.entries();
-        for (let i = 0; i < entries.length; ++i) {
-            const e = entries[i];
-            const id = e.id;
-            const isSubmodule = e.mode === NodeGit.TreeEntry.FILEMODE.COMMIT;
-
-            // From libgit2 index.h.  This information is not documented in the
-            // nodegit or libgit2 documentation.
-
-            const stage = RepoStatus.getStage(e.flags);
-            switch (stage) {
-            case RepoStatus.STAGE.NORMAL:
-                // If this is an unchanged, visible sub, make sure its sha is
-                // in the right place in case it was ffwded.
-
-                if (visibleSubs.has(e.path)) {
-                    const name = e.path;
-                    const sha = shas[name];
-                    const newSha = id.tostrS();
-                    if (sha !== newSha) {
-                        const subRepo = yield SubmoduleUtil.getRepo(metaRepo,
-                                                                    name);
-                        yield fetcher.fetchSha(subRepo, name, newSha);
-                        yield setHead(subRepo, newSha);
-                    }
-                }
-                break;
-            case RepoStatus.STAGE.OURS:
-                if (isSubmodule) {
-                    const initRebaser = yield getSubmoduleRebaser(e.path);
-
-                    // This case is an indication that we have a conflict with
-                    // an upstream commit.  Initialize a rebase for the
-                    // affected submodule, letting it know the id of the
-                    // upstream commit onto which it should rebase.  The
-                    // `Entry` that comes with the stage set to
-                    // GIT_INDEX_STAGE_THEIRS will contain the id of the commit
-                    // that we are rebasing FROM.
-
-                    const sha = shas[e.path];
-                    inits.push(initRebaser.init(sha, id.tostrS()));
-                }
-                else {
-                    if (SubmoduleConfigUtil.modulesFileName === e.path) {
-
-                        // If there is a conflict in the '.gitmodules' file,
-                        // attempt to resolve it by comparing the current
-                        // change against the original onto commit and the
-                        // merge base between the base and onto commits.
-
-                        const Conf = SubmoduleConfigUtil;
-                        const getSubs = Conf.getSubmodulesFromCommit;
-                        const fromNext = yield getSubs(metaRepo,
-                                                       currentCommit);
-                        const fromBase = yield getMergeBaseSubs();
-                        const fromOnto = yield getOntoSubs();
-                        const merged = Conf.mergeSubmoduleConfigs(fromNext,
-                                                                  fromOnto,
-                                                                  fromBase);
-                        // If it was resolved, write out and stage the new
-                        // modules state.
-
-                        if (null !== merged) {
-                            const newConf = Conf.writeConfigText(merged);
-                            yield fs.writeFile(path.join(metaRepo.workdir(),
-                                                         Conf.modulesFileName),
-                                               newConf);
-                            yield index.addByPath(e.path);
-                            break;
-                        }
-                    }
-                    errorMessage += `
-There is a conflict in ${colors.red(e.path)}.\n`;
-                 }
-                 break;
-             case RepoStatus.STAGE.THEIRS:
-                 const theirPath = e.path;
-                 if (isSubmodule) {
-                     const theirRebaser = yield getSubmoduleRebaser(theirPath);
-
-                     // Found the part of a conflict that corresponds to the
-                     // branch we're rebasing from.  Need to schedule a call
-                     // to the `SubmoduleRebaser.next` method to process the
-                     // commit.
-
-                     nexts.push({rebaser: theirRebaser, id: id.tostrS()});
-                 }
-             break;
-             default:
-             }
-        }
-
-        // Clean up conflicts unless we found one in the meta-repo that was not
-        // a submodule change.
-
-        if ("" === errorMessage) {
-            yield index.conflictCleanup();
-        }
-
-        // Initiate scheduled rebases.
-
-        yield inits;
-
-        // Process next commits for all submodule rebases.
-
-        yield nexts.map(co.wrap(function *(next) {
-            const rebaser = next.rebaser;
-            const id = next.id;
-            if (yield rebaser.next(id)) {
-                yield index.addByPath(rebaser.path());
-            }
-            else {
-                errorMessage += submoduleConflictMessage(rebaser.path());
-            }
-        }));
-
-        if ("" !== errorMessage) {
-            throw new UserError(errorMessage);
-        }
-
-        // Write the index and new commit, recording a mapping from the
-        // original commit ID to the new one.
-
-        yield index.write();
-        const newCommit = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
-            const commit = rebase.commit(null, signature, null);
-            return Promise.resolve(commit);
-        });
-        const newCommitSha = newCommit.tostrS();
-        const originalSha = rebaseOper.id().tostrS();
-        if (originalSha !== newCommitSha) {
-            result.metaCommits[newCommitSha] = originalSha;
-        }
-    });
 
     let idx = rebase.operationCurrent();
     const total = rebase.operationEntrycount();
@@ -584,42 +460,30 @@ There is a conflict in ${colors.red(e.path)}.\n`;
     while (idx < total) {
         const rebaseOper = rebase.operationByIndex(idx);
         console.log(`Applying ${colors.green(rebaseOper.id().tostrS())}.`);
-        currentCommit = yield metaRepo.getCommit(rebaseOper.id());
-        const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                metaRepo,
-                                                                currentCommit);
-        const names = Object.keys(urls);
-        shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
-                                                             names,
-                                                             currentCommit);
-        fetcher = new SubmoduleFetcher(metaRepo, currentCommit);
-        yield processRebase(rebaseOper);
+        yield processMetaRebaseOp(metaRepo,
+                                  ontoCommit,
+                                  rebase,
+                                  rebaseOper,
+                                  result);
         yield SubmoduleUtil.cacheSubmodules(metaRepo, makeCallNext);
         ++idx;
     }
 
-    // After the main rebase completes, we need to give the submodules a chance
-    // to finish then call `finish` on the `rebase` object.
-
-    yield Object.keys(submoduleRebasers).map(co.wrap(function *(name) {
-        const rebaser = yield submoduleRebasers[name];
-        yield rebaser.finish();
-    }));
-
     // If this was a fast-forward rebase, we need to set the heads of the
     // submodules correctly.
 
-    const wasFF = undefined === currentCommit ||
-                  (yield NodeGit.Graph.descendantOf(metaRepo,
+    const wasFF = yield NodeGit.Graph.descendantOf(metaRepo,
                                                     ontoCommit.id(),
-                                                    currentCommit.id()));
+                                                    fromCommit.id());
     if (wasFF) {
-        fetcher = new SubmoduleFetcher(metaRepo, ontoCommit);
-        shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
-                                                             openSubs,
-                                                             ontoCommit);
+        const opener = new Open.Opener(metaRepo, ontoCommit);
+        const fetcher = yield opener.fetcher();
+        const openSubs = Array.from(yield opener.getOpenSubs());
+        const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
+                                                                   openSubs,
+                                                                   ontoCommit);
         yield openSubs.map(co.wrap(function *(name) {
-            const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+            const subRepo = yield opener.getSubrepo(name);
             const head = yield subRepo.head();
             const sha = shas[name];
             if (head.target().tostrS() !== sha) {
@@ -630,7 +494,6 @@ There is a conflict in ${colors.red(e.path)}.\n`;
     }
 
     yield callFinish(metaRepo, rebase);
-
     return result;
 });
 
@@ -704,7 +567,10 @@ up-to-date.`);
                                                      null);
             console.log(`Rewinding to ${colors.green(commitId.tostrS())}.`);
             yield callNext(rebase);
-            return rebase;
+            return {
+                rebase: rebase,
+                submoduleCommits: {},
+            };
         }));
     });
     return yield driveRebase(metaRepo, initialize, fromCommit, commit);
@@ -760,34 +626,57 @@ exports.continue = co.wrap(function *(repo) {
     if (null === rebaseInfo) {
         throw new UserError("Error: no rebase in progress");
     }
-    const fromCommit = yield repo.getCommit(rebaseInfo.originalHead);
+  const fromCommit = yield repo.getCommit(rebaseInfo.originalHead);
     const ontoCommit = yield repo.getCommit(rebaseInfo.onto);
 
     let errorMessage = "";
 
-    const initializer = co.wrap(function *(openSubs, getSubmoduleRebaser) {
+    const initializer = co.wrap(function *(metaRepo) {
         console.log(`Continuing rebase from \
 ${colors.green(rebaseInfo.originalHead)} onto \
 ${colors.green(rebaseInfo.onto)}.`);
         const rebase = yield SubmoduleUtil.cacheSubmodules(repo, () => {
             return NodeGit.Rebase.open(repo);
         });
-        const curIdx = rebase.operationCurrent();
-        const curOper = rebase.operationByIndex(curIdx);
-        const curSha = curOper.id().tostrS();
         const index = yield repo.index();
-        yield openSubs.map(co.wrap(function *(name) {
-            const subRebaser = yield getSubmoduleRebaser(name);
-            const result = yield subRebaser.continueRebase(curSha, index);
-            if (!result) {
-                errorMessage += submoduleConflictMessage(name);
+        const subs = yield SubmoduleUtil.listOpenSubmodules(metaRepo);
+        const subCommits = {};
+        for (let i = 0; i !== subs.length; ++i) {
+            const name = subs[i];
+            const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+            if (!subRepo.isRebasing()) {
+                yield index.addByPath(name);
+                break;                                                 // BREAK
             }
-        }));
+            yield index.addByPath(name);
+
+            const subInfo = yield RebaseFileUtil.readRebase(repo.path());
+            console.log(`Submodule ${colors.blue(name)} continuing \
+rebase from ${colors.green(subInfo.originalHead)} onto \
+${colors.green(subInfo.onto)}.`);
+            const rebase = yield NodeGit.Rebase.open(subRepo);
+            const idx = rebase.operationCurrent();
+            const op = rebase.operationByIndex(idx);
+            const result = yield processSubmoduleRebase(subRepo,
+                                                        name,
+                                                        rebase,
+                                                        op);
+            subCommits[name] = result.commits;
+            if (null !== result.error) {
+                errorMessage += result.error + "\n";
+            }
+            else {
+                yield index.addByPath(name);
+                yield index.conflictRemove(name);
+            }
+        }
         if ("" !== errorMessage) {
             throw new UserError(errorMessage);
         }
-        return rebase;
+        return {
+            rebase: rebase,
+            submoduleCommits: subCommits,
+        };
     });
     return yield driveRebase(repo, initializer, fromCommit, ontoCommit);
 });
-

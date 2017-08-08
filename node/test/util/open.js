@@ -127,13 +127,55 @@ describe("openOnCommit", function () {
             const fetcher = yield opener.fetcher();
             assert.instanceOf(fetcher, SubmoduleFetcher);
         }));
-        it("fetcher", co.wrap(function *() {
-            const state = "x=S";
+        it("getOpenSubs, empty", co.wrap(function *() {
+            const state = "a=B|x=U";
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const fetcher = yield opener.fetcher();
-            assert.instanceOf(fetcher, SubmoduleFetcher);
+            const open = yield opener.getOpenSubs();
+            assert.deepEqual(Array.from(open), []);
+        }));
+        it("getOpenSubs, empty after open", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const open = yield opener.getOpenSubs();
+            assert.deepEqual(Array.from(open), []);
+        }));
+        it("getOpenSubs, non-empty", co.wrap(function *() {
+            const state = "a=B|x=U:Os";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const open = yield opener.getOpenSubs();
+            assert.deepEqual(Array.from(open), ["s"]);
+        }));
+        it("isOpen, not", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const result = yield opener.isOpen("s");
+            assert.equal(false, result);
+        }));
+        it("isOpen, true after open", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const result = yield opener.isOpen("s");
+            assert.equal(true, result);
+        }));
+        it("getOpenSubs, true immediately", co.wrap(function *() {
+            const state = "a=B|x=U:Os";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const result = yield opener.isOpen("s");
+            assert.equal(true, result);
         }));
     });
 });
