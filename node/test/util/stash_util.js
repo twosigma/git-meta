@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const GitUtil         = require("../../lib/util/git_util");
 const StashUtil       = require("../../lib/util/stash_util");
 const StatusUtil      = require("../../lib/util/status_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
@@ -287,6 +288,40 @@ x=E:Fmeta-stash=s;
                 });
             }));
         });
+        describe("check log message", function () {
+            it("on branch", co.wrap(function *() {
+                const state = "a=B|x=U:Os W README.md=999";
+                const w = yield RepoASTTestUtil.createMultiRepos(state);
+                const repo = w.repos.x;
+                const status = yield StatusUtil.getRepoStatus(repo, {
+                    showMetaChanges: false,
+                });
+                yield StashUtil.save(repo, status, false);
+                const head = yield repo.getHeadCommit();
+                const log = yield NodeGit.Reflog.read(repo,
+                                                      "refs/meta-stash");
+                const entry = log.entryByIndex(0);
+                assert.equal(entry.message(),
+`WIP on master: ${GitUtil.shortSha(head.id().tostrS())} added 's'`);
+            }));
+            it("detached", co.wrap(function *() {
+                const state = "a=B|x=U:Os W README.md=999";
+                const w = yield RepoASTTestUtil.createMultiRepos(state);
+                const repo = w.repos.x;
+                const head = yield repo.getHeadCommit();
+                const headSha = head.id().tostrS();
+                repo.setHeadDetached(headSha);
+                const status = yield StatusUtil.getRepoStatus(repo, {
+                    showMetaChanges: false,
+                });
+                yield StashUtil.save(repo, status, false);
+                const log = yield NodeGit.Reflog.read(repo,
+                                                      "refs/meta-stash");
+                const entry = log.entryByIndex(0);
+                assert.equal(entry.message(),
+`WIP on (no branch): ${GitUtil.shortSha(headSha)} added 's'`);
+            }));
+        });
     });
     describe("createReflogIfNeeded", function () {
         it("breathing", co.wrap(function *() {
@@ -296,14 +331,21 @@ x=E:Fmeta-stash=s;
             const headSha = head.id().tostrS();
             const first = yield head.parent(0);
             const firstSha = first.id().tostrS();
-            yield StashUtil.createReflogIfNeeded(repo, "refs/foo", headSha);
-            yield StashUtil.createReflogIfNeeded(repo, "refs/foo", firstSha);
+            yield StashUtil.createReflogIfNeeded(repo,
+                                                 "refs/foo",
+                                                 headSha,
+                                                 "foo");
+            yield StashUtil.createReflogIfNeeded(repo,
+                                                 "refs/foo",
+                                                 firstSha,
+                                                 "bar");
             const log = yield NodeGit.Reflog.read(repo, "refs/foo");
             assert.equal(log.entrycount(), 1);
             const zero = log.entryByIndex(0);
             const zeroSha = "0000000000000000000000000000000000000000";
             assert.equal(zero.idOld().tostrS(), zeroSha);
             assert.equal(zero.idNew().tostrS(), headSha);
+            assert.equal(zero.message(), "foo");
         }));
     });
     describe("setStashHead", function () {
