@@ -46,7 +46,7 @@ const writeLog = co.wrap(function *(repo, reverseMap, logs) {
     for(let i = 0; i < logs.length; ++i) {
         const logSha = logs[logs.length - (i + 1)];
         const sha = reverseMap[logSha];
-        log.append(NodeGit.Oid.fromString(sha), sig, "foo");
+        log.append(NodeGit.Oid.fromString(sha), sig, `log of ${logSha}`);
     }
     log.write();
 });
@@ -621,6 +621,41 @@ x=E:Fmeta-stash=;
                                                                c.fails, {
                     expectedTransformer: refMapper,
                 });
+            }));
+        });
+    });
+
+    describe("list", function () {
+        const cases = {
+            "no stashes": {
+                state: "x=S",
+                logs: [],
+                expected: "",
+            },
+            "one stash": {
+                state: "x=S",
+                logs: ["1"],
+                expected: "meta-stash@{0}: log of 1\n",
+            },
+            "two stash": {
+                state: "x=S:C2-1;Bmaster=2",
+                logs: ["2", "1"],
+                expected: `\
+meta-stash@{0}: log of 2
+meta-stash@{1}: log of 1
+`,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = w.repos.x;
+                yield writeLog(repo, w.reverseCommitMap, c.logs);
+                const result = yield StashUtil.list(repo);
+                const resultLines = result.split("\n");
+                const expectedLines = c.expected.split("\n");
+                assert.deepEqual(resultLines, expectedLines);
             }));
         });
     });

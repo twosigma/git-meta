@@ -416,3 +416,20 @@ Dropped ${colors.green(metaStashRef + "@{0}")} ${colors.blue(stashSha)}`);
 Could not restore stash ${colors.red(stashSha)} due to conflicts.`);
     }
 });
+
+/**
+ * Return a string describing the meta stashes in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ */
+exports.list = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    let result = "";
+    const log = yield NodeGit.Reflog.read(repo, metaStashRef);
+    const count = log.entrycount();
+    for (let i = 0; i < count; ++i) {
+        const entry = log.entryByIndex(i);
+        result += `meta-stash@{${i}}: ${entry.message()}\n`;
+    }
+    return result;
+});
