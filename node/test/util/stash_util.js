@@ -39,6 +39,17 @@ const StatusUtil      = require("../../lib/util/status_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 
+const writeLog = co.wrap(function *(repo, reverseMap, logs) {
+    const log = yield NodeGit.Reflog.read(repo, "refs/meta-stash");
+    const sig = repo.defaultSignature();
+    for(let i = 0; i < logs.length; ++i) {
+        const logSha = logs[logs.length - (i + 1)];
+        const sha = reverseMap[logSha];
+        log.append(NodeGit.Oid.fromString(sha), sig, "foo");
+    }
+    log.write();
+});
+
 /**
  * Replace all the submodule stash refs in the form of `sub-stash/ss` with
  * `sub-stash/${physical id}`, where  'physical id' refers to the id of the
@@ -471,16 +482,8 @@ x=E:Os Bss=ss!
             const c = cases[caseName];
             const remover = co.wrap(function *(repos, mapping) {
                 const repo = repos.x;
-                const revMap = mapping.reverseCommitMap;
-                const log = yield NodeGit.Reflog.read(repo, "refs/meta-stash");
-                const refLog = c.log;
-                const sig = repo.defaultSignature();
-                for(let i = 0; i < refLog.length; ++i) {
-                    const logSha = refLog[refLog.length - (i + 1)];
-                    const sha = revMap[logSha];
-                    log.append(NodeGit.Oid.fromString(sha), sig, "foo");
-                }
-                log.write();
+                const logs = c.log;
+                yield writeLog(repo, mapping.reverseCommitMap, logs);
                 yield StashUtil.removeStash(repo, c.index);
                 const map = mapping.commitMap;
                 const newLog = yield NodeGit.Reflog.read(repo,
@@ -491,10 +494,10 @@ x=E:Os Bss=ss!
                     const sha = map[entry.idNew().tostrS()];
                     newRefLog.push(sha);
                 }
-                if (0 !== refLog.length) {
-                    refLog.splice(c.index, 1);
+                if (0 !== logs.length) {
+                    logs.splice(c.index, 1);
                 }
-                assert.deepEqual(newRefLog, refLog);
+                assert.deepEqual(newRefLog, logs);
             });
             it(caseName, co.wrap(function *() {
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.init,
@@ -551,15 +554,7 @@ x=E:Fmeta-stash=;
             const popper = co.wrap(function *(repos, mapping) {
                 const repo = repos.x;
                 const revMap = mapping.reverseCommitMap;
-                const log = yield NodeGit.Reflog.read(repo, "refs/meta-stash");
-                const refLog = c.log || [];
-                const sig = repo.defaultSignature();
-                for(let i = 0; i < refLog.length; ++i) {
-                    const logSha = refLog[refLog.length - (i + 1)];
-                    const sha = revMap[logSha];
-                    log.append(NodeGit.Oid.fromString(sha), sig, "foo");
-                }
-                log.write();
+                yield writeLog(repo, revMap, c.log || []);
 
                 // set up stash refs in submodules, if requested
 
