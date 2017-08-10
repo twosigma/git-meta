@@ -63,6 +63,13 @@ default`,
         defaultValue: "save",
     });
 
+    parser.addArgument("stash", {
+        help: "use the index at <stash>, e.g., 'git meta stash pop 2'",
+        type: "int",
+        nargs: "?",
+        defaultValue: null,
+    });
+
     parser.addArgument(["-u", "--include-untracked"], {
         help: `Include untracked files in the stash.`,
         action: "storeConst",
@@ -70,12 +77,13 @@ default`,
     });
 };
 
-const doPop = co.wrap(function *() {
+const doPop = co.wrap(function *(args) {
     const GitUtil   = require("../../lib/util/git_util");
     const StashUtil = require("../../lib/util/stash_util");
 
     const repo = yield GitUtil.getCurrentRepo();
-    yield StashUtil.pop(repo);
+    const index = (null === args.stash) ? 0 : args.stash;
+    yield StashUtil.pop(repo, index);
 });
 
 function cleanSubs(status, includeUntracked) {
@@ -94,6 +102,12 @@ const doSave = co.wrap(function *(args) {
     const GitUtil    = require("../../lib/util/git_util");
     const StashUtil  = require("../../lib/util/stash_util");
     const StatusUtil = require("../../lib/util/status_util");
+    const UserError  = require("../../lib/util/user_error");
+
+    if (null !== args.stash) {
+        throw new UserError("<stash> option not compatible with 'save'");
+    }
+
     const repo = yield GitUtil.getCurrentRepo();
     const status = yield StatusUtil.getRepoStatus(repo);
     const includeUntracked = args.include_untracked || false;

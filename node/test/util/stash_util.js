@@ -564,6 +564,7 @@ x=U:Cs-2 s=Sa:ss;Bs=s;Fmeta-stash=s;
        Csis-1 !
        Csus foo=bar;`,
                 fails: true,
+                log: ["s"],
                 expected: `
 x=E:Os Bss=ss!Fstash=ss!
        W foo=baz!
@@ -584,6 +585,25 @@ x=U:Cs-2 s=Sa:ss;Fmeta-stash=s;Bs=s;
                 subStash: { s: "ss" },
                 expected: `
 x=E:Fmeta-stash=;
+    Os Bss=ss!
+       Css-1,sis,sus !
+       Csis-1 !
+       Csus foo=bar!
+       W foo=bar`
+            },
+            "works, second": {
+                init: `
+a=B|
+x=U:Cs-2 s=Sa:ss;Fmeta-stash=2;Bs=s;
+    Os Bss=ss!
+       Css-1,sis,sus !
+       Csis-1 !
+       Csus foo=bar`,
+                log: ["2", "s"],
+                subStash: { s: "ss" },
+                index: 1,
+                expected: `
+x=E:Fmeta-stash=2;
     Os Bss=ss!
        Css-1,sis,sus !
        Csis-1 !
@@ -611,8 +631,8 @@ x=E:Fmeta-stash=;
                                              1,
                                              "test stash");
                 }
-
-                yield StashUtil.pop(repo);
+                const index = (undefined === c.index) ? 0 : c.index;
+                yield StashUtil.pop(repo, index);
             });
             it(caseName, co.wrap(function *() {
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.init,
