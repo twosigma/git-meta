@@ -369,14 +369,15 @@ exports.removeStash = co.wrap(function *(repo, index) {
 });
 
 /**
- * Attempt to restore the most recent stash in the specified `repo`.  If
- * successful, make the second stash current; if there is no other stash,
+ * Attempt to restore the stash at the specified `index` in the specified
+ * `repo`.  If successful, remove that stash; if there is no other stash,
  * remove `refs/meta-stash`.
  *
  * @param {NodeGit.Repository} repo
  */
-exports.pop = co.wrap(function *(repo) {
+exports.pop = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
+    assert.isNumber(index);
 
     // Try to look up the meta stash; return early if not found.
 
@@ -389,8 +390,12 @@ exports.pop = co.wrap(function *(repo) {
         return;                                                       // RETURN
     }
 
-    const stashSha = stashRef.target().tostrS();
-
+    const log = yield NodeGit.Reflog.read(repo, metaStashRef);
+    const count = log.entrycount();
+    if (count <= index) {
+        throw new UserError(`Invalid stash index: ${colors.red(index)}.`);
+    }
+    const stashSha = log.entryByIndex(index).idNew().tostrS();
     const applyResult = yield exports.apply(repo, stashSha);
 
     const status = yield StatusUtil.getRepoStatus(repo);
@@ -399,7 +404,7 @@ exports.pop = co.wrap(function *(repo) {
     // If the application succeeded, remove it.
 
     if (null !== applyResult) {
-        yield exports.removeStash(repo, 0);
+        yield exports.removeStash(repo, index);
         console.log(`\
 Dropped ${colors.green(metaStashRef + "@{0}")} ${colors.blue(stashSha)}`);
 
