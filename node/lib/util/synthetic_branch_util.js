@@ -113,18 +113,6 @@ function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
 
     const localPath = yield *urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
-    const odb = yield submoduleRepo.odb();
-    (process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES || "").split(":").forEach(
-        function(alt) {
-            if (alt !== "") {
-                odb.addDiskAlternate(alt);
-            }
-        }
-    );
-    const objectDirectory = process.env.GIT_OBJECT_DIRECTORY;
-    if (objectDirectory) {
-        odb.addDiskAlternate();
-    }
     const submoduleCommitId = submoduleEntry.id();
     const branch = exports.getSyntheticBranchForCommit(submoduleCommitId);
     try {
@@ -305,6 +293,20 @@ function* submoduleCheck(repo, updates) {
     return resolved.some(identity);
 }
 
+function* initAltOdb(repo) {
+    const odb = yield repo.odb();
+    (process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES || "").split(":").forEach(
+        function(alt) {
+            if (alt !== "") {
+                odb.addDiskAlternate(alt);
+            }
+        }
+    );
+    const objectDirectory = process.env.GIT_OBJECT_DIRECTORY;
+    if (objectDirectory) {
+        odb.addDiskAlternate(objectDirectory);
+    }
+}
 
 /**
  * A git pre-receive hook, which reads from stdin and checks
@@ -330,6 +332,7 @@ function doPreReceive(check) {
     }).on("end", function() {
         co(function *() {
             const repo = yield NodeGit.Repository.open(".");
+            yield initAltOdb(repo);
             return yield check(repo, updates);
         }).then(function(res) {
             process.exit(+res);
@@ -345,3 +348,5 @@ exports.submodulePreReceive = doPreReceive.bind(null, submoduleCheck);
 
 exports.checkUpdate = co.wrap(checkUpdate);
 exports.submoduleCheck = co.wrap(submoduleCheck);
+exports.metaUpdateCheck = co.wrap(metaUpdateCheck);
+exports.initAltOdb = co.wrap(initAltOdb);

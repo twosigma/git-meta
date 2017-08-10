@@ -175,19 +175,27 @@ describe("synthetic-branch", function () {
     });
 });
 
+const createCommit = function*(repo, contents) {
+    const index = yield repo.index();
+
+    yield contents(repo, index);
+
+    const sig = NodeGit.Signature.create("A U Thor", "author@example.com",
+                                         1475535185, -4*60);
+    return yield repo.createCommitOnHead(["f"], sig, sig, "a commit");
+};
+
+const addFile = function*(repo, index) {
+    yield fsp.writeFile(path.join(repo.workdir(), "f"), "hello world");
+    yield index.addByPath("f");
+};
+
 describe("synthetic-branch-submodule-pre-receive", function () {
     it("works", co.wrap(function *() {
         const root = yield TestUtil.makeTempDir();
         const rootDirectory = yield fsp.realpath(root);
         const repo = yield NodeGit.Repository.init(rootDirectory, 0);
-        const index = yield repo.index();
-
-        yield fsp.writeFile(path.join(rootDirectory, "f"), "hello world");
-        yield index.addByPath("f");
-
-        const sig = NodeGit.Signature.create("A U Thor", "author@example.com",
-                                             1475535185, -4*60);
-        const oid = yield repo.createCommitOnHead(["f"], sig, sig, "a commit");
+        const oid = yield createCommit(repo, addFile);
 
         // an empty push succeeds
         let fail = yield SyntheticBranch.submoduleCheck(repo, []);
@@ -199,6 +207,7 @@ describe("synthetic-branch-submodule-pre-receive", function () {
             newSha: oid.toString(),
             ref: "refs/commits/" + oid.toString(),
         }]);
+        assert(!fail);
 
         // a push with f to a bogus branch fails
         fail = yield SyntheticBranch.submoduleCheck(repo, [{
@@ -207,5 +216,70 @@ describe("synthetic-branch-submodule-pre-receive", function () {
             ref: "refs/commits/0000000000000000000000000000000000000000",
         }]);
         assert(fail);
+    }));
+});
+
+describe("synthetic-branch-meta-pre-receive", function () {
+    it("works", co.wrap(function *() {
+        const base = yield TestUtil.makeTempDir();
+        const baseDirectory = yield fsp.realpath(base);
+        const subDirectory = path.join(baseDirectory, "sub");
+        const metaDirectory = path.join(baseDirectory, "meta");
+
+        const subRepo = yield NodeGit.Repository.init(subDirectory, 0);
+        const subOid = yield createCommit(subRepo, addFile);
+
+        const metaRepo = yield NodeGit.Repository.init(metaDirectory, 0);
+        yield createCommit(metaRepo, addFile);
+        const metaOid = yield createCommit(metaRepo, function*(repo, index) {
+            const sub = yield NodeGit.Submodule.addSetup(repo, "../sub",
+                                                         "sub", 1);
+            const subRepo = yield sub.open();
+            yield subRepo.fetchAll();
+            subRepo.setHeadDetached(subOid);
+            yield index.addByPath("sub");
+        });
+
+        //Now, we want to create an empty repo on which we will run
+        //these tests, but we'll point them to the ODB of the original
+        //repo using GIT_OBJECT_DIRECTORY, as git receive-pack does
+
+        const emptyBaseDirectory = path.join(baseDirectory, "empty");
+        yield fsp.mkdir(emptyBaseDirectory);
+
+        const repo = yield NodeGit.Repository.init(emptyBaseDirectory, 0);
+        const metaObjects = metaDirectory + "/.git/objects";
+        process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = metaObjects;
+
+        //fail: no synthetic ref
+        let fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+            ref: "refs/heads/example",
+            oldSha: "0000000000000000000000000000000000000000",
+            newSha: metaOid.toString()
+        }]);
+        assert(fail);
+
+        yield NodeGit.Reference.create(subRepo,
+                                       "refs/commits/" + subOid.toString(),
+                                       subOid, 0, "create synthetic ref");
+
+        //fail: no alt odb
+        fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+            ref: "refs/heads/example",
+            oldSha: "0000000000000000000000000000000000000000",
+            newSha: metaOid.toString()
+        }]);
+        assert(fail);
+
+        //pass
+        yield SyntheticBranch.initAltOdb(repo);
+        fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+            ref: "refs/heads/example",
+            oldSha: "0000000000000000000000000000000000000000",
+            newSha: metaOid.toString()
+        }]);
+        assert(!fail);
+
+        process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = "";
     }));
 });
