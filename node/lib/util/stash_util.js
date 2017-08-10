@@ -35,6 +35,7 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
+const GitUtil         = require("./git_util");
 const Open            = require("./open");
 const PrintStatusUtil = require("./print_status_util");
 const RepoStatus      = require("./repo_status");
@@ -84,6 +85,18 @@ const metaStashRef = "refs/meta-stash";
 function makeSubRefName(sha) {
     return `refs/sub-stash/${sha}`;
 }
+
+/**
+ * Return a message describing the stash being created in the specified `repo`.
+ */
+const makeLogMessage = co.wrap(function *(repo) {
+    const head = yield repo.getHeadCommit();
+    const branchName = yield GitUtil.getCurrentBranchName(repo);
+    const branchDesc = (null === branchName) ?  "(no branch)" : branchName;
+    return `\
+WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} \
+${head.message()}`;
+});
 
 /**
  * Save the state of the submodules in the specified, `repo` having the
@@ -178,33 +191,39 @@ exports.save = co.wrap(function *(repo, status, includeUntracked) {
 
     // Update the stash ref and the ref log
 
+    const message = yield makeLogMessage(repo);
     yield NodeGit.Reference.create(repo,
                                    metaStashRef,
                                    stashId,
                                    1,
-                                   "meta stash");
+                                   message);
 
-    yield exports.createReflogIfNeeded(repo, metaStashRef, stashSha);
+    yield exports.createReflogIfNeeded(repo, metaStashRef, stashSha, message);
     return subResults;
 });
 
 /**
  * If there is no reflog for the specified `reference` in the specified `repo`,
- * create one with the specified `sha` as its first and only entry.  Otherwise,
- * do nothing.
+ * create one with the specified `sha` as its first and only entry, using the
+ * specified log `message`. Otherwise, do nothing.
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             reference
  * @param {String}             sha
+ * @param {String}             message
  */
-exports.createReflogIfNeeded = co.wrap(function *(repo, reference, sha) {
+exports.createReflogIfNeeded = co.wrap(function *(repo,
+                                                  reference,
+                                                  sha,
+                                                  message) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(reference);
     assert.isString(sha);
+    assert.isString(message);
     const log = yield NodeGit.Reflog.read(repo, reference);
     if (0 === log.entrycount()) {
         const id = NodeGit.Oid.fromString(sha);
-        log.append(id, repo.defaultSignature(), "log");
+        log.append(id, repo.defaultSignature(), message);
         log.write();
     }
 });
@@ -234,8 +253,9 @@ exports.setStashHead = co.wrap(function *(repo, sha) {
 
     // otherwise, either there is no stash, or it points to the wrong thing
 
-    yield NodeGit.Reference.create(repo, "refs/stash", sha, 1, "stash");
-    yield exports.createReflogIfNeeded(repo, "refs/stash", sha);
+    const message = "sub stash";
+    yield NodeGit.Reference.create(repo, "refs/stash", sha, 1, message);
+    yield exports.createReflogIfNeeded(repo, "refs/stash", sha, message);
 });
 
 /**
@@ -395,4 +415,21 @@ Dropped ${colors.green(metaStashRef + "@{0}")} ${colors.blue(stashSha)}`);
         throw new UserError(`\
 Could not restore stash ${colors.red(stashSha)} due to conflicts.`);
     }
+});
+
+/**
+ * Return a string describing the meta stashes in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ */
+exports.list = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    let result = "";
+    const log = yield NodeGit.Reflog.read(repo, metaStashRef);
+    const count = log.entrycount();
+    for (let i = 0; i < count; ++i) {
+        const entry = log.entryByIndex(i);
+        result += `meta-stash@{${i}}: ${entry.message()}\n`;
+    }
+    return result;
 });

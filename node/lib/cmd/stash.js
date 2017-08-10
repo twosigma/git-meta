@@ -55,7 +55,9 @@ and unstaged commits to the sub-repos.`;
 exports.configureParser = function (parser) {
 
     parser.addArgument("type", {
-        help: "'save' to save a stash, 'pop' to restore; 'save' is default",
+        help: `
+'save' to save a stash, 'pop' to restore, 'list' to show stashes; 'save' is
+default`,
         type: "string",
         nargs: "?",
         defaultValue: "save",
@@ -103,6 +105,14 @@ const doSave = co.wrap(function *(args) {
     console.log("Saved working directory and index state.");
 });
 
+const doList = co.wrap(function *() {
+    const GitUtil    = require("../../lib/util/git_util");
+    const StashUtil  = require("../../lib/util/stash_util");
+    const repo = yield GitUtil.getCurrentRepo();
+    const list = yield StashUtil.list(repo);
+    process.stdout.write(list);
+});
+
 /**
  * Execute the `stash` command according to the specified `args`.
  *
@@ -114,6 +124,7 @@ exports.executeableSubcommand = function (args) {
     switch(args.type) {
         case "pop" : return doPop(args);
         case "save": return doSave(args);
+        case "list": return doList(args);
         default: {
             console.error(`Invalid type ${colors.red(args.type)}`);
             process.exit(1);
