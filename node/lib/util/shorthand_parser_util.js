@@ -110,7 +110,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * second is its parent.  A new commit introduces a change with a file having
  * the same name as its id and content that is also its id, unless changes are
  * specified.  If no commit message is specified, the default value is
- * "message".  Note that in a test case, an expected commit message of "*"
+ * "message\n".  Note that in a test case, an expected commit message of "*"
  * indicates that any message is acceptable; this is necessary to match
  * generated messages.
  *
@@ -654,7 +654,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
         // up the start of the 'id' and message boundaries appropriately.
 
         const messageSeparator = findChar(shorthand, "#", begin, end);
-        let message = "message";
+        let message = "message\n";
         if (null !== messageSeparator) {
             message = shorthand.substr(begin, messageSeparator - begin);
         }

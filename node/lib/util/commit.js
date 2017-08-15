@@ -54,6 +54,16 @@ const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
 /**
+ * If the specified `message` does not end with '\n', return the result of
+ * appending '\n' to 'message'; otherwise, return 'message'.
+ *
+ * @param {String} message
+ */
+function ensureEolOnLastLine(message) {
+    return message.endsWith("\n") ? message : (message + "\n");
+}
+
+/**
  * Return the `NodeGit.Tree` object for the (left) parent of the head commit
  * in the specified `repo`, or null if the commit has no parent.
  *
@@ -220,7 +230,7 @@ const commitRepo = co.wrap(function *(repo,
         return yield repo.createCommitOnHead([],
                                              signature,
                                              signature,
-                                             message);
+                                             ensureEolOnLastLine(message));
     }
     return null;
 });
@@ -604,7 +614,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
                                                  sig,
                                                  sig,
                                                  0,
-                                                 message,
+                                                 ensureEolOnLastLine(message),
                                                  tree,
                                                  parents.length,
                                                  parents);
@@ -952,7 +962,8 @@ exports.amendRepo = co.wrap(function *(repo, message) {
     const index = yield repo.index();
     const treeId = yield index.writeTree();
     const tree = yield NodeGit.Tree.lookup(repo, treeId);
-    const id = yield head.amend("HEAD", null, null, null, message, tree);
+    const termedMessage = ensureEolOnLastLine(message);
+    const id = yield head.amend("HEAD", null, null, null, termedMessage, tree);
     return id.tostrS();
 });
 
