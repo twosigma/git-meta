@@ -106,7 +106,7 @@ const repoWithCommit = co.wrap(function *() {
             "README.md": "bleh",
             "foobar": "meh",
         },
-        message: "message",
+        message: "message\n",
     });
     const expected = new RepoAST({
         commits: commits,
@@ -152,7 +152,7 @@ const repoWithDeeperCommits = co.wrap(function *() {
     commits[secondCommit] = new Commit({
         changes: { "README.md": "bleh" },
         parents: [firstCommit],
-        message: "message",
+        message: "message\n",
     });
     const expected = new RepoAST({
         commits: commits,
@@ -268,7 +268,7 @@ describe("readRAST", function () {
         commits[secondSha] = new Commit({
             parents: [firstSha],
             changes: { "foo/bar": "meh" },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -298,7 +298,7 @@ describe("readRAST", function () {
         commits[delSha] = new Commit({
             parents: [headSha],
             changes: { "README.md": null },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -411,7 +411,7 @@ describe("readRAST", function () {
                                                      sig,
                                                      sig,
                                                      0,
-                                                     "message",
+                                                     "message\n",
                                                      tree,
                                                      0,
                                                      []);
@@ -420,7 +420,7 @@ describe("readRAST", function () {
         const commits = {};
         const sha = commitId.tostrS();
         commits[sha] = new RepoAST.Commit({
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -546,7 +546,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -594,7 +594,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -646,7 +646,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
-            message: "message",
+            message: "message\n",
         });
         commits[lastCommit.id().tostrS()] = new Commit({
             parents: [commit.id().tostrS()],
@@ -655,7 +655,7 @@ describe("readRAST", function () {
                                             baseSubPath,
                                             anotherSubCommit.id().tostrS())
             },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -852,7 +852,7 @@ describe("readRAST", function () {
                 "x/y": new RepoAST.Submodule(baseSubPath,
                                              subHead.id().tostrS()),
             },
-            message: "message",
+            message: "message\n",
         });
         const expected = new RepoAST({
             commits: commits,
@@ -1027,12 +1027,12 @@ describe("readRAST", function () {
         commits[bSha] = new Commit({
             parents: [firstSha],
             changes: { foo: "foo" },
-            message: "message",
+            message: "message\n",
         });
         commits[cSha] = new Commit({
             parents: [firstSha],
             changes: { bar: "bar" },
-            message: "message",
+            message: "message\n",
         });
         commits[mergeSha] = new Commit({
             parents: [cSha, bSha],
@@ -1132,7 +1132,7 @@ describe("readRAST", function () {
                                                  "HEAD",
                                                  sig,
                                                  sig,
-                                                 "message",
+                                                 "message\n",
                                                  id,
                                                  [ masterCommit, whamCommit ]);
         const mergeSha = mergeCommit.tostrS();
@@ -1147,12 +1147,12 @@ describe("readRAST", function () {
         subCommits[fooSha] = new Commit({
             parents: [baseMasterSha],
             changes: { foo: "foo" },
-            message: "message",
+            message: "message\n",
         });
         subCommits[barSha] = new Commit({
             parents: [baseMasterSha],
             changes: { bar: "bar" },
-            message: "message",
+            message: "message\n",
         });
 
         const commits = {};
@@ -1163,22 +1163,22 @@ describe("readRAST", function () {
         commits[subSha] = new Commit({
             parents: [firstSha],
             changes: { "s": new Submodule(basePath, baseMasterSha), },
-            message: "message",
+            message: "message\n",
         });
         commits[whamSha] = new Commit({
             parents: [subSha],
             changes: { "s": new Submodule(basePath, barSha) },
-            message: "message",
+            message: "message\n",
         });
         commits[masterSha] = new Commit({
             parents: [subSha],
             changes: { "s": new Submodule(basePath, fooSha) },
-            message: "message",
+            message: "message\n",
         });
         commits[mergeSha] = new Commit({
             parents: [masterSha, whamSha],
             changes: { "s": new Submodule(basePath, barSha) },
-            message: "message",
+            message: "message\n",
         });
 
         const expected = new RepoAST({
@@ -1284,7 +1284,7 @@ describe("readRAST", function () {
                                                  "HEAD",
                                                  sig,
                                                  sig,
-                                                 "message",
+                                                 "message\n",
                                                  id,
                                                  [ masterCommit, whamCommit ]);
         const mergeSha = mergeCommit.tostrS();
@@ -1299,12 +1299,12 @@ describe("readRAST", function () {
         subCommits[fooSha] = new Commit({
             parents: [baseMasterSha],
             changes: { foo: "foo" },
-            message: "message",
+            message: "message\n",
         });
         subCommits[barSha] = new Commit({
             parents: [baseMasterSha],
             changes: { bar: "bar" },
-            message: "message",
+            message: "message\n",
         });
 
         const commits = {};
@@ -1315,22 +1315,22 @@ describe("readRAST", function () {
         commits[subSha] = new Commit({
             parents: [firstSha],
             changes: { "s": new Submodule(basePath, baseMasterSha), },
-            message: "message",
+            message: "message\n",
         });
         commits[whamSha] = new Commit({
             parents: [subSha],
             changes: { "s": new Submodule(basePath, barSha) },
-            message: "message",
+            message: "message\n",
         });
         commits[masterSha] = new Commit({
             parents: [subSha],
             changes: { "s": new Submodule(basePath, fooSha) },
-            message: "message",
+            message: "message\n",
         });
         commits[mergeSha] = new Commit({
             parents: [masterSha, whamSha],
             changes: {},
-            message: "message",
+            message: "message\n",
         });
 
         const expected = new RepoAST({
@@ -1478,14 +1478,14 @@ describe("readRAST", function () {
             changes: {
                 a: new RepoAST.Submodule(anotherUrl, anotherHeadSha),
             },
-            message: "message",
+            message: "message\n",
         });
         commits[finalSha] = new RepoAST.Commit({
             parents: [nextSha],
             changes: {
                 a: new RepoAST.Submodule(thirdUrl, anotherHeadSha),
             },
-            message: "message",
+            message: "message\n",
         });
         expected = expected.copy({
             branches: {
@@ -1576,7 +1576,7 @@ describe("readRAST", function () {
             changes: {
                 "README.md": "data",
             },
-            message: "message",
+            message: "message\n",
         });
         const ast = yield ReadRepoASTUtil.readRAST(r);
         const headId = yield r.getHeadCommit();
@@ -1612,7 +1612,6 @@ describe("readRAST", function () {
 
         const repo = yield TestUtil.createSimpleRepository();
         const repoPath = repo.workdir();
-        console.log(repoPath);
         const readmePath = path.join(repoPath, "README.md");
         const foobarPath = path.join(repoPath, "foobar");
         const bazPath    = path.join(repoPath, "baz");

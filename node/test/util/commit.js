@@ -847,8 +847,14 @@ Untracked files:
             "staged addition": {
                 initial: "x=S:I a=b",
                 doAll: true,
+                message: "hello\n",
+                expected: "x=S:Chello\n#x-1 a=b;Bmaster=x",
+            },
+            "add newline": {
+                initial: "x=S:I a=b",
+                doAll: true,
                 message: "hello",
-                expected: "x=S:Chello#x-1 a=b;Bmaster=x",
+                expected: "x=S:Chello\n#x-1 a=b;Bmaster=x",
             },
             "staged addition, unstaged modification but all": {
                 initial: "x=S:I a=b;W a=c",
@@ -946,7 +952,7 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
                 subMessages: {
                     s: "this message",
                 },
-                expected: "x=E:Os Cthis message#s-1 u=v!H=s",
+                expected: "x=E:Os Cthis message\n#s-1 u=v!H=s",
             },
             "staged change in submodule with commit override": {
                 initial: "a=S|x=U:Os I u=v",
@@ -956,7 +962,7 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
                     s: "this message",
                 },
                 expected:
-                    "x=U:Cx-2 s=Sa:s;Os Cthis message#s-1 u=v!H=s;Bmaster=x",
+                    "x=U:Cx-2 s=Sa:s;Os Cthis message\n#s-1 u=v!H=s;Bmaster=x",
             },
             "new commit in a submodule": {
                 initial: "a=S|x=U:Ca-1;Bx=a;I s=Sa:a;Ba=a",
@@ -1420,9 +1426,15 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
         const cases = {
             "trivial": {
                 input: "x=S",
+                message: "foo\n",
+                expected: `
+x=N:Cfoo\n#x README.md=hello world;*=master;Bmaster=x`,
+            },
+            "added newline": {
+                input: "x=S",
                 message: "foo",
                 expected: `
-x=N:Cfoo#x README.md=hello world;*=master;Bmaster=x`,
+x=N:Cfoo\n#x README.md=hello world;*=master;Bmaster=x`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -1495,65 +1507,65 @@ x=U:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Cs-1 a=b,README.md=3!H=s`,
                 input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os",
                 message: "hi",
                 expected: `
-x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a!H=s`,
+x=U:Chi\n#x-2 s=Sa:s;Bmaster=x;Os Chi\n#s-1 a=a!H=s`,
             },
             "amended subrepo with index change": {
                 input: "a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os I q=4",
                 message: "hi",
                 expected: `
-x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a,q=4!H=s`,
+x=U:Chi\n#x-2 s=Sa:s;Bmaster=x;Os Chi\n#s-1 a=a,q=4!H=s`,
             },
             "amended subrepo with unstaged change": {
                 input: `
 a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
-                message: "hi",
+                message: "hi\n",
                 expected: `
-x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a!H=s!W README.md=2`,
+x=U:Chi\n#x-2 s=Sa:s;Bmaster=x;Os Chi\n#s-1 a=a!H=s!W README.md=2`,
             },
             "amended subrepo with change to stage": {
                 input: `
 a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=2`,
-                message: "hi",
+                message: "hi\n",
                 expected: `
-x=U:Chi#x-2 s=Sa:s;Bmaster=x;Os Chi#s-1 a=a,README.md=2!H=s`,
+x=U:Chi\n#x-2 s=Sa:s;Bmaster=x;Os Chi\n#s-1 a=a,README.md=2!H=s`,
                 all: true,
             },
             "strip submodule commit": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os`,
+                expected: `x=U:Cfoo\n#x-2 3=3;Bmaster=x;Os`,
             },
             "strip submodule commit, leave untracked": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W x=y;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os W x=y`,
+                expected: `x=U:Cfoo\n#x-2 3=3;Bmaster=x;Os W x=y`,
             },
             "strip submodule commit, leave modified": {
                 input: `
 a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a,3=3;Os I a!W README.md=2;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#x-2 3=3;Bmaster=x;Os W README.md=2`,
+                expected: `x=U:Cfoo\n#x-2 3=3;Bmaster=x;Os W README.md=2`,
             },
             "strip submodule commit unchange from index": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os I a=a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#x-2 3=3,s=Sa:a;Bmaster=x;Os`
+                expected: `x=U:Cfoo\n#x-2 3=3,s=Sa:a;Bmaster=x;Os`
             },
             "not strip submodule commit unchange from workdir": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 message: "foo",
                 expected: `
-x=U:Cfoo#x-2 3=3,s=Sa:s;Bmaster=x;Os Cfoo#s-a a=9!W a=a`
+x=U:Cfoo\n#x-2 3=3,s=Sa:s;Bmaster=x;Os Cfoo\n#s-a a=9!W a=a`
             },
             "strip submodule commit unchange from workdir, when all": {
                 input: `
 a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 message: "foo",
-                expected: `x=U:Cfoo#x-2 3=3,s=Sa:a;Bmaster=x;Os`,
+                expected: `x=U:Cfoo\n#x-2 3=3,s=Sa:a;Bmaster=x;Os`,
                 all: true,
             },
             "skipped meta repo": {
@@ -1562,7 +1574,7 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                 subMessages: {
                     s: "hi",
                 },
-                expected: `x=E:Os Chi#s-1 a=a!H=s`,
+                expected: `x=E:Os Chi\n#s-1 a=a!H=s`,
             },
             "skipped non-amend": {
                 input: "a=B|x=U:C3-2;Bmaster=3;I q=r;Os I y=z;B3=3",
@@ -1575,7 +1587,7 @@ a=B:Ca-1;Cb-a a=9;Bmaster=b|x=U:C3-2 s=Sa:b,3=3;Os W a=a;Bmaster=3`,
                     s: "hola",
                 },
                 expected: `
-x=E:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Chola#s-1 y=z!H=s`,
+x=E:Cx-2 3=3,s=Sa:s;Bmaster=x;Os Chola\n#s-1 y=z!H=s`,
             },
             "amended subrepo skipped with subMessage": {
                 input: `
@@ -1583,7 +1595,7 @@ a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
                 subMessages: {},
                 message: "hi",
                 expected: `
-x=U:Chi#x-2 foo=moo,s=Sa:a;Bmaster=x;Os`,
+x=U:Chi\n#x-2 foo=moo,s=Sa:a;Bmaster=x;Os`,
             },
             "amended subrepo skipped with own message": {
                 input: `
@@ -1593,7 +1605,7 @@ a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
                 },
                 message: "hi",
                 expected: `
-x=U:Chi#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh#s-1 a=a!H=s`,
+x=U:Chi\n#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh\n#s-1 a=a!H=s`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -1609,7 +1621,7 @@ x=U:Chi#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh#s-1 a=a!H=s`,
                     });
                     const subsToAmend = Object.keys(amend.subsToAmend);
                     const subMessages = c.subMessages || null;
-                    let message = "message";
+                    let message = "message\n";
                     if (undefined !== c.message) {
                         message = c.message;
                     }
@@ -1905,6 +1917,14 @@ my message
                 },
                 expected: "x=S:Cx-1 README.md=haha;Bmaster=x",
             },
+            "simple staged change, added eol": {
+                state: "x=S:I README.md=haha",
+                message: "hah",
+                fileChanges: {
+                    "README.md": FILESTATUS.MODIFIED,
+                },
+                expected: "x=S:Chah\n#x-1 README.md=haha;Bmaster=x",
+            },
             "simple workdir change": {
                 state: "x=S:W README.md=haha",
                 fileChanges: { "README.md": FILESTATUS.MODIFIED, },
@@ -1913,8 +1933,8 @@ my message
             "simple change with message": {
                 state: "x=S:I README.md=haha",
                 fileChanges: { "README.md": FILESTATUS.MODIFIED, },
-                expected: "x=S:Chello world#x-1 README.md=haha;Bmaster=x",
-                message: "hello world",
+                expected: "x=S:Chello world\n#x-1 README.md=haha;Bmaster=x",
+                message: "hello world\n",
             },
             "added file": {
                 state: "x=S:W q=3",
@@ -1977,7 +1997,7 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
             const writer = co.wrap(function *(repos) {
                 const repo = repos.x;
                 let status = yield StatusUtil.getRepoStatus(repo);
-                const message = c.message || "message";
+                const message = c.message || "message\n";
                 const subChanges = c.subChanges || [];
                 const subs = {};
                 const submodules = status.submodules;
@@ -3020,8 +3040,8 @@ and for d
             },
             "meta commit": {
                 initial: "x=S:I a=b",
-                message: "foo",
-                expected: "x=S:Cfoo#x-1 a=b;Bmaster=x",
+                message: "foo\n",
+                expected: "x=S:Cfoo\n#x-1 a=b;Bmaster=x",
             },
             "meta commit, with editor": {
                 initial: "x=S:I a=b",
@@ -3035,14 +3055,14 @@ and for d
                 initial: "x=S:W README.md=2",
                 all: true,
                 message: "foo",
-                expected: "x=S:Cfoo#x-1 README.md=2;Bmaster=x",
+                expected: "x=S:Cfoo\n#x-1 README.md=2;Bmaster=x",
             },
             "paths, cwd": {
                 initial: "x=S:I a/b=b,b=d",
                 message: "foo",
                 paths: ["b"],
                 cwd: "a",
-                expected: "x=S:Cfoo#x-1 a/b=b;I b=d;Bmaster=x",
+                expected: "x=S:Cfoo\n#x-1 a/b=b;I b=d;Bmaster=x",
             },
             "uncommitable": {
                 initial: "a=B|x=S:I a=Sa:;Oa",
@@ -3134,41 +3154,41 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
             "simple amend": {
                 initial: "x=S:C2-1 README.md=foo;Bmaster=2",
                 message: "foo",
-                expected: "x=S:Cfoo#x-1 README.md=foo;Bmaster=x",
+                expected: "x=S:Cfoo\n#x-1 README.md=foo;Bmaster=x",
             },
             "amend with change": {
                 initial: "x=S:C2-1 README.md=foo;Bmaster=2;I a=b",
                 message: "foo",
-                expected: "x=S:Cfoo#x-1 README.md=foo,a=b;Bmaster=x",
+                expected: "x=S:Cfoo\n#x-1 README.md=foo,a=b;Bmaster=x",
             },
             "amend with no all": {
                 initial: "x=S:C2-1;Bmaster=2;W README.md=8",
                 message: "foo",
-                expected: "x=S:Cfoo#x-1 2=2;Bmaster=x;W README.md=8",
+                expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
             },
             "amend with all": {
                 initial: "x=S:C2-1;Bmaster=2;W README.md=8",
                 message: "foo",
                 all: true,
-                expected: "x=S:Cfoo#x-1 2=2,README.md=8;Bmaster=x",
+                expected: "x=S:Cfoo\n#x-1 2=2,README.md=8;Bmaster=x",
             },
             "amend with all but no meta": {
                 initial: "x=S:C2-1;Bmaster=2;W README.md=8",
                 message: "foo",
                 all: true,
                 meta: false,
-                expected: "x=S:Cfoo#x-1 2=2;Bmaster=x;W README.md=8",
+                expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
             },
             "mismatch": {
                 initial: `
-a=B:Chello#a-1;Ba=a|x=U:Cworld#3-2 s=Sa:a;Bmaster=3`,
+a=B:Chello\n#a-1;Ba=a|x=U:Cworld\n#3-2 s=Sa:a;Bmaster=3`,
                 message: "hahaha",
                 expected: "x=E:Os",
                 fails: true,
             },
             "mismatch interactive": {
                 initial: `
-a=B:Chello#a-1;Ba=a|x=U:Cworld#3-2 s=Sa:a;Bmaster=3`,
+a=B:Chello\n#a-1;Ba=a|x=U:Cworld\n#3-2 s=Sa:a;Bmaster=3`,
                 interactive: true,
                 editor: () => Promise.resolve(`\
 hola

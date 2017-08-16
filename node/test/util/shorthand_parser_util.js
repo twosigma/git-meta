@@ -154,7 +154,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: { "1": "1"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -163,7 +163,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: {},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -174,7 +174,7 @@ describe("ShorthandParserUtil", function () {
                         "1": new Commit({
                             parents: [],
                             changes: { y: "2" },
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                 }),
@@ -193,7 +193,7 @@ describe("ShorthandParserUtil", function () {
                     "3": new Commit({
                         parents: ["1","2"],
                         changes: { "3": "3"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 },
             })},
@@ -211,7 +211,7 @@ describe("ShorthandParserUtil", function () {
                     "xxx2": new Commit({
                         parents: ["yy"],
                         changes: { "xxx2": "xxx2"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -220,7 +220,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: { "foo": "bar"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -229,7 +229,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: { "foo": ""},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -238,7 +238,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: { "foo": "bar", "b": "z"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -247,7 +247,7 @@ describe("ShorthandParserUtil", function () {
                     "1": new Commit({
                         parents: ["2"],
                         changes: { "foo": "bar", "b": "z"},
-                        message: "message",
+                        message: "message\n",
                     }),
                 }
             })},
@@ -263,7 +263,7 @@ describe("ShorthandParserUtil", function () {
                         "1": new Commit({
                             parents: ["2"],
                             changes: { "1": "1"},
-                            message: "message",
+                            message: "message\n",
                     })},
                     branches: { m: null },
                 }),
@@ -276,7 +276,7 @@ describe("ShorthandParserUtil", function () {
                         "1": new Commit({
                             parents: ["2"],
                             changes: { "1": "1"},
-                            message: "message",
+                            message: "message\n",
                     })},
                     branches: { m: null },
                 }),
@@ -298,12 +298,12 @@ describe("ShorthandParserUtil", function () {
                         "1": new Commit({
                             parents: ["2"],
                             changes: { "1": "1"},
-                            message: "message",
+                            message: "message\n",
                         }),
                         "3": new Commit({
                             parents: ["4"],
                             changes: { "3": "3"},
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                 }),
@@ -378,7 +378,7 @@ describe("ShorthandParserUtil", function () {
                         "2": new Commit({
                             parents: ["1"],
                             changes: { "baz": new Submodule("/foo.git", "1") },
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                 }),
@@ -391,7 +391,7 @@ describe("ShorthandParserUtil", function () {
                         "2": new Commit({
                             parents: ["1"],
                             changes: { "baz": new Submodule("o", "1") },
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                     branches: { master: new RepoAST.Branch("2", null), },
@@ -525,7 +525,7 @@ describe("ShorthandParserUtil", function () {
                         "2": new Commit({
                             parents: ["1"],
                             changes: { "2": "2"},
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                     notes: {
@@ -543,7 +543,7 @@ describe("ShorthandParserUtil", function () {
                         "2": new Commit({
                             parents: ["1"],
                             changes: { "2": "2"},
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                     notes: {
@@ -567,7 +567,7 @@ describe("ShorthandParserUtil", function () {
                             changes: {
                                 a: new RepoAST.Submodule("a", "1"),
                             },
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                     head: "2",
@@ -665,7 +665,7 @@ describe("ShorthandParserUtil", function () {
                             changes: {
                                 "1": "1",
                             },
-                            message: "message",
+                            message: "message\n",
                         }),
                     },
                     head: "1",
@@ -690,7 +690,7 @@ describe("ShorthandParserUtil", function () {
                         "1": B.commits["1"],
                         "2": new Commit({
                             changes: { "2": "2" },
-                            message: "message",
+                            message: "message\n",
                             parents: ["1"],
                         }),
                     },
@@ -736,7 +736,7 @@ describe("ShorthandParserUtil", function () {
                         commits[2] = new Commit({
                             parents: ["1"],
                             changes: { "2": "2"},
-                            message: "message",
+                            message: "message\n",
                         });
                         return commits;
                     })(),
@@ -756,7 +756,7 @@ describe("ShorthandParserUtil", function () {
                         commits[2] = new Commit({
                             parents: ["1"],
                             changes: { "2": "2"},
-                            message: "message",
+                            message: "message\n",
                         });
                         return commits;
                     })(),
@@ -842,7 +842,7 @@ describe("ShorthandParserUtil", function () {
                             "1": B.commits["1"],
                             "2": new Commit({
                                 changes: { "2": "2" },
-                                message: "message",
+                                message: "message\n",
                                 parents: ["1"],
                             }),
                         },
@@ -997,7 +997,7 @@ describe("ShorthandParserUtil", function () {
                                     "2": new Commit({
                                         parents: ["1"],
                                         changes: { "2": "2" },
-                                        message: "message",
+                                        message: "message\n",
                                     }),
                                 },
                                 branches: {
@@ -1051,7 +1051,7 @@ describe("ShorthandParserUtil", function () {
                                 changes: {
                                     s: new Submodule("a","3"),
                                 },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                     }),
@@ -1079,7 +1079,7 @@ describe("ShorthandParserUtil", function () {
                                 changes: {
                                     s: new Submodule("a","3"),
                                 },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                         openSubmodules: {
@@ -1110,7 +1110,7 @@ describe("ShorthandParserUtil", function () {
                                     "2": new Commit({
                                         parents: ["1"],
                                         changes: { "2": "2" },
-                                        message: "message",
+                                        message: "message\n",
                                     }),
                                 },
                                 branches: {
@@ -1160,7 +1160,7 @@ describe("ShorthandParserUtil", function () {
                                 changes: {
                                     s: new RepoAST.Submodule("a","x"),
                                 },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                         branches: {
@@ -1185,7 +1185,7 @@ describe("ShorthandParserUtil", function () {
                             "8": new Commit({
                                 parents: ["1"],
                                 changes: { "8": "8" },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                         branches: {
@@ -1222,12 +1222,12 @@ x=S:Efoo,8,9`,
                             "8": new Commit({
                                 parents: ["1"],
                                 changes: { "8": "8" },
-                                message: "message",
+                                message: "message\n",
                             }),
                             "9": new Commit({
                                 parents: ["1"],
                                 changes: { "9": "9" },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                         branches: {
@@ -1247,12 +1247,12 @@ x=S:Efoo,8,9`,
                             "8": new Commit({
                                 parents: ["1"],
                                 changes: { "8": "8" },
-                                message: "message",
+                                message: "message\n",
                             }),
                             "9": new Commit({
                                 parents: ["1"],
                                 changes: { "9": "9" },
-                                message: "message",
+                                message: "message\n",
                             }),
                         },
                         rebase: new RepoAST.Rebase("foo", "8", "9"),

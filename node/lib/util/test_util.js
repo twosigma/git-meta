@@ -212,7 +212,10 @@ exports.makeCommit = co.wrap(function *(repo, files) {
     files.forEach((name, i) => assert.isString(name, i));
 
     const sig = repo.defaultSignature();
-    const commitId = yield repo.createCommitOnHead(files, sig, sig, "message");
+    const commitId = yield repo.createCommitOnHead(files,
+                                                   sig,
+                                                   sig,
+                                                   "message\n");
     return yield repo.getCommit(commitId);
 });
 

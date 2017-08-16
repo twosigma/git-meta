@@ -55,7 +55,7 @@ describe("merge", function () {
         assert.property(reverseCommitMap, fromCommit);
         const physicalCommit = reverseCommitMap[fromCommit];
         const commit = yield x.getCommit(physicalCommit);
-        const result = yield Merge.merge(x, status, commit, mode, "message");
+        const result = yield Merge.merge(x, status, commit, mode, "message\n");
         if (upToDate) {
             assert.isNull(result);
             return;                                                   // RETURN
