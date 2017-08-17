@@ -3048,6 +3048,12 @@ and for d
                 editor: () => Promise.resolve("haha"),
                 expected: "x=S:Chaha\n#x-1 a=b;Bmaster=x",
             },
+            "interactive meta commit, but do nothing": {
+                initial: "x=S:I a=b",
+                interactive: true,
+                editor: (_, content) => Promise.resolve(content),
+                fails: true,
+            },
             "no all": {
                 initial: "x=S:W README.md=2",
             },
