@@ -1877,12 +1877,10 @@ exports.doCommitCommand = co.wrap(function *(repo,
         // If 'interactive' mode is requested, ask the user to specify which
         // repos are committed and with what commit messages.
 
-        const head = yield repo.getHeadCommit();
         const sig = repo.defaultSignature();
-        const headMeta = exports.getCommitMetaData(head);
         const prompt = exports.formatSplitCommitEditorPrompt(repoStatus,
                                                              sig,
-                                                             headMeta,
+                                                             null,
                                                              {});
         const userText = yield editMessage(repo, prompt);
         const userData = exports.parseSplitCommitMessages(userText);
