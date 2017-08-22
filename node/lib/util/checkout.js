@@ -143,7 +143,9 @@ const dryRun = co.wrap(function *(metaRepo, commit, submodules) {
 
     // Check meta
 
-    const metaError = yield runOne(metaRepo, commit);
+    const metaError = yield SubmoduleUtil.cacheSubmodules(
+                                               metaRepo,
+                                               () => runOne(metaRepo, commit));
     if (null !== metaError) {
         errors.push(`Unable to check out meta-repo: ${metaError}.`);
     }
@@ -217,8 +219,6 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isBoolean(force);
 
-    metaRepo.submoduleCacheAll();
-
     const subs = yield loadSubmodulesToCheckout(metaRepo, commit);
 
     // If we're not forcing the commit, attempt a dry run and fail if it
@@ -230,7 +230,6 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
         // Throw an error if any dry-runs failed.
 
         if (0 !== errors.length) {
-            metaRepo.submoduleCacheClear();
             throw new UserError(errors.join("\n"));
         }
     }
@@ -250,7 +249,8 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
 
     // Now do the actual checkouts.
 
-    yield doCheckout(metaRepo, commit);
+    yield SubmoduleUtil.cacheSubmodules(metaRepo,
+                                        () => doCheckout(metaRepo, commit));
 
     yield Object.keys(subs).map(co.wrap(function *(name) {
         const sub = subs[name];
@@ -258,8 +258,6 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
         const subCommit = sub.commit;
         yield doCheckout(repo, subCommit);
     }));
-
-    metaRepo.submoduleCacheClear();
 });
 
 /**
