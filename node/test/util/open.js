@@ -152,6 +152,32 @@ describe("openOnCommit", function () {
             const open = yield opener.getOpenSubs();
             assert.deepEqual(Array.from(open), ["s"]);
         }));
+        it("getOpenedSubs, empty", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(Array.from(opened), []);
+        }));
+        it("getOpenedSubs, empty after getting opened", co.wrap(function *() {
+            const state = "a=B|x=U:Os";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(Array.from(opened), []);
+        }));
+        it("getOpenedSubs, non-empty", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(Array.from(opened), ["s"]);
+        }));
         it("isOpen, not", co.wrap(function *() {
             const state = "a=B|x=U";
             const w = yield RepoASTTestUtil.createMultiRepos(state);

@@ -158,6 +158,19 @@ Opener.prototype.getOpenSubs = co.wrap(function*() {
 });
 
 /**
+ * Return an array containing the names of submodules opened by this object.
+ *
+ * @return {Set}
+ */
+Opener.prototype.getOpenedSubs = co.wrap(function*() {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    const subs = Object.keys(this.d_subRepos);
+    return subs.filter(name => !this.d_openSubs.has(name));
+});
+
+/**
  * Return true if the submodule having the specified `subName` is open and
  * false otherwise.
  *
