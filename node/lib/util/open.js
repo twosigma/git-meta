@@ -121,6 +121,13 @@ class Opener {
         this.d_commit = commit;
         this.d_initialized = false;
     }
+
+    /**
+     * @property {NodeGit.Repository} the repo associated with this object
+     */
+    get repo() {
+        return this.d_repo;
+    }
 }
 
 Opener.prototype._initialize = co.wrap(function *() {
