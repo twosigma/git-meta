@@ -38,6 +38,7 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
+const DeinitUtil          = require("./deinit_util");
 const Open                = require("./open");
 const GitUtil             = require("./git_util");
 const RepoStatus          = require("./repo_status");
@@ -310,6 +311,25 @@ const processMetaRebaseEntry = co.wrap(function *(metaRepo,
 });
 
 /**
+ * Close the submodules opened by the specified `opener` that have no entry in
+ * the specified `subCommits` map.
+ *
+ * @param {Open.Opener} opener
+ * @param {Object}      subCommits   sub name to commit map
+ */
+const closeAutoOpenedSubmodules = co.wrap(function *(opener, subCommits) {
+    const repo = opener.repo;
+    const opened = yield opener.getOpenedSubs();
+    yield opened.map(co.wrap(function *(name) {
+        const commits = subCommits[name];
+        if (undefined === commits || 0 === Object.keys(commits).length) {
+            console.log(`Closing ${colors.green(name)} -- no commit created.`);
+            yield DeinitUtil.deinit(repo, name);
+        }
+    }));
+});
+
+/**
  * Process the specified `op` for the specified `rebase` in the specified
  * `metaRepo` that maps to the specified `ontoCommit`.  Load the generated
  * commits into the specified `result`.
@@ -398,6 +418,8 @@ const processMetaRebaseOp = co.wrap(function *(metaRepo,
             errorMessage += ret.error + "\n";
         }
     }
+
+    yield closeAutoOpenedSubmodules(opener, result.submoduleCommits);
 
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
