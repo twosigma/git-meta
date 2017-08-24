@@ -178,9 +178,16 @@ x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
             "no ffwd, but can ffwd sub": {
                 initial: "\
 a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
-x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
+x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os",
                 rebaser: rebaser("x", "4"),
                 expected: "x=E:C3M-4 3=3;Bmaster=3M;Os H=c",
+            },
+            "ffwd-ed sub is closed after rebase": {
+                initial: "\
+a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
+x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
+                rebaser: rebaser("x", "4"),
+                expected: "x=E:C3M-4 3=3;Bmaster=3M",
             },
             "rebase two changes in sub": {
                 initial: "\

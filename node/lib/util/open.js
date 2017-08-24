@@ -121,6 +121,13 @@ class Opener {
         this.d_commit = commit;
         this.d_initialized = false;
     }
+
+    /**
+     * @property {NodeGit.Repository} the repo associated with this object
+     */
+    get repo() {
+        return this.d_repo;
+    }
 }
 
 Opener.prototype._initialize = co.wrap(function *() {
@@ -155,6 +162,19 @@ Opener.prototype.getOpenSubs = co.wrap(function*() {
         yield this._initialize();
     }
     return this.d_openSubs;
+});
+
+/**
+ * Return an array containing the names of submodules opened by this object.
+ *
+ * @return {Set}
+ */
+Opener.prototype.getOpenedSubs = co.wrap(function*() {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    const subs = Object.keys(this.d_subRepos);
+    return subs.filter(name => !this.d_openSubs.has(name));
 });
 
 /**

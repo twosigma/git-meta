@@ -86,6 +86,12 @@ describe("openOnCommit", function () {
         }));
     });
     describe("Opener", function () {
+        it("repo", co.wrap(function *() {
+            const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U:Os");
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            assert.equal(opener.repo, repo);
+        }));
         it("already open", co.wrap(function *() {
             const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U:Os");
             const repo = w.repos.x;
@@ -151,6 +157,32 @@ describe("openOnCommit", function () {
             const opener = new Open.Opener(repo, null);
             const open = yield opener.getOpenSubs();
             assert.deepEqual(Array.from(open), ["s"]);
+        }));
+        it("getOpenedSubs, empty", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(opened, []);
+        }));
+        it("getOpenedSubs, empty after getting opened", co.wrap(function *() {
+            const state = "a=B|x=U:Os";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(opened, []);
+        }));
+        it("getOpenedSubs, non-empty", co.wrap(function *() {
+            const state = "a=B|x=U";
+            const w = yield RepoASTTestUtil.createMultiRepos(state);
+            const repo = w.repos.x;
+            const opener = new Open.Opener(repo, null);
+            yield opener.getSubrepo("s");
+            const opened = yield opener.getOpenedSubs();
+            assert.deepEqual(opened, ["s"]);
         }));
         it("isOpen, not", co.wrap(function *() {
             const state = "a=B|x=U";
