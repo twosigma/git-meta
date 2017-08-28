@@ -353,6 +353,17 @@ x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
                 expected: `
 x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r`
             },
+            "with rebase in submodule, other open subs": {
+                initial: `
+a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
+x=S:C2-1 a=Sa:1,s=Sa:1,z=Sa:1;C3-2 s=Sa:q;C4-2 s=Sa:r;
+    Bmaster=3;Bfoo=4;Bold=3;
+    Erefs/heads/master,3,4;
+    Oa;Oz;
+    Os EHEAD,q,r!I q=q!Bq=q!Br=r`,
+                expected: `
+x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;Oa;Oz`
+            },
             "with rebase in submodule, staged commit in another submodule": {
                 initial: `
 a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|

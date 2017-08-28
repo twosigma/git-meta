@@ -666,9 +666,12 @@ ${colors.green(rebaseInfo.onto)}.`);
         for (let i = 0; i !== subs.length; ++i) {
             const name = subs[i];
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
+
+            // If this submodule isn't rebasing, continue to the next one.
+
             if (!subRepo.isRebasing()) {
                 yield index.addByPath(name);
-                break;                                                 // BREAK
+                continue;                                           // CONTINUE
             }
             yield index.addByPath(name);
 
