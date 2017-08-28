@@ -255,7 +255,15 @@ exports.listSubmoduleDescriptors = function (status) {
 
         // Register unstaged commits on an open submodule.
 
-        if (null !== sub.workdir &&
+        if (!sub.isNew() &&
+            null !== sub.workdir &&
+            null === sub.workdir.relation) {
+            const desc = "submodule is headless -- try closing and reopening";
+            workdir.push(new StatusDescriptor(FILESTATUS.MODIFIED,
+                                              subName,
+                                              desc));
+        }
+        else if (null !== sub.workdir &&
             null !== sub.workdir.relation &&
             SAME !== sub.workdir.relation) {
             const desc = "submodule, " +

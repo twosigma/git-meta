@@ -473,6 +473,26 @@ describe("PrintStatusUtil", function () {
                                   "submodule, newly created"),
                 ],
             },
+            "headless": {
+                status: new RepoStatus({
+                    submodules: {
+                        x: new RepoStatus.Submodule({
+                            commit: new Commit("y", "a"),
+                            index: new Index("y", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: null,
+                            }), null),
+                        }),
+                    },
+                }),
+                workdir: [
+                    new StatusDescriptor(
+                         FILESTATUS.MODIFIED,
+                         "x",
+                         "submodule is headless -- try closing and reopening"),
+
+                ],
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

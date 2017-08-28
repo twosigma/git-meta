@@ -272,7 +272,7 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
     if (null !== commit) {
         relation = yield exports.getRelation(repo, commit.sha, indexSha);
     }
-    const workdirRelation = (null === indexSha) ?
+    const workdirRelation = (null === indexSha || null === status.headCommit) ?
         null :
         COMMIT_RELATION.SAME;
     return new RepoStatus.Submodule({
