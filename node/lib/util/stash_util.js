@@ -88,14 +88,17 @@ function makeSubRefName(sha) {
 
 /**
  * Return a message describing the stash being created in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
  */
-const makeLogMessage = co.wrap(function *(repo) {
+exports.makeLogMessage = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
     const head = yield repo.getHeadCommit();
+    const message = head.message().split("\n")[0];
     const branchName = yield GitUtil.getCurrentBranchName(repo);
     const branchDesc = (null === branchName) ?  "(no branch)" : branchName;
     return `\
-WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} \
-${head.message()}`;
+WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} ${message}`;
 });
 
 /**
@@ -191,7 +194,7 @@ exports.save = co.wrap(function *(repo, status, includeUntracked) {
 
     // Update the stash ref and the ref log
 
-    const message = yield makeLogMessage(repo);
+    const message = yield exports.makeLogMessage(repo);
     yield NodeGit.Reference.create(repo,
                                    metaStashRef,
                                    stashId,

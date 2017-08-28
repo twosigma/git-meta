@@ -87,6 +87,38 @@ function refMapper(expected, mapping) {
 }
 
 describe("StashUtil", function () {
+    describe("makeLogMessage", function () {
+        const cases = {
+            "simple": {
+                input: "S",
+                expectedPre: "WIP on master: ",
+                expectedPost: " the first commit",
+            },
+            "detached": {
+                input: "S:H=1",
+                expectedPre: "WIP on (no branch): ",
+                expectedPost: " the first commit",
+            },
+            "multiline comit": {
+                input: "S:Chello\nworld\n#2-1;Bmaster=2",
+                expectedPre: "WIP on master: ",
+                expectedPost: " hello",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.input);
+                const repo = written.repo;
+                const result = yield StashUtil.makeLogMessage(repo);
+                const head = yield repo.getHeadCommit();
+                const expected = c.expectedPre +
+                    GitUtil.shortSha(head.id().tostrS()) +
+                    c.expectedPost;
+                assert.equal(result, expected);
+            }));
+        });
+    });
     describe("stashRepo", function () {
         // We'll make a new branch, `i`, pointing to the logical commit `i`,
         // with message "i" containing the state of the index and a branch
@@ -247,6 +279,7 @@ x=E:Fmeta-stash=s;
             const includeUntracked = c.includeUntracked || false;
             const stasher = co.wrap(function *(repos) {
                 const repo = repos.x;
+                const expMessage = yield StashUtil.makeLogMessage(repo);
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: false,
                 });
@@ -257,6 +290,12 @@ x=E:Fmeta-stash=s;
                 const stashId = yield NodeGit.Reference.lookup(
                                                             repo,
                                                             "refs/meta-stash");
+                // read the reflog
+                const log = yield NodeGit.Reflog.read(repo, "refs/meta-stash");
+                assert(1 === log.entrycount());
+                const entry = log.entryByIndex(0);
+                const message = entry.message();
+                assert.equal(message, expMessage);
                 commitMap[stashId.target().tostrS()] = "s";
 
                 // Look up the commits made for stashed submodules and create
@@ -286,40 +325,6 @@ x=E:Fmeta-stash=s;
                                                                c.fails, {
                     expectedTransformer: refMapper,
                 });
-            }));
-        });
-        describe("check log message", function () {
-            it("on branch", co.wrap(function *() {
-                const state = "a=B|x=U:Os W README.md=999";
-                const w = yield RepoASTTestUtil.createMultiRepos(state);
-                const repo = w.repos.x;
-                const status = yield StatusUtil.getRepoStatus(repo, {
-                    showMetaChanges: false,
-                });
-                yield StashUtil.save(repo, status, false);
-                const head = yield repo.getHeadCommit();
-                const log = yield NodeGit.Reflog.read(repo,
-                                                      "refs/meta-stash");
-                const entry = log.entryByIndex(0);
-                assert.equal(entry.message(),
-`WIP on master: ${GitUtil.shortSha(head.id().tostrS())} added 's'`);
-            }));
-            it("detached", co.wrap(function *() {
-                const state = "a=B|x=U:Os W README.md=999";
-                const w = yield RepoASTTestUtil.createMultiRepos(state);
-                const repo = w.repos.x;
-                const head = yield repo.getHeadCommit();
-                const headSha = head.id().tostrS();
-                repo.setHeadDetached(headSha);
-                const status = yield StatusUtil.getRepoStatus(repo, {
-                    showMetaChanges: false,
-                });
-                yield StashUtil.save(repo, status, false);
-                const log = yield NodeGit.Reflog.read(repo,
-                                                      "refs/meta-stash");
-                const entry = log.entryByIndex(0);
-                assert.equal(entry.message(),
-`WIP on (no branch): ${GitUtil.shortSha(headSha)} added 's'`);
             }));
         });
     });
