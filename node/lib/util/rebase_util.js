@@ -312,17 +312,21 @@ const processMetaRebaseEntry = co.wrap(function *(metaRepo,
 
 /**
  * Close the submodules opened by the specified `opener` that have no entry in
- * the specified `subCommits` map.
+ * the specified `subCommits` map or the specified `conflicted` set.
  *
  * @param {Open.Opener} opener
  * @param {Object}      subCommits   sub name to commit map
+ * @param {Set}         conflicted   name of subs with conflicts.
  */
-const closeAutoOpenedSubmodules = co.wrap(function *(opener, subCommits) {
+const closeAutoOpenedSubmodules = co.wrap(function *(opener,
+                                                     subCommits,
+                                                     conflicted) {
     const repo = opener.repo;
     const opened = yield opener.getOpenedSubs();
     yield opened.map(co.wrap(function *(name) {
         const commits = subCommits[name];
-        if (undefined === commits || 0 === Object.keys(commits).length) {
+        if ((undefined === commits || 0 === Object.keys(commits).length) &&
+            !conflicted.has(name)) {
             console.log(`Closing ${colors.green(name)} -- no commit created.`);
             yield DeinitUtil.deinit(repo, name);
         }
@@ -398,6 +402,8 @@ const processMetaRebaseOp = co.wrap(function *(metaRepo,
         yield index.conflictCleanup();
     }
 
+    const conflicted = new Set();
+
     // Process submodule rebases.
 
     for (let name in subsToRebase) {
@@ -416,10 +422,13 @@ const processMetaRebaseOp = co.wrap(function *(metaRepo,
 
         if (null !== ret.error) {
             errorMessage += ret.error + "\n";
+            conflicted.add(name);
         }
     }
 
-    yield closeAutoOpenedSubmodules(opener, result.submoduleCommits);
+    yield closeAutoOpenedSubmodules(opener,
+                                    result.submoduleCommits,
+                                    conflicted);
 
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);

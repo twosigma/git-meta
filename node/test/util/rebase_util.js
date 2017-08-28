@@ -35,6 +35,7 @@ const co     = require("co");
 
 const RebaseUtil      = require("../../lib/util/rebase_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const SubmoduleUtil   = require("../../lib/util/submodule_util");
 
 function makeRebaser(operation) {
     return co.wrap(function *(repos, maps) {
@@ -285,6 +286,26 @@ x=E:C3M-4 a=b;Bmaster=3M;Os H=X`,
                                                                c.fails);
             }));
         });
+        it("conflict stays open", co.wrap(function *() {
+            const input = `
+a=B:Ca-1 t=t;Cb-1 t=u;Ba=a;Bb=b|
+x=U:C31-2 s=Sa:a;C41-2 s=Sa:b;Bmaster=31;Bfoo=41;Bold=31`;
+            const w = yield RepoASTTestUtil.createMultiRepos(input);
+            const repo = w.repos.x;
+            const reverseCommitMap = w.reverseCommitMap;
+            const originalActualCommit = reverseCommitMap["41"];
+            const originalCommit = yield repo.getCommit(originalActualCommit);
+            let threw = false;
+            try {
+                yield RebaseUtil.rebase(repo, originalCommit);
+            }
+            catch (e) {
+                threw = true;
+            }
+            assert(threw, "should have thrown");
+            const open = yield SubmoduleUtil.isVisible(repo, "s");
+            assert(open, "should be open");
+        }));
     });
 
     describe("abort", function () {
