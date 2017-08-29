@@ -43,6 +43,7 @@ const checkout   = require("./cmd/checkout");
 const cherryPick = require("./cmd/cherrypick");
 const close      = require("./cmd/close");
 const commit     = require("./cmd/commit");
+const Forward    = require("./cmd/forward");
 const include    = require("./cmd/include");
 const listFiles  = require("./cmd/list_files");
 const merge      = require("./cmd/merge");
@@ -116,26 +117,55 @@ const parser = new ArgumentParser({
 
 const subParser = parser.addSubparsers({});
 
-configureSubcommand(subParser, "add", add);
-configureSubcommand(subParser, "checkout", checkout);
-configureSubcommand(subParser, "cherry-pick", cherryPick);
-configureSubcommand(subParser, "close", close);
-configureSubcommand(subParser, "commit", commit);
-configureSubcommand(subParser, "include", include);
-configureSubcommand(subParser, "ls-files", listFiles);
-configureSubcommand(subParser, "merge", merge);
-configureSubcommand(subParser, "new", newSub);
-configureSubcommand(subParser, "open", open);
-configureSubcommand(subParser, "pull", pull);
-configureSubcommand(subParser, "push", push);
-configureSubcommand(subParser, "rebase", rebase);
-configureSubcommand(subParser, "reset", reset);
-configureSubcommand(subParser, "root", root);
-configureSubcommand(subParser, "stash", stash);
-configureSubcommand(subParser, "submodule", submodule);
-configureSubcommand(subParser, "status", status);
-configureSubcommand(subParser, "version", version);
+const commands = {
+    "add": add,
+    "checkout": checkout,
+    "cherry-pick": cherryPick,
+    "close": close,
+    "commit": commit,
+    "include": include,
+    "ls-files": listFiles,
+    "merge": merge,
+    "new": newSub,
+    "open": open,
+    "pull": pull,
+    "push": push,
+    "rebase": rebase,
+    "reset": reset,
+    "root": root,
+    "stash": stash,
+    "submodule": submodule,
+    "status": status,
+    "version": version,
+};
 
-const args = parser.parseArgs();
+// Configure forwarded commands.
 
-args.func(args);
+Array.from(Forward.forwardedCommands).forEach(name => {
+    commands[name] = Forward.makeModule(name);
+});
+
+// Configure the parser with commands in alphabetical order.
+
+Object.keys(commands).sort().forEach(name => {
+    const cmd = commands[name];
+    configureSubcommand(subParser, name, cmd);
+});
+
+// If the first argument matches a forwarded sub-command, handle it manually.
+// I was not able to get ArgParse to allow unknown flags, e.g.
+// `git meta branch -r` to be passed to the REMAINDER positional argument on a
+// sub-parser level.
+
+if (2 < process.argv.length &&
+    Forward.forwardedCommands.has(process.argv[2])) {
+    const name = process.argv[2];
+    const args = process.argv.slice(3);
+    Forward.execute(name, args).catch(() => {
+        process.exit(-1);
+    });
+}
+else {
+    const args = parser.parseArgs();
+    args.func(args);
+}
