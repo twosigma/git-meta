@@ -74,6 +74,7 @@ ${helpText}  See 'git ${name} --help' for more information.`,
 exports.forwardedCommands = new Set([
     "branch",
     "fetch",
+    "remote",
     "tag",
 ]);
 
