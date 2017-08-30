@@ -408,6 +408,14 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     }), RELATION.SAME),
                 }),
             },
+            "headless": {
+                state: "a=S|x=U:Os H=",
+                expected: new Submodule({
+                    commit: new Commit("1", "a"),
+                    index: new Index("1", "a", RELATION.SAME),
+                    workdir: new Workdir(new RepoStatus({}), null),
+                }),
+            },
         };
 
         Object.keys(cases).forEach(caseName => {
