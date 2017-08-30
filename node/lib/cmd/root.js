@@ -30,6 +30,8 @@
  */
 "use strict";
 
+const co = require("co");
+
 /**
  * This module contains methods for implementing the `root` command.
  */
@@ -45,7 +47,14 @@ From within any subdirectory of a meta-repository -- including when
 the working directory is in a submodule -- print the root of the working
 directory of that meta-repository.`;
 
-exports.configureParser = function () {
+exports.configureParser = function (parser) {
+    parser.addArgument(["--relative", "-r"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `
+Print the relative path between current directory and root.  E.g., \
+'cd $(git meta root)'; cd a/b/c; git meta root -r' will print 'a/b/c'.`});
 };
 
 /**
@@ -55,8 +64,18 @@ exports.configureParser = function () {
  * @param {Object}   args
  * @param {String[]} args.paths
  */
-exports.executeableSubcommand = function () {
+exports.executeableSubcommand = co.wrap(function *(args) {
+    const path    = require("path");
+
     const GitUtil = require("../util/git_util");
-    console.log(GitUtil.getRootGitDirectory());
-    return Promise.resolve(0);
-};
+
+    const root = GitUtil.getRootGitDirectory();
+    if (args.relative) {
+        const cwd = process.cwd();
+        console.log(path.relative(root, cwd));
+    }
+    else {
+        console.log(root);
+    }
+    yield Promise.resolve(0);  // To silence no yield statement warning
+});
