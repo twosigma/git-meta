@@ -183,6 +183,13 @@ x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os",
                 rebaser: rebaser("x", "4"),
                 expected: "x=E:C3M-4 3=3;Bmaster=3M;Os H=c",
             },
+            "ffwd sub 2X": {
+                initial: `
+a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|
+x=U:Cr-2;C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=4;Bother=r;Os;Bfoo=4`,
+                rebaser: rebaser("x", "r"),
+                expected: "x=E:C3M-r s=Sa:b;C4M-3M s=Sa:c;Bmaster=4M;Os H=c",
+            },
             "ffwd-ed sub is closed after rebase": {
                 initial: "\
 a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
