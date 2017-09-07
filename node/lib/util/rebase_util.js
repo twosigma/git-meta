@@ -242,10 +242,9 @@ const mergeModulesFile = co.wrap(function *(repo,
 /**
  * Process the specified `entry` from the specified `index`  for the specified
  * `metaRepo` during a rebase from the specified `fromCommit` on the specified
- * `ontoCommit`.  Use the specified `opener` to open submodules
- * as needed, and obtain the SHA for a submodule on the `ontoCommit` from the
- * specified `ontoShas`.  Return an object indicating that an error occurred,
- * that a submodule needs to be rebased, or neither.
+ * `ontoCommit`.  Use the specified `opener` to open submodules as needed.
+ * Return an object indicating that an error occurred, that a submodule needs
+ * to be rebased, or neither.
  *
  * @return {Object}
  * @return {String|null} return.error
@@ -256,7 +255,6 @@ const processMetaRebaseEntry = co.wrap(function *(metaRepo,
                                                   index,
                                                   entry,
                                                   opener,
-                                                  ontoShas,
                                                   fromCommit,
                                                   ontoCommit) {
 
@@ -278,10 +276,10 @@ const processMetaRebaseEntry = co.wrap(function *(metaRepo,
         const open = yield opener.isOpen(entry.path);
         if (open) {
             const name = entry.path;
-            const ontoSha = ontoShas[name];
             const fromSha = id.tostrS();
-            if (ontoSha !== fromSha) {
-                const subRepo = yield opener.getSubrepo(name);
+            const subRepo = yield opener.getSubrepo(name);
+            const subHead = yield subRepo.getHeadCommit();
+            if (subHead.id().tostrS() !== fromSha) {
                 yield fetcher.fetchSha(subRepo, name, fromSha);
                 yield setHead(subRepo, fromSha);
             }
@@ -383,7 +381,6 @@ const processMetaRebaseOp = co.wrap(function *(metaRepo,
                                                  index,
                                                  entries[i],
                                                  opener,
-                                                 ontoShas,
                                                  fromCommit,
                                                  ontoCommit);
         if (null !== ret.error) {
