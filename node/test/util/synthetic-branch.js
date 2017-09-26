@@ -198,11 +198,11 @@ describe("synthetic-branch-submodule-pre-receive", function () {
         const oid = yield createCommit(repo, addFile);
 
         // an empty push succeeds
-        let fail = yield SyntheticBranch.submoduleCheck(repo, []);
+        let fail = yield SyntheticBranch.submoduleIsBad(repo, []);
         assert(!fail);
 
         // a push with f to a correct branch succeeds
-        fail = yield SyntheticBranch.submoduleCheck(repo, [{
+        fail = yield SyntheticBranch.submoduleIsBad(repo, [{
             oldSha: "0000000000000000000000000000000000000000",
             newSha: oid.toString(),
             ref: "refs/commits/" + oid.toString(),
@@ -210,7 +210,7 @@ describe("synthetic-branch-submodule-pre-receive", function () {
         assert(!fail);
 
         // a push with f to a bogus branch fails
-        fail = yield SyntheticBranch.submoduleCheck(repo, [{
+        fail = yield SyntheticBranch.submoduleIsBad(repo, [{
             oldSha: "0000000000000000000000000000000000000000",
             newSha: oid.toString(),
             ref: "refs/commits/0000000000000000000000000000000000000000",

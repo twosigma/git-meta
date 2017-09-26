@@ -247,13 +247,14 @@ function* checkUpdate(repo, oldSha, newSha, handled) {
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
  * @param [{Object}] updates. Each object has fields oldSha, newSha, and ref,
+*  @return true if the update should be rejected.
  * all strings.
  */
-function* metaUpdateCheck(repo, updates) {
+function* metaUpdateIsBad(repo, updates) {
     const handled = {};
     const checkFailures = updates.map(function*(update) {
         if (!update.ref.startsWith("refs/heads/")) {
-            return true;
+            return false;
         }
         const ok = yield checkUpdate(repo, update.oldSha, update.newSha,
                                      handled);
@@ -277,8 +278,9 @@ function* metaUpdateCheck(repo, updates) {
  * @param {NodeGit.Repostory} repo The meta repository
  * @param [{Object}] updates. Each object has fields oldSha, newSha, and ref,
  * all strings.
+ * @return true if the submodule update should be rejected
  */
-function* submoduleCheck(repo, updates) {
+function* submoduleIsBad(repo, updates) {
     const checkFailures = updates.map(function*(update) {
         /*jshint noyield:true*/
         if (!update.ref.startsWith(SYNTHETIC_BRANCH_BASE)) {
@@ -343,10 +345,10 @@ function doPreReceive(check) {
     });
 }
 
-exports.metaPreReceive = doPreReceive.bind(null, metaUpdateCheck);
-exports.submodulePreReceive = doPreReceive.bind(null, submoduleCheck);
+exports.metaPreReceive = doPreReceive.bind(null, metaUpdateIsBad);
+exports.submodulePreReceive = doPreReceive.bind(null, submoduleIsBad);
 
 exports.checkUpdate = co.wrap(checkUpdate);
-exports.submoduleCheck = co.wrap(submoduleCheck);
-exports.metaUpdateCheck = co.wrap(metaUpdateCheck);
+exports.submoduleIsBad = co.wrap(submoduleIsBad);
+exports.metaUpdateIsBad = co.wrap(metaUpdateIsBad);
 exports.initAltOdb = co.wrap(initAltOdb);
