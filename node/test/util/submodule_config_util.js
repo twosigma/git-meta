@@ -178,6 +178,17 @@ describe("SubmoduleConfigUtil", function () {
                     "x/y": "/foo/bar/baz",
                 }
             },
+            "trailing slash": {
+                input: `\
+[submodule "x/y/"]
+    path = x/y/
+[submodule "x/y/"]
+    url = /foo/bar/baz
+`,
+                expected: {
+                    "x/y": "/foo/bar/baz",
+                }
+            },
             "all in one": {
                 input: `\
 [submodule "x/y"]
