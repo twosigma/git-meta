@@ -252,7 +252,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
         process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = metaObjects;
 
         //fail: no synthetic ref
-        let fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+        let fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
@@ -264,7 +264,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
                                        subOid, 0, "create synthetic ref");
 
         //fail: no alt odb
-        fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+        fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
@@ -273,7 +273,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
 
         //pass
         yield SyntheticBranch.initAltOdb(repo);
-        fail = yield SyntheticBranch.metaUpdateCheck(repo, [{
+        fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
