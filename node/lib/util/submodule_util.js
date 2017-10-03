@@ -345,7 +345,14 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
     for (let i = 0; i < num; ++i) {
         const delta = diff.getDelta(i);
         switch (delta.status()) {
-            // TODO: DELTA.COPIED, DELTA.RENAMED
+            case DELTA.COPIED:
+            case DELTA.RENAMED: {
+                if (COMMIT === delta.newFile.mode() ||
+                    COMMIT === delta.oldFile.mode()) {
+                    throw new Error(
+                           "Not sure if these are possible.  TODO: find out.");
+                }
+            } break;
             case DELTA.MODIFIED:
             case DELTA.CONFLICTED: {
                 const newFile = delta.newFile();
