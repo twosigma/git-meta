@@ -134,9 +134,12 @@ function* checkSubmodules(repo, commit) {
                                                                   commit);
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
     const changes = yield getChanges(repo, commit);
-    const allChanges = [changes.added, changes.changed];
+    const allChanges = [
+        Object.keys(changes.added),
+        Object.keys(changes.changed)
+    ];
     const result = allChanges.map(function *(changeSet) {
-        const result = Array.from(changeSet).map(function *(path) {
+        const result = changeSet.map(function *(path) {
             const entry = yield commit.getEntry(path);
             const submodulePath = entry.path();
             const url = submodules[submodulePath].url;
