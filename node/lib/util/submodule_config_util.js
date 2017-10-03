@@ -168,6 +168,9 @@ exports.parseSubmoduleConfig = function (text) {
         const nameParseResult = nameRe.exec(line);
         if (null !== nameParseResult) {
             lastName = nameParseResult[1];
+            if (lastName.endsWith("/")) {
+                lastName = lastName.slice(0, lastName.length - 1);
+            }
         }
         else if (null !== lastName) {
             const urlParseResult = urlRe.exec(line);
