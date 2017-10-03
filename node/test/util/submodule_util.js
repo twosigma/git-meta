@@ -363,79 +363,113 @@ describe("SubmoduleUtil", function () {
             "trivial": {
                 state: "S",
                 from: "1",
-                added: [],
-                changed: [],
-                removed: [],
+                added: {},
+                changed: {},
+                removed: {},
+                modules: false,
             },
             "changed something else": {
                 state: "S:C2-1 README.md=foo;H=2",
                 from: "2",
-                added: [],
-                changed: [],
-                removed: [],
+                added: {},
+                changed: {},
+                removed: {},
+                modules: false,
             },
             "removed something else": {
                 state: "S:C2-1 README.md;H=2",
                 from: "2",
-                added: [],
-                changed: [],
-                removed: [],
+                added: {},
+                changed: {},
+                removed: {},
+                modules: false,
             },
             "not on current commit": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "1",
-                added: [],
-                changed: [],
-                removed: [],
+                added: {},
+                changed: {},
+                removed: {},
+                modules: false,
             },
             "added one": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "2",
-                added: ["x"],
-                changed: [],
-                removed: [],
+                added: {
+                    "x": "1",
+                },
+                changed: {},
+                removed: {},
+                modules: true,
             },
             "added two": {
                 state: "S:C2-1 a=Sa:1,x=Sa:1;H=2",
                 from: "2",
-                added: ["a", "x"],
-                changed: [],
-                removed: [],
+                added: {
+                    a: "1",
+                    x: "1",
+                },
+                changed: {},
+                removed: {},
+                modules: true,
             },
             "changed one": {
                 state: "S:C3-2 a=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: [],
-                changed: ["a"],
-                removed: [],
+                added: {},
+                changed: {
+                    a: {
+                        "new": "2",
+                        old: "1",
+                    },
+                },
+                removed: {},
+                modules: false,
             },
-            "changed one url": {
-                state: "S:C3-2 a=Sa:2;C2-1 a=Sb:1,x=Sa:1;H=3",
+            "changed url": {
+                state: "S:C3-2 a=Sb:1;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: [],
-                changed: ["a"],
-                removed: [],
+                added: {},
+                changed: {},
+                removed: {},
+                modules: true,
             },
             "changed and added": {
                 state: "S:C3-2 a=Sa:2,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: ["c"],
-                changed: ["a"],
-                removed: [],
+                added: {
+                    c: "2",
+                },
+                changed: {
+                    a: {
+                        "new": "2",
+                        old: "1",
+                    },
+                },
+                removed: {},
+                modules: true,
             },
             "removed one": {
                 state: "S:C3-2 a=;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: [],
-                changed: [],
-                removed: ["a"],
+                added: {},
+                changed: {},
+                removed: {
+                    "a": "1",
+                },
+                modules: true,
             },
             "added and removed": {
                 state: "S:C3-2 a,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: ["c"],
-                changed: [],
-                removed: ["a"],
+                added: {
+                    c: "2",
+                },
+                changed: {},
+                removed: {
+                    a: "1",
+                },
+                modules: true,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -448,12 +482,31 @@ describe("SubmoduleUtil", function () {
                 const commit = yield repo.getCommit(fromId);
                 const changes =
                          yield SubmoduleUtil.getSubmoduleChanges(repo, commit);
-                assert.deepEqual(Array.from(changes.added).sort(),
-                                 c.added.sort());
-                assert.deepEqual(Array.from(changes.changed).sort(),
-                                 c.changed.sort());
-                assert.deepEqual(Array.from(changes.removed).sort(),
-                                 c.removed.sort());
+
+                // map the logical commits in the expected results to the
+                // actual commit ids
+
+                const commitMap = written.oldCommitMap;
+                const expAdded = Object.assign({}, c.added);
+                for (let name in expAdded) {
+                    expAdded[name] = commitMap[expAdded[name]];
+                }
+                const expChanged = Object.assign({}, c.changed);
+                for (let name in expChanged) {
+                    expChanged[name] = {
+                        "new": commitMap[expChanged[name]["new"]],
+                        "old": commitMap[expChanged[name].old],
+                    };
+                }
+                const expRemoved = Object.assign({}, c.removed);
+                for (let name in expRemoved) {
+                    expRemoved[name] = commitMap[expRemoved[name]];
+                }
+
+                assert.deepEqual(changes.added, expAdded, "added");
+                assert.deepEqual(changes.changed, expChanged, "changed");
+                assert.deepEqual(changes.removed, expRemoved, "removed");
+                assert.equal(changes.modulesFileChanged, c.modules, "modules");
             }));
         });
     });

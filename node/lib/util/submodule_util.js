@@ -305,48 +305,81 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
 });
 
 /**
- * Return a summary of the submodules changed by the specified `commitId` in
- * the specified `repo`.
+ * Return a summary of the submodule SHAs changed by the specified `commitId` in
+ * the specified `repo`, and flag denoting whether or not the `.gitmodules`
+ * file was changed.
  *
  * @asycn
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
  * @return {Object}
- * @return {Set(String)}  return.added    paths to added submodules
- * @return {Set(String)}  return.changed  paths to changed submodule
- * @return {Set(String)}  return.removed  paths to removed submodules
+ * @return {Object}  return.added    map from path to SHA
+ * @return {Object}  return.changed  map from path to new and old SHAs
+ * @return {Object} return.removed  map from path to SHA
+ * @return {Boolean} return.modulesFileChanged  true if modules file changed
  */
 exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const currentSubs = yield exports.getSubmodulesForCommit(repo, commit);
-    let lastSubs = {};
-    if (0 !== commit.parentcount()) {
-        const parents = yield commit.parents();
-        const parentCommit = yield repo.getCommit(parents[0]);
-        lastSubs = yield exports.getSubmodulesForCommit(repo, parentCommit);
+    // We calculate the changes of a commit against it's first parent.  If it
+    // has no parents, then the calculation is against an empty tree.
+
+    let parentTree = null;
+    const parents = yield commit.getParents();
+    if (0 !== parents.length) {
+        parentTree = yield parents[0].getTree();
     }
-    let result = {
-        added  : new Set(),
-        changed: new Set(),
-        removed: new Set(),
+
+    const tree = yield commit.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree, null);
+    const num = diff.numDeltas();
+    const result = {
+        added: {},
+        changed: {},
+        removed: {},
+        modulesFileChanged: false,
     };
-    for (let name in currentSubs) {
-        const last = lastSubs[name];
-        if (undefined === last) {
-            result.added.add(name);
-        }
-        else {
-            const current = currentSubs[name];
-            if (current.sha !== last.sha || current.url !== last.url) {
-                result.changed.add(name);
-            }
-        }
-    }
-    for (let name in lastSubs) {
-        if (!(name in currentSubs)) {
-            result.removed.add(name);
+    const DELTA = NodeGit.Diff.DELTA;
+    const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
+    for (let i = 0; i < num; ++i) {
+        const delta = diff.getDelta(i);
+        switch (delta.status()) {
+            // TODO: DELTA.COPIED, DELTA.RENAMED
+            case DELTA.MODIFIED:
+            case DELTA.CONFLICTED: {
+                const newFile = delta.newFile();
+                const path = newFile.path();
+                if (COMMIT === newFile.mode()) {
+                    result.changed[path] = {
+                        "new": newFile.id().tostrS(),
+                        "old": delta.oldFile().id().tostrS(),
+                    };
+                }
+                else if (SubmoduleConfigUtil.modulesFileName === path) {
+                    result.modulesFileChanged = true;
+                }
+            } break;
+            case DELTA.ADDED: {
+                const newFile = delta.newFile();
+                const path = newFile.path();
+                if (COMMIT === newFile.mode()) {
+                    result.added[newFile.path()] = newFile.id().tostrS();
+                }
+                else if (SubmoduleConfigUtil.modulesFileName === path) {
+                    result.modulesFileChanged = true;
+                }
+            } break;
+            case DELTA.DELETED: {
+                const oldFile = delta.oldFile();
+                const path = oldFile.path();
+                if (COMMIT === oldFile.mode()) {
+                    result.removed[oldFile.path()] = oldFile.id().tostrS();
+                }
+                else if (SubmoduleConfigUtil.modulesFileName === path) {
+                    result.modulesFileChanged = true;
+                }
+            } break;
         }
     }
     return result;

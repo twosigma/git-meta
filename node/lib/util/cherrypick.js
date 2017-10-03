@@ -129,7 +129,7 @@ ${colors.green(commitSha)}.`);
 
     // Cherry-pick each submodule changed in `commit`.
 
-    changes.changed.forEach(subName => {
+    Object.keys(changes.changed).forEach(subName => {
         const headSub = headSubs[subName];
         const commitSub = commitSubs[subName];
         const headSha = headSub.sha;
