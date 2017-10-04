@@ -741,7 +741,8 @@ describe("GitUtil", function () {
             const written = yield WriteRepoASTUtil.writeRAST(ast, path);
             const commit = written.oldCommitMap["1"];
             const repo = written.repo;
-            yield GitUtil.fetchSha(repo, "not a url", commit);
+            const result = yield GitUtil.fetchSha(repo, "not a url", commit);
+            assert.equal(result, false);
         }));
 
         it("fetch one", co.wrap(function *() {
@@ -754,7 +755,8 @@ describe("GitUtil", function () {
             const writtenY = yield WriteRepoASTUtil.writeRAST(astY, yPath);
             const commit = writtenX.oldCommitMap["2"];
             const repo = writtenY.repo;
-            yield GitUtil.fetchSha(repo, xPath, commit);
+            const result = yield GitUtil.fetchSha(repo, xPath, commit);
+            assert.equal(result, true);
             yield repo.getCommit(commit);
         }));
 

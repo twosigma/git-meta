@@ -181,6 +181,8 @@ const SequencerState = RepoAST.SequencerState;
  *                               be a submodule with a url 'baz' at commit '1'
  * S:Chello#2-1,3             -- a commit, "2", with two parents: "1" and "3",
  *                               and a message of "hello"
+ * S:C*#2-1,3                 -- same as above, but ignore the commit message
+ *                               during validation
  * S:Rorigin=/foo.git           -- 'S' repo with an origin of /foo.git
  * S:Rorigin=/foo.git master=1  -- same as above but with remote branch
  *                              -- named 'master' pointing to commit 1

@@ -547,12 +547,14 @@ git -C '${repo.path()}' fetch -q '${remoteName}' '${branch}'`;
 
 /**
  * Fetch the specified `sha` from the specified `url` into the specified
- * `repo`, if it does not already exist in `repo`.
+ * `repo`, if it does not already exist in `repo`; return true if a fetch
+ * happened and false if the commit already existed in `repo`.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {String}             url
  * @param {String}             sha
+ * @return {Bool}
  */
 exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     assert.instanceOf(repo, NodeGit.Repository);
@@ -563,7 +565,7 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
 
     try {
         yield repo.getCommit(sha);
-        return;                                                       // RETURN
+        return false;                                                 // RETURN
     }
     catch (e) {
     }
@@ -571,11 +573,12 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
         yield ChildProcess.exec(execString);
-        return yield repo.getCommit(sha);
+        yield repo.getCommit(sha);
     }
     catch (e) {
         throw new UserError(e.message);
     }
+    return true;
 });
 
 

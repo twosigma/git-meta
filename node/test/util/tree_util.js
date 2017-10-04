@@ -105,6 +105,24 @@ describe("TreeUtil", function () {
                     "a": {
                         "b": "1",
                     },
+                }
+            },
+            "creation and deletion": {
+                input: {
+                    "a/b": "1",
+                    "a": null,
+                },
+                expected: {
+                    a: { b: "1" },
+                },
+            },
+            "deletion and creation": {
+                input: {
+                    "a": null,
+                    "a/b": "1",
+                },
+                expected: {
+                    a: { b: "1" },
                 },
             },
         };
@@ -309,6 +327,21 @@ describe("TreeUtil", function () {
             });
             const entry = yield secondTree.entryByPath("foo");
             assert.equal(entry.id().tostrS(), id.tostrS());
+        }));
+        it("implicitly overwrite blob with directory", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const blobAId = yield hashObject(repo, "xxxxxxxh");
+            const parent = yield TreeUtil.writeTree(repo, null, {
+                foo: new Change(blobAId, FILEMODE.BLOB),
+            });
+            const blobBId = yield hashObject(repo, "bazzzz");
+            const result = yield TreeUtil.writeTree(repo, parent, {
+                "foo/bar": new Change(blobBId, FILEMODE.BLOB),
+            });
+            const entry = yield result.entryByPath("foo/bar");
+            assert.isNotNull(entry);
+            assert(entry.isBlob());
+            assert.equal(entry.id().tostrS(), blobBId.tostrS());
         }));
     });
     describe("hashFile", function () {
