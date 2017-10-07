@@ -135,8 +135,14 @@ function* checkSubmodules(repo, commit) {
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
     const changes = yield getChanges(repo, commit);
     const allChanges = [
-        Object.keys(changes.added),
-        Object.keys(changes.changed)
+        Object.keys(changes).filter(changeName => {
+            const change = changes[changeName];
+            return null === change.oldSha;
+        }),
+        Object.keys(changes).filter(changeName => {
+            const change = changes[changeName];
+            return null !== change.oldSha && null !== change.newSha;
+        }),
     ];
     const result = allChanges.map(function *(changeSet) {
         const result = changeSet.map(function *(path) {

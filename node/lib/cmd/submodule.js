@@ -122,27 +122,64 @@ ancestor of M (or M itself) that references S (or a descendant of S)`,
 };
 
 const doStatusCommand = co.wrap(function *(paths, verbose) {
-    const path   = require("path");
+    // TODO: this is too big for a cmd; need to move some of this into a
+    // utility and write a test.
 
-    const GitUtil         = require("../util/git_util");
-    const PrintStatusUtil = require("../util/print_status_util");
-    const StatusUtil      = require("../util/status_util");
+    const path = require("path");
+
+    const GitUtil              = require("../util/git_util");
+    const StatusUtil           = require("../util/status_util");
+    const SubmoduleConfigUtil  = require("../util/submodule_config_util");
+    const SubmoduleUtil        = require("../util/submodule_util");
+    const PrintStatusUtil      = require("../util/print_status_util");
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd = process.cwd();
-
-    paths = yield paths.map(filename => {
-        return GitUtil.resolveRelativePath(workdir, cwd, filename);
-    });
+    const relCwd = path.relative(workdir, cwd);
+    const head = yield repo.getHeadCommit();
+    const tree = yield head.getTree();
     const status = yield StatusUtil.getRepoStatus(repo, {
         paths: paths,
         showMetaChanges: false,
     });
-    const relCwd = path.relative(workdir, cwd);
-    process.stdout.write(PrintStatusUtil.printSubmoduleStatus(status,
-                                                              relCwd,
-                                                              verbose));
+    paths = yield paths.map(filename => {
+        return GitUtil.resolveRelativePath(workdir, cwd, filename);
+    });
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, head);
+    const allSubs = Object.keys(urls);
+    const subs = status.submodules;
+    const openList = Object.keys(subs).filter(name => {
+        return null !== subs[name].workdir;
+    });
+    const open = new Set(openList);
+    let pathsToUse = allSubs;
+    if (0 !== paths.length) {
+        pathsToUse  = Object.keys(yield SubmoduleUtil.resolvePaths(relCwd,
+                                                                   paths,
+                                                                   allSubs,
+                                                                   openList));
+    }
+    const pathsSet = new Set(pathsToUse);
+    const subShas = {};
+    for (let i = 0; i < allSubs.length; ++i) {
+        const name = allSubs[i];
+        if (pathsSet.has(name) && (verbose || open.has(name))) {
+            const sub = subs[name];
+            if (undefined === sub) {
+                const entry = yield tree.entryByPath(name);
+                subShas[name] = entry.sha();
+            }
+            else {
+                subShas[name] = sub.index && sub.index.sha;
+            }
+        }
+    }
+    const result = PrintStatusUtil.printSubmoduleStatus(relCwd,
+                                                        subShas,
+                                                        open,
+                                                        verbose);
+    process.stdout.write(result);
 });
 
 const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {

@@ -32,6 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const path    = require("path");
 
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
@@ -502,6 +503,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
             },
             "staged change": {
                 state: "x=S:I README.md=whoohoo",
+                options: {
+                    showMetaChanges: true,
+                },
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "1",
@@ -518,7 +522,7 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                         "x/y/q": FILESTATUS.ADDED,
                     },
                 }),
-                options: { showAllUntracked: true, },
+                options: { showAllUntracked: true, showMetaChanges: true },
             },
             "ignore meta": {
                 state: "x=S:I README.md=whoohoo",
@@ -527,21 +531,34 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     headCommit: "1",
                     staged: {},
                 }),
-                options: { showMetaChanges: false },
             },
 
             // The logic for filtering is tested earlier; here, we just need to
             // validate that the option is propagated properly.
 
             "path filtered out in meta": {
-                state: "x=S:I x/y=a,README.md=sss",
+                state: "x=S:I x/y=a,README.md=sss,y=foo",
                 options: {
                     paths: ["README.md"],
+                    showMetaChanges: true,
                 },
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "1",
                     staged: { "README.md": FILESTATUS.MODIFIED },
+                }),
+            },
+            "path resolved with cwd": {
+                state: "x=S:I x/y=a,README.md=sss,y=foo",
+                options: {
+                    cwd: "x",
+                    paths: ["y"],
+                    showMetaChanges: true,
+                },
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "1",
+                    staged: { "x/y": FILESTATUS.ADDED },
                 }),
             },
 
@@ -643,9 +660,17 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                         "x/": FILESTATUS.ADDED,
                     },
                 }),
+                options: { showMetaChanges: true, },
+            },
+            "no changes, ingored": {
+                state: "a=B|x=U",
+                expected: new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "2",
+                }),
             },
             "filtered out": {
-                state: "a=B|x=U",
+                state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a",
                 options: {
                     paths: ["README.md"],
                 },
@@ -655,19 +680,14 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                 }),
             },
             "filtered in": {
-                state: "a=B|x=U",
+                state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a",
                 options: {
-                    paths: ["s"],
+                    paths: ["README.md"],
                 },
                 expected: new RepoStatus({
                     currentBranchName: "master",
                     headCommit: "2",
-                    submodules: {
-                        s: new Submodule({
-                            commit: new Commit("1", "a"),
-                            index: new Index("1", "a", RELATION.SAME),
-                        }),
-                    },
+                    submodules: {},
                 }),
             },
             "deep filter": {
@@ -723,13 +743,37 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                    },
                }),
            },
+           "new with staged": {
+               state: "a=B|x=S:I s=Sa:;Os I q=r",
+               expected: new RepoStatus({
+                   headCommit: "1",
+                   currentBranchName: "master",
+                   submodules: {
+                       s: new Submodule({
+                           commit: null,
+                           index: new Index(null, "a", null),
+                           workdir: new Workdir(new RepoStatus({
+                               headCommit: null,
+                               staged: {
+                                   q: FILESTATUS.ADDED,
+                               },
+                           }), null),
+                       }),
+                   },
+               }),
+           },
        };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const options = c.options || {};
+                if (undefined !== options.cwd) {
+                    options.cwd = path.join(w.repos.x.workdir(),
+                                            options.cwd);
+                }
                 const result = yield StatusUtil.getRepoStatus(w.repos.x,
-                                                              c.options);
+                                                              options);
                 assert.instanceOf(result, RepoStatus);
                 const mappedResult = StatusUtil.remapRepoStatus(result,
                                                                 w.commitMap,

@@ -49,6 +49,8 @@ const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
 const StatusUtil          = require("./status_util");
+const Submodule           = require("./submodule");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
@@ -720,7 +722,7 @@ exports.getCommitMetaData = function (commit) {
  * amended.
  *
  * @param {RepoStatus.Submodule} status
- * @param {Submodule|null}       old
+ * @param {String|null}       old
  * @return {Object}
  * @return {CommitMetaData|null}       return.oldCommit if sub in last commit
  * @return {RepoStatus.Submodule|null} return.status    null if shouldn't exist
@@ -729,6 +731,10 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
                                                      old,
                                                      getRepo,
                                                      all) {
+    assert.instanceOf(status, RepoStatus.Submodule);
+    if (null !== old) {
+        assert.instanceOf(old, Submodule);
+    }
     const index = status.index;
     const commit = status.commit;
     const workdir = status.workdir;
@@ -807,17 +813,15 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
  * Return the status object describing an amend commit to be created in the
  * specified `repo` and a map containing the submodules to have amend
  * commits created mapped to `CommitMetaData` objects describing their current
- * commits; submodules with staged changes not in this map receive
- * normal commits.  Format paths relative to the specified `cwd`.  Include
- * changes to the meta-repo if the specified `includeMeta` is true; ignore them
- * otherwise.  Auto-stage modifications (to tracked files) if the specified
- * `all` is true.
+ * commits; submodules with staged changes not in this map receive normal
+ * commits.  Format paths relative to the specified `cwd`.  Ignore
+ * non-submodule changes to the meta-repo.  Auto-stage modifications (to
+ * tracked files) if the specified `all` is true.
  *
  * @param {NodeGit.Repository} repo
  * @param {Object}             [options]
  * @param {Boolean}            [options.all = false]
  * @param {String}             [options.cwd = ""]
- * @param {Boolean}            [options.includeMeta = false]
  *
  * @return {Object}
  * @return {RepoStatus} return.status
@@ -845,55 +849,89 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     else {
         assert.isString(cwd);
     }
-    let includeMeta = options.includeMeta;
-    if (undefined === includeMeta) {
-        includeMeta = false;
-    }
-    else {
-        assert.isBoolean(includeMeta);
-    }
 
     const baseStatus = yield exports.getCommitStatus(repo, cwd, {
-        showMetaChanges: includeMeta,
         all: all,
     });
 
     const head = yield repo.getHeadCommit();
+    const headTree = yield head.getTree();
 
-    // If we're including the meta-repo, load its changes.
-
-    let metaStaged = {};
-    let metaWorkdir = {};
-    if (includeMeta) {
-        const changes = yield getAmendStatusForRepo(repo, all);
-        metaStaged = changes.staged;
-        metaWorkdir = changes.workdir;
-    }
+    const newUrls =
+                 yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, head);
 
     // Read the state of the commits in the commit before the one to be
     // amended.
 
-    let oldSubs = {};
+    let oldUrls = {};
     const parent = yield GitUtil.getParentCommit(repo, head);
     let parentTree = null;
     if (null !== parent) {
-        const treeId = parent.treeId();
-        parentTree = yield NodeGit.Tree.lookup(repo, treeId);
-        oldSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+        parentTree = yield parent.getTree();
+        oldUrls =
+               yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, parent);
     }
-
+    const diff =
+               yield NodeGit.Diff.treeToTree(repo, parentTree, headTree, null);
+    const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
     const submodules = baseStatus.submodules;  // holds resulting sub statuses
     const opener = new Open.Opener(repo, null);
 
     const subsToAmend = {};  // holds map of subs to amend to their commit info
 
-    // Loop through submodules that were currently exist in either the last
-    // commit or the index, adjusting their "base" status to reflect the amend
-    // change.
+    // Loop through submodules that either have changes against the current
+    // commit, or were changed in the current commit.
 
-    yield Object.keys(submodules).map(co.wrap(function *(name) {
-        const currentSub = submodules[name];
-        const old = oldSubs[name] || null;
+    const subsToInspect = Array.from(new Set(
+                        Object.keys(submodules).concat(Object.keys(changes))));
+
+    yield subsToInspect.map(co.wrap(function *(name) {
+        const change = changes[name];
+        let currentSub = submodules[name];
+        let old = null;
+        if (undefined !== change) {
+            // We handle deleted submodules later.  TODO: this should not be a
+            // special case when we've done the refactoring noted below.
+
+            if (null === change.newSha) {
+                return;                                               // RETURN
+            }
+            // This submodule was affected by the commit; record it's old sha
+            // if it wasn't added.
+
+            if (null !== change.oldSha) {
+                old = new Submodule(oldUrls[name], change.oldSha);
+            }
+
+            if (undefined === currentSub) {
+                // This submodule is not open though; we need to construct a
+                // `RepoStatus.Submodule` object for it as if it had been
+                // loaded; the commit and index parts of this object are the
+                // same as they cannot have been changed.
+                //
+                // TODO: refactor this and `getSubmoduleAmendStatus` to be
+                // less-wonky, specifically to not deal in terms of
+                // `RepoAST.Submodule` objects.
+
+                const url = newUrls[name];
+                const Submodule = RepoStatus.Submodule;
+                currentSub = new Submodule({
+                    commit: new Submodule.Commit(change.newSha, url),
+                    index: new Submodule.Index(change.newSha,
+                                               url,
+                                               Submodule.COMMIT_RELATION.SAME),
+                });
+            }
+        }
+        else {
+            // This submodule was opened but not changed.  Populate 'old' with
+            // current commit value, if it exists.
+
+            const commit = currentSub.commit;
+            if (null !== commit) {
+                old = new Submodule(commit.url, commit.sha);
+            }
+        }
         const getRepo = () => opener.getSubrepo(name);
 
         const result = yield exports.getSubmoduleAmendStatus(currentSub,
@@ -920,23 +958,21 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     // Look for subs that were removed in the commit we are amending; reflect
     // their status.
 
-    Object.keys(oldSubs).forEach(name => {
+    Object.keys(changes).forEach(name => {
         // If we find one, create a status entry for it reflecting its
         // deletion.
 
-        const sub = submodules[name];
-        if (undefined === sub) {
-            const old = oldSubs[name];
+        const change = changes[name];
+        if (null === change.newSha) {
             submodules[name] = new RepoStatus.Submodule({
-                commit: new RepoStatus.Submodule.Commit(old.sha, old.url),
+                commit: new RepoStatus.Submodule.Commit(change.sha,
+                                                        oldUrls[name]),
                 index: null,
             });
         }
     });
 
     const resultStatus = baseStatus.copy({
-        staged: metaStaged,
-        workdir: metaWorkdir,
         submodules: submodules,
     });
 
@@ -1471,11 +1507,9 @@ exports.calculateAllRepoStatus = function (normalStatus, toWorkdirStatus) {
 /**
  * Return the status of the specified `repo` indicating a commit that would be
  * performed, including all (tracked) modified files if the specified `all` is
- * provided (default false) and the state of them meta-repo if the specified
- * `showMetaChanges` is true (default is false).  Restrict status to the
- * specified `paths` if nonempty (default []), using the specified `cwd` to
- * resolve their meaning.  The behavior undefined unless
- * `0 === paths.length || !all`.
+ * provided (default false).  Restrict status to the specified `paths` if
+ * nonempty (default []), using the specified `cwd` to resolve their meaning.
+ * The behavior undefined unless `0 === paths.length || !all`.
  * 
  * @param {NodeGit.Repository} repo
  * @param {String}             cwd
@@ -1523,17 +1557,11 @@ exports.getCommitStatus = co.wrap(function *(repo, cwd, options) {
     if (0 !== options.paths.length) {
         // Doing path-based status.  First, we need to compute the
         // `commitStatus` object that reflects the paths requested by the user.
-        // First, we need to resolve the relative paths.
-
-        const paths = yield options.paths.map(filename => {
-            return GitUtil.resolveRelativePath(repo.workdir(), cwd, filename);
-        });
-
-        // Now we get the path-based status.
 
         const requestedStatus = yield StatusUtil.getRepoStatus(repo, {
+            cwd: cwd,
+            paths: options.paths,
             showMetaChanges: options.showMetaChanges,
-            paths: paths,
         });
 
         return exports.calculatePathCommitStatus(baseStatus, requestedStatus);
@@ -1831,7 +1859,6 @@ function abortForNoMessage() {
 exports.doCommitCommand = co.wrap(function *(repo,
                                              cwd,
                                              message,
-                                             meta,
                                              all,
                                              paths,
                                              interactive,
@@ -1841,7 +1868,6 @@ exports.doCommitCommand = co.wrap(function *(repo,
     if (null !== message) {
         assert.isString(message);
     }
-    assert.isBoolean(meta);
     assert.isBoolean(all);
     assert.isArray(paths);
     assert.isBoolean(interactive);
@@ -1850,7 +1876,6 @@ exports.doCommitCommand = co.wrap(function *(repo,
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
     const repoStatus = yield exports.getCommitStatus(repo, cwd, {
-        showMetaChanges: meta,
         all: all,
         paths: paths,
     });
@@ -1958,7 +1983,6 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * @param {NodeGit.Repository}                    repo
  * @param {String}                                cwd
  * @param {String|null}                           message
- * @param {Boolean}                               meta
  * @param {Boolean}                               all
  * @param {Boolean}                               interactive
  * @param {(repo, txt) -> Promise(String) | null} editMessage
@@ -1969,7 +1993,6 @@ exports.doCommitCommand = co.wrap(function *(repo,
 exports.doAmendCommand = co.wrap(function *(repo,
                                             cwd,
                                             message,
-                                            meta,
                                             all,
                                             interactive,
                                             editMessage) {
@@ -1978,7 +2001,6 @@ exports.doAmendCommand = co.wrap(function *(repo,
     if (null !== message) {
         assert.isString(message);
     }
-    assert.isBoolean(meta);
     assert.isBoolean(all);
     assert.isBoolean(interactive);
     if (null !== editMessage) {
@@ -1988,7 +2010,6 @@ exports.doAmendCommand = co.wrap(function *(repo,
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
     const amendStatus = yield exports.getAmendStatus(repo, {
-        includeMeta: meta,
         all: all,
         cwd: relCwd,
     });
@@ -2062,5 +2083,4 @@ You can make this commit using the interactive ('-i') commit option.`;
                                        all,
                                        message,
                                        subMessages);
-
 });

@@ -43,6 +43,7 @@ const path    = require("path");
 
 const GitUtil             = require("./git_util");
 const Submodule           = require("./submodule");
+const SubmoduleChange     = require("./submodule_change");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
@@ -305,41 +306,18 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
 });
 
 /**
- * Return a summary of the submodule SHAs changed by the specified `commitId` in
- * the specified `repo`, and flag denoting whether or not the `.gitmodules`
- * file was changed.
+ * Return a summary of the submodule SHA changes in the specified `diff`.
+ * TODO: Test this separately from `getSubmoduleChanges`.
  *
  * @asycn
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
- * @return {Object}
- * @return {Object}  return.added    map from path to SHA
- * @return {Object}  return.changed  map from path to new and old SHAs
- * @return {Object} return.removed  map from path to SHA
- * @return {Boolean} return.modulesFileChanged  true if modules file changed
+ * @param {NodeGit.Diff} diff
+ * @return {Object} map from name to `SubmoduleChange`
  */
-exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(commit, NodeGit.Commit);
+exports.getSubmoduleChangesFromDiff = function (diff) {
+    assert.instanceOf(diff, NodeGit.Diff);
 
-    // We calculate the changes of a commit against it's first parent.  If it
-    // has no parents, then the calculation is against an empty tree.
-
-    let parentTree = null;
-    const parents = yield commit.getParents();
-    if (0 !== parents.length) {
-        parentTree = yield parents[0].getTree();
-    }
-
-    const tree = yield commit.getTree();
-    const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree, null);
     const num = diff.numDeltas();
-    const result = {
-        added: {},
-        changed: {},
-        removed: {},
-        modulesFileChanged: false,
-    };
+    const result = {};
     const DELTA = NodeGit.Diff.DELTA;
     const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
     for (let i = 0; i < num; ++i) {
@@ -358,38 +336,58 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
                 const newFile = delta.newFile();
                 const path = newFile.path();
                 if (COMMIT === newFile.mode()) {
-                    result.changed[path] = {
-                        "new": newFile.id().tostrS(),
-                        "old": delta.oldFile().id().tostrS(),
-                    };
-                }
-                else if (SubmoduleConfigUtil.modulesFileName === path) {
-                    result.modulesFileChanged = true;
+                    result[path] = new SubmoduleChange(
+                                                 delta.oldFile().id().tostrS(),
+                                                 newFile.id().tostrS());
                 }
             } break;
             case DELTA.ADDED: {
                 const newFile = delta.newFile();
                 const path = newFile.path();
                 if (COMMIT === newFile.mode()) {
-                    result.added[newFile.path()] = newFile.id().tostrS();
-                }
-                else if (SubmoduleConfigUtil.modulesFileName === path) {
-                    result.modulesFileChanged = true;
+                    result[path] = new SubmoduleChange(null,
+                                                       newFile.id().tostrS());
                 }
             } break;
             case DELTA.DELETED: {
                 const oldFile = delta.oldFile();
                 const path = oldFile.path();
                 if (COMMIT === oldFile.mode()) {
-                    result.removed[oldFile.path()] = oldFile.id().tostrS();
-                }
-                else if (SubmoduleConfigUtil.modulesFileName === path) {
-                    result.modulesFileChanged = true;
+                    result[path] = new SubmoduleChange(oldFile.id().tostrS(),
+                                                       null);
                 }
             } break;
         }
     }
     return result;
+};
+
+/**
+ * Return a summary of the submodule SHAs changed by the specified `commitId`
+ * in the specified `repo`, and flag denoting whether or not the `.gitmodules`
+ * file was changed.
+ *
+ * @asycn
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @return {Object} map from name to `SubmoduleChange`
+ */
+exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    // We calculate the changes of a commit against its first parent.  If it
+    // has no parents, then the calculation is against an empty tree.
+
+    let parentTree = null;
+    const parents = yield commit.getParents();
+    if (0 !== parents.length) {
+        parentTree = yield parents[0].getTree();
+    }
+
+    const tree = yield commit.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree, null);
+    return yield exports.getSubmoduleChangesFromDiff(diff);
 });
 
 /**

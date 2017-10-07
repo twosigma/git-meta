@@ -683,7 +683,6 @@ Untracked files:
                 expected: base,
                 options: {
                     all: false,
-                    showMetaChanges: true,
                     paths: [],
                 },
             },
@@ -691,107 +690,9 @@ Untracked files:
                 state: "x=S:W foo=bar",
                 expected: base,
             },
-            "with meta": {
+            "with meta, ignored": {
                 state: "x=S:W foo=bar",
-                options: {
-                    showMetaChanges: true,
-                },
-                expected: base.copy({
-                    workdir: { foo: FILESTATUS.ADDED },
-                }),
-            },
-            "staged": {
-                state: "x=S:I a=b",
-                options: {
-                    showMetaChanges: true,
-                    all: true,
-                },
-                expected: base.copy({
-                    staged: {
-                        a: FILESTATUS.ADDED,
-                    },
-                }),
-            },
-            "without paths": {
-                state: "x=S:I foo=bar,baz=bam",
-                options: {
-                    showMetaChanges: true,
-                },
-                expected: base.copy({
-                    staged: {
-                        foo: FILESTATUS.ADDED,
-                        baz: FILESTATUS.ADDED,
-                    },
-                }),
-            },
-            "with paths": {
-                state: "x=S:I foo/bar=bar,baz=bam",
-                options: {
-                    showMetaChanges: true,
-                    paths: [ "foo" ],
-                },
-                expected: base.copy({
-                    staged: {
-                        "foo/bar": FILESTATUS.ADDED,
-                    },
-                    workdir: {
-                        "baz": FILESTATUS.ADDED,
-                    },
-                }),
-            },
-            "without relative path": {
-                state: "x=S:I foo/bar=bar,bar=bam",
-                options: {
-                    showMetaChanges: true,
-                    paths: [ "bar" ],
-                },
-                expected: base.copy({
-                    staged: {
-                        "bar": FILESTATUS.ADDED,
-                    },
-                    workdir: {
-                        "foo/bar": FILESTATUS.ADDED,
-                    },
-                }),
-            },
-            "with relative path": {
-                state: "x=S:I foo/bar=bar,bar=bam",
-                options: {
-                    showMetaChanges: true,
-                    paths: [ "bar" ],
-                },
-                workdir: "foo",
-                expected: base.copy({
-                    staged: {
-                        "foo/bar": FILESTATUS.ADDED,
-                    },
-                    workdir: {
-                        "bar": FILESTATUS.ADDED,
-                    },
-                }),
-            },
-            "without all": {
-                state: "x=S:W README.md=88",
-                options: {
-                    showMetaChanges: true,
-                },
-                expected: base.copy({
-                    workdir: {
-                        "README.md": FILESTATUS.MODIFIED,
-                    },
-                }),
-            },
-            "with all": {
-                state: "x=S:W README.md=88",
-                options: {
-                    showMetaChanges: true,
-                    all: true,
-                },
-                expected: base.copy({
-                    staged: {
-                        "README.md": FILESTATUS.MODIFIED,
-                    },
-                }),
+                expected: base,
             },
             "sub staged": {
                 state: "a=B|x=U:C3-2;Bmaster=3;Os I a=b",
@@ -1000,11 +901,14 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
         // Will always use subrepo 's' in repo 'x'
         const cases = {
             "unchanged": {
-                input: "a=B|x=U:C3-2;Bmaster=3",
+                input: "a=B|x=U:C3-2;Bmaster=3;Os",
                 expected: {
                     status: new Submodule({
                         commit: new Submodule.Commit("1", "a"),
                         index: new Submodule.Index("1", "a", RELATION.SAME),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: "1",
+                        }), RELATION.SAME),
                     }),
                 },
             },
@@ -1022,11 +926,14 @@ x=E:Cx-2 x=Sq:1;Bmaster=x;I s=~,x=~`,
                 },
             },
             "added in commit": {
-                input: "a=B|x=U",
+                input: "a=B|x=U:Os",
                 expected: {
                     status: new Submodule({
                         commit: null,
                         index: new Submodule.Index("1", "a", null),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: "1",
+                        }), RELATION.SAME),
                     }),
                 },
             },
@@ -1187,51 +1094,13 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
                     }),
                 },
             },
-            "include meta": {
-                state: "x=S:C2-1;Bmaster=2;I a=b;W README.md=888",
-                includeMeta: true,
-                expected: {
-                    status: new RepoStatus({
-                        currentBranchName: "master",
-                        headCommit: "2",
-                        staged: {
-                            a: FILESTATUS.ADDED,
-                            "2": FILESTATUS.ADDED,
-                        },
-                        workdir: {
-                            "README.md": FILESTATUS.MODIFIED,
-                        },
-                    }),
-                },
-            },
-            "include meta, all": {
-                state: "x=S:C2-1;Bmaster=2;I a=b;W README.md=888",
-                includeMeta: true,
-                all: true,
-                expected: {
-                    status: new RepoStatus({
-                        currentBranchName: "master",
-                        headCommit: "2",
-                        staged: {
-                            a: FILESTATUS.ADDED,
-                            "2": FILESTATUS.ADDED,
-                            "README.md": FILESTATUS.MODIFIED,
-                        },
-                    }),
-                },
-            },
             "sub, no amend": {
                 state: "a=B|x=U:C3-2;Bmaster=3",
                 expected: {
                     status: new RepoStatus({
                         currentBranchName: "master",
                         headCommit: "3",
-                        submodules: {
-                            s: new Submodule({
-                                commit: new Submodule.Commit("1", "a"),
-                                index: new Submodule.Index("1", "a", SAME),
-                            }),
-                        },
+                        submodules: {},
                     }),
                 },
             },
@@ -1469,15 +1338,6 @@ x=N:Cfoo\n#x README.md=hello world;*=master;Bmaster=x`,
             "trivial": {
                 input: "x=N:Cm#1;H=1",
                 expected: "x=N:Cx 1=1;H=x",
-            },
-            "meta change": {
-                input: "x=S:C2-1;Bmaster=2;I README.md=3",
-                expected: "x=S:Cx-1 README.md=3,2=2;Bmaster=x",
-            },
-            "meta staged": {
-                input: "x=S:C2-1;Bmaster=2;W README.md=3",
-                expected: "x=S:Cx-1 README.md=3,2=2;Bmaster=x",
-                all: true,
             },
             "repo with new sha in index": {
                 input: "a=B:Ca-1;Bmaster=a|x=U:C3-2;I s=Sa:a;Bmaster=3",
@@ -3052,41 +2912,28 @@ and for d
             "nothing to commit": {
                 initial: "x=S",
             },
-            "no meta, no commit": {
-                initial: "x=S:I a=b",
-                meta: false,
-            },
-            "meta commit": {
+            "meta changes, ignored": {
                 initial: "x=S:I a=b",
                 message: "foo\n",
-                expected: "x=S:Cfoo\n#x-1 a=b;Bmaster=x",
-            },
-            "meta commit, with editor": {
-                initial: "x=S:I a=b",
-                editor: () => Promise.resolve("haha"),
-                expected: "x=S:Chaha\n#x-1 a=b;Bmaster=x",
-            },
-            "interactive meta commit, but do nothing": {
-                initial: "x=S:I a=b",
-                interactive: true,
-                editor: (_, content) => Promise.resolve(content),
-                fails: true,
             },
             "no all": {
-                initial: "x=S:W README.md=2",
+                initial: "a=B|x=U:Os W README.md=2",
+                message: "foo",
             },
             "all": {
-                initial: "x=S:W README.md=2",
-                all: true,
+                initial: "a=B|x=U:Os W README.md=2",
                 message: "foo",
-                expected: "x=S:Cfoo\n#x-1 README.md=2;Bmaster=x",
+                all: true,
+                expected: `
+x=S:Cfoo\n#x-2 s=Sa:s;Os Cfoo\n#s-1 README.md=2!H=s;Bmaster=x`,
             },
             "paths, cwd": {
-                initial: "x=S:I a/b=b,b=d",
+                initial: "a=B|x=U:Os I a/b=b,b=d",
                 message: "foo",
                 paths: ["b"],
-                cwd: "a",
-                expected: "x=S:Cfoo\n#x-1 a/b=b;I b=d;Bmaster=x",
+                cwd: "s/a",
+                expected: `
+x=S:Cfoo\n#x-2 s=Sa:s;Os Cfoo\n#s-1 a/b=b!I b=d!H=s;Bmaster=x`,
             },
             "uncommitable": {
                 initial: "a=B|x=S:I a=Sa:;Oa",
@@ -3131,12 +2978,10 @@ x=U:Cfoo\n#x-2 s=Sa:s;Os Cbar\n#s-1 a=b!H=s;Bmaster=x`,
                 const editor = c.editor || (() => {
                     assert(false, "no editor");
                 });
-                const meta = undefined === c.meta ? true : false;
                 const result = yield Commit.doCommitCommand(
                                                         repo,
                                                         cwd,
                                                         c.message || null,
-                                                        meta,
                                                         c.all || false,
                                                         c.paths || [],
                                                         c.interactive || false,
@@ -3190,17 +3035,10 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
                 message: "foo",
                 expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
             },
-            "amend with all": {
-                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
-                message: "foo",
-                all: true,
-                expected: "x=S:Cfoo\n#x-1 2=2,README.md=8;Bmaster=x",
-            },
             "amend with all but no meta": {
                 initial: "x=S:C2-1;Bmaster=2;W README.md=8",
                 message: "foo",
                 all: true,
-                meta: false,
                 expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
             },
             "mismatch": {
@@ -3254,12 +3092,10 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
                 if (undefined === editor) {
                     editor = () => assert(false, "no editor");
                 }
-                const meta = undefined === c.meta ? true : false;
                 const result = yield Commit.doAmendCommand(
                                                         repo,
                                                         cwd,
                                                         c.message || null,
-                                                        meta,
                                                         c.all || false,
                                                         c.interactive || false,
                                                         editor);

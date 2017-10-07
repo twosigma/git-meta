@@ -37,6 +37,7 @@ const path    = require("path");
 
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const TestUtil            = require("../../lib/util/test_util");
+const SubmoduleChange     = require("../../lib/util/submodule_change");
 const Submodule           = require("../../lib/util/submodule");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
@@ -363,113 +364,72 @@ describe("SubmoduleUtil", function () {
             "trivial": {
                 state: "S",
                 from: "1",
-                added: {},
-                changed: {},
-                removed: {},
-                modules: false,
+                result: {},
             },
             "changed something else": {
                 state: "S:C2-1 README.md=foo;H=2",
                 from: "2",
-                added: {},
-                changed: {},
-                removed: {},
-                modules: false,
+                result: {},
             },
             "removed something else": {
                 state: "S:C2-1 README.md;H=2",
                 from: "2",
-                added: {},
-                changed: {},
-                removed: {},
-                modules: false,
+                result: {},
             },
             "not on current commit": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "1",
-                added: {},
-                changed: {},
-                removed: {},
-                modules: false,
+                result: {},
             },
             "added one": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "2",
-                added: {
-                    "x": "1",
+                result: {
+                    "x": new SubmoduleChange(null, "1"),
                 },
-                changed: {},
-                removed: {},
-                modules: true,
             },
             "added two": {
                 state: "S:C2-1 a=Sa:1,x=Sa:1;H=2",
                 from: "2",
-                added: {
-                    a: "1",
-                    x: "1",
+                result: {
+                    a: new SubmoduleChange(null, "1"),
+                    x: new SubmoduleChange(null, "1"),
                 },
-                changed: {},
-                removed: {},
-                modules: true,
             },
             "changed one": {
                 state: "S:C3-2 a=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: {},
-                changed: {
-                    a: {
-                        "new": "2",
-                        old: "1",
-                    },
+                result: {
+                    a: new SubmoduleChange("1", "2"),
                 },
-                removed: {},
-                modules: false,
             },
             "changed url": {
                 state: "S:C3-2 a=Sb:1;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: {},
-                changed: {},
-                removed: {},
-                modules: true,
+                result: {},
             },
             "changed and added": {
                 state: "S:C3-2 a=Sa:2,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: {
-                    c: "2",
+                result: {
+                    a: new SubmoduleChange("1", "2"),
+                    c: new SubmoduleChange(null, "2"),
                 },
-                changed: {
-                    a: {
-                        "new": "2",
-                        old: "1",
-                    },
-                },
-                removed: {},
-                modules: true,
             },
             "removed one": {
                 state: "S:C3-2 a=;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: {},
-                changed: {},
-                removed: {
-                    "a": "1",
+                result: {
+                    a: new SubmoduleChange("1", null),
                 },
-                modules: true,
             },
             "added and removed": {
                 state: "S:C3-2 a,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
-                added: {
-                    c: "2",
+                result: {
+                    c: new SubmoduleChange(null, "2"),
+                    a: new SubmoduleChange("1", null),
                 },
-                changed: {},
-                removed: {
-                    a: "1",
-                },
-                modules: true,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -483,30 +443,19 @@ describe("SubmoduleUtil", function () {
                 const changes =
                          yield SubmoduleUtil.getSubmoduleChanges(repo, commit);
 
+                const commitMap = written.commitMap;
+
                 // map the logical commits in the expected results to the
                 // actual commit ids
 
-                const commitMap = written.oldCommitMap;
-                const expAdded = Object.assign({}, c.added);
-                for (let name in expAdded) {
-                    expAdded[name] = commitMap[expAdded[name]];
-                }
-                const expChanged = Object.assign({}, c.changed);
-                for (let name in expChanged) {
-                    expChanged[name] = {
-                        "new": commitMap[expChanged[name]["new"]],
-                        "old": commitMap[expChanged[name].old],
-                    };
-                }
-                const expRemoved = Object.assign({}, c.removed);
-                for (let name in expRemoved) {
-                    expRemoved[name] = commitMap[expRemoved[name]];
-                }
-
-                assert.deepEqual(changes.added, expAdded, "added");
-                assert.deepEqual(changes.changed, expChanged, "changed");
-                assert.deepEqual(changes.removed, expRemoved, "removed");
-                assert.equal(changes.modulesFileChanged, c.modules, "modules");
+                Object.keys(changes).forEach(name => {
+                    const change = changes[name];
+                    assert.instanceOf(change, SubmoduleChange);
+                    const oldSha = change.oldSha && commitMap[change.oldSha];
+                    const newSha = change.newSha && commitMap[change.newSha];
+                    changes[name] = new SubmoduleChange(oldSha, newSha);
+                });
+                assert.deepEqual(changes, c.result);
             }));
         });
     });

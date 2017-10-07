@@ -90,12 +90,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd = process.cwd();
-    const paths = yield args.path.map(filename => {
-        return GitUtil.resolveRelativePath(workdir, cwd, filename);
-    });
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: args.meta,
-        paths: paths,
+        cwd: cwd,
+        paths: args.path,
     });
 
     // Compute the current directory relative to the working directory of the

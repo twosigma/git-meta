@@ -153,7 +153,9 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
             it(caseName, co.wrap(function *() {
                 const stasher = co.wrap(function *(repos) {
                     const repo = repos.x;
-                    const status = yield StatusUtil.getRepoStatus(repo);
+                    const status = yield StatusUtil.getRepoStatus(repo, {
+                        showMetaChanges: true,
+                    });
                     const includeUntracked = c.includeUntracked || false;
                     const result = yield StashUtil.stashRepo(repo,
                                                              status,

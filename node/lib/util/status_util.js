@@ -292,13 +292,15 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
  * true), return the status of changes in `repo`; otherwise, show only changes
  * in submobules.  If the optionally specified `ignoreIndex` is specified,
  * calculate the status matching the workdir to the underlying commit rather
- * than against the index.
+ * than against the index.  If the specified `options.cwd` is provided, resolve
+ * paths in the context of that directory.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {Object}             [options]
  * @param {Boolean}            [options.showAllUntracked]
  * @param {String []}          [options.paths]
+ * @param {String}             [options.cwd]
  * @param {Boolean}            [options.showMetaChanges]
  * @param {Boolean}            [options.ignoreIndex]
  * @return {RepoStatus}
@@ -327,7 +329,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         assert.isArray(options.paths);
     }
     if (undefined === options.showMetaChanges) {
-        options.showMetaChanges = true;
+        options.showMetaChanges = false;
     }
     else {
         assert.isBoolean(options.showMetaChanges);
@@ -338,7 +340,14 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     else {
         assert.isBoolean(options.ignoreIndex);
     }
-
+    if (undefined !== options.cwd) {
+        assert.isString(options.cwd);
+        options.paths = yield options.paths.map(filename => {
+            return GitUtil.resolveRelativePath(repo.workdir(),
+                                               options.cwd,
+                filename);
+        });
+    }
     const headCommit = yield repo.getHeadCommit();
 
     let args = {
@@ -395,48 +404,68 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
         const openSet = new Set(openArray);
         const index = yield repo.index();
+        const headTree = yield headCommit.getTree();
+        const diff = yield NodeGit.Diff.treeToIndex(repo, headTree, index);
+        const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
         const indexUrls =
                  yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
-        const indexNames = Object.keys(indexUrls);
         const headUrls =
            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, headCommit);
 
-        // No paths specified, so we'll do all submodules, restricing to open
+        // No paths specified, so we'll do all submodules, restricting to open
         // ones based on options.
 
         let filterPaths; // map from sub name to paths to use
-        let subsToList;  // array of subs that will be in result
         const filtering = 0 !== options.paths.length;
+
+        // Will look at submodules that are open or have changes.  TODO: we're
+        // ignoring changes affecting only the `.gitmodules` file for now.
+
+        let subsToList  = Array.from(new Set(
+                                      openArray.concat(Object.keys(changes))));
+
         if (filtering) {
             filterPaths = yield SubmoduleUtil.resolvePaths(repo.workdir(),
                                                            options.paths,
-                                                           indexNames,
+                                                           subsToList,
                                                            openArray);
             subsToList = Object.keys(filterPaths);
         }
-        else {
-            // Compute the list by joining the list of submodules listed in the
-            // index and on head.
-            subsToList = Array.from(new Set(
-                                    Object.keys(headUrls).concat(indexNames)));
-        }
-        const commitTree = yield headCommit.getTree();
 
         // Make a list of promises to read the status for each submodule, then
         // evaluate them in parallel.
 
         const subStatMakers = subsToList.map(co.wrap(function *(name) {
-            const headUrl = headUrls[name];
-            let headSha = null;
-            if (undefined !== headUrl) {
-                headSha = (yield commitTree.entryByPath(name)).sha();
-            }
+            const headUrl = headUrls[name] || null;
+            const indexUrl = indexUrls[name] || null;
+            let  headSha = null;
             let indexSha = null;
-            const entry = index.getByPath(name);
-            if (entry) {
-                indexSha = entry.id.tostrS();
-            }
             let subRepo = null;
+
+            // Load commit information available based on whether the submodule
+            // was added, removed, changed, or just open.
+
+            const change = changes[name];
+            if (undefined !== change) {
+                headSha = change.oldSha;
+                indexSha = change.newSha;
+            }
+            else {
+                // Just open, we need to load its sha.  Unfortunately, the diff
+                // we did above doesn't catch new submodules with unstaged
+                // commits; validate that we have commit and index URLs and
+                // entries before trying to read them.
+
+                if (null !== headUrl) {
+                    headSha = (yield headTree.entryByPath(name)).sha();
+                }
+                if (null !== indexUrl) {
+                    const indexEntry = index.getByPath(name);
+                    if (undefined !== indexEntry) {
+                        indexSha = indexEntry.id.tostrS();
+                    }
+                }
+            }
             let status = null;
             if (openSet.has(name)) {
                 subRepo = yield SubmoduleUtil.getRepo(repo, name);
@@ -444,12 +473,13 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
                     paths: filtering ? filterPaths[name] : [],
                     showAllUntracked: options.showAllUntracked,
                     ignoreIndex: options.ignoreIndex,
+                    showMetaChanges: true,
                 });
             }
             return yield exports.getSubmoduleStatus(subRepo,
                                                     status,
-                                                    indexUrls[name] || null,
-                                                    headUrls[name] || null,
+                                                    indexUrl,
+                                                    headUrl,
                                                     indexSha,
                                                     headSha);
         }));
