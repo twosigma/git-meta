@@ -1098,6 +1098,37 @@ exports.amendMetaRepo = co.wrap(function *(repo,
 });
 
 /**
+ * Return a human-readable format of the time for the specified `time`.
+ *
+ * @param {NodeGit.Time} time
+ * @return {String}
+ */
+exports.formatCommitTime = function (time) {
+    assert.instanceOf(time, NodeGit.Time);
+    const signPrefix = time.offset() < 0 ? "-" : "";
+
+    //  TODO: something better than rounding offset, though I think we can live
+    //  without showing minute-specific TZ diffs for a long time.
+
+    const offset = Math.floor(time.offset() / 60);
+    const date = new Date((time.time() + (time.offset() * 60)) * 1000);
+
+    // TODO: do something user-locale-aware.
+
+    const formatted = new Intl.DateTimeFormat("en-US", {
+        hour12: false,
+        timeZone: "UTC",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+    }).format(date);
+    return `${formatted} ${signPrefix}${Math.abs(offset)}00`;
+};
+
+/**
  * Return a string describing the signature of an amend commit, to be used in
  * an editor prompt, based on the specified `currentSignature` that is the
  * current signature used in a normal commit, and the specified `lastSignature`
@@ -1119,28 +1150,8 @@ Author:    ${lastSignature.name()} <${lastSignature.email()}>
 `;
     }
     const time = lastSignature.when();
-    const signPrefix = time.offset() < 0 ? "-" : "";
-
-    //  TODO: something better than rounding offset, though I think we can live
-    //  without showing minute-specific TZ diffs for a long time.
-
-    const offset = Math.floor(time.offset() / 60);
-    const date = new Date((time.time() + (time.offset() * 60)) * 1000);
-
-    // TODO: do something user-locale-aware.
-
-    const formatted = new Intl.DateTimeFormat("en-US", {
-        hour12: false,
-        timeZone: "UTC",
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-    }).format(date);
     result += `\
-Date:      ${formatted} ${signPrefix}${Math.abs(offset)}00
+Date:      ${exports.formatCommitTime(time)}
 
 `;
     return result;

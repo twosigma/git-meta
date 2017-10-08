@@ -1640,6 +1640,24 @@ x=U:Chi\n#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh\n#s-1 a=a!H=s`,
             }));
         });
     });
+    describe("formatCommitTime", function () {
+        // Just two different paths to test here.
+
+        it("positive", function () {
+            const sig = NodeGit.Signature.create("me", "me@me", 3, 60);
+            const time = sig.when();
+            const result = Commit.formatCommitTime(time);
+            const expected = "1/1/1970, 01:00:03 100";
+            assert.equal(expected, result);
+        });
+        it("negative", function () {
+            const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
+            const time = sig.when();
+            const result = Commit.formatCommitTime(time);
+            const expected = "12/31/1969, 23:00:03 -100";
+            assert.equal(expected, result);
+        });
+    });
     describe("formatAmendSignature", function () {
         const sig = NodeGit.Signature.create("me", "me@me", 3, -60);
         const sigYouName = NodeGit.Signature.create("youName", "me@me", 4, 60);
