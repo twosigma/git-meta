@@ -272,7 +272,7 @@ Bmaster=1 origin/master`,
                 e: "x=E:Bfoo=1",
                 userError: true,
             },
-            "simple transform": {
+            "simple expected transform": {
                 i: "x=S:Bfoo=1",
                 m: noOp,
                 e: "x=S",
@@ -287,7 +287,7 @@ Bmaster=1 origin/master`,
                     },
                 },
             },
-            "commit id in branch": {
+            "commit id in branch, transformed by expected transformer": {
                 i: "x=S",
                 m: co.wrap(function *(repos) {
                     const x = repos.x;
@@ -304,6 +304,29 @@ Bmaster=1 origin/master`,
                         const commitId = mappings.reverseCommitMap["1"];
                         branches[`foo-${commitId}`] =
                                                  new RepoAST.Branch("1", null);
+                        return {
+                            x: x.copy({ branches: branches}),
+                        };
+                    },
+                },
+            },
+            "commit id in branch, transformed by actual transformer": {
+                i: "x=S",
+                m: co.wrap(function *(repos) {
+                    const x = repos.x;
+                    const head = yield x.getHeadCommit();
+                    const headStr = head.id().tostrS();
+                    const sig = x.defaultSignature();
+                    yield repos.x.createBranch(`foo-${headStr}`, head, 0, sig);
+                }),
+                e: "x=E:Bfoo-1=1",
+                options: {
+                    actualTransformer: (expected, mappings) => {
+                        const x = expected.x;
+                        let branches = x.branches;
+                        const commitId = mappings.reverseCommitMap["1"];
+                        delete branches[`foo-${commitId}`];
+                        branches["foo-1"] = new RepoAST.Branch("1", null);
                         return {
                             x: x.copy({ branches: branches}),
                         };

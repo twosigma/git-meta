@@ -187,6 +187,15 @@ exports.createMultiRepos = co.wrap(function *(input) {
  *   map.  This facility is provided to allow for cases where some aspect of a
  *   repository state may be dependent on mapping information, such as if a
  *   commit ID is embedded in a ref name.
+ * - If `options.actualTransformer` is provided, the map of expected ASTs,
+ *   along with an object containing mapping information will be passed to it
+ *   with the expectation that it will return a (potentially changed) actual
+ *   map.  This facility is provided to allow for cases where some aspect of a
+ *   repository state may be dependent on mapping information, such as if a
+ *   commit ID is embedded in a ref name.  For example, if a reference name
+ *   will contain a sha, this option allows one to transform that reference
+ *   name into one where the physical sha is replaced by the logical sha, e.g.:
+ *   'refs/commits/aaaaafffffffff' can be changed to: 'refs/commits/1'.
  *
  * TODO: We should change this so that manipulators are given object/url maps
  * to manipulate in-place so that mappings may be recorded even if errors are
@@ -229,6 +238,12 @@ exports.testMultiRepoManipulator =
     }
     else {
         assert.isFunction(options.expectedTransformer);
+    }
+    if (!("actualTransformer" in options)) {
+        options.actualTransformer = (actual) => actual;
+    }
+    else {
+        assert.isFunction(options.actualTransformer);
     }
     const inputASTs = createMultiRepoASTMap(input);
 
@@ -329,6 +344,10 @@ exports.testMultiRepoManipulator =
                                                              commitMap,
                                                              urlMap);
     }
+
+    // Allow mapping of actual ASTs.
+
+    actualASTs = options.actualTransformer(actualASTs, mappings);
 
     RepoASTUtil.assertEqualRepoMaps(actualASTs, expectedASTs);
 });
