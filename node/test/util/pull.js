@@ -131,7 +131,7 @@ describe("userWantsRebase", function () {
                                                       repo,
                                                       master));
 
-        config.setString("branch.master.rebase", "false");
+        yield config.setString("branch.master.rebase", "false");
         assert.equal(false, yield Pull.userWantsRebase({},
                                                        repo,
                                                        master));
