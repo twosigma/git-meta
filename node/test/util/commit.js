@@ -3215,6 +3215,11 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
                 editor: () => Promise.resolve(""),
                 fails: true,
             },
+            "reuse old message": {
+                initial: "x=S:Cbar\n#2-1 README.md=foo;I a=b;Bmaster=2",
+                expected: "x=S:Cbar\n#x-1 README.md=foo, a=b;Bmaster=x",
+                editor: null,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -3227,9 +3232,10 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
                 else {
                     cwd = repo.workdir();
                 }
-                const editor = c.editor || (() => {
-                    assert(false, "no editor");
-                });
+                let editor = c.editor;
+                if (undefined === editor) {
+                    editor = () => assert(false, "no editor");
+                }
                 const meta = undefined === c.meta ? true : false;
                 const result = yield Commit.doAmendCommand(
                                                         repo,
