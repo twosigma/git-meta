@@ -85,6 +85,13 @@ Amend the last commit, including newly staged chnages and, (if -a is \
 specified) modifications.  Will fail unless all submodules changed in HEAD \
 have matching commits and have no new commits.`,
     });
+    parser.addArgument(["--no-edit"], {
+        required: false,
+        action: "storeConst",
+        defaultValue: false,
+        constant: true,
+        help: `When amending, reuse previous messages without editing.`,
+    });
     parser.addArgument(["-i", "--interactive"], {
         required: false,
         action: "storeConst",
@@ -142,7 +149,7 @@ const doAmend = co.wrap(function *(args) {
                                 args.meta,
                                 args.all,
                                 args.interactive,
-                                GitUtil.editMessage);
+                                args.no_edit ? null : GitUtil.editMessage);
 });
 
 /**
@@ -154,6 +161,15 @@ const doAmend = co.wrap(function *(args) {
  * @param {String}  [args.message]
  */
 exports.executeableSubcommand = function (args) {
+    if (args.no_edit && !args.amend) {
+        console.error("The '--no-edit' flag makes sense only when amending.");
+        process.exit(1);
+    }
+    if (args.no_edit && null !== args.message) {
+        console.error(
+                  "Does not make sense to supply a message with '--no-edit'.");
+        process.exit(1);
+    }
     if (args.all && 0 !== args.file.length) {
         console.error("The use of '-a' and files does not make sense.");
         process.exit(1);

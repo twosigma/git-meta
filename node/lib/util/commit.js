@@ -1951,16 +1951,17 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * modified but unstaged changes.  If the specified `interactive` is true,
  * prompt the user to create an "interactive" message, allowing for different
  * commit messages for each changed submodules.  Use the specified
- * `editMessage` function to invoke an editor when needed.  The behavior is
- * undefined if `null !== message && true === interactive`.
+ * `editMessage` function to invoke an editor when needed.  If
+ * `null === editMessage`, use the message of the previous commit.  The
+ * behavior is undefined if `null !== message && true === interactive`.
  *
- * @param {NodeGit.Repository}             repo
- * @param {String}                         cwd
- * @param {String|null}                    message
- * @param {Boolean}                        meta
- * @param {Boolean}                        all
- * @param {Boolean}                        interactive
- * @param {(repo, txt) -> Promise(String)} editMessage
+ * @param {NodeGit.Repository}                    repo
+ * @param {String}                                cwd
+ * @param {String|null}                           message
+ * @param {Boolean}                               meta
+ * @param {Boolean}                               all
+ * @param {Boolean}                               interactive
+ * @param {(repo, txt) -> Promise(String) | null} editMessage
  * @return {Object}
  * @return {String} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
@@ -1980,7 +1981,9 @@ exports.doAmendCommand = co.wrap(function *(repo,
     assert.isBoolean(meta);
     assert.isBoolean(all);
     assert.isBoolean(interactive);
-    assert.isFunction(editMessage);
+    if (null !== editMessage) {
+        assert.isFunction(editMessage);
+    }
 
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
@@ -2028,9 +2031,16 @@ You can make this commit using the interactive ('-i') commit option.`;
             throw new UserError(error);
         }
 
-        // If no message, use editor.
 
+        if (null === editMessage) {
+            // If no `editMessage` function, use the message of the previous
+            // commit.
+
+            message = head.message();
+        }
         if (null === message) {
+            // If no message, use editor.
+
             const prompt = exports.formatAmendEditorPrompt(defaultSig,
                                                            headMeta,
                                                            status,
