@@ -334,6 +334,33 @@ ${colors.red(name)}`);
 });
 
 /**
+ * Return the sha of the stash at the specified `index` in the specified
+ * `repo`.  Throw a `UserError` if there is no stash at the specified index.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {Number}             index
+ * @return {String}
+ */
+const getStashSha = co.wrap(function *(repo, index) {
+
+    let stashRef;
+    try {
+        stashRef = yield NodeGit.Reference.lookup(repo, metaStashRef);
+    }
+    catch (e) {
+        throw new UserError("No stash found.");
+    }
+
+    const log = yield NodeGit.Reflog.read(repo, metaStashRef);
+    const count = log.entrycount();
+    if (count <= index) {
+        throw new UserError(
+`Invalid stash index: ${colors.red(index)}, max is ${count - 1}.`);
+    }
+    return log.entryByIndex(index).idNew().tostrS();
+});
+
+/**
  * Remove, from the stash queue for the specified `repo`, the stash at the
  * specified `index`.  Throw a `UserError` if no such stash exists.  If
  * `0 === index` and there are more elements in the queue, set
@@ -347,10 +374,8 @@ exports.removeStash = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isNumber(index);
     const log = yield NodeGit.Reflog.read(repo, metaStashRef);
+    const stashSha = yield getStashSha(repo, index);
     const count = log.entrycount();
-    if (count <= index) {
-        throw new UserError(`Invalid stash index: ${colors.red(index)}.`);
-    }
     log.drop(index, 1 /* rewrite previous entry */);
     log.write();
 
@@ -369,6 +394,9 @@ exports.removeStash = co.wrap(function *(repo, index) {
             NodeGit.Reference.remove(repo, metaStashRef);
         }
     }
+    const refText = `${metaStashRef}@{${index}}`;
+    console.log(`\
+Dropped ${colors.green(refText)} ${colors.blue(stashSha)}`);
 });
 
 /**
@@ -382,23 +410,7 @@ exports.pop = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isNumber(index);
 
-    // Try to look up the meta stash; return early if not found.
-
-    let stashRef;
-    try {
-        stashRef = yield NodeGit.Reference.lookup(repo, metaStashRef);
-    }
-    catch (e) {
-        console.warn("No meta stash found.");
-        return;                                                       // RETURN
-    }
-
-    const log = yield NodeGit.Reflog.read(repo, metaStashRef);
-    const count = log.entrycount();
-    if (count <= index) {
-        throw new UserError(`Invalid stash index: ${colors.red(index)}.`);
-    }
-    const stashSha = log.entryByIndex(index).idNew().tostrS();
+    const stashSha = yield getStashSha(repo, index);
     const applyResult = yield exports.apply(repo, stashSha);
 
     const status = yield StatusUtil.getRepoStatus(repo);
@@ -408,8 +420,6 @@ exports.pop = co.wrap(function *(repo, index) {
 
     if (null !== applyResult) {
         yield exports.removeStash(repo, index);
-        console.log(`\
-Dropped ${colors.green(metaStashRef + "@{0}")} ${colors.blue(stashSha)}`);
 
         // Clean up sub-repo meta-refs
 
