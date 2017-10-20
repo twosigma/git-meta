@@ -40,9 +40,13 @@ const co = require("co");
  * help text for the `new` command
  * @property {String}
  */
-exports.helpText = `create a new sub-repo`;
+exports.helpText = `add a submodule`;
 
 exports.configureParser = function (parser) {
+    parser.addArgument(["url"], {
+        type: "string",
+        help: "url of the submodule to add",
+    });
     parser.addArgument(["path"], {
         type: "string",
         help: "path to new sub-repo",
@@ -74,9 +78,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const fs     = require("fs-promise");
     const path   = require("path");
 
-    const GitUtil   = require("../util/git_util");
-    const newSub    = require("../util/new");
-    const UserError = require("../util/user_error");
+    const GitUtil      = require("../util/git_util");
+    const AddSubmodule = require("../util/add_submodule");
+    const UserError    = require("../util/user_error");
 
     if (null !== args.branch && null === args.import_from) {
         throw new UserError(`Cannot use '-b' without '-i'.`);
@@ -110,13 +114,13 @@ The path ${colors.red(args.path)} already exists.`);
 
     // Generate the new submodule.
 
-    yield newSub.newSubmodule(repo, args.path, importArg);
+    yield AddSubmodule.addSubmodule(repo, args.url, args.path, importArg);
 
     // Warn the user to create commits or stage changes before committing.
 
     if (null === importArg) {
         console.log(`\
-Created new sub-repo ${colors.blue(args.path)}.  It is currently empty.  Please
+Added new sub-repo ${colors.blue(args.path)}.  It is currently empty.  Please
 stage changes and/or make a commit before finishing with 'git meta commit';
 you will not be able to use 'git meta commit' until you do so.`);
     }

@@ -42,18 +42,21 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
 
 /**
- * Create a new (empty) submodule at the specified `filename` in the specified
- * `repo`.  If the specified `importArg` is provided, import from the specified
- * `importArg.url` and checkout HEAD to the specified `importArg.branch`.
+ * Add a new (empty) submodule at the specified `filename` in the specified
+ * `repo`; configure it to have the specified `url`.  If the specified
+ * `importArg` is provided, import from the specified `importArg.url` and
+ * checkout HEAD to the specified `importArg.branch`.
  *
  * @param {NodeGit.Repository} repo
+ * @param {String}             url
+ * @param {String}             filename
  * @param {Object | null}      importArg
  * @param {String}             importArg.url
  * @param {String}             importArg.branch
- * @param {String}             filename
  */
-exports.newSubmodule = co.wrap(function *(repo, filename, importArg) {
+exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
     assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(url);
     assert.isString(filename);
     if (null !== importArg) {
         assert.isObject(importArg);
@@ -65,7 +68,7 @@ exports.newSubmodule = co.wrap(function *(repo, filename, importArg) {
     fs.appendFileSync(modulesPath, `\
 [submodule "${filename}"]
     path = ${filename}
-    url = .
+    url = ${url}
 `);
     const index = yield repo.index();
     yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
@@ -76,7 +79,7 @@ exports.newSubmodule = co.wrap(function *(repo, filename, importArg) {
                                                                  metaUrl,
                                                                  repo,
                                                                  filename,
-                                                                 ".",
+                                                                 url,
                                                                  templatePath);
     if (null === importArg) {
         return subRepo;                                               // RETURN

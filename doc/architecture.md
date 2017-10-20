@@ -255,32 +255,27 @@ README.md
 
 ## Server-side Representation
 
-We use the *omega* repo strategy to organize sub-repos.  With this strategy,
-all submodules have the same URL: ".".  When a submodule is opened, Git
-resolves the URL of the submodule to be exactly that of the origin of the
-meta-repo itself, i.e., the objects for the meta-repo and all sub-repos live in
-the same physical repository on the back-end.
+On the server, we allow for any number of copies of the meta-repo, but only one
+copy of each sub-repo.  The sub-repos contain commits and synthetic-meta-refs,
+but other names in them are generally insignificant.  Essentially, they are
+provided to shard commits; the strategy would work (though, perhaps, slowly) if
+all sub-repos shared the same server-side repository.
 
-Thus, we have a true (as in all commits reside in one repository) mono-repo
-that can be treated as many sub-repos (especially, client-side).  Key
-functionality enabled by this technique:
-
-- Server-side forks are possible; other potential strategies, as described in
-  the design and evolution section, preclude forks.
-- When desired (e.g. preparing to work remotely) the entire mono-repo can be
-  cloned relatively quickly -- with a single fetch -- compared to other
-  techniques which would require a fetch for each sub-repo.
-- A commit is sufficient to describe the state of a sub-repo in a repository.
-  A separate repository does not need to be brought to life to back a new
-  sub-repo.  If a sub-repo is created, e.g., on a local branch, there is no
-  side-effects or impact on other (local or remote) branches.
-- Sub-repo creation and deletion are implemented in terms of normal,
-  client-side, git operations.
+- Server-side forks; many other potential strategies, as described in the
+  design and evolution section, preclude forks.
+- Implementors must provide some way for developers to ensure the existence of
+  sub-repos on the server before referencing them with `add-submodule`.
+- While a server-side repo does need to exist to back a sub-repo, the state of
+  that repo is insignificant; it contains only (idempotent) meta-refs.  Thus
+  independent users can affect the lifecycle of the same sub-repo without
+  affecting each other (until they try to merge).
 
 Creating and pushing a new sub-repo:
 
 ```bash
-$ git meta new my/sub/repo
+$ your-tool create-submodule my/sub/repo
+Run 'git meta add-submodule https://my-git.com/my/sub/repo my/sub/repo'
+$ git meta add-submodule https://my-git.com/my/sub/repo my/sub/repo
 Created new sub-repo my/sub/repo.  It is currently empty.  Please
 stage changes and/or make a commit before finishing with 'git meta commit';
 you will not be able to use 'git meta commit' until you do so.
@@ -943,9 +938,8 @@ This design has one several drawbacks:
 1. We use symbolic-meta-refs as push-targets in sub-repos; as the contents of a
    symbolic-meta-ref are immutable (a given symbolic-meta-ref can point to only
    one commit), we are always guaranteed to be able to update them when needed.
-1. Using the omega repo strategy to store sub-repo refs together with meta-repo
-   refs allows us to use forking and to implement submodule creation and
-   deletion with normal Git operations.
+1. Using our server-side repo strategy  allows us to use forking and to
+   implement submodule creation and deletion with normal Git operations.
 
 # Performance
 
@@ -983,18 +977,29 @@ minimized through several strategies:
 
 ## Server-side
 
-We were initially concerned about the effect of putting large numbers of refs
-(i.e., one or more synthetic-meta-refs per sub-repo) and objects into a single
-(back end) repository would have on the performance of client-server
+We initially experimented with an *omega* repo technique, storing all meta-repo
+and sub-repos in the same server-side repository.  This strategy had the
+benefit of not needing a proprietary tool to ensure the existence of a
+server-side repository for created submodules; the mono-repo contained
+everything and functioned in a true DVCS sense.
+
+We were concerned from the beginning about the effect of putting large numbers
+of refs (i.e., one or more synthetic-meta-refs per sub-repo) and objects into a
+single (back end) repository would have on the performance of client-server
 interactions, particularly fetching (including cloning) and pushing.
 
 Testing on [an extremely large repository](https://github.com/bpeabody/mongo)
-(~260k commits and 26k sub-repos) has been encouraging so far.  Still, we
-believe that keeping the total number of refs in a given repository to a small
-factor (close to 1) of the number of sub-repos is required to maintain
-performance.  Synthetic-meta-refs should be pruned regularly (s.t. only
-necessary roots remain) and forks should be used to minimize the number of
-meta-repo branches in a given repository; this practice is a good one anyway.
+(~260k commits and 26k sub-repos) was encouraging.  Git seemed mostly up to the
+task of handling the omega repo.
+
+Unfortunately, our hosting solution (Gitlab) was not up to the task, its
+performance degraded in many ways when we fed it with large omega repos.
+Furthermore, this technique prevented users from being able to use normal code
+browsing techniques from Gitlab.  Because of these issues, we adopted the
+technique described above -- each submodule has a single server-side repo --
+that has most of the benefits of the omega repo approach, avoids the worrying
+performance and UX concerns, but has the cost of needing users to ensure the
+existence of upstream repositories for submodules as they create them.
 
 # Tools
 

@@ -38,27 +38,27 @@
 const ArgumentParser = require("argparse").ArgumentParser;
 const NodeGit = require("nodegit");
 
-const add        = require("./cmd/add");
-const checkout   = require("./cmd/checkout");
-const cherryPick = require("./cmd/cherrypick");
-const close      = require("./cmd/close");
-const commit     = require("./cmd/commit");
-const Forward    = require("./cmd/forward");
-const include    = require("./cmd/include");
-const listFiles  = require("./cmd/list_files");
-const merge      = require("./cmd/merge");
-const newSub     = require("./cmd/new");
-const open       = require("./cmd/open");
-const pull       = require("./cmd/pull");
-const push       = require("./cmd/push");
-const rebase     = require("./cmd/rebase");
-const reset      = require("./cmd/reset");
-const root       = require("./cmd/root");
-const submodule  = require("./cmd/submodule");
-const stash      = require("./cmd/stash");
-const status     = require("./cmd/status");
-const UserError  = require("./util/user_error");
-const version    = require("./cmd/version");
+const add          = require("./cmd/add");
+const addSubmodule = require("./cmd/add_submodule");
+const checkout     = require("./cmd/checkout");
+const cherryPick   = require("./cmd/cherrypick");
+const close        = require("./cmd/close");
+const commit       = require("./cmd/commit");
+const Forward      = require("./cmd/forward");
+const include      = require("./cmd/include");
+const listFiles    = require("./cmd/list_files");
+const merge        = require("./cmd/merge");
+const open         = require("./cmd/open");
+const pull         = require("./cmd/pull");
+const push         = require("./cmd/push");
+const rebase       = require("./cmd/rebase");
+const reset        = require("./cmd/reset");
+const root         = require("./cmd/root");
+const submodule    = require("./cmd/submodule");
+const stash        = require("./cmd/stash");
+const status       = require("./cmd/status");
+const UserError    = require("./util/user_error");
+const version      = require("./cmd/version");
 
 // see https://github.com/nodegit/nodegit/issues/827 -- this is required
 // to prevent random hard crashes with e.g. parallelism in index operations.
@@ -126,7 +126,7 @@ const commands = {
     "include": include,
     "ls-files": listFiles,
     "merge": merge,
-    "new": newSub,
+    "add-submodule": addSubmodule,
     "open": open,
     "pull": pull,
     "push": push,

@@ -946,6 +946,22 @@ describe("ShorthandParserUtil", function () {
                     }),
                 },
             },
+            "open sub, missing url": {
+                i: "b=S:I foo=S/a:;Ofoo",
+                e: {
+                    b: S.copy({
+                        index: { foo: new Submodule("/a", null) },
+                        openSubmodules: {
+                            foo: RepoASTUtil.cloneRepo(
+                                new RepoAST(), "/a").copy({
+                                    branches: {},
+                                    currentBranchName: null,
+                                    remotes: { origin: new Remote("/a") },
+                                })
+                        }
+                    }),
+                },
+            },
             "simple open sub with relative URL": {
                 i: "a=S|b=S|x=Cb:I foo=S../a:1;Ofoo",
                 e: {
