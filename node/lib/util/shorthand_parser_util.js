@@ -1302,15 +1302,19 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
                     const origin = remotes.origin;
                     openUrl = origin.url;
                 }
-                assert.property(result,
-                                openUrl,
-`cannot find url ${openUrl} for submodule ${subName} in repo ${name}.`);
+
+                // If the url maps to a repo name, use it; otherwise, configure
+                // an empty repo.
+
+                let subBase = result[openUrl];
+                if (undefined === subBase) {
+                    subBase = new RepoAST();
+                }
 
                 // Configure the submodule using its origin repo as its base.
                 // We configure it similar to a clone, but omitting current
                 // branch and any local branches.
 
-                const subBase = result[openUrl];
                 const clone = RepoASTUtil.cloneRepo(subBase, openUrl);
                 const origin = clone.remotes.origin;
                 const rawSubRepo = rawResult.openSubmodules[subName];
