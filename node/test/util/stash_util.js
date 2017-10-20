@@ -558,6 +558,7 @@ x=E:Os Bss=ss!
         const cases = {
             "nothing to pop": {
                 init: "x=S",
+                fails: true,
             },
             "failed": {
                 init: `
