@@ -56,7 +56,8 @@ exports.configureParser = function (parser) {
 
     parser.addArgument("type", {
         help: `
-'save' to save a stash, 'pop' to restore, 'list' to show stashes; 'save' is
+'save' to save a stash, 'pop' to restore, 'list' to show stashes, 'drop' to \
+discard a stash; 'save' is
 default`,
         type: "string",
         nargs: "?",
@@ -127,6 +128,14 @@ const doList = co.wrap(function *() {
     process.stdout.write(list);
 });
 
+const doDrop = co.wrap(function *(args) {
+    const GitUtil    = require("../../lib/util/git_util");
+    const StashUtil  = require("../../lib/util/stash_util");
+    const repo = yield GitUtil.getCurrentRepo();
+    const index = (null === args.stash) ? 0 : args.stash;
+    yield StashUtil.removeStash(repo, index);
+});
+
 /**
  * Execute the `stash` command according to the specified `args`.
  *
@@ -139,6 +148,7 @@ exports.executeableSubcommand = function (args) {
         case "pop" : return doPop(args);
         case "save": return doSave(args);
         case "list": return doList(args);
+        case "drop": return doDrop(args);
         default: {
             console.error(`Invalid type ${colors.red(args.type)}`);
             process.exit(1);
