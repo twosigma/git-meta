@@ -794,15 +794,17 @@ Changes to be committed:
     describe("printSubmoduleStatus", function () {
         const cases = {
             "empty show closed": {
-                status: new RepoStatus(),
                 relCwd: "",
+                subsToPrint: {},
+                openSubs: new Set(),
                 showClosed: true,
                 expected: `\
 ${colors.grey("All submodules:")}
 `,
             },
             "empty no show closed": {
-                status: new RepoStatus(),
+                subsToPrint: {},
+                openSubs: new Set(),
                 relCwd: "",
                 showClosed: false,
                 expected: `\
@@ -810,14 +812,8 @@ ${colors.grey("Open submodules:")}
 `,
             },
             "a closed sub, not shown": {
-                status: new RepoStatus({
-                    submodules: {
-                        foo: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                        }),
-                    },
-                }),
+                subsToPrint: { foo: "1", },
+                openSubs: new Set(),
                 relCwd: "",
                 showClosed: false,
                 expected: `\
@@ -825,14 +821,8 @@ ${colors.grey("Open submodules:")}
 `,
             },
             "a closed sub, shown": {
-                status: new RepoStatus({
-                    submodules: {
-                        foo: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                        }),
-                    },
-                }),
+                subsToPrint: { foo: "1", },
+                openSubs: new Set(),
                 relCwd: "",
                 showClosed: true,
                 expected: `\
@@ -841,17 +831,10 @@ ${colors.grey("All submodules:")}
 `,
             },
             "an open sub": {
-                status: new RepoStatus({
-                    submodules: {
-                        bar: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                            workdir: new Workdir(new RepoStatus({
-                                headCommit: "1",
-                            }), RELATION.SAME),
-                        }),
-                    },
-                }),
+                subsToPrint: {
+                    bar: "1",
+                },
+                openSubs: new Set(["bar"]),
                 relCwd: "",
                 showClosed: true,
                 expected: `\
@@ -860,21 +843,11 @@ ${colors.grey("All submodules:")}
 `,
             },
             "an open sub and closed": {
-                status: new RepoStatus({
-                    submodules: {
-                        foo: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                        }),
-                        bar: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                            workdir: new Workdir(new RepoStatus({
-                                headCommit: "1",
-                            }), RELATION.SAME),
-                        }),
-                    },
-                }),
+                subsToPrint: {
+                    foo: "1",
+                    bar: "1",
+                },
+                openSubs: new Set(["bar"]),
                 relCwd: "",
                 showClosed: true,
                 expected: `\
@@ -884,17 +857,8 @@ ${colors.grey("All submodules:")}
 `,
             },
             "with relative workdir": {
-                status: new RepoStatus({
-                    submodules: {
-                        bar: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: new Index("1", "/a", RELATION.SAME),
-                            workdir: new Workdir(new RepoStatus({
-                                headCommit: "1",
-                            }), RELATION.SAME),
-                        }),
-                    },
-                }),
+                subsToPrint: { bar: "1", },
+                openSubs: new Set(["bar"]),
                 relCwd: "q",
                 showClosed: true,
                 expected: `\
@@ -903,14 +867,8 @@ ${colors.grey("All submodules:")}
 `,
             },
             "deleted": {
-                status: new RepoStatus({
-                    submodules: {
-                        bar: new Submodule({
-                            commit: new Commit("1", "/a"),
-                            index: null,
-                        }),
-                    },
-                }),
+                subsToPrint: { bar: null },
+                openSubs: new Set(),
                 relCwd: "",
                 showClosed: true,
                 expected: `\
@@ -923,8 +881,9 @@ ${colors.grey("All submodules:")}
             const c = cases[caseName];
             it(caseName, function () {
                 const result = PrintStatusUtil.printSubmoduleStatus(
-                                                                 c.status,
                                                                  c.relCwd,
+                                                                 c.subsToPrint,
+                                                                 c.openSubs,
                                                                  c.showClosed);
                 const resultLines = result.split("\n");
                 const expectedLines = c.expected.split("\n");

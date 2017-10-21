@@ -129,13 +129,16 @@ ${colors.green(commitSha)}.`);
 
     // Cherry-pick each submodule changed in `commit`.
 
-    Object.keys(changes.changed).forEach(subName => {
-        const headSub = headSubs[subName];
-        const commitSub = commitSubs[subName];
-        const headSha = headSub.sha;
-        if (undefined !== commitSub &&
-            headSha !== commitSub.sha) {
-            pickers.push(picker(subName, headSha, commitSub.sha));
+    Object.keys(changes).forEach(subName => {
+        const change = changes[subName];
+        if (null !== change.oldSha && null !== change.newSha) {
+            const headSub = headSubs[subName];
+            const commitSub = commitSubs[subName];
+            const headSha = headSub.sha;
+            if (undefined !== commitSub &&
+                headSha !== commitSub.sha) {
+                pickers.push(picker(subName, headSha, commitSub.sha));
+            }
         }
     });
 

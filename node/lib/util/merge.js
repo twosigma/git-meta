@@ -35,11 +35,12 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil          = require("./git_util");
-const Open             = require("./open");
-const RepoStatus       = require("./repo_status");
-const SubmoduleUtil    = require("./submodule_util");
-const UserError        = require("./user_error");
+const GitUtil             = require("./git_util");
+const Open                = require("./open");
+const RepoStatus          = require("./repo_status");
+const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleUtil       = require("./submodule_util");
+const UserError           = require("./user_error");
 
 /**
  * @enum {MODE}
@@ -156,7 +157,10 @@ ${colors.red(commitSha)}.`);
 
     const subCommits = {};  // Record of merge commits in submodules.
 
-    const subs = metaRepoStatus.submodules;
+    const subUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(metaRepo,
+                                                                      head);
+    const headTree = yield head.getTree();
+    //const subs = metaRepoStatus.submodules;
 
     const opener = new Open.Opener(metaRepo, null);
     const subFetcher = yield opener.fetcher();
@@ -174,7 +178,7 @@ ${colors.red(commitSha)}.`);
 
         // If it's not a submodule move on.
 
-        if (!(path in subs)) {
+        if (!(path in subUrls)) {
             return;                                                   // RETURN
         }
 
@@ -182,8 +186,8 @@ ${colors.red(commitSha)}.`);
 
         const subSha = entry.id.tostrS();
         const subCommitId = NodeGit.Oid.fromString(subSha);
-        const sub = subs[path];
-        const subHeadSha = sub.commit.sha;
+        const subEntry = yield headTree.entryByPath(path);
+        const subHeadSha = subEntry.sha();
         const subCommitSha = subCommitId.tostrS();
 
         // Exit early without opening if we have the same commit as the one
@@ -193,16 +197,7 @@ ${colors.red(commitSha)}.`);
             return;                                                   // RETURN
         }
 
-        let subRepo;
-        if (null === sub.workdir) {
-            // If this submodule's not open, open it.
-
-            console.log(`Opening ${colors.blue(path)}.`);
-            subRepo = yield opener.getSubrepo(path);
-        }
-        else {
-            subRepo = yield opener.getSubrepo(path);
-        }
+        const subRepo = yield opener.getSubrepo(path);
 
         // Fetch commit to merge.
 

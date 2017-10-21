@@ -68,14 +68,6 @@ exports.configureParser = function (parser) {
         required: false,
         help: "commit message; if not specified will prompt"
     });
-    parser.addArgument(["--meta"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the meta-repo; disabled by default to prevent mistakes.`,
-        defaultValue: false,
-    });
     parser.addArgument(["--amend"], {
         required: false,
         action: "storeConst",
@@ -123,7 +115,6 @@ const doCommit = co.wrap(function *(args) {
     yield Commit.doCommitCommand(repo,
                                  cwd,
                                  args.message,
-                                 args.meta,
                                  args.all,
                                  args.file,
                                  args.interactive,
@@ -146,7 +137,6 @@ const doAmend = co.wrap(function *(args) {
     yield Commit.doAmendCommand(repo,
                                 process.cwd(),
                                 args.message,
-                                args.meta,
                                 args.all,
                                 args.interactive,
                                 args.no_edit ? null : GitUtil.editMessage);

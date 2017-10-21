@@ -40,9 +40,9 @@ const assert  = require("chai").assert;
 const colors  = require("colors/safe");
 const path    = require("path");
 
-const GitUtil             = require("../util/git_util");
-const Rebase              = require("../util/rebase");
-const RepoStatus          = require("../util/repo_status");
+const GitUtil             = require("./git_util");
+const Rebase              = require("./rebase");
+const RepoStatus          = require("./repo_status");
 
 /**
  * This value-semantic class describes a line entry to be printed in a status
@@ -437,34 +437,41 @@ Untracked files:
 };
 
 /**
- * Print a string describing the status of the submodules in the specified
- * `status`; show closed submodules if the specified `showClosed` is true; show
- * names relative to the specified `relCwd`.
+ * Print a string describing the status of the specified `subsToPrint`.  Use
+ * the specified `openSubs` set to determine which submodules are open.  Unless
+ * the specified `true === showClosed`, do not print closed sub modules.  Use
+ * the specified `relCwd` to display relative paths.
  *
- * @param {RepoStatus}  status
  * @param {String}      relCwd
+ * @param {Object}      subsToPrint   map from name to sha or null if deleted
+ * @param {Set(String)} openSubs      set of names of open submodules
  * @param {Boolean}     showClosed
  * @return {String}
  */
-exports.printSubmoduleStatus = function (status, relCwd, showClosed) {
-    assert.instanceOf(status, RepoStatus);
+exports.printSubmoduleStatus = function (relCwd,
+                                         subsToPrint,
+                                         openSubs,
+                                         showClosed) {
     assert.isString(relCwd);
+    assert.isObject(subsToPrint);
     assert.isBoolean(showClosed);
+
     let result = "";
-    const subStats = status.submodules;
     if (showClosed) {
         result = `${colors.grey("All submodules:")}\n`;
     }
     else {
         result = `${colors.grey("Open submodules:")}\n`;
     }
-    const names = Object.keys(subStats).sort();
+    const names = Object.keys(subsToPrint).sort();
     names.forEach(name => {
         const relName = path.relative(relCwd, name);
-        const sub = subStats[name];
-        const isVis = null !== sub.workdir;
+        const isVis = openSubs.has(name);
         const visStr = isVis ? " " : "-";
-        const sha = (sub.index && sub.index.sha) || "<deleted>";
+        let sha = subsToPrint[name];
+        if (null === sha) {
+            sha = "<deleted>";
+        }
         if (isVis || showClosed) {
             result += `${visStr} ${sha}  ${colors.cyan(relName)}\n`;
         }
