@@ -72,10 +72,10 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
                                                                   paths);
     const closers = subsToClose.map(co.wrap(function *(name) {
         const sub = subStats[name];
-        const subWorkdir = sub.workdir;
-        if (null === subWorkdir) {
+        if (undefined === sub || null === sub.workdir) {
             return;                                                   // RETURN
         }
+        const subWorkdir = sub.workdir;
         const subRepo = subWorkdir.status;
         if (!force) {
             // Determine if there are any uncommited changes:
