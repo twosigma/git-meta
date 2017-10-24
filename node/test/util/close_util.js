@@ -53,6 +53,10 @@ describe("close_util", function () {
                 paths: ["s"],
                 expected: "a=B|x=U",
             },
+            "with path and closed sub": {
+                state: "a=B|x=U",
+                paths: ["."],
+            },
             "simple with resolved paths": {
                 state: "a=B|x=U:Os",
                 paths: ["s"],
