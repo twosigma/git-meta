@@ -65,19 +65,14 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
     }
     const modulesPath = path.join(repo.workdir(),
                                   SubmoduleConfigUtil.modulesFileName);
-    fs.appendFileSync(modulesPath, `\
-[submodule "${filename}"]
-    path = ${filename}
-    url = ${url}
-`);
     const index = yield repo.index();
-    yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
-    yield index.write();
-
-    // sort all the urls since new modules get added
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+    urls[filename] = url;
     const newConf = SubmoduleConfigUtil.writeConfigText(urls);
     yield fs.writeFile(modulesPath, newConf);
+
+    yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
+    yield index.write();
 
     const metaUrl = yield GitUtil.getOriginUrl(repo);
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
