@@ -121,7 +121,7 @@ The path ${colors.red(args.path)} already exists.`);
     if (null === importArg) {
         console.log(`\
 Added new sub-repo ${colors.blue(args.path)}.  It is currently empty.  Please
-stage changes and/or make a commit before finishing with 'git meta commit';
+stage changes under sub-repo before finishing with 'git meta commit';
 you will not be able to use 'git meta commit' until you do so.`);
     }
 });
