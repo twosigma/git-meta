@@ -165,6 +165,7 @@ describe("RepoAST", function () {
 
             const Commit = RepoAST.Commit;
             const Rebase = RepoAST.Rebase;
+            const Merge  = RepoAST.Merge;
             const Remote = RepoAST.Remote;
 
             const c1       = new Commit();
@@ -192,8 +193,8 @@ describe("RepoAST", function () {
                     eworkdir: ("workdir" in expected) ? expected.workdir : {},
                     eopenSubmodules: ("openSubmodules" in expected) ?
                                                   expected.openSubmodules : {},
-                    erebase: ("rebase" in expected) ?
-                        expected.rebase : null,
+                    erebase: ("rebase" in expected) ?  expected.rebase : null,
+                    emerge: ("merge" in expected) ? expected.merge : null,
                     fails   : fails,
                 };
             }
@@ -207,6 +208,7 @@ describe("RepoAST", function () {
                         head: null,
                         currentBranchName: null,
                         rebase: null,
+                        merge: null,
                         bare: false,
                     },
                     undefined,
@@ -227,6 +229,12 @@ describe("RepoAST", function () {
                 "bad bare with rebase": m({
                     bare: true,
                     rebase: new Rebase("foo", "1", "1"),
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
+                "bad bare with merge": m({
+                    bare: true,
+                    merge: new Merge("foo", "1", "1"),
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -488,6 +496,37 @@ describe("RepoAST", function () {
                 "bad rebase": m({
                     rebase: new Rebase("fff", "1", "1"),
                 }, undefined, true),
+                "with merge": m({
+                    commits: {
+                        "1": new Commit(),
+                    },
+                    head: "1",
+                    merge: new Merge("fff", "1", "1"),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                    },
+                    head: "1",
+                    merge: new Merge("fff", "1", "1"),
+                }),
+                "with merge specific commits": m({
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    merge: new Merge("fff", "2", "2"),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    merge: new Merge("fff", "2", "2"),
+                }),
+                "bad merge": m({
+                    merge: new Merge("fff", "1", "1"),
+                }, undefined, true),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -510,6 +549,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.workdir, c.eworkdir);
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
                     assert.deepEqual(obj.rebase, c.erebase);
+                    assert.deepEqual(obj.merge, c.emerge);
                     assert.equal(obj.bare, c.ebare);
 
                     if (c.input) {
@@ -648,6 +688,7 @@ describe("RepoAST", function () {
 
         describe("AST.copy", function () {
             const Rebase = RepoAST.Rebase;
+            const Merge  = RepoAST.Merge;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": new RepoAST.Branch("1", null) },
@@ -657,6 +698,7 @@ describe("RepoAST", function () {
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello", "1", "1"),
+                merge: new Merge("hello", "1", "1"),
                 bare: false,
             });
             const newArgs = {
@@ -669,6 +711,7 @@ describe("RepoAST", function () {
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello world", "2", "2"),
+                merge: new Merge("hello world", "2", "2"),
                 bare: false,
             };
             const cases = {
@@ -686,6 +729,7 @@ describe("RepoAST", function () {
                         index: {},
                         workdir: {},
                         rebase: null,
+                        merge: null,
                     },
                     e: new RepoAST({
                         commits: { "1": new RepoAST.Commit()},
@@ -711,6 +755,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.workdir, c.e.workdir);
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                     assert.deepEqual(obj.rebase, c.e.rebase);
+                    assert.deepEqual(obj.merge, c.e.merge);
                     assert.equal(obj.bare, c.e.bare);
                 });
             });

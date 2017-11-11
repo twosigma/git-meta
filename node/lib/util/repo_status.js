@@ -32,6 +32,7 @@
 const assert  = require("chai").assert;
 
 const Rebase = require("./rebase");
+const Merge  = require("./merge");
 
 /**
  * This modules defines the type `RepoStatus`, used to describe modifications
@@ -407,6 +408,7 @@ class RepoStatus {
      * @param {Object}   [args.submodules] map from name to `Submodule`
      * @param {Object}   [args.workdir] map from name to `FILESTATUS`
      * @param {Rebase}   [args.rebase] rebase, if one is in progress
+     * @param {Merge}    [args.merge] merge, if one is in progress
      */
     constructor(args) {
         if (undefined === args) {
@@ -421,6 +423,7 @@ class RepoStatus {
         this.d_workdir = {};
         this.d_submodules = {};
         this.d_rebase = null;
+        this.d_merge = null;
 
         if ("currentBranchName" in args) {
             if (null !== args.currentBranchName) {
@@ -462,6 +465,14 @@ class RepoStatus {
                 assert.instanceOf(rebase, Rebase);
             }
             this.d_rebase = rebase;
+        }
+
+        if ("merge" in args) {
+            const merge = args.merge;
+            if (null !== merge) {
+                assert.instanceOf(merge, Merge);
+            }
+            this.d_merge = merge;
         }
         Object.freeze(this);
     }
@@ -607,10 +618,17 @@ class RepoStatus {
     }
 
     /**
-     * @property {Rebase} rebase if non-null, state of in-progress rebase
+     * @property {rebase} rebase if non-null, state of in-progress rebase
      */
     get rebase() {
         return this.d_rebase;
+    }
+
+    /**
+     * @property {merge} merge if non-null, state of in-progress merge
+     */
+    get merge() {
+        return this.d_merge;
     }
 
     /**
@@ -637,6 +655,7 @@ class RepoStatus {
                 args.submodules: this.d_submodules,
             workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
+            merge: ("merge" in args) ? args.merge : this.d_merge,
         });
     }
 }

@@ -46,6 +46,7 @@ const NodeGit  = require("nodegit");
 const path     = require("path");
 
 const DoWorkQueue         = require("./do_work_queue");
+const MergeFileUtil       = require("./merge_file_util");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
@@ -435,6 +436,19 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             // we render against the new head, `onto`.
 
             indexHead = rebase.onto;
+        }
+
+        // Write out the merge info, if it exists.
+
+        if (null !== ast.merge) {
+            // Map commits
+
+            const originalSha = commitMap[ast.merge.originalHead];
+            const mergeSha = commitMap[ast.merge.mergeHead];
+            const merge = new RepoAST.Merge(ast.merge.message,
+                                            originalSha,
+                                            mergeSha);
+            yield MergeFileUtil.writeMerge(repo.path(), merge);
         }
 
         // Set up the index.  We render the current commit and apply the index

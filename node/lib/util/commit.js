@@ -61,9 +61,10 @@ const UserError           = require("./user_error");
  *
  * @param {String} message
  */
-function ensureEolOnLastLine(message) {
+exports.ensureEolOnLastLine = function (message) {
+    // TODO: test independently
     return message.endsWith("\n") ? message : (message + "\n");
-}
+};
 
 /**
  * Return the `NodeGit.Tree` object for the (left) parent of the head commit
@@ -229,10 +230,11 @@ const commitRepo = co.wrap(function *(repo,
         yield index.write();
     }
     if (doCommit) {
-        return yield repo.createCommitOnHead([],
-                                             signature,
-                                             signature,
-                                             ensureEolOnLastLine(message));
+        return yield repo.createCommitOnHead(
+                                         [],
+                                         signature,
+                                         signature,
+                                         exports.ensureEolOnLastLine(message));
     }
     return null;
 });
@@ -611,15 +613,16 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
 
     const sig = repo.defaultSignature();
     const parents = [headCommit];
-    const commitId = yield NodeGit.Commit.create(repo,
-                                                 0,
-                                                 sig,
-                                                 sig,
-                                                 0,
-                                                 ensureEolOnLastLine(message),
-                                                 tree,
-                                                 parents.length,
-                                                 parents);
+    const commitId = yield NodeGit.Commit.create(
+                                          repo,
+                                          0,
+                                          sig,
+                                          sig,
+                                          0,
+                                          exports.ensureEolOnLastLine(message),
+                                          tree,
+                                          parents.length,
+                                          parents);
 
     // Now we need to put the commit on head.  We need to unstage the changes
     // we've just committed, otherwise we see conflicts with the workdir.  We
@@ -998,7 +1001,7 @@ exports.amendRepo = co.wrap(function *(repo, message) {
     const index = yield repo.index();
     const treeId = yield index.writeTree();
     const tree = yield NodeGit.Tree.lookup(repo, treeId);
-    const termedMessage = ensureEolOnLastLine(message);
+    const termedMessage = exports.ensureEolOnLastLine(message);
     const id = yield head.amend("HEAD", null, null, null, termedMessage, tree);
     return id.tostrS();
 });

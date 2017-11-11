@@ -472,6 +472,32 @@ ${colorExp(expected.rebase.onto)} but got ${colorAct(actual.rebase.onto)}.`);
         }
     }
 
+    // Check merge
+
+    if (null === actual.merge && null !== expected.merge) {
+        result.push("Missing merge.");
+    }
+    else if (null !== actual.merge && null === expected.merge) {
+        result.push("Unexpected merge.");
+    }
+    else if (null !== actual.merge) {
+        if (actual.merge.message !== expected.merge.message) {
+            result.push(`Expected ${colorBad("merge message")} to be \
+${colorExp(expected.merge.message)} but got \
+${colorAct(actual.merge.message)}.`);
+        }
+        if (actual.merge.originalHead !== expected.merge.originalHead) {
+            result.push(`Expected ${colorBad("merge original head")} to be \
+${colorExp(expected.merge.originalHead)} but got \
+${colorAct(actual.merge.originalHead)}.`);
+        }
+        if (actual.merge.mergeHead !== expected.merge.mergeHead) {
+            result.push(`Expected ${colorBad("merge head")} to be \
+${colorExp(expected.merge.mergeHead)} but got \
+${colorAct(actual.merge.mergeHead)}.`);
+        }
+    }
+
     return result;
 }
 
@@ -697,6 +723,13 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
                                     mapCommitId(rebase.onto));
     }
 
+    let merge = ast.merge;
+    if (null !== merge) {
+        merge = new RepoAST.Merge(merge.message,
+                                  mapCommitId(merge.originalHead),
+                                  mapCommitId(merge.mergeHead));
+    }
+
     return ast.copy({
         commits: commits,
         branches: branches,
@@ -709,6 +742,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         workdir: mapChanges(ast.workdir),
         openSubmodules: openSubmodules,
         rebase: rebase,
+        merge: merge,
     });
 };
 

@@ -57,7 +57,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
- *                  <note> | <rebase>
+ *                  <note> | <rebase> | <merge>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
@@ -75,6 +75,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
  * note           = N <ref> <commit>=message
  * rebase         = E<head name>,<original commit id>,<onto commit id>
+ * merge          = M<message>,<original head>,<merge head>
  * index          = I <change>[,<change>]*
  * workdir        = W <change>[,<change>]*
  * open submodule = 'O'<path>[' '<override>('!'<override>)*]
@@ -171,6 +172,9 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *                              -- file `x` to be `y`.
  * S:Emaster,1,2                -- rebase in progress started on "master",
  *                                 original head "1", onto commit "2"
+ * S:Mmerging commit,1,2        -- merge in progress started with commit
+ *                                 message "merging commit"
+ *                                 original head "1", merge head "2"
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
@@ -320,6 +324,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         workdir: baseAST.workdir,
         openSubmodules: baseAST.openSubmodules,
         rebase: baseAST.rebase,
+        merge: baseAST.merge,
         bare: baseAST.bare,
     };
 
@@ -432,6 +437,12 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.rebase = rawRepo.rebase;
     }
 
+    // Override merge if provided
+
+    if ("merge" in rawRepo) {
+        resultArgs.merge = rawRepo.merge;
+    }
+
     return resultArgs;
 }
 
@@ -509,6 +520,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let notes = {};
     let openSubmodules = {};
     let rebase;
+    let merge;
 
     /**
      * Parse a set of changes from the specified `begin` character to the
@@ -862,6 +874,26 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
+     * Parse the merge definition beginning at the specified `begin` and
+     * terminating at the specified `end`.
+     *
+     * @param {Number} begin
+     * @param {Number} end
+     */
+    function parseMerge(begin, end) {
+        if (begin === end) {
+            merge = null;
+            return;                                                   // RETURN
+        }
+        const mergeDef = shorthand.substr(begin, end - begin);
+        const parts = mergeDef.split(",");
+        assert.equal(parts.length,
+                     3,
+                     `Wrong number of merge parts in ${mergeDef}`);
+        merge = new RepoAST.Merge(parts[0], parts[1], parts[2]);
+    }
+
+    /**
      * Parse the override beginning at the specified `begin` and finishing at
      * the specified `end`.
      *
@@ -881,6 +913,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "H": return parseHeadOverride;
                 case "R": return parseRemote;
                 case "I": return parseIndex;
+                case "M": return parseMerge;
                 case "N": return parseNote;
                 case "W": return parseWorkdir;
                 case "O": return parseOpenSubmodule;
@@ -925,6 +958,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== rebase) {
         result.rebase = rebase;
+    }
+    if (undefined !== merge) {
+        result.merge = merge;
     }
     return result;
 }
@@ -1180,6 +1216,10 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.rebase) {
             includeCommit(resultArgs.rebase.originalHead);
             includeCommit(resultArgs.rebase.onto);
+        }
+        if (resultArgs.merge) {
+            includeCommit(resultArgs.merge.originalHead);
+            includeCommit(resultArgs.merge.mergeHead);
         }
         for (let remoteName in resultArgs.remotes) {
             const remote = resultArgs.remotes[remoteName];

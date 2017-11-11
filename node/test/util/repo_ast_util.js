@@ -133,6 +133,7 @@ describe("RepoAstUtil", function () {
         const AST = RepoAST;
         const Commit = AST.Commit;
         const Rebase = AST.Rebase;
+        const Merge = AST.Merge;
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
 
@@ -165,6 +166,7 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
+                    merge: new Merge("foo", "1", "1"),
                     bare: false,
                 }),
                 expected: new AST({
@@ -178,6 +180,7 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
+                    merge: new Merge("foo", "1", "1"),
                     bare: false,
                 }),
             },
@@ -497,6 +500,73 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
+            "missing merge": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                fails: true,
+            },
+            "unexpected merge": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong merge message": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    merge: new Merge("foo bar", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong merge original commit": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    merge: new Merge("foo", "2", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong merge head": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    merge: new Merge("foo", "1", "2"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                fails: true,
+            },
         };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
@@ -516,6 +586,7 @@ describe("RepoAstUtil", function () {
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
         const Rebase = RepoAST.Rebase;
+        const Merge = RepoAST.Merge;
         const c1 = new Commit({ message: "foo" });
         const cases = {
             "trivial": { i: new RepoAST(), m: {}, e: new RepoAST() },
@@ -872,6 +943,32 @@ describe("RepoAstUtil", function () {
                     rebase: new Rebase("foo", "1", "1"),
                 }),
             },
+            "merge": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    merge: new Merge("foo", "2", "2"),
+                }),
+            },
+            "merge unmapped": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+                m: {},
+                e: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    merge: new Merge("foo", "1", "1"),
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             it(caseName, function () {
@@ -1037,6 +1134,21 @@ describe("RepoAstUtil", function () {
                     commits: { "1": c1},
                     head: "1",
                     rebase: new RepoAST.Rebase("foo", "1", "1"),
+                }),
+                url: "foo",
+                expected: new AST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    remotes: {
+                        origin: new Remote("foo", {}),
+                    },
+                }),
+            },
+            "no clone merge": {
+                original: new AST({
+                    commits: { "1": c1},
+                    head: "1",
+                    merge: new RepoAST.Merge("foo", "1", "1"),
                 }),
                 url: "foo",
                 expected: new AST({

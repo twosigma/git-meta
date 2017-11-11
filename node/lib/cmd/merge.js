@@ -58,7 +58,7 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-m", "--message"], {
         type: "string",
         help: "commit message",
-        required: true,
+        required: false,
     });
     parser.addArgument(["--ff"], {
         help: "allow fast-forward merges; this is the default",
@@ -77,7 +77,19 @@ exports.configureParser = function (parser) {
     });
     parser.addArgument(["commit"], {
         type: "string",
-        help: "the commitish to merge"
+        help: "the commitish to merge",
+        defaultValue: null,
+        nargs: "?",
+    });
+    parser.addArgument(["--continue"], {
+        action: "storeConst",
+        constant: true,
+        help: "continue an in-progress merge",
+    });
+    parser.addArgument(["--abort"], {
+        action: "storeConst",
+        constant: true,
+        help: "abort an in-progress merge",
     });
 };
 
@@ -95,41 +107,60 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const Merge      = require("../util/merge");
+    const MergeUtil  = require("../util/merge_util");
     const GitUtil    = require("../util/git_util");
-    const StatusUtil = require("../util/status_util");
     const UserError  = require("../util/user_error");
 
-    const MODE = Merge.MODE;
+    const MODE = MergeUtil.MODE;
     let mode = MODE.NORMAL;
 
-    if (args.ff) {
-        if (args.ff_only) {
-            throw new UserError("--ff and --ff-only cannot be used together.");
-        }
-        if (args.no_ff) {
-            throw new UserError("--ff and --no-ff cannot be used together.");
-        }
+    if (args.ff + args.continue + args.abort + args.no_ff + args.ff_only > 1) {
+        throw new UserError(
+                "Cannot use ff, no-ff, ff-only, abort, or continue together.");
     }
-    else if (args.ff_only) {
-        if (args.no_ff) {
-            throw new UserError(
-                "--no-ff and --ff-only cannot be used together.");
-        }
+
+    if (args.ff_only) {
         mode = MODE.FF_ONLY;
     }
     else if (args.no_ff) {
         mode = MODE.FORCE_COMMIT;
     }
-
     const repo = yield GitUtil.getCurrentRepo();
-    const status = yield StatusUtil.getRepoStatus(repo);
 
+    if (args.continue) {
+        if (null !== args.commit) {
+            throw new UserError("Cannot specify a commit with --continue.");
+        }
+        yield MergeUtil.continue(repo);
+        return;                                                       // RETURN
+    }
+    if (args.abort) {
+        if (null !== args.commit) {
+            throw new UserError("Cannot specify a commit with --abort.");
+        }
+        yield MergeUtil.abort(repo);
+        return;                                                       // RETURN
+    }
+    if (null === args.commit) {
+        throw new UserError("Commit required.");
+    }
     const commitish = yield GitUtil.resolveCommitish(repo, args.commit);
     if (null === commitish) {
         throw new UserError(`\
 Could not resolve ${colors.red(args.commit)} to a commit.`);
     }
+    const editMessage = function () {
+        const message = `\
+Merge of '${args.commit}'
+
+# please enter a commit message to explain why this merge is necessary,
+# especially if it merges an updated upstream into a topic branch.
+#
+# lines starting with '#' will be ignored, and an empty message aborts
+# the commit.
+`;
+        return GitUtil.editMessage(repo, message);
+    };
     const commit = yield repo.getCommit(commitish.id());
-    yield Merge.merge(repo, status, commit, mode, args.message);
+    yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
 });

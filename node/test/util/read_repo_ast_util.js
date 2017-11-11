@@ -37,6 +37,8 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 
 const DeinitUtil          = require("../../lib/util/deinit_util");
+const Merge               = require("../../lib/util/merge");
+const MergeFileUtil       = require("../../lib/util/merge_file_util");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
@@ -1433,13 +1435,59 @@ describe("readRAST", function () {
 
         yield NodeGit.Rebase.init(r, current, onto, null, null);
 
-        // Remove the branches, making the commits reachable only from the
-        // rebase.
-
         const ast = yield ReadRepoASTUtil.readRAST(r);
         const rebase = ast.rebase;
         assert.equal(rebase.originalHead, thirdCommit.id().tostrS());
         assert.equal(rebase.onto, secondCommit.id().tostrS());
+    }));
+
+    it("merge", co.wrap(function *() {
+        // Start out with a base repo having two branches, "master", and "foo",
+        // foo having one commit on top of master.
+
+        const start = yield repoWithCommit();
+        const r = start.repo;
+
+        // Switch to master
+
+        yield r.checkoutBranch("master");
+
+        const head = yield r.getHeadCommit();
+        const sha = head.id().tostrS();
+
+        const merge = new Merge("hello", sha, sha);
+
+        const original = yield ReadRepoASTUtil.readRAST(r);
+        const expected = original.copy({
+            merge: merge,
+        });
+
+        yield MergeFileUtil.writeMerge(r.path(), merge);
+
+        const actual = yield ReadRepoASTUtil.readRAST(r);
+
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
+
+    it("merge - unreachable", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        r.detachHead();
+        const secondCommit = yield TestUtil.generateCommit(r);
+        const thirdCommit = yield TestUtil.generateCommit(r);
+
+        // Then begin a merge.
+
+        const merge = new Merge("hello world",
+                                secondCommit.id().tostrS(),
+                                thirdCommit.id().tostrS());
+        yield MergeFileUtil.writeMerge(r.path(), merge);
+
+        // Remove the branches, making the commits reachable only from the
+        // rebase.
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const actualMerge = ast.merge;
+        assert.deepEqual(actualMerge, merge);
     }));
 
     it("add subs again", co.wrap(function *() {

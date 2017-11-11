@@ -439,6 +439,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
  * dictionaries, who have the specified `mergeBase` dictionary as their merge
  * base; or, `null` if there is a conflict between the two that cannot be
  * resolved.
+ * TODO: indicate which submodules are in conflict
  *
  * @param {Object} lhs
  * @param {Object} rhs
