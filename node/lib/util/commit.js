@@ -1574,6 +1574,7 @@ exports.getCommitStatus = co.wrap(function *(repo, cwd, options) {
         const workdirStatus = yield StatusUtil.getRepoStatus(repo, {
             showMetaChanges: options.showMetaChanges,
             ignoreIndex: true,
+            showAllUntracked: true,
         });
         return exports.calculateAllRepoStatus(baseStatus, workdirStatus);
     }

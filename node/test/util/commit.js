@@ -716,6 +716,28 @@ Untracked files:
                     },
                 }),
             },
+            "sub staged in new dir with all": {
+                state: "a=B|x=U:C3-2;Bmaster=3;Os I a/b/c=b",
+                options: {
+                    all: true,
+                },
+                expected:  new RepoStatus({
+                    currentBranchName: "master",
+                    headCommit: "3",
+                    submodules: {
+                        s: new Submodule({
+                            commit: new Submodule.Commit("1", "a"),
+                            index: new Submodule.Index("1", "a", SAME),
+                            workdir: new Submodule.Workdir(new RepoStatus({
+                                headCommit: "1",
+                                staged: {
+                                    "a/b/c": FILESTATUS.ADDED,
+                                },
+                            }), SAME),
+                        }),
+                    },
+                }),
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
