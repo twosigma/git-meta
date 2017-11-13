@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const path    = require("path");
 
+const Merge               = require("../../lib/util/merge");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
@@ -105,6 +106,7 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "1", "1"),
+                    merge: new Merge("foo", "1", "1"),
                 }),
                 commitMap: { "1": "3"},
                 urlMap: {},
@@ -114,6 +116,7 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "3", "3"),
+                    merge: new Merge("foo", "3", "3"),
                 }),
             },
             "with a sub": {
@@ -499,6 +502,14 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                 expected: new RepoStatus({
                     headCommit: "3",
                     rebase: new Rebase("master", "2", "3"),
+                }),
+            },
+            "merge": {
+                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Mhi\n,2,3",
+                expected: new RepoStatus({
+                    headCommit: "2",
+                    currentBranchName: "master",
+                    merge: new Merge("hi\n", "2", "3"),
                 }),
             },
             "staged change": {

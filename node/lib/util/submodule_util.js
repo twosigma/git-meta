@@ -657,3 +657,53 @@ exports.cacheSubmodules = co.wrap(function *(repo, operation) {
     repo.submoduleCacheClear();
     return result;
 });
+
+/**
+ * Attempt to handle a conflicted `.gitmodules` file in the specified `repo`
+ * with changes from the specified `fromCommit` and `ontoCommit` commits.  If
+ * successful, write the result to the .gitmodules file and return true;
+ * otherwise, return false.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     fromCommit
+ * @param {NodeGit.Commit}     ontoCommit
+ * @return {Boolean}
+ */
+exports.mergeModulesFile = co.wrap(function *(repo,
+                                              fromCommit,
+                                              ontoCommit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(fromCommit, NodeGit.Commit);
+    assert.instanceOf(ontoCommit, NodeGit.Commit);
+    // If there is a conflict in the '.gitmodules' file, attempt to resolve it
+    // by comparing the current change against the original onto commit and the
+    // merge base between the base and onto commits.
+
+    const Conf = SubmoduleConfigUtil;
+    const getSubs = Conf.getSubmodulesFromCommit;
+    const fromNext = yield getSubs(repo, fromCommit);
+
+    const baseId = yield NodeGit.Merge.base(repo,
+                                            fromCommit.id(),
+                                            ontoCommit.id());
+    const mergeBase = yield repo.getCommit(baseId);
+    const baseSubs =
+            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, mergeBase);
+
+    const ontoSubs = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                   repo,
+                                                                   ontoCommit);
+
+    const merged = Conf.mergeSubmoduleConfigs(fromNext, ontoSubs, baseSubs);
+                        // If it was resolved, write out and stage the new
+                        // modules state.
+
+    if (null !== merged) {
+        const newConf = Conf.writeConfigText(merged);
+        yield fs.writeFile(path.join(repo.workdir(), Conf.modulesFileName),
+                           newConf);
+        return true;
+    }
+    return false;
+});
+

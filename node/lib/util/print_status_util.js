@@ -41,6 +41,7 @@ const colors  = require("colors/safe");
 const path    = require("path");
 
 const GitUtil             = require("./git_util");
+const Merge               = require("./merge");
 const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
 
@@ -351,10 +352,24 @@ exports.printRebase = function (rebase) {
     return `${colors.red("rebase in progress; onto ", shortSha)}
 You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
   (fix conflicts and then run "git meta rebase --continue")
-  (use "git meta rebase --skip" to skip this patch)
   (use "git meta rebase --abort" to check out the original branch)
 `;
 };
+
+/**
+ * Return a message describing the specified `merge`.
+ *
+ * @param {Merge}
+ * @return {String}
+ */
+function printMerge(merge) {
+    assert.instanceOf(merge, Merge);
+    return `\
+A merge is in progress.
+  (fix conflicts and run "git meta merge --continue")
+  (use "git meta merge --abort" to abort the merge)
+`;
+}
 
 /**
  * Return a message describing the state of the current branch in the specified
@@ -390,6 +405,10 @@ exports.printRepoStatus = function (status, cwd) {
     }
 
     result += exports.printCurrentBranch(status);
+
+    if (null !== status.merge) {
+        result += printMerge(status.merge);
+    }
 
     let changes = "";
     const fileStatuses = exports.accumulateStatus(status);

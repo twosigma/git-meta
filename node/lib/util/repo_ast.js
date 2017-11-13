@@ -38,6 +38,7 @@ const deeper   = require("deeper");
 const deepCopy = require("deepcopy");
 
 const Rebase = require("./rebase");
+const Merge  = require("./merge");
 
 /**
  * @class {Branch}
@@ -303,7 +304,8 @@ class AST {
      * @param {Object}      [args.workdir]
      * @param {Object}      [args.notes]
      * @param {Object}      [args.openSubmodules]
-     * @param {Rebase}      [args.Rebase]
+     * @param {Rebase}      [args.rebase]
+     * @param {Merge}       [args.merge]
      */
     constructor(args) {
         if (undefined === args) {
@@ -469,6 +471,17 @@ in commit ${id}.`);
             }
         }
 
+        this.d_merge = null;
+        if ("merge" in args) {
+            const merge = args.merge;
+            if (null !== merge) {
+                assert.instanceOf(merge, Merge);
+                assert.isFalse(this.d_bare);
+                checkAndTraverse(merge.originalHead, "original head of merge");
+                checkAndTraverse(merge.mergeHead, "merge head");
+                this.d_merge = merge;
+            }
+        }
 
         // Validate that all commits have been reached.
 
@@ -641,6 +654,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {Merge} null unless a merge is in progress
+     */
+    get merge() {
+        return this.d_merge;
+    }
+
+    /**
      * Accumulate the specified `changes` into the specified `dest` map.  A
      * non-null value in `changes` overrides any existing value in `dest`; a
      * `null value causes the path mapped to `null` to be removed.  The
@@ -699,6 +719,7 @@ in commit ${id}.`);
             openSubmodules: ("openSubmodules" in args) ?
                 args.openSubmodules : this.d_openSubmodules,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
+            merge: ("merge" in args) ? args.merge : this.d_merge,
             bare: ("bare" in args) ? args.bare : this.d_bare,
         });
     }
@@ -774,6 +795,7 @@ in commit ${id}.`);
 AST.Branch = Branch;
 AST.Commit = Commit;
 AST.Rebase = Rebase;
+AST.Merge  = Merge;
 AST.Remote = Remote;
 AST.Submodule = Submodule;
 module.exports = AST;

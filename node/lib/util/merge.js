@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Two Sigma Open Source
+ * Copyright (c) 2017, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,327 +31,56 @@
 "use strict";
 
 const assert  = require("chai").assert;
-const co      = require("co");
-const colors  = require("colors");
-const NodeGit = require("nodegit");
-
-const GitUtil             = require("./git_util");
-const Open                = require("./open");
-const RepoStatus          = require("./repo_status");
-const SubmoduleConfigUtil = require("./submodule_config_util");
-const SubmoduleUtil       = require("./submodule_util");
-const UserError           = require("./user_error");
 
 /**
- * @enum {MODE}
- * Flags to describe what type of merge to do.
+ * This module defines the `Merge` value-semantic type.
  */
-const MODE = {
-    NORMAL      : 0,  // will do a fast-forward merge when possible
-    FF_ONLY     : 1,  // will fail unless fast-forward merge is possible
-    FORCE_COMMIT: 2,  // will generate merge commit even could fast-forward
-};
-
-exports.MODE = MODE;
 
 /**
- * Merge the specified `commit` in the specified `metaRepo` having the
- * specified `metaRepoStatus`, using the specified `mode` to control whether or
- * not a merge commit will be generated.  The specified `commitMessage` will be
- * recorded as the message for merge commits.  Throw a `UserError` exception if
- * a fast-forward merge is requested and cannot be completed.
+ * @class Merge
  *
- * Note that this method will open closed submodules having changes recorded in
- * `commit` compared to HEAD.
- *
- * @async
- * @param {NodeGit.Repository} metaRepo
- * @param {RepoStatus}         metaRepoStatus
- * @param {NodeGit.Commit}     commit
- * @param {MODE}               mode
- * @param {String}             commitMessage
- * @return {Object|null}
- * @return {String} return.metaCommit
- * @return {Object} return.submoduleCommits  map from submodule to commit
+ * This class represents the state of a merge.
  */
-exports.merge = co.wrap(function *(metaRepo,
-                                   metaRepoStatus,
-                                   commit,
-                                   mode,
-                                   commitMessage) {
-    assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.instanceOf(metaRepoStatus, RepoStatus);
-    assert.isNumber(mode);
-    assert.instanceOf(commit, NodeGit.Commit);
-    assert.isString(commitMessage);
+class Merge {
 
-    // TODO: See how we do with a variety of edge cases, e.g.: submodules added
-    // and removed.
-    // TODO: Deal with conflicts.
+    /**
+     * Create a new `Merge` object.
+     *
+     * @param {String} message
+     * @param {String} originalHead
+     * @param {String} mergeHead
+     */
+    constructor(message, originalHead, mergeHead) {
+        assert.isString(message);
+        assert.isString(originalHead);
+        assert.isString(mergeHead);
 
-    // Basic algorithm:
-    // - start merge on meta-repo
-    // - detect changes in sub-repos
-    // - merge changes in sub-repos
-    // - if any conflicts in sub-repos, bail
-    // - finalize commit in meta-repo
-    //
-    // The actual problem is complicated by a couple of things:
-    //
-    // - oddities with and/or poor support of submodules
-    // - unlike rebase and cherry-pick, which seem similar on the surface, the
-    //   merge operation doesn't operate directly on the current HEAD, index,
-    //   or working directory: it creates a weird virtual index
-    //
-    // I haven't created issues for nodegit or libgit2 yet as I'm not sure how
-    // many of these problems are real problems or "by design".  If this
-    // project moves out of the prototype phase, we should resolve these
-    // issues as much of the code below feels like a hackish workaround.
-    //
-    // details to follow:
-
-    // If the target commit is an ancestor of the derived commit, then we have
-    // nothing to do; the target commit is already part of the current history.
-
-    const commitSha = commit.id().tostrS();
-
-    if (yield GitUtil.isUpToDate(metaRepo,
-                                 metaRepoStatus.headCommit,
-                                 commitSha)) {
-        return null;
+        this.d_message = message;
+        this.d_originalHead = originalHead;
+        this.d_mergeHead = mergeHead;
+        Object.freeze(this);
     }
 
-    let canFF = yield NodeGit.Graph.descendantOf(metaRepo,
-                                                 commitSha,
-                                                 metaRepoStatus.headCommit);
-
-    if (MODE.FF_ONLY === mode && !canFF) {
-        throw new UserError(`The meta-repositor cannot be fast-forwarded to \
-${colors.red(commitSha)}.`);
+    /**
+     * @property {String} message  commit message started with the merge
+     */
+    get message() {
+        return this.d_message;
     }
 
-    const sig = metaRepo.defaultSignature();
-
-    // Kick off the merge.  It is important to note is that `Merge.commit` does
-    // not directly modify the working directory or index.  The `metaIndex`
-    // object it returns is magical, virtual, does not operate on HEAD or
-    // anything, has no effect.
-
-    const head = yield metaRepo.getCommit(metaRepoStatus.headCommit);
-
-    const metaIndex = yield SubmoduleUtil.cacheSubmodules(metaRepo, () => {
-        return NodeGit.Merge.commits(metaRepo,
-                                     head,
-                                     commit,
-                                     null);
-    });
-
-    let errorMessage = "";
-
-    // `toAdd` will contain a list of paths that need to be added to the final
-    // index when it's ready.  Adding them to the "virtual", `metaIndex` object
-    // turns out to have no effect.  This complication is caused by a a
-    // combination of merge/index weirdness and submodule weirdness.
-
-    const toAdd = [];
-
-    const subCommits = {};  // Record of merge commits in submodules.
-
-    const subUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(metaRepo,
-                                                                      head);
-    const headTree = yield head.getTree();
-    //const subs = metaRepoStatus.submodules;
-
-    const opener = new Open.Opener(metaRepo, null);
-    const subFetcher = yield opener.fetcher();
-
-    const mergeEntry = co.wrap(function *(entry) {
-        const path = entry.path;
-        const stage = RepoStatus.getStage(entry.flags);
-
-        // If the entry is not on the "other" side of the merge move on.
-
-        if (RepoStatus.STAGE.THEIRS !== stage &&
-            RepoStatus.STAGE.NORMAL !== stage) {
-            return;                                                   // RETURN
-        }
-
-        // If it's not a submodule move on.
-
-        if (!(path in subUrls)) {
-            return;                                                   // RETURN
-        }
-
-        // Otherwise, we have a submodule that needs to be merged.
-
-        const subSha = entry.id.tostrS();
-        const subCommitId = NodeGit.Oid.fromString(subSha);
-        const subEntry = yield headTree.entryByPath(path);
-        const subHeadSha = subEntry.sha();
-        const subCommitSha = subCommitId.tostrS();
-
-        // Exit early without opening if we have the same commit as the one
-        // we're supposed to merge to.
-
-        if (subCommitSha === subHeadSha) {
-            return;                                                   // RETURN
-        }
-
-        const subRepo = yield opener.getSubrepo(path);
-
-        // Fetch commit to merge.
-
-        yield subFetcher.fetchSha(subRepo, path, subSha);
-
-        const subCommit = yield subRepo.getCommit(subCommitId);
-
-        // If this submodule is up-to-date with the merge commit, exit.
-
-        if (yield GitUtil.isUpToDate(subRepo, subHeadSha, subCommitSha)) {
-            console.log(`Submodule ${colors.blue(path)} is up-to-date with \
-commit ${colors.green(subCommitSha)}.`);
-            return;                                                   // RETURN
-        }
-
-        // If we can fast-forward, we don't need to do a merge.
-
-        const canSubFF = yield NodeGit.Graph.descendantOf(subRepo,
-                                                          subCommitSha,
-                                                          subHeadSha);
-        if (canSubFF && MODE.FORCE_COMMIT !== mode) {
-            console.log(`Submodule ${colors.blue(path)}: fast-forward to
-${colors.green(subCommitSha)}.`);
-            yield NodeGit.Reset.reset(subRepo,
-                                      subCommit,
-                                      NodeGit.Reset.TYPE.HARD);
-
-            // We still need to add this submodule's name to the list to add so
-            // that it will be recorded to the index if the meta-repo ends up
-            // generating a commit.
-
-            toAdd.push(path);
-            return;                                                   // RETURN
-        }
-        else if (MODE.FF_ONLY === mode) {
-            // If non-ff merge is disallowed, bail.
-            errorMessage += `Submodule ${colors.red(path)} could not be \
-fast-forwarded.\n`;
-            return;                                                   // RETURN
-        }
-
-        // We're going to generate a commit.  Note that the meta-repo cannot be
-        // fast-forwarded.
-
-        canFF = false;
-
-        console.log(`Submodule ${colors.blue(path)}: merging commit \
-${colors.green(subCommitSha)}.\n`);
-
-        // Start the merge.
-
-        const subHead = yield subRepo.getCommit(subHeadSha);
-        let index = yield NodeGit.Merge.commits(subRepo,
-                                                 subHead,
-                                                 subCommit,
-                                                 null);
-
-        // Abort if conflicted.
-
-        if (index.hasConflicts()) {
-            errorMessage += `Submodule ${colors.red(path)} is conflicted.\n`;
-            return;                                                   // RETURN
-        }
-
-        // Otherwise, finish off the merge.
-
-        yield index.writeTreeTo(subRepo);
-        yield NodeGit.Checkout.index(subRepo, index, {
-            checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
-        });
-        index = yield subRepo.index();
-        const treeId = yield index.writeTreeTo(subRepo);
-        const mergeCommit = yield subRepo.createCommit("HEAD",
-                                                       sig,
-                                                       sig,
-                                                       commitMessage,
-                                                       treeId,
-                                                       [subHead, subCommit]);
-        subCommits[path] = mergeCommit.tostrS();
-
-        // And add this sub-repo to the list of sub-repos that need to be added
-        // to the index later.
-
-        toAdd.push(path);
-    });
-
-    // Createa a submodule merger for each submodule in the index.
-
-    const entries = metaIndex.entries();
-    yield entries.map(mergeEntry);
-
-    // If one of the submodules could not be merged, exit.
-
-    if ("" !== errorMessage) {
-        throw new UserError(errorMessage);
+    /**
+     * @property {String} originalHead  HEAD commit when merge started
+     */
+    get originalHead() {
+        return this.d_originalHead;
     }
 
-    // If we've made it through the submodules and can still fast-forward, just
-    // reset the head to the right commit and return.
-
-    if (canFF && MODE.FORCE_COMMIT !== mode) {
-        console.log(
-            `Fast-forwarding meta-repo to ${colors.green(commitSha)}.`);
-        yield NodeGit.Reset.reset(metaRepo, commit, NodeGit.Reset.TYPE.HARD);
-        return {
-            metaCommit: commitSha,
-            submoduleCommits: subCommits,
-        };
+    /**
+     * @property {String} mergeHead  target commit of merge
+     */
+    get mergeHead() {
+        return this.d_mergeHead;
     }
+}
 
-    console.log(`Merging meta-repo commit ${colors.green(commitSha)}.`);
-
-    // This bit gets a little nasty.  First, we need to put `metaIndex` into a
-    // proper state and write it out.
-
-    yield metaIndex.conflictCleanup();
-    yield metaIndex.writeTreeTo(metaRepo);
-
-    // Having committed the index with changes, we need to check it out so that
-    // it's applied to the current index and working directory.  Only there
-    // will we be able to properly reflect the changes to the submodules.  We
-    // need to get to a point where we have a "real" index to work with.
-
-    const checkoutOpts =  {
-        checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE
-    };
-    yield NodeGit.Checkout.index(metaRepo, metaIndex, checkoutOpts);
-
-    // Now that the changes are applied to the current working directory and
-    // index, we can open the current index and work with it.
-
-    const newIndex = yield metaRepo.index();
-
-    // We've made changes to (merges into) some of the submodules; now we can
-    // finally stage them into the index.
-
-    yield toAdd.map(subName => newIndex.addByPath(subName));
-
-    // And write that index out.
-
-    yield newIndex.write();
-    const id = yield newIndex.writeTreeTo(metaRepo);
-
-    // And finally, commit it.
-
-    const metaCommit = yield metaRepo.createCommit("HEAD",
-                                                   sig,
-                                                   sig,
-                                                   commitMessage,
-                                                   id,
-                                                   [head, commit]);
-
-    return {
-        metaCommit: metaCommit.tostrS(),
-        submoduleCommits: subCommits,
-    };
-});
+module.exports = Merge;

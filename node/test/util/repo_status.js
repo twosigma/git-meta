@@ -32,6 +32,7 @@
 
 const assert = require("chai").assert;
 
+const Merge      = require("../../lib/util/merge");
 const Rebase     = require("../../lib/util/rebase");
 const RepoStatus = require("../../lib/util/repo_status");
 
@@ -475,6 +476,7 @@ describe("RepoStatus", function () {
                 workdir: {},
                 submodules: {},
                 rebase: null,
+                merge: null,
             };
             return Object.assign(result, args);
         }
@@ -500,6 +502,7 @@ describe("RepoStatus", function () {
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
+                    merge: new Merge("baz", "2", "1"),
                 },
                 e: m({
                     currentBranchName: "foo",
@@ -513,6 +516,7 @@ describe("RepoStatus", function () {
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
+                    merge: new Merge("baz", "2", "1"),
                 }),
             }
         };
@@ -528,6 +532,7 @@ describe("RepoStatus", function () {
             assert.deepEqual(result.workdir, c.e.workdir);
             assert.deepEqual(result.submodules, c.e.submodules);
             assert.deepEqual(result.rebase, c.e.rebase);
+            assert.deepEqual(result.merge, c.e.merge);
         });
     });
 
@@ -957,6 +962,7 @@ describe("RepoStatus", function () {
             },
             workdir: { x: FILESTATUS.MODIFIED },
             rebase: new Rebase("2", "4", "b"),
+            merge: new Merge("hah", "1", "1"),
         });
         const anotherStat = new RepoStatus({
             currentBranchName: "fo",
@@ -967,6 +973,7 @@ describe("RepoStatus", function () {
             },
             workdir: { x: FILESTATUS.ADDED },
             rebase: new Rebase("a", "4", "b"),
+            merge: new Merge("a", "2", "2"),
         });
         it("simple, no args", function () {
             const newStat = stat.copy();
@@ -984,6 +991,7 @@ describe("RepoStatus", function () {
                 submodules: anotherStat.submodules,
                 workdir: anotherStat.workdir,
                 rebase: anotherStat.rebase,
+                merge: anotherStat.merge,
             });
             assert.deepEqual(newStat, anotherStat);
         });

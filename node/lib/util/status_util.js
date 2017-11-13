@@ -42,6 +42,8 @@ const NodeGit = require("nodegit");
 
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
+const Merge               = require("./merge");
+const MergeFileUtil       = require("./merge_file_util");
 const Rebase              = require("./rebase");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
@@ -114,6 +116,29 @@ function remapRebase(rebase, commitMap) {
 }
 
 /**
+ * Return a new `Merge` object having the same value as the specified `merge`
+ * but with commit shas being replaced by commits in the specified `commitMap`.
+ *
+ * @param {Merge} merg
+ * @param {Object} commitMap from sha to sha
+ */
+function remapMerge(merge, commitMap) {
+    assert.instanceOf(merge, Merge);
+    assert.isObject(commitMap);
+
+    let originalHead = merge.originalHead;
+    let mergeHead = merge.mergeHead;
+    if (originalHead in commitMap) {
+        originalHead = commitMap[originalHead];
+    }
+    if (mergeHead in commitMap) {
+        mergeHead = commitMap[mergeHead];
+    }
+    return new Merge(merge.message, originalHead, mergeHead);
+}
+
+
+/**
  * Return a new `RepoStatus` object having the same value as the specified
  * `status` but with all commit shas replaced by commits in the specified
  * `comitMap` and all urls replaced by the values in the specified `urlMap`.
@@ -148,6 +173,8 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
         workdir: status.workdir,
         rebase: status.rebase === null ? null : remapRebase(status.rebase,
                                                             commitMap),
+        merge: status.merge === null ? null : remapMerge(status.merge,
+                                                         commitMap),
     });
 };
 
@@ -370,6 +397,8 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         }
         args.rebase = rebase;
     }
+
+    args.merge = yield MergeFileUtil.readMerge(repo.path());
 
     if (options.showMetaChanges && !repo.isBare()) {
         const head = yield repo.getHeadCommit();

@@ -33,7 +33,6 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
-const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
@@ -191,55 +190,6 @@ rebase; rewinding to ${colors.green(ontoCommitId.tostrS())}.`);
 });
 
 /**
- * Attempt to handle a conflicted `.gitmodules` file in the specified `repo`
- * having the specified `index`, with changes coming from the specified
- * `fromCommit` and `ontoCommit` commits.  Return true if the conflict was
- * resolved and false otherwise.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Index}      index
- * @param {NodeGit.Commit}     fromCommit
- * @param {NodeGit.Commit}     ontoCommit
- * @return {Boolean}
- */
-const mergeModulesFile = co.wrap(function *(repo,
-                                            index,
-                                            fromCommit,
-                                            ontoCommit) {
-    // If there is a conflict in the '.gitmodules' file, attempt to resolve it
-    // by comparing the current change against the original onto commit and the
-    // merge base between the base and onto commits.
-
-    const Conf = SubmoduleConfigUtil;
-    const getSubs = Conf.getSubmodulesFromCommit;
-    const fromNext = yield getSubs(repo, fromCommit);
-
-    const baseId = yield NodeGit.Merge.base(repo,
-                                            fromCommit.id(),
-                                            ontoCommit.id());
-    const mergeBase = yield repo.getCommit(baseId);
-    const baseSubs =
-            yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, mergeBase);
-
-    const ontoSubs = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                   repo,
-                                                                   ontoCommit);
-
-    const merged = Conf.mergeSubmoduleConfigs(fromNext, ontoSubs, baseSubs);
-                        // If it was resolved, write out and stage the new
-                        // modules state.
-
-    if (null !== merged) {
-        const newConf = Conf.writeConfigText(merged);
-        yield fs.writeFile(path.join(repo.workdir(), Conf.modulesFileName),
-                           newConf);
-        yield index.addByPath(Conf.modulesFileName);
-        return true;
-    }
-    return false;
-});
-
-/**
  * Process the specified `entry` from the specified `index`  for the specified
  * `metaRepo` during a rebase from the specified `fromCommit` on the specified
  * `ontoCommit`.  Use the specified `opener` to open submodules as needed.
@@ -292,11 +242,12 @@ const processMetaRebaseEntry = co.wrap(function *(metaRepo,
         }
         else {
             if (SubmoduleConfigUtil.modulesFileName === entry.path) {
-                const succeeded = yield mergeModulesFile(metaRepo,
-                                                         index,
-                                                         fromCommit,
-                                                         ontoCommit);
+                const succeeded = yield SubmoduleUtil.mergeModulesFile(
+                                                                   metaRepo,
+                                                                   fromCommit,
+                                                                   ontoCommit);
                 if (succeeded) {
+                    yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
                     break;                                             // BREAK
                 }
             }

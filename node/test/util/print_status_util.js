@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const colors  = require("colors");
 
 const Rebase              = require("../../lib/util/rebase");
+const Merge               = require("../../lib/util/merge");
 const RepoStatus          = require("../../lib/util/repo_status");
 const PrintStatusUtil     = require("../../lib/util/print_status_util");
 
@@ -687,7 +688,23 @@ describe("PrintStatusUtil", function () {
                 input: new RepoStatus({
                     currentBranchName: "master",
                 }),
-                regex: /On branch.*master.*\n.*nothing to commit.*/,
+                exact: `\
+On branch ${colors.green("master")}.
+nothing to commit, working tree clean
+`,
+            },
+            "merge": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    merge: new Merge("hello", "1", "1"),
+                }),
+                exact: `\
+On branch ${colors.green("master")}.
+A merge is in progress.
+  (fix conflicts and run "git meta merge --continue")
+  (use "git meta merge --abort" to abort the merge)
+nothing to commit, working tree clean
+`,
             },
             "rebase": {
                 input: new RepoStatus({
