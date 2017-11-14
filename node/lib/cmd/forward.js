@@ -76,6 +76,7 @@ exports.forwardedCommands = new Set([
     "fetch",
     "log",
     "remote",
+    "show",
     "tag",
 ]);
 
