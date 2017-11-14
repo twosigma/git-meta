@@ -232,7 +232,7 @@ exports.getRelation = co.wrap(function *(repo, from, to) {
  * optionally specified `repo`, and workdir `status` if open, the optionally
  * specified `indexUrl` and `indexSha` if the submodule exists in the index,
  * and the optionally specified `commitUrl` and `commitSha` if it exists in the
- * HEAD commit.
+ * HEAD commit.  Return `undefined` if the submodule is misconfigured.
  * @async
  * @private
  * @param {NodeGit.Repository|null}         repo
@@ -249,6 +249,11 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
                                                 commitUrl,
                                                 indexSha,
                                                 commitSha) {
+    // If there is no index URL or commit URL, this submodule cannot be deleted
+    // or added.
+    if (null === commitUrl && null === indexUrl) {
+        return undefined;
+    }
     const Submodule = RepoStatus.Submodule;
     const COMMIT_RELATION = Submodule.COMMIT_RELATION;
 
@@ -518,7 +523,10 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         // And copy them into the arguments.
 
         subsToList.forEach((name, i) => {
-            args.submodules[name] = subStats[i];
+            const subStat = subStats[i];
+            if (undefined !== subStat) {
+                args.submodules[name] = subStats[i];
+            }
         });
     }
 

@@ -421,7 +421,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                 }),
             },
         };
-
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
@@ -470,6 +469,15 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                 assert.deepEqual(mappedResult, c.expected);
             }));
         });
+        it("misconfigured", co.wrap(function *() {
+            const result = yield StatusUtil.getSubmoduleStatus(null,
+                                                               null,
+                                                               null,
+                                                               null,
+                                                               null,
+                                                               null);
+            assert.isUndefined(result);
+        }));
     });
 
     describe("getRepoStatus", function () {
