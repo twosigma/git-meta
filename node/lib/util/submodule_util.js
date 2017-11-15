@@ -260,13 +260,19 @@ exports.listOpenSubmodules = co.wrap(function *(repo) {
     // the `.git/config` file without actually opening it, meaning that the
     // `.git/config` file cannot be used as the single source of truth and we
     // must verify with `isVisble`, which looks for a repositories `.git` file.
+    // Also, we need to make sure that the submodule is included in the
+    // `.gitmodules` file.  If a user abandons a submodule while adding it, it
+    // may have a lingering reference in `.git/config` even though it's been
+    // removed from `.gitmodules`.
 
+    const configuredSubmodules =
+                            SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
     const openInConfig = SubmoduleConfigUtil.parseOpenSubmodules(text);
     const visCheckers = openInConfig.map(sub => exports.isVisible(repo, sub));
     const visFlags = yield visCheckers;
     let result = [];
     openInConfig.forEach((name, i) => {
-        if (visFlags[i]) {
+        if ((name in configuredSubmodules) && visFlags[i]) {
             result.push(name);
         }
     });

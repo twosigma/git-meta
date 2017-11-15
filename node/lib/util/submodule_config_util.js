@@ -258,6 +258,31 @@ exports.getSubmodulesFromIndex = co.wrap(function *(repo, index) {
 });
 
 /**
+ * Return a map from submodule name to url in the specified `repo`.
+ *
+ * @private
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @return {Object} map from name to url
+ */
+exports.getSubmodulesFromWorkdir = function (repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const modulesPath = path.join(repo.workdir(), exports.modulesFileName);
+    let data;
+    try {
+        data = fs.readFileSync(modulesPath, "utf8");
+    }
+    catch (e) {
+        // File doesn't exist, no submodules configured.
+    }
+    if (undefined === data) {
+        return {};
+    }
+    return exports.parseSubmoduleConfig(data);
+};
+
+/**
  * Return the path to the config file for the specified `repo`.
  *
  * @param {NodeGit.Repository}

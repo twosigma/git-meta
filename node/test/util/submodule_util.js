@@ -338,6 +338,17 @@ describe("SubmoduleUtil", function () {
             const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
             assert.deepEqual(openSubs, []);
         }));
+
+        it("missing from .gitmodules", co.wrap(function *() {
+            const input = "a=B|x=U:Os";
+            const written = yield RepoASTTestUtil.createMultiRepos(input);
+            const x = written.repos.x;
+            const modulesPath = path.join(x.workdir(),
+                                          SubmoduleConfigUtil.modulesFileName);
+            yield fs.unlink(modulesPath);
+            const result = yield SubmoduleUtil.listOpenSubmodules(x);
+            assert.deepEqual(result, []);
+        }));
     });
 
     describe("getSubmoduleRepos", function () {

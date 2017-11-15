@@ -406,6 +406,36 @@ describe("SubmoduleConfigUtil", function () {
         }));
     });
 
+    describe("getSubmodulesFromWorkdir", function () {
+        // We know that the actual parsing is done by `parseSubmoduleConfig`;
+        // we just need to check that the parsing happens and that it works in
+        // the case where there is no `.gitmodules` file.
+
+        it("no gitmodules", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const result = SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+            assert.deepEqual(result, {});
+        }));
+
+        it("with gitmodules", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const modulesPath = path.join(repo.workdir(),
+                                          SubmoduleConfigUtil.modulesFileName);
+
+            yield fs.writeFile(modulesPath, `\
+[submodule "x/y"]
+    path = x/y
+[submodule "x/y"]
+    url = /foo/bar/baz
+`
+                              );
+            const result = SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+            assert.deepEqual(result, {
+                "x/y": "/foo/bar/baz",
+            });
+        }));
+    });
+
     describe("getConfigPath", function () {
         it("breathing", co.wrap(function *() {
             const repo = yield TestUtil.createSimpleRepository();
