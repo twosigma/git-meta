@@ -465,7 +465,7 @@ const driveRebase = co.wrap(function *(metaRepo,
             const subRepo = yield opener.getSubrepo(name);
             const head = yield subRepo.head();
             const sha = shas[name];
-            if (head.target().tostrS() !== sha) {
+            if (undefined !== sha && head.target().tostrS() !== sha) {
                 yield fetcher.fetchSha(subRepo, name, sha);
                 yield setHead(subRepo, sha);
             }
