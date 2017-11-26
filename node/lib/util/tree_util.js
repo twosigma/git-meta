@@ -35,7 +35,8 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const RepoStatus = require("./repo_status");
+const RepoStatus          = require("./repo_status");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
  * Return a nested tree mapping the flat structure in the specified `flatTree`,
@@ -232,6 +233,7 @@ exports.listWorkdirChanges = function (repo, status, includeUnstaged) {
     assert.instanceOf(status, RepoStatus);
     assert.isBoolean(includeUnstaged);
 
+    let touchedModules = false;
     const FILESTATUS = RepoStatus.FILESTATUS;
     const FILEMODE = NodeGit.TreeEntry.FILEMODE;
 
@@ -262,15 +264,38 @@ exports.listWorkdirChanges = function (repo, status, includeUnstaged) {
     // commits.
 
     const submodules = status.submodules;
+    const SAME = RepoStatus.Submodule.COMMIT_RELATION.SAME;
     for (let name in submodules) {
         const sub = submodules[name];
         const wd = sub.workdir;
-        if (null !== wd &&
-            RepoStatus.Submodule.COMMIT_RELATION.SAME !== wd.relation) {
-            result[name] = new Change(
-                                  NodeGit.Oid.fromString(wd.status.headCommit),
-                                  FILEMODE.COMMIT);
+        let sha = null;
+        touchedModules = touchedModules ||
+            null === sub.commit ||
+            null === sub.index ||
+            sub.index.url !== sub.commit.url;
+        if (null !== wd && SAME !== wd.relation) {
+            sha = wd.status.headCommit;
         }
+        else if (null === sub.commit && null !== sub.index) {
+            sha = sub.index.sha;
+        }
+        else if (null === wd && null === sub.index) {
+            result[name] = null;
+        }
+        else if (null === wd && SAME !== sub.index.relation) {
+            sha = sub.index.sha;
+        }
+        if (null !== sha) {
+            result[name] = new Change(NodeGit.Oid.fromString(sha),
+                                      FILEMODE.COMMIT);
+
+        }
+    }
+
+    if (touchedModules) {
+        const modulesName = SubmoduleConfigUtil.modulesFileName;
+        const id = exports.hashFile(repo, modulesName);
+        result[modulesName] = new Change(id, FILEMODE.BLOB);
     }
 
     return result;
