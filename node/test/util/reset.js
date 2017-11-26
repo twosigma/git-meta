@@ -85,7 +85,7 @@ describe("reset", function () {
                 type: TYPE.HARD,
                 expected: "x=E:Bmaster=4"
             },
-            "changed sub-repo not open": {
+            "hard changed sub-repo not open": {
                 initial: "a=B:Ca-1 y=x;Bfoo=a|x=U:C4-2 s=Sa:a;Bfoo=4",
                 to: "4",
                 type: TYPE.HARD,
@@ -109,6 +109,19 @@ a=B:Ca-1 y=x;Bfoo=a|x=U:C3-2 t=Sa:1;C4-3 s=Sa:a,t=Sa:a;Bfoo=4;Bmaster=3;Os;Ot`,
                 to: "4",
                 type: TYPE.HARD,
                 expected: "x=E:Bmaster=4;Os;Ot"
+            },
+            "soft in sub": {
+                initial: "a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Bf=3",
+                to: "2",
+                type: TYPE.SOFT,
+                expected: "x=E:Os H=1!I a=a;Bmaster=2",
+            },
+            "soft in sub, already open": {
+                initial: `
+a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Bf=3;Os`,
+                to: "2",
+                type: TYPE.SOFT,
+                expected: "x=E:Os H=1!I a=a;Bmaster=2",
             },
         };
         Object.keys(cases).forEach(caseName => {

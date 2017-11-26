@@ -35,6 +35,7 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 
 const GitUtil          = require("./git_util");
+const Open             = require("./open");
 const StatusUtil       = require("./status_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
 const SubmoduleUtil    = require("./submodule_util");
@@ -79,6 +80,21 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isString(type);
 
+    const head = yield repo.getHeadCommit();
+    const headTree = yield head.getTree();
+    const commitTree = yield commit.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo,
+                                               commitTree,
+                                               headTree,
+                                               null);
+    const changedSubs = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
+
+    // Prep the opener to open submodules on HEAD; otherwise, our resets will
+    // be noops.
+
+    const opener = new Open.Opener(repo, null);
+    const fetcher = yield opener.fetcher();
+
     const resetType = getType(type);
 
     // First, reset the meta-repo.
@@ -87,24 +103,53 @@ exports.reset = co.wrap(function *(repo, commit, type) {
         return NodeGit.Reset.reset(repo, commit, resetType);
     });
 
-    // Then, all open subs.
+    // Make a list of submodules to reset, including all that have been changed
+    // between HEAD and 'commit', and all that are open.
 
-    const openNames = yield SubmoduleUtil.listOpenSubmodules(repo);
+    const openSubsSet = yield opener.getOpenSubs();
+    const pathsToResetSet = new Set(openSubsSet);
+    Object.keys(changedSubs).forEach(path => pathsToResetSet.add(path));
+    const pathsToReset = Array.from(pathsToResetSet);
+    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
+                                                               pathsToReset,
+                                                               commit);
     const index = yield repo.index();
-    const shas = yield SubmoduleUtil.getCurrentSubmoduleShas(index, openNames);
-    const fetcher = new SubmoduleFetcher(repo, commit);
+    yield pathsToReset.map(co.wrap(function *(name) {
+        const change = changedSubs[name];
+        if (undefined !== change &&
+            (null === change.oldSha || null === change.newSha)) {
+            // If the submodule has been added or removed since 'commit',
+            // there's nothing to do.
+            return;                                                   // RETURN
+         }
+        const sha = shas[name];
 
-    yield openNames.map(co.wrap(function *(name, index) {
-        const sha = shas[index];
-        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+        // When doing a hard reset, we don't need to open closed submodules
+        // because we would be throwing away the changes anyway.
 
-        // Fetch the sha in case we don't already have it.
+        if (TYPE.HARD === type && !openSubsSet.has(name)) {
+            return;                                                   // RETURN
+        }
 
+        // Open the submodule and fetch the sha of the commit to which we're
+        // resetting in case we don't have it.
+
+        const subRepo = yield opener.getSubrepo(name);
         yield fetcher.fetchSha(subRepo, name, sha);
 
         const subCommit = yield subRepo.getCommit(sha);
         yield NodeGit.Reset.reset(subRepo, subCommit, resetType);
+
+        // Set the index to have the commit to which we just set the submodule;
+        // otherwise, Git will see a staged change and worktree modifications
+        // for the submodule.
+
+        yield index.addByPath(name);
     }));
+
+    // Write the index in case we've had to stage submodule changes.
+
+    yield index.write();
 });
 
 /**
