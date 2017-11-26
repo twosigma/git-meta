@@ -54,6 +54,13 @@ and unstaged commits to the sub-repos.`;
 
 exports.configureParser = function (parser) {
 
+    parser.addArgument(["-m", "--message"], {
+        type: "string",
+        defaultValue: null,
+        required: false,
+        help: "description; if not provided one will be generated",
+    });
+
     parser.addArgument("type", {
         help: `
 'save' to save a stash, 'pop' to restore, 'list' to show stashes, 'drop' to \
@@ -116,13 +123,22 @@ const doSave = co.wrap(function *(args) {
         console.warn("Nothing to stash.");
         return;                                                       // RETURN
     }
-    yield StashUtil.save(repo, status, includeUntracked || false);
+    yield StashUtil.save(repo,
+                         status,
+                         includeUntracked || false,
+                         args.message);
     console.log("Saved working directory and index state.");
 });
 
-const doList = co.wrap(function *() {
+const doList = co.wrap(function *(args) {
     const GitUtil    = require("../../lib/util/git_util");
     const StashUtil  = require("../../lib/util/stash_util");
+    const UserError  = require("../../lib/util/user_error");
+
+    if (null !== args.message) {
+        throw new UserError("-m not compatible with list");
+    }
+
     const repo = yield GitUtil.getCurrentRepo();
     const list = yield StashUtil.list(repo);
     process.stdout.write(list);
@@ -131,6 +147,12 @@ const doList = co.wrap(function *() {
 const doDrop = co.wrap(function *(args) {
     const GitUtil    = require("../../lib/util/git_util");
     const StashUtil  = require("../../lib/util/stash_util");
+    const UserError  = require("../../lib/util/user_error");
+
+    if (null !== args.message) {
+        throw new UserError("-m not compatible with list");
+    }
+
     const repo = yield GitUtil.getCurrentRepo();
     const index = (null === args.stash) ? 0 : args.stash;
     yield StashUtil.removeStash(repo, index);

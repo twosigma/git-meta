@@ -206,6 +206,12 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
                 state: "x=S:C2-1 README.md;Bmaster=2",
                 expected: `x=E:Cstash#s-2, ;Fmeta-stash=s`,
             },
+            "with message": {
+                state: "x=S:C2-1 README.md;Bmaster=2",
+                expected: `x=E:Cstash#s-2, ;Fmeta-stash=s`,
+                message: "hello world",
+                expectedMessage: "hello world",
+            },
             "closed sub": {
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2",
                 expected: `x=E:Cstash#s-2, ;Fmeta-stash=s`,
@@ -281,13 +287,18 @@ x=E:Fmeta-stash=s;
             const includeUntracked = c.includeUntracked || false;
             const stasher = co.wrap(function *(repos) {
                 const repo = repos.x;
-                const expMessage = yield StashUtil.makeLogMessage(repo);
+                const stashMessage = c.message || null;
+                let expMessage = c.expectedMessage;
+                if (undefined === expMessage) {
+                    expMessage = yield StashUtil.makeLogMessage(repo);
+                }
                 const status = yield StatusUtil.getRepoStatus(repo, {
                     showMetaChanges: false,
                 });
                 const result = yield StashUtil.save(repo,
                                                     status,
-                                                    includeUntracked);
+                                                    includeUntracked,
+                                                    stashMessage);
                 const commitMap = {};
                 const stashId = yield NodeGit.Reference.lookup(
                                                             repo,
