@@ -118,12 +118,16 @@ WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} ${message}`;
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         status
  * @param {Boolean}            includeUntracked
+ * @param {String|null}        message
  * @return {Object}    submodule name to stashed commit
  */
-exports.save = co.wrap(function *(repo, status, includeUntracked) {
+exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isBoolean(includeUntracked);
+    if (null !== message) {
+        assert.isString(message);
+    }
 
     const subResults = {};  // name to sha
     const subChanges = {};  // name to TreeUtil.Change
@@ -194,7 +198,9 @@ exports.save = co.wrap(function *(repo, status, includeUntracked) {
 
     // Update the stash ref and the ref log
 
-    const message = yield exports.makeLogMessage(repo);
+    if (null === message) {
+        message = yield exports.makeLogMessage(repo);
+    }
     yield NodeGit.Reference.create(repo,
                                    metaStashRef,
                                    stashId,
