@@ -494,13 +494,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     headCommit: "1",
                 }),
             },
-            "bare": {
-                state: "x=B",
-                expected: new RepoStatus({
-                    currentBranchName: "master",
-                    headCommit: "1",
-                }),
-            },
             "empty": {
                 state: { x: new RepoAST()},
                 expected: new RepoStatus(),
