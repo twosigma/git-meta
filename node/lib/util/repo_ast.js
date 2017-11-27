@@ -530,7 +530,6 @@ in commit ${id}.`);
             const workdir = args.workdir;
             assert.isObject(workdir);
             for (let path in workdir) {
-                assert.isNotNull(this.d_head);
                 assert.isFalse(this.d_bare);
                 const change = workdir[path];
                 if (null !== change) {
