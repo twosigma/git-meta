@@ -457,3 +457,135 @@ exports.list = co.wrap(function *(repo) {
     }
     return result;
 });
+
+/**
+ * Make a shadow commit for the specified `repo` having the specified `status`;
+ * use the specified commit `message`.  Ignored untracked files unless the
+ * specified `includeUntracked` is true.  Return the sha of the created commit.
+ * Note that this method does not recurse into submodules.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {RepoStatus}         status
+ * @param {String}             message
+ * @param {Bool}               includeUntracked
+ * @return {String}
+ */
+const makeShadowCommitForRepo = co.wrap(function *(repo,
+                                                   status,
+                                                   message,
+                                                   includeUntracked) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(message);
+    assert.isBoolean(includeUntracked);
+
+    const changes = yield TreeUtil.listWorkdirChanges(repo,
+                                                      status,
+                                                      includeUntracked);
+    const head = yield repo.getHeadCommit();
+    let headTree = null;
+    const parents = [];
+    if (null !== head) {
+        parents.push(head);
+        headTree = yield head.getTree();
+    }
+    const newTree = yield TreeUtil.writeTree(repo, headTree, changes);
+    const sig = repo.defaultSignature();
+    const id = yield NodeGit.Commit.create(repo,
+                                           null,
+                                           sig,
+                                           sig,
+                                           null,
+                                           message,
+                                           newTree,
+                                           parents.length,
+                                           parents);
+    return id.tostrS();
+});
+
+/**
+ * Generate a shadow commit in the specified 'repo' with the specified
+ * 'message' and return an object describing the created commits.  Ignore
+ * untracked files unless the specified 'includeUntracked' is true.  If the
+ * repository is clean, return null.  Note that this command does not affect
+ * the state of 'repo' other than to generate commits.
+ *
+ * TODO: Note that we cannot really support `includeMeta === true` due to the
+ * fact that `getRepoStatus` is broken when `true === ignoreIndex` and there
+ * are new submodules (see TODO in `StatusUtil.getRepoStatus`).
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             message
+ * @param {Bool}               includeMeta
+ * @param {Bool}               includeUntracked
+ * @return {Object|null}
+ * @return {String} return.metaCommit
+ * @return {Object} return.subCommits  path to sha of generated subrepo commits
+ */
+exports.makeShadowCommit = co.wrap(function *(repo,
+                                              message,
+                                              includeMeta,
+                                              includeUntracked) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(message);
+    assert.isBoolean(includeMeta);
+    assert.isBoolean(includeUntracked);
+
+    if (!message.endsWith("\n")) {
+        message += "\n";
+    }
+
+    const status = yield StatusUtil.getRepoStatus(repo, {
+        showMetaChanges: includeMeta,
+        showAllUntracked: true,
+        ignoreIndex: true,
+    });
+    if (status.isDeepClean(includeUntracked)) {
+        return null;                                                  // RETURN
+    }
+    const subCommits = {};
+    const subStats = status.submodules;
+    const Submodule = RepoStatus.Submodule;
+    yield Object.keys(subStats).map(co.wrap(function *(name) {
+        const subStatus = subStats[name];
+        const wd = subStatus.workdir;
+
+        // If the submodule is closed or its workdir is clean, we don't need to
+        // do anything for it.
+
+        if (null === wd || wd.status.isClean(includeUntracked)) {
+            return;                                                   // RETURN
+        }
+        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+        const subSha = yield makeShadowCommitForRepo(subRepo,
+                                                     wd.status,
+                                                     message,
+                                                     includeUntracked);
+        const newSubStat = new Submodule({
+            commit: subStatus.commit,
+            index: subStatus.index,
+            workdir: new Submodule.Workdir(new RepoStatus({
+                headCommit: subSha,
+            }), Submodule.COMMIT_RELATION.AHEAD),
+        });
+
+        // Update the status for this submodule so that it will be written
+        // correctly.
+
+        subStats[name] = newSubStat;
+        subCommits[name] = subSha;
+    }));
+
+    // Update the submodules in the status object to reflect newly-generated
+    // commits.
+
+    const newStatus = status.copy({ submodules: subStats });
+    const metaCommit = yield makeShadowCommitForRepo(repo,
+                                                     newStatus,
+                                                     message,
+                                                     includeUntracked);
+    return {
+        metaCommit: metaCommit,
+        subCommits: subCommits,
+    };
+});
