@@ -323,6 +323,23 @@ x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 expected: "x=E:Mmessage\n,3,4;Os Mmessage\n,a,b",
                 fails: true,
             },
+            "new commit in sub in target branch but not in HEAD branch": {
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 t=Sa:1;C4-3 s=Sa:a;C5-3 t=Sa:b;Bmaster=4;Bfoo=5;Os;Ot`,
+                fromCommit: "5",
+                expected: `
+x=E:Cx-4,5 t=Sa:b;Bmaster=x;Ot H=b;Os`
+            },
+            "new commit in sub in target branch but not in HEAD branch, closed"
+            : {
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 t=Sa:1;C4-3 s=Sa:a;C5-3 t=Sa:b;Bmaster=4;Bfoo=5`,
+                fromCommit: "5",
+                expected: `
+x=E:Cx-4,5 t=Sa:b;Bmaster=x`
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

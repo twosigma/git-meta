@@ -137,6 +137,29 @@ exports.fastForwardMerge = co.wrap(function *(repo, mode, commit, message) {
 });
 
 /**
+ * Perform a fast-forward in the submodule having the specified path.  Use the
+ * specified 'opener' to get the submodule repo, if it's open, and move it to
+ * the specied 'sha'; stage the change in the specified 'index'.
+ */
+const doFastForward = co.wrap(function *(opener, index, path, toSha) {
+    assert.instanceOf(opener, Open.Opener);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.isString(path);
+    assert.isString(toSha);
+    console.log(`Submodule ${colors.blue(path)}: fast-forward to \
+${colors.green(toSha)}.`);
+    const open = yield opener.isOpen(path);
+    if (open) {
+        const repo = yield opener.getSubrepo(path);
+        const fetcher = yield opener.fetcher();
+        yield fetcher.fetchSha(repo, path, toSha);
+        const commit = yield repo.getCommit(toSha);
+        yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.HARD);
+        yield index.addByPath(path);
+    }
+});
+
+/**
  * Merge the specified `commit` in the specified `repo` having the specified
  * `status`, using the specified `mode` to control whether or not a merge
  * commit will be generated.  Return `null` if the repository is up-to-date, or
@@ -278,7 +301,6 @@ ${colors.red(commitSha)}.`);
             hasModulesFile = true;
             return;                                                   // RETURN
         }
-
         else if (RepoStatus.STAGE.THEIRS === stage && !(path in subUrls)) {
             errorMessage += `Conflict in ${colors.red(path)}`;
             return;                                                   // RETURN
@@ -287,17 +309,32 @@ ${colors.red(commitSha)}.`);
         // We don't need to do anything with an entry unless it is a conflicted
         // submodule.
 
-        if (RepoStatus.STAGE.THEIRS !== stage || !(path in subUrls)) {
+        if (!(path in subUrls)) {
             return;                                                   // RETURN
         }
-
-        // Otherwise, we have a submodule that needs to be merged.
 
         const subSha = entry.id.tostrS();
         const subCommitId = NodeGit.Oid.fromString(subSha);
         const subEntry = yield headTree.entryByPath(path);
         const subHeadSha = subEntry.sha();
-        const subCommitSha = subCommitId.tostrS();
+
+        // If the submodule has a "normal" stage, that means it can be
+        // trivially fast-forwarded if there is a change.
+
+        if (RepoStatus.STAGE.NORMAL === stage) {
+            if (subSha !== subHeadSha) {
+                yield doFastForward(opener, index, path, subSha);
+            }
+            return;                                                   // RETURN
+        }
+
+        // Otherwise, if there is a conflict in the submodule, we'll handle it
+        // during the THEIRS entry.
+
+        else if (RepoStatus.STAGE.THEIRS !== stage) {
+            return;                                                   // RETURN
+        }
+
         const subRepo = yield opener.getSubrepo(path);
 
         // Fetch commit to merge.
@@ -308,24 +345,18 @@ ${colors.red(commitSha)}.`);
 
         const upToDate = yield NodeGit.Graph.descendantOf(subRepo,
                                                           subHeadSha,
-                                                          subCommitSha);
+                                                          subSha);
         if (upToDate) {
+            console.log("We're up-to-date with", path);
             yield index.addByPath(path);
             return;                                                   // RETURN
         }
 
-        // If we can fast-forward, we don't need to do a merge.
-
         const canSubFF = yield NodeGit.Graph.descendantOf(subRepo,
-                                                          subCommitSha,
+                                                          subSha,
                                                           subHeadSha);
         if (canSubFF) {
-            console.log(`Submodule ${colors.blue(path)}: fast-forward to \
-${colors.green(subCommitSha)}.`);
-            yield NodeGit.Reset.reset(subRepo,
-                                      subCommit,
-                                      NodeGit.Reset.TYPE.HARD);
-            yield index.addByPath(path);
+            yield doFastForward(opener, index, path, subSha);
             return;                                                   // RETURN
         }
 
@@ -333,7 +364,7 @@ ${colors.green(subCommitSha)}.`);
         // anything.
 
         console.log(`Submodule ${colors.blue(path)}: merging commit \
-${colors.green(subCommitSha)}.`);
+${colors.green(subSha)}.`);
 
         // Start the merge.
 
