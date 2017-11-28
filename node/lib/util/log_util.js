@@ -81,6 +81,7 @@ exports.findMetaCommit = co.wrap(function *(repo,
     let   toCheck = [metaCommit];   // commits left to check
     const checked = new Set();      // SHAs checked
     const existsInSha = new Map();  // repo sha to bool if target included
+    const isDescended = new Map();  // cache of descendant check
 
     const doesExistInCommit = co.wrap(function *(commit) {
         const sha = commit.id().tostrS();
@@ -108,15 +109,25 @@ exports.findMetaCommit = co.wrap(function *(repo,
                 result = true;
             }
             else {
-                // Ensure that the commit we're checking against is present.
+                // Check to see if the commit  we're looking for is descended
+                // from the current commit.  First, look in the cache.
 
-                yield subFetcher.fetchSha(subRepo,
-                                          submoduleName,
-                                          subShaForCommit);
-                result = (yield NodeGit.Graph.descendantOf(
+                if (isDescended.has(subShaForCommit)) {
+                    result = isDescended.get(subShaForCommit);
+                }
+                else {
+                    // Ensure that the commit we're checking against is
+                    // present; we can't do a descendant check otherwise.
+
+                    yield subFetcher.fetchSha(subRepo,
+                                              submoduleName,
+                                              subShaForCommit);
+                    result = (yield NodeGit.Graph.descendantOf(
                                        subRepo,
                                        NodeGit.Oid.fromString(subShaForCommit),
                                        subCommit.id())) !== 0;
+                    isDescended.set(subShaForCommit, result);
+                }
             }
         }
         existsInSha.set(sha, result);
