@@ -59,17 +59,19 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
     assert.isArray(paths);
     assert.isBoolean(force);
 
-    const repoStatus = yield StatusUtil.getRepoStatus(repo);
-    const subStats = repoStatus.submodules;
-    let errorMessage = "";
-
     const workdir = repo.workdir();
     const subs    = yield SubmoduleUtil.getSubmoduleNames(repo);
-
     const subsToClose = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
                                                                   cwd,
                                                                   subs,
                                                                   paths);
+
+    const repoStatus = yield StatusUtil.getRepoStatus(repo, {
+        paths: subsToClose,
+    });
+    const subStats = repoStatus.submodules;
+    let errorMessage = "";
+
     const closers = subsToClose.map(co.wrap(function *(name) {
         const sub = subStats[name];
         if (undefined === sub || null === sub.workdir) {
