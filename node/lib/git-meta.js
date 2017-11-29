@@ -54,9 +54,10 @@ const push         = require("./cmd/push");
 const rebase       = require("./cmd/rebase");
 const reset        = require("./cmd/reset");
 const root         = require("./cmd/root");
-const submodule    = require("./cmd/submodule");
+const commitShadow = require("./cmd/commit-shadow");
 const stash        = require("./cmd/stash");
 const status       = require("./cmd/status");
+const submodule    = require("./cmd/submodule");
 const UserError    = require("./util/user_error");
 const version      = require("./cmd/version");
 
@@ -133,6 +134,7 @@ const commands = {
     "rebase": rebase,
     "reset": reset,
     "root": root,
+    "commit-shadow": commitShadow,
     "stash": stash,
     "submodule": submodule,
     "status": status,

@@ -327,6 +327,12 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
  * than against the index.  If the specified `options.cwd` is provided, resolve
  * paths in the context of that directory.
  *
+ * TODO: Note that this function is broken when
+ * `true === ignoreIndex && true === showMetaChanges` and
+ * there are new submodules.  It erroneously reports that the path with the new
+ * submodule is an untracked file.  We need to put some logic in that
+ * recognizes these paths as being inside a submodule and filters them out.
+ *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {Object}             [options]

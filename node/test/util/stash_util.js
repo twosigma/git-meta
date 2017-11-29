@@ -698,4 +698,124 @@ meta-stash@{1}: log of 1
             }));
         });
     });
+
+    describe("shadow", function () {
+        const cases = {
+            "clean": {
+                state: "x=S",
+                includeMeta: true,
+            },
+            "a new file": {
+                state: "x=S:W foo/bar=2",
+                expected: "x=E:Cm-1 foo/bar=2;Bm=m",
+                includeMeta: true,
+            },
+            "a new file, untracked not included": {
+                state: "x=S:W foo/bar=2",
+                includeMeta: true,
+                includeUntracked: false,
+            },
+            "with a message": {
+                state: "x=S:W foo/bar=2",
+                expected: "x=E:Cfoo\n#m-1 foo/bar=2;Bm=m",
+                message: "foo",
+                includeMeta: true,
+            },
+            "deleted file": {
+                state: "x=S:W README.md",
+                expected: "x=E:Cm-1 README.md;Bm=m",
+                includeMeta: true,
+            },
+            "change in index": {
+                state: "x=S:I README.md=3",
+                expected: "x=E:Cm-1 README.md=3;Bm=m",
+                includeMeta: true,
+            },
+            "new file in index": {
+                state: "x=S:I foo/bar=8",
+                expected: "x=E:Cm-1 foo/bar=8;Bm=m",
+                includeMeta: true,
+            },
+            "unchanged submodule": {
+                state: "a=B|x=U:W README.md=2;Os",
+                expected: "x=E:Cm-2 README.md=2;Bm=m",
+                includeMeta: true,
+            },
+            "new commit in unopened submodule": {
+                state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a",
+                expected: "x=E:Cm-2 s=Sa:a;Bm=m",
+                includeMeta: true,
+            },
+            "new file in open submodule": {
+                state: "a=B|x=U:Os W x/y/z=3",
+                includeMeta: true,
+                expected: `
+x=E:Cm-2 s=Sa:s;Bm=m;Os W x/y/z=3!Cs-1 x/y/z=3!Bs=s`,
+            },
+            "new file in open submodule, untracked not included": {
+                state: "a=B|x=U:Os W x/y/z=3",
+                includeMeta: true,
+                includeUntracked: false,
+            },
+            "new submodule with a commit": {
+                state: "a=B|x=S:I s=Sa:;Os Cq-1!H=q",
+                includeMeta: false,
+                expected: `
+x=E:Cm-1 s=Sa:q;Bm=m`
+            },
+            "new submodule with a new file": {
+                state: "a=B|x=S:I s=Sa:;Os W foo=bar",
+                includeMeta: false,
+                expected: `
+x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const shadower = co.wrap(function *(repos) {
+                // If a meta commit was made, map it to "m" and create a branch
+                // named "m" pointing to it.  For each submodule commit made,
+                // map the commit to one with that submodule's name, and make a
+                // branch in the submodule with that name.
+
+                const repo = repos.x;
+                const message = c.message || "message\n";
+                const meta = c.includeMeta;
+                const includeUntracked =
+                        undefined === c.includeUntracked || c.includeUntracked;
+                const result = yield StashUtil.makeShadowCommit(
+                                                             repo,
+                                                             message,
+                                                             meta,
+                                                             includeUntracked);
+                const commitMap = {};
+                if (null !== result) {
+                    const metaSha = result.metaCommit;
+                    const commit = yield repo.getCommit(metaSha);
+                    commitMap[metaSha] = "m";
+                    yield NodeGit.Branch.create(repo, "m", commit, 1);
+                    for (let path in result.subCommits) {
+                        const subSha = result.subCommits[path];
+                        const subRepo = yield SubmoduleUtil.getRepo(repo,
+                                                                    path);
+                        const subCommit = yield subRepo.getCommit(subSha);
+                        commitMap[subSha] = path;
+                        yield NodeGit.Branch.create(subRepo,
+                                                    path,
+                                                    subCommit,
+                                                    1);
+                    }
+                }
+                return {
+                    commitMap: commitMap,
+                };
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
+                                                               c.expected,
+                                                               shadower,
+                                                               c.fails);
+            }));
+        });
+    });
 });

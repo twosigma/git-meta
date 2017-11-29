@@ -36,9 +36,10 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const RepoStatus = require("../../lib/util/repo_status");
-const TestUtil   = require("../../lib/util/test_util");
-const TreeUtil   = require("../../lib/util/tree_util");
+const RepoStatus          = require("../../lib/util/repo_status");
+const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
+const TestUtil            = require("../../lib/util/test_util");
+const TreeUtil            = require("../../lib/util/tree_util");
 
 describe("TreeUtil", function () {
     const Change = TreeUtil.Change;
@@ -318,6 +319,81 @@ describe("TreeUtil", function () {
             assert.deepEqual(result, {
                 sub: new Change(NodeGit.Oid.fromString(commit),
                                 FILEMODE.COMMIT),
+            });
+        }));
+        it("submodule with index change", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = "1111111111111111111111111111111111111111";
+            const status = new RepoStatus({
+                submodules: {
+                    "sub": new RepoStatus.Submodule({
+                        commit: new Submodule.Commit("1", "/a"),
+                        index: new Submodule.Index(commit,
+                                                   "/a",
+                                                    RELATION.AHEAD),
+                        workdir: null,
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            assert.deepEqual(result, {
+                sub: new Change(NodeGit.Oid.fromString(commit),
+                                FILEMODE.COMMIT),
+            });
+        }));
+        it("new submodule with commit", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const commit = "1111111111111111111111111111111111111111";
+            const modPath = path.join(repo.workdir(),
+                                      SubmoduleConfigUtil.modulesFileName);
+            // It doesn't matter what's in the file, just that the function
+            // includes its contents.
+            yield fs.writeFile(modPath, "foo");
+            const modId = TreeUtil.hashFile(
+                                          repo,
+                                          SubmoduleConfigUtil.modulesFileName);
+            const status = new RepoStatus({
+                submodules: {
+                    "sub": new RepoStatus.Submodule({
+                        commit: null,
+                        index: new Submodule.Index(null, "/a", null),
+                        workdir: new Submodule.Workdir(new RepoStatus({
+                            headCommit: commit,
+                        }), RELATION.AHEAD),
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            assert.deepEqual(result, {
+                sub: new Change(NodeGit.Oid.fromString(commit),
+                                FILEMODE.COMMIT),
+                ".gitmodules": new Change(modId, FILEMODE.BLOB),
+            });
+        }));
+        it("deleted submodule", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const modPath = path.join(repo.workdir(),
+                                      SubmoduleConfigUtil.modulesFileName);
+            // It doesn't matter what's in the file, just that the function
+            // includes its contents.
+            yield fs.writeFile(modPath, "foo");
+            const modId = TreeUtil.hashFile(
+                                          repo,
+                                          SubmoduleConfigUtil.modulesFileName);
+
+            const status = new RepoStatus({
+                submodules: {
+                    "sub": new RepoStatus.Submodule({
+                        commit: new Submodule.Commit("1", "/a"),
+                        index: null,
+                        workdir: null,
+                    }),
+                },
+            });
+            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            assert.deepEqual(result, {
+                sub: null,
+                ".gitmodules": new Change(modId, FILEMODE.BLOB),
             });
         }));
         it("untracked and index", co.wrap(function *() {
