@@ -411,7 +411,7 @@ A branch named ${colors.red(name)} already exists.`);
 
             if (null === result.commit) {
                 throw new UserError(
-                    `Could not resolve ${colors.red(committish)}.`);
+         `Could not resolve ${colors.red(committish)} as a branch or commit.`);
             }
         }
         else {
