@@ -2515,7 +2515,8 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch master.
 #
 # Please enter the commit message(s) for your changes.  The message for a
@@ -2534,7 +2535,8 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 metaCommitData: new Commit.CommitMetaData(sig, "hiya"),
                 expected: `\
 hiya
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
 # On branch master.
@@ -2557,7 +2559,8 @@ hiya
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch foo.
 # Changes to be committed:
 # \tnew file:     baz
@@ -2585,7 +2588,8 @@ hiya
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch foo.
 # Changes to be committed:
 # \tmodified:     bar (submodule, new commits)
@@ -2622,7 +2626,8 @@ hiya
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch foo.
 #
 # Please enter the commit message(s) for your changes.  The message for a
@@ -2657,7 +2662,8 @@ hiya
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch foo.
 # -----------------------------------------------------------------------------
 
@@ -2701,7 +2707,8 @@ committing 'bar'
                 },
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # On branch foo.
 # -----------------------------------------------------------------------------
 yoyoyo
@@ -2750,7 +2757,8 @@ committing 'bar'
                 },
                 expected: `\
 yoyoyo
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to commit \
+only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
 # On branch foo.

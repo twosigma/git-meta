@@ -1660,7 +1660,8 @@ exports.formatSplitCommitEditorPrompt = function (status,
     }
     result += `\
 
-# <*> enter meta-repo message above this line; delete to commit only submodules
+# <*> enter meta-repo message above this line; delete this line to \
+commit only submodules
 `;
 
     if (metaCommitData) {
