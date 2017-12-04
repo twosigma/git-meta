@@ -157,7 +157,9 @@ ${colors.green(toSha)}.`);
         yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.HARD);
         yield index.addByPath(path);
     }
+    yield index.conflictRemove(path);
 });
+
 
 /**
  * Merge the specified `commit` in the specified `repo` having the specified
@@ -349,6 +351,7 @@ ${colors.red(commitSha)}.`);
         if (upToDate) {
             console.log("We're up-to-date with", path);
             yield index.addByPath(path);
+            yield index.conflictRemove(path);
             return;                                                   // RETURN
         }
 
@@ -410,10 +413,10 @@ ${colors.green(subSha)}.`);
                                                        [subHead, subCommit]);
         subCommits[path] = mergeCommit.tostrS();
 
-        // And add this sub-repo to the list of sub-repos that need to be added
-        // to the index later.
+        // Clean up the conflict for this submodule and stage our change.
 
         yield index.addByPath(path);
+        yield index.conflictRemove(path);
     });
 
     const entries = index.entries();
@@ -426,6 +429,7 @@ ${colors.green(subSha)}.`);
         }
         else {
             yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
+            yield index.conflictRemove(SubmoduleConfigUtil.modulesFileName);
         }
     }
 
@@ -443,11 +447,6 @@ ${colors.green(subSha)}.`);
         yield MergeFileUtil.writeMerge(repo.path(), merge);
         throw new UserError(errorMessage);
     }
-
-    // If we've made it here, it means there are no "real" conflicts, but we
-    // need to clean up the index anyway or it won't let us write a tree.
-
-    yield index.conflictCleanup();
 
     console.log(`Merging meta-repo commit ${colors.green(commitSha)}.`);
 
@@ -572,15 +571,16 @@ exports.continue = co.wrap(function *(repo) {
             result.submoduleCommits[subPath] = id.tostrS();
         }
         yield index.addByPath(subPath);
+        yield index.conflictRemove(subPath);
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
     yield DoWorkQueue.doInParallel(openSubs, continueSub, 30);
 
+    yield index.write();
+
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
     }
-    yield index.conflictCleanup();
-    yield index.write();
     const treeId = yield index.writeTreeTo(repo);
 
     const sig = repo.defaultSignature();
