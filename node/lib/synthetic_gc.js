@@ -121,32 +121,26 @@ function* cleanUpOldRefs(repo, roots, isOldCommit) {
       
        const reservedCommits = roots[subName];
 
-       let rawShaSubRoots = Array.from(reservedCommits).map(function(commit) {
+       const rawShaSubRoots = Array.from(reservedCommits).map(function(commit) {
                             return commit.sha();
                         });
 
-       let references = yield getSyntheticRefs(subRepo);
 
-       // filter out all the references from rootA
-       references = references.filter(refVal => 
-                                      !rawShaSubRoots.includes(refVal)); 
+       let allRefs = yield getSyntheticRefs(subRepo);
 
-
-       // filter out all the references younger than 6 months
-       let refsToDelete = [];
-       for (let ref in references) {
-           // could not figure out how to call generators withing filter 
-           // properly, so cant be fancy
-           const actualCommit = yield subRepo.getCommit(references[ref]);
-           if (isOldCommit(actualCommit)) {
-               refsToDelete.push(actualCommit);
+       for (let ref of allRefs) {
+           // filter out all the references from rootA
+           if (rawShaSubRoots.includes(ref)) {
+               continue;
            }
-       }
 
-        
-       yield* refsToDelete.map(value => removeSyntheticRef(subRepo, value));
-   }
-}
+           const actualCommit = yield subRepo.getCommit(ref);
+           if (isOldCommit(actualCommit)) {
+               yield removeSyntheticRef(subRepo, ref);
+           } // if
+       } // for
+   } // for
+} // cleanUpOldRefs
 
 let lessThanDate = function(thresHold) {
     return function(input) {
@@ -183,22 +177,16 @@ function* populateRoots(repo) {
 
     let classAroots = {}; // roots that we can rely on to be around, master or 
                           // team branches
-    let classBroots = {}; // root that can go anyway, like users branches
 
     const submodules = yield SubmoduleUtil.getSubmoduleNames(repo);
 
     const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
-    for (let ref in refs) {
-        ref = refs[ref];
+    for (let ref of refs) {
         const refHeadCommit = yield repo.getReferenceCommit(ref);
 
         const tree = yield refHeadCommit.getTree();
 
-        // This could have been fancy if we were running gc per meta change
-        //const submodules = yield SubmoduleUtil.getSubmoduleChanges(repo,
-        //                                                      refHeadCommit);
-
-        yield submodules.map(function*(subName) {
+        for (const subName of submodules) {
             const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
             const subSha = yield tree.entryByPath(subName);
             const subCommit = yield subRepo.getCommit(subSha.sha());
@@ -208,13 +196,8 @@ function* populateRoots(repo) {
                     classAroots[subName] = new Set();
                 }
                 classAroots[subName].add(subCommit);
-            } else {
-                if (!(subName in classBroots)) {
-                    classBroots[subName] = new Set();
-                }
-                classBroots[subName].add(subCommit);
-            }
-        });
+            } 
+        }
     }
 
     return classAroots;
