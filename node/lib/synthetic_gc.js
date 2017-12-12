@@ -16,6 +16,11 @@ let SIMULATION = true; // dont' actually delete refs, just output
 
 let visited = {}; // visited commmits.
 
+/**
+ * Parse command line options.
+ *
+ * @return {Object}
+ */
 function parseOptions() {
     let parser = new ArgumentParser({
         version: "0.1",
@@ -43,7 +48,13 @@ function parseOptions() {
     return parser.parseArgs();
 }
 
-
+/**
+ * Remove synthetic ref corresponding to specified `commit` in the specified
+ * `repo`.
+ *
+ * @param {NodeGit.Repo}   repo
+ * @param {NodeGit.Commit} commit
+ */
 function* removeSyntheticRef(repo, commit) {
     const refPath = SyntheticBranchUtil.getSyntheticBranchForCommit(commit);
 
@@ -55,8 +66,16 @@ function* removeSyntheticRef(repo, commit) {
     return yield GitUtil.removeRemoteRef(repo, refPath);
 }
 
-// Go through the parents of `commit` and remove synthetic reference recusively 
-// if they satisfy `isDeletable`. 
+/**
+ * Go through the parents of `commit` of the specified `repo` and remove
+ * synthetic reference recusively if they satisfy `isDeletable` and not part of
+ * `existingReferences`. 
+ *
+ * @param {NodeGit.Repo}   repo
+ * @param {NodeGit.Commit} commit
+ * @param {Function}       isDeletable 
+ * @param {String[]}       existingReferences
+ */
 function* recursiveSyntheticRefRemoval(repo, commit, isDeletable, 
                                        existingReferences) { 
 
@@ -84,6 +103,12 @@ function* recursiveSyntheticRefRemoval(repo, commit, isDeletable,
     return;
 }
 
+/**
+ * Return all available synthetic refs within specifed `subRepo`.
+ *
+ * @param {NodeGit.Repo}   subRepo
+ * @return {String[]}
+ */
 function* getSyntheticRefs(subRepo) {
 
     const syntheticRefExtractor = function(value) {
@@ -98,7 +123,18 @@ function* getSyntheticRefs(subRepo) {
     return references.map(syntheticRefExtractor).filter(commit => commit);
 }
 
-    // Clean up all redundant 
+/**
+ * Delete all redundant synthetic refs within specified 'repo' satisfying
+ * `predicate` by recursively iterating over parents of the specified `roots`. 
+ *
+ * Synthetic ref is considered to be redundant if its commit is reachable from
+ * descendant who is guaranteed to be around - i.e part of a persistent roots
+ * ('roots' here).
+ *
+ * @param {NodeGit.Repo}   repo
+ * @param {Object[]}       roots
+ * @param {Function}       predicate
+ */
 function* cleanUpRedundant(repo, roots, predicate) {
 
    for (let subName in roots) {
@@ -113,7 +149,14 @@ function* cleanUpRedundant(repo, roots, predicate) {
    }
 }
 
-    // Clean up all refs that satisfy `isOldCommit`, but not part of `roots`.
+/**
+ * Delete all synthetic refs within specified `repo` that satisfy `isOldCommit`,
+ * that not part of specified `roots`.
+ *
+ * @param {NodeGit.Repo}   repo
+ * @param {Object[]}       roots
+ * @param {Function}       isOldCommit 
+ */
 function* cleanUpOldRefs(repo, roots, isOldCommit) {
 
    for (let subName in roots) {
@@ -164,7 +207,16 @@ function getThresholdDate(args) {
     return date;
 }
 
-// Fetch all important refs from out repo.
+/**
+ * Fetch all refs that are considered to be persistent within the specified
+ * `repo`. 
+ *
+ * Return value is a mapping between submodule name and collection of persistent
+ * refs within that submodules.
+ *
+ * @param {NodeGit.Repo}   repo
+ * @return {Object[]}      
+ */
 function* populateRoots(repo) {
 
     // For now, we are using heads/master as an important root.  
