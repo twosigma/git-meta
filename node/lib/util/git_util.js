@@ -456,50 +456,6 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 });
 
 /**
- * Fetch the remote having the specified the specified `repo`.
- * Throw a `UserError` object if the repository cannot be fetched.
- *
- * @async
- * @param {NodeGit.Repository} repo
- */
-exports.getRefs = co.wrap(function *(repo) {
-
-    assert.instanceOf(repo, NodeGit.Repository);
-
-    const execString = `git -C '${repo.path()}' ls-remote --refs`;
-
-    try {
-        const result = yield ChildProcess.exec(execString);
-        return result.stdout.split("\n");
-    }
-    catch (e) {
-        return new UserError(e.message);
-    }
-});
-
-/**
- * Delete the specified `ref` on the specified remote `repo`.
- * Throw a `UserError` object if cannot push to remote repository. 
- *
- * @async
- * @param {NodeGit.Repository} repo
- * @param {String}             remoteName
- */
-exports.removeRemoteRef = co.wrap(function *(repo, ref) {
-
-    assert.instanceOf(repo, NodeGit.Repository);
-
-    const execString = `git -C '${repo.path()}' push origin :${ref}`;
-
-    try {
-        return yield ChildProcess.exec(execString);
-    }
-    catch (e) {
-        return new UserError(e.message);
-    }
-});
-
-/**
  * Fetch the specified `branch` in the remote having the specified `remoteName
  * in the specified `repo`.  Throw a `UserError` object if the repository
  * cannot be fetched.
