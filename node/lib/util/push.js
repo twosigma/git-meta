@@ -119,11 +119,13 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
 
         // Always force push synthetic refs.  It should not be necessary, but
         // if something does go wrong forcing will allow us to auto-correct.
+        // If they succeed, no need to print the output inside the submodules.
 
         const pushResult = yield GitUtil.push(subRepo,
                                               subUrl,
                                               sha,
                                               syntheticName,
+                                              true,
                                               true);
         if (null !== pushResult) {
             errorMessage +=
