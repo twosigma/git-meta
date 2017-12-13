@@ -826,7 +826,7 @@ exports.isBlank = function (line) {
 /**
  * Return the text contained in the specified array of `lines` after removing
  * all comment (i.e., those whose first non-whitespace character is a '#') and
- * leading and trailing blank (i.e., those containing only whitespce) lines. 
+ * leading and trailing blank (i.e., those containing only whitespace) lines.
  *
  * @param {String[]} lines
  * @return {String}
