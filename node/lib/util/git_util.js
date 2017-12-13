@@ -306,7 +306,7 @@ exports.getCurrentRepo = function () {
  * `target` branch in the specified `remote` repository.  Return null if the
  * push succeeded and string containing an error message if the push failed.
  * Attempt to allow a non-ffwd push if the specified `force` is `true`.
- * Silence console output if the specified `quiet` is provided and is true.
+ * If `quiet` is true, and push was successful, silence console output.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -344,11 +344,13 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
 git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
         const result = yield ChildProcess.exec(execString);
-        if (result.stdout && !quiet) {
-            console.log(result.stdout);
-        }
-        if (result.stderr && !quiet) {
-            console.error(result.stderr);
+        if (result.error || !quiet) {
+            if (result.stdout) {
+                console.log(result.stdout);
+            }
+            if (result.stderr) {
+                console.error(result.stderr);
+            }
         }
         return null;
     }
