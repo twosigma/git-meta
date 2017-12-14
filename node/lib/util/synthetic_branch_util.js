@@ -99,7 +99,7 @@ function *urlToLocalPath(repo, url) {
 }
 
 /**
- * Check that a synthetic branch exists for a given submodule
+ * Check that a commit exists exists for a given submodule
  * at a given commit.
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
@@ -114,14 +114,14 @@ function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
     const localPath = yield *urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
     const submoduleCommitId = submoduleEntry.id();
-    const branch = exports.getSyntheticBranchForCommit(submoduleCommitId);
     try {
         const subrepoCommit =
-            yield submoduleRepo.getReferenceCommit(branch);
-        return subrepoCommit.id().equal(submoduleEntry.id());
+              yield NodeGit.Object.lookup(submoduleRepo, submoduleCommitId,
+                                          NodeGit.Object.TYPE.COMMIT);
+        return subrepoCommit !== null;
     } catch (e) {
-        console.error("Could not look up ", branch, " in ", localPath,
-                      ": ", e);
+        console.error("Could not look up ", submoduleCommitId, " in ",
+                      localPath, ": ", e);
         return false;
     }
 }

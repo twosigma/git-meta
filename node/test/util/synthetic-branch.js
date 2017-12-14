@@ -59,10 +59,6 @@ describe("synthetic-branch", function () {
                value. */
         }
         const headId = head.id().toString();
-        SyntheticBranch.getSyntheticBranchForCommit = function(commit) {
-            /*jshint unused:false*/
-            return "refs/heads/metaTEST";
-        };
         const pass = yield SyntheticBranch.checkUpdate(x, old, headId, {});
         if (!pass) {
             throw new UserError("fail");
@@ -100,67 +96,79 @@ describe("synthetic-branch", function () {
                 "N refs/notes/git-meta/subrepo-check 4=ok|" +
                 "z=S:C5-1;Bmaster=5",
         },
+        //in these tests, we point meta's y to a commit which doesn't exist
+        //inside y's repo -- to do this, we use an otherwise unused submodule
+        //called 'u'.
         "with a submodule but no synthetic branch": {
-            input: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3|y=S:C4-1;Bmaster=4",
-            expected: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3|" +
-                "y=S:C4-1;Bmaster=4",
+            input: "x=S:C2-1;C3-2 y=S/y:7;Bmaster=3|y=S:C4-1;Bmaster=4" +
+                "|u=S:C7-1;Bmaster=7",
+            expected: "x=S:C2-1;C3-2 y=S/y:7;Bmaster=3|y=S:C4-1;Bmaster=4" +
+                "|u=S:C7-1;Bmaster=7",
             fails: true
         },
         "with a submodule in a subdir but no synthetic branch": {
-            input: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3|z=S:C4-1;Bmaster=4",
-            expected: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3|" +
-                "z=S:C4-1;Bmaster=4",
+            input: "x=S:C2-1;C3-2 y/z=S/z:7;Bmaster=3|z=S:C4-1;Bmaster=4" +
+                "|u=S:C7-1;Bmaster=7",
+            expected: "x=S:C2-1;C3-2 y/z=S/z:7;Bmaster=3|z=S:C4-1;Bmaster=4" +
+                "|u=S:C7-1;Bmaster=7",
             fails: true
         },
         "with a submodule in a subdir, bad parent commit": {
-            input: "x=S:C2-1;C3-2 y/z=S/z:5;C4-3;Bmaster=4|z=S:C5-1;Bmaster=5",
-            expected: "x=S:C2-1;C3-2 y/z=S/z:5;C4-3;Bmaster=4|" +
-                "z=S:C5-1;Bmaster=5",
+            input: "x=S:C2-1;C3-2 y/z=S/z:7;C4-3;Bmaster=4" +
+                "|z=S:C5-1;Bmaster=5" +
+                "|u=S:C7-1;Bmaster=7",
+            expected: "x=S:C2-1;C3-2 y/z=S/z:7;C4-3;Bmaster=4" +
+                "|z=S:C5-1;Bmaster=5" +
+                "|u=S:C7-1;Bmaster=7",
             fails: true
         },
         "with a submodule in a subdir, bad merge commit": {
-            input: "x=S:C2-1;C3-2 y/z=S/z:5;C4-3,1;Bmaster=4|" +
-                "z=S:C5-1;Bmaster=5",
-            expected: "x=S:C2-1;C3-2 y/z=S/z:5;C4-3,1;Bmaster=4|" +
-                "z=S:C5-1;Bmaster=5",
+            input: "x=S:C2-1;C3-2 y/z=S/z:7;C4-3,1;Bmaster=4" +
+                "|z=S:C5-1;Bmaster=5" +
+                "|u=S:C7-1;Bmaster=7",
+            expected: "x=S:C2-1;C3-2 y/z=S/z:7;C4-3,1;Bmaster=4" +
+                "|z=S:C5-1;Bmaster=5" +
+                "|u=S:C7-1;Bmaster=7",
             fails: true
         },
         "with a submodule, at meta commit": {
             input: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3|" +
-                "y=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "y=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
-                "y=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "y=S:C4-1;Bmaster=4",
         },
         "with a change to a submodule which was deleted on master": {
-            input: "x=S:C2-1 s=S/s:1;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
-                ";BmetaTEST=4" +
+            input: "x=S:C2-1 s=S/s:9;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
+                ";Btombstone=4" +
+                "|u=S:C9-1;Bmaster=9" +
                 "|s=S:C8-7;C7-1;Bmaster=8",
-            expected: "x=S:C2-1 s=S/s:1;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
-                ";BmetaTEST=4" +
+            expected: "x=S:C2-1 s=S/s:9;C3-2 s;Bmaster=3;C4-2 s=S/s:8" +
+                ";Btombstone=4" +
+                "|u=S:C9-1;Bmaster=9" +
                 "|s=S:C8-7;C7-1;Bmaster=8",
             fails: true
         },
         "with a submodule in a subdir, at meta commit": {
             input: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
         },
         "with a submodule in a subdir, from earlier meta-commit": {
             input: "x=S:C2-1 y/z=S/z:4;C3-2;Bmaster=3|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1 y/z=S/z:4;C3-2;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
         },
         "with a submodule in a subdir, irrelevant change": {
             input: "x=S:C2-1 y/z=S/z:4;C3-2 y/foo=bar;Bmaster=3|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1 y/z=S/z:4;C3-2 y/foo=bar;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
-                "z=S:C4-1;Bmaster=4;BmetaTEST=4",
+                "z=S:C4-1;Bmaster=4",
         },
     };
 

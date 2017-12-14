@@ -1136,10 +1136,11 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
     function addCommit(id, commit) {
         if (id in commits) {
             const oldCommit = commits[id];
+            const msg = `different submodule commit for meta commit ${id}`;
             RepoASTUtil.assertEqualCommits(
                                       commit,
                                       oldCommit,
-                                      `diffferent duplicate for commit ${id}`);
+                                      msg);
         }
         else {
             commits[id] = commit;
