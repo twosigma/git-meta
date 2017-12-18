@@ -140,14 +140,20 @@ describe("synthetic_gc_util", function () {
         yield NodeGit.Reference.create(repo, syntheticRefName2,
             oid2, 1, "TEST2 commit");
 
+        const oid3 = yield createCommit(repo, addFile, "TEST3", "Hello3");
+        let syntheticRefName3 = SYNTHETIC_BRANCH_BASE + oid3.toString();
+        yield NodeGit.Reference.create(repo, syntheticRefName3,
+            oid3, 1, "TEST3 commit");
+
         // First check that we can extract all synthetic refs.
-        let EXPECTED_SYNTHETIC_REFS = 2;
+        let EXPECTED_SYNTHETIC_REFS = 3;
         let allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
         assert.equal(allSyntheticRefs.length, EXPECTED_SYNTHETIC_REFS);
         assert(allSyntheticRefs.includes(oid1.toString()));
         assert(allSyntheticRefs.includes(oid2.toString()));
+        assert(allSyntheticRefs.includes(oid3.toString()));
 
-        const lastCommit = yield repo.getCommit(oid2);
+        const lastCommit = yield repo.getCommit(oid3);
         // Then, we will try to run in simulation mode(default),
         // this should do nothing.
         yield syntheticGcUtil.recursiveSyntheticRefRemoval(repo, lastCommit,
@@ -171,7 +177,8 @@ describe("synthetic_gc_util", function () {
         allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
         assert.equal(allSyntheticRefs.length, EXPECTED_SYNTHETIC_REFS);
         assert(!allSyntheticRefs.includes(oid1.toString()));
-        assert(allSyntheticRefs.includes(oid2.toString()));
+        assert(!allSyntheticRefs.includes(oid2.toString()));
+        assert(allSyntheticRefs.includes(oid3.toString()));
     }));
 
 
