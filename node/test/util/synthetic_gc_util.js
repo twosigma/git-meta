@@ -273,5 +273,45 @@ describe("synthetic_gc_util", function () {
         newSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
         assert.equal(newSyntheticRefs.toString(), oid2.toString());
     }));
+
+    // TESTING:  'synthetic_gc_util:cleanUpRedundant'
+    //
+    // Concern:
+    //  1) 'cleanUpRedundant' should delete all synthetic references that are
+    //     that are reachable from persistent ref.
+    //
+    // Plan:
+    //  1) Create a submodule with two commits on the same persistent ref.
+    //
+    //     - Run 'cleanUpRedundant' and observe that only last synthetic
+    //       refrence is around. (C-1)
+    //
+    it("cleanUpRedundant", co.wrap(function *() {
+        const syntheticGcUtil = new SyntheticGcUtil();
+        syntheticGcUtil.simulation = false;
+        const repo        = yield TestUtil.createSimpleRepository();
+        const subRootRepo = yield TestUtil.createSimpleRepository();
+
+        const subCommit = yield subRootRepo.getHeadCommit();
+        let syntheticRefName1 = SYNTHETIC_BRANCH_BASE + subCommit.toString();
+        yield NodeGit.Reference.create(subRootRepo, syntheticRefName1,
+            subCommit, 1, "TEST1 commit");
+
+        const oid2 = yield createCommit(subRootRepo, addFile,
+                                        "coTEST2", "coHello2");
+        let syntheticRefName2 = SYNTHETIC_BRANCH_BASE + oid2.toString();
+        yield NodeGit.Reference.create(subRootRepo, syntheticRefName2,
+            oid2, 1, "TEST2 commit");
+
+        yield setupRepo(repo, subRootRepo, subRootRepo.workdir(), "foo");
+
+        const roots = yield syntheticGcUtil.populateRoots(repo);
+
+        yield syntheticGcUtil.cleanUpRedundant(repo, roots, isDeletable);
+
+        let newSyntheticRefs =
+            yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
+        assert.equal(newSyntheticRefs.toString(), oid2.toString());
+    }));
 });
 

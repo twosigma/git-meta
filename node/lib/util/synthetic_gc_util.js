@@ -36,8 +36,13 @@ const co = require("co");
 const NodeGit = require("nodegit");
 const SubmoduleUtil = require("./submodule_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
+const UserError = require("../util/user_error");
 
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
+
+let refExists = function(existingReferences, sha) {
+    return existingReferences.includes(sha);
+};
 
 /**
  * This class provides a way to list/delete synthetic refs, by following two
@@ -90,7 +95,7 @@ class SyntheticGcUtil {
  *
  * @param {NodeGit.Repository}   repo
  * @param {NodeGit.Commit}       commit
- * @return {Number} 0 or an error code
+ * @return {NodeGit.Repository}  subRepo
  */
 SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
     function*(repo, subName, refHeadCommit) {
@@ -112,7 +117,6 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
  *
  * @param {NodeGit.Repository}   repo
  * @param {NodeGit.Commit}       commit
- * @return {Number} 0 or an error code
  */
 SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
     function(repo, commit) {
@@ -126,7 +130,11 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
         console.log("Removing ref: " + synRefPath);
         return;
     }
-    return NodeGit.Reference.remove(repo, synRefPath);
+
+    const failed = NodeGit.Reference.remove(repo, synRefPath);
+    if (failed) {
+        throw new UserError("Failed to remove the reference: " + synRefPath);
+    }
 });
 
 /**
@@ -159,10 +167,11 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
         thisState.d_visited[parent.sha()] = 1;
 
         // We are keeping track of 'existingReferences' to avoid trying to
-        // delete referneces that do not exists. This is helpful in simulation
+        // delete references that do not exists. This is helpful in simulation
         // mode, since it provides a clear way to a user what actually is being
         // deleted. Also helps in debugging.
-        if (isDeletable(parent) && existingReferences.includes(parent.sha())) {
+        if (isDeletable(parent) &&
+                refExists(existingReferences, parent.sha())) {
             thisState.removeSyntheticRef(repo, parent);
         }
         return yield thisState.recursiveSyntheticRefRemoval(repo, parent,
@@ -178,16 +187,17 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
  * @param {NodeGit.Repo}   subRepo
  * @return {String[]}
  */
-SyntheticGcUtil.prototype.getSyntheticRefs= co.wrap(
+SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
     function*(subRepo) {
 
     assert.instanceOf(subRepo, NodeGit.Repository);
     let references = yield NodeGit.Reference.list(subRepo);
 
     references = references.filter(
-            ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) !== -1);
+            ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) === 0);
 
     references = references.map(ref => ref.split(SYNTHETIC_BRANCH_BASE)[1]);
+    references.sort();
 
     return references;
 });
@@ -204,7 +214,7 @@ SyntheticGcUtil.prototype.getSyntheticRefs= co.wrap(
  * @param {Object[]}       roots
  * @param {Function}       predicate
  */
-SyntheticGcUtil.prototype.cleanUpRedundant= co.wrap(
+SyntheticGcUtil.prototype.cleanUpRedundant = co.wrap(
     function*(repo, roots, predicate) {
 
    assert.instanceOf(repo, NodeGit.Repository);
@@ -231,7 +241,7 @@ SyntheticGcUtil.prototype.cleanUpRedundant= co.wrap(
  * @param {Object[]}       roots
  * @param {Function}       isOldCommit
  */
-SyntheticGcUtil.prototype.cleanUpOldRefs= co.wrap(
+SyntheticGcUtil.prototype.cleanUpOldRefs = co.wrap(
     function*(repo, roots, isOldCommit) {
 
    assert.instanceOf(repo, NodeGit.Repository);
@@ -244,7 +254,6 @@ SyntheticGcUtil.prototype.cleanUpOldRefs= co.wrap(
        const reservedSha = Array.from(reservedCommits).map(function(commit) {
                             return commit.sha();
                         });
-
 
        let allRefs = yield this.getSyntheticRefs(subRepo);
 
@@ -272,7 +281,7 @@ SyntheticGcUtil.prototype.cleanUpOldRefs= co.wrap(
  * @param {NodeGit.Repo}   repo
  * @return {Object[]}
  */
-SyntheticGcUtil.prototype.populateRoots= co.wrap(
+SyntheticGcUtil.prototype.populateRoots = co.wrap(
     function*(repo) {
 
     assert.instanceOf(repo, NodeGit.Repository);
@@ -284,6 +293,9 @@ SyntheticGcUtil.prototype.populateRoots= co.wrap(
     // unless there is an important ref out there that was not updated for so
     // long.
     const IMPORTANT_REFS = ["refs/heads/master"];
+    // TODO, use this?:
+    //  refs/heads/*
+    //  refs/tags/*
 
     let classAroots = {}; // roots that we can rely on to be around, master or
                           // team branches
@@ -320,11 +332,3 @@ SyntheticGcUtil.prototype.populateRoots= co.wrap(
 
 module.exports = SyntheticGcUtil;
 
-/*
-exports.cleanUpRedundant = co.wrap(cleanUpRedundant);
-exports.cleanUpOldRefs = co.wrap(cleanUpOldRefs);
-exports.getSyntheticRefs= co.wrap(getSyntheticRefs);
-exports.getBareSubmoduleRepo= co.wrap(getBareSubmoduleRepo);
-exports.populateRoots = co.wrap(populateRoots);
-exports.recursiveSyntheticRefRemoval = co.wrap(recursiveSyntheticRefRemoval);
-*/
