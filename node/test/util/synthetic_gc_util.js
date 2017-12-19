@@ -148,10 +148,10 @@ describe("synthetic_gc_util", function () {
         // First check that we can extract all synthetic refs.
         let EXPECTED_SYNTHETIC_REFS = 3;
         let allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.length, EXPECTED_SYNTHETIC_REFS);
-        assert(allSyntheticRefs.includes(oid1.toString()));
-        assert(allSyntheticRefs.includes(oid2.toString()));
-        assert(allSyntheticRefs.includes(oid3.toString()));
+        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert(allSyntheticRefs.has(oid1.toString()));
+        assert(allSyntheticRefs.has(oid2.toString()));
+        assert(allSyntheticRefs.has(oid3.toString()));
 
         const lastCommit = yield repo.getCommit(oid3);
         // Then, we will try to run in simulation mode(default),
@@ -161,9 +161,9 @@ describe("synthetic_gc_util", function () {
                                            allSyntheticRefs);
 
         allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.length, EXPECTED_SYNTHETIC_REFS);
-        assert(allSyntheticRefs.includes(oid1.toString()));
-        assert(allSyntheticRefs.includes(oid2.toString()));
+        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert(allSyntheticRefs.has(oid1.toString()));
+        assert(allSyntheticRefs.has(oid2.toString()));
 
         // Now, lets disable simulation, and observe the effects
         // We should see that refs for parent of last commit be deleted.
@@ -175,10 +175,10 @@ describe("synthetic_gc_util", function () {
 
         EXPECTED_SYNTHETIC_REFS = 1;
         allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.length, EXPECTED_SYNTHETIC_REFS);
-        assert(!allSyntheticRefs.includes(oid1.toString()));
-        assert(!allSyntheticRefs.includes(oid2.toString()));
-        assert(allSyntheticRefs.includes(oid3.toString()));
+        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert(!allSyntheticRefs.has(oid1.toString()));
+        assert(!allSyntheticRefs.has(oid2.toString()));
+        assert(allSyntheticRefs.has(oid3.toString()));
     }));
 
 
@@ -271,7 +271,9 @@ describe("synthetic_gc_util", function () {
         yield syntheticGcUtil.cleanUpOldRefs(repo, roots, isOlderThanTomorrow);
 
         newSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
-        assert.equal(newSyntheticRefs.toString(), oid2.toString());
+        let EXPECTED_SYNTHETIC_REFS = 1;
+        assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert(newSyntheticRefs.has(oid2.toString()));
     }));
 
     // TESTING:  'synthetic_gc_util:cleanUpRedundant'
@@ -311,7 +313,9 @@ describe("synthetic_gc_util", function () {
 
         let newSyntheticRefs =
             yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
-        assert.equal(newSyntheticRefs.toString(), oid2.toString());
+        let EXPECTED_SYNTHETIC_REFS = 1;
+        assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert(newSyntheticRefs.has(oid2.toString()));
     }));
 });
 

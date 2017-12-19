@@ -35,13 +35,15 @@ const assert  = require("chai").assert;
 const co = require("co");
 const NodeGit = require("nodegit");
 const SubmoduleUtil = require("./submodule_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
-const UserError = require("../util/user_error");
+const UserError = require("./user_error");
+const GitUtil = require("./git_util");
 
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
 
 let refExists = function(existingReferences, sha) {
-    return existingReferences.includes(sha);
+    return existingReferences.has(sha);
 };
 
 /**
@@ -60,7 +62,11 @@ class SyntheticGcUtil {
     */
     constructor() {
         this.d_visited = {};
+        this.d_metaVisited = {};
         this.d_simulation = true;
+
+        // due to absense of value inequality in set
+        this.d_subCommitStored = {};
     }
 
     /**
@@ -105,7 +111,14 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
 
         const fetcher = new SubmoduleFetcher(repo, refHeadCommit);
 
-        const subUrl = yield fetcher.getSubmoduleUrl(subName);
+        let subUrl = yield fetcher.getSubmoduleUrl(subName);
+
+        const metaUrl = yield GitUtil.getOriginUrl(repo);
+        if (metaUrl !== null) {
+            subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(metaUrl,
+                                                             subUrl);
+        }
+
         const subRepo = yield NodeGit.Repository.open(subUrl);
 
         return subRepo;
@@ -127,7 +140,8 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
     const synRefPath = SYNTHETIC_BRANCH_BASE + commit;
 
     if (this.d_simulation) {
-        console.log("Removing ref: " + synRefPath);
+        // following 'git clean -n'
+        console.log("Would remove: " + synRefPath);
         return;
     }
 
@@ -145,7 +159,7 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
  * @param {NodeGit.Repository}   repo
  * @param {NodeGit.Commit}       commit
  * @param {Function}             isDeletable
- * @param {String[]}             existingReferences
+ * @param {Set<String>}          existingReferences
  */
 
 SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
@@ -197,9 +211,8 @@ SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
             ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) === 0);
 
     references = references.map(ref => ref.split(SYNTHETIC_BRANCH_BASE)[1]);
-    references.sort();
 
-    return references;
+    return new Set(references);
 });
 
 /**
@@ -272,46 +285,49 @@ SyntheticGcUtil.prototype.cleanUpOldRefs = co.wrap(
 }); // cleanUpOldRefs
 
 /**
- * Fetch all refs that are considered to be persistent within the specified
- * `repo`.
+* Indicate whether 'ref' is a part of important ref set.
+*
+* @param {String} ref
+* @return {Boolean}
+*/
+let isImportantRef = function(ref) {
+
+    // `important root` - means the root that most likely be around, so that we
+    // can remove all parent synthetic refs.
+    const IMPORTANT_REFS = ["refs/heads/", "refs/tags/"];
+
+    for (let importantRef of IMPORTANT_REFS) {
+        if (ref.indexOf(importantRef) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+/**
+ * Go through every commit of meta repository and populate a map of submodule
+ * to its commits.
  *
  * Return value is a mapping between submodule name and collection of persistent
  * refs within that submodules.
  *
  * @param {NodeGit.Repo}   repo
- * @return {Object[]}
+ * @param {NodeGit.Commit} commit
+ * @param {Map<String, Set<String>>} classAroots
+ * @return {Map<String, Set<String>>}
  */
-SyntheticGcUtil.prototype.populateRoots = co.wrap(
-    function*(repo) {
+SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
+    function*(repo, commit, classAroots) {
 
-    assert.instanceOf(repo, NodeGit.Repository);
-
-    // For now, we are using heads/master as an important root.
-    // `important root` - means the root that most likely be around, so that we
-    // can remove all parent synthetic refs.
-    // This is not really necessary, more like optimization,
-    // unless there is an important ref out there that was not updated for so
-    // long.
-    const IMPORTANT_REFS = ["refs/heads/master"];
-    // TODO, use this?:
-    //  refs/heads/*
-    //  refs/tags/*
-
-    let classAroots = {}; // roots that we can rely on to be around, master or
-                          // team branches
-
-    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
-    for (let ref of refs) {
-        const refHeadCommit = yield repo.getReferenceCommit(ref);
-
-        const tree = yield refHeadCommit.getTree();
+        const tree = yield commit.getTree();
 
         const submodules = yield SubmoduleUtil.getSubmoduleNamesForCommit(repo,
-                                                                refHeadCommit);
+                                                                commit);
         for (const subName of submodules) {
             const subRepo =
                 yield this.getBareSubmoduleRepo(repo, subName,
-                                                refHeadCommit);
+                                                commit);
             const subSha = yield tree.entryByPath(subName);
             const subCommit = yield subRepo.getCommit(subSha.sha());
             const subPath = subRepo.path();
@@ -319,12 +335,61 @@ SyntheticGcUtil.prototype.populateRoots = co.wrap(
             // Record all unique paths from all references.
             if (!(subPath in classAroots)) {
                 classAroots[subPath] = new Set();
+                this.d_subCommitStored[subPath] = {};
             }
 
-            if (IMPORTANT_REFS.includes(ref)) {
-                classAroots[subPath].add(subCommit);
+            if (subCommit.sha() in this.d_subCommitStored[subPath]) {
+                continue;
             }
+
+            classAroots[subPath].add(subCommit);
+            this.d_subCommitStored[subPath][subCommit.sha()] = 1;
         }
+
+        const parents = yield commit.getParents(commit.parentcount());
+        let thisState = this;
+        yield parents.map(function *(parent) {
+            if (parent.sha() in thisState.d_metaVisited) {
+                return;
+            }
+            thisState.d_metaVisited[parent.sha()] = 1;
+            classAroots = yield thisState.populatePerCommit(repo,
+                                                      parent,
+                                                      classAroots);
+        });
+
+        return classAroots;
+});
+
+/**
+ * Fetch all refs that are considered to be persistent within the specified
+ * `repo`.
+ *
+ * Return value is a mapping between submodule name and collection of persistent
+ * refs within that submodules.
+ *
+ * @param {NodeGit.Repo}   repo
+ * @return {Map<String, Set<String>>}
+ */
+SyntheticGcUtil.prototype.populateRoots = co.wrap(
+    function*(repo) {
+
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    let classAroots = {}; // roots that we can rely on to be around, master or
+                          // team branches
+
+    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
+    for (let ref of refs) {
+
+        if (!isImportantRef(ref)) {
+            continue;
+        }
+
+        const refHeadCommit = yield repo.getReferenceCommit(ref);
+        classAroots = yield this.populatePerCommit(repo,
+                                                   refHeadCommit,
+                                                   classAroots);
     }
 
     return classAroots;
