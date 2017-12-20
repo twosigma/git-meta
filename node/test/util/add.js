@@ -129,17 +129,33 @@ a=B|x=S:C2-1 a/b=Sa:1;Oa/b W x/y/z=a,x/r/z=b;Bmaster=2`,
                 paths: [],
                 stageMeta: false,
             },
+            "add only tracked files": {
+                initial: "a=B|x=U:Os W README.md=foo,newFile=a",
+                paths: ["s"],
+                expected: "x=E:Os I README.md=foo!W newFile=a",
+                update: true,
+            },
+            "add all(tracked and not tracked) files": {
+                initial: "a=B|x=U:Os W README.md=foo,newFile=a",
+                paths: ["s"],
+                expected: "x=E:Os I README.md=foo,newFile=a",
+                update: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 let stageMeta = c.stageMeta;
+                let update = c.update;
                 if (undefined === stageMeta) {
                     stageMeta = true;
                 }
+                 if (undefined === update) {
+                    update = false;
+                 }
                 const doAdd = co.wrap(function *(repos) {
                     const repo = repos.x;
-                    yield Add.stagePaths(repo, c.paths, stageMeta);
+                    yield Add.stagePaths(repo, c.paths, stageMeta, update);
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                                c.expected,
