@@ -109,7 +109,9 @@ commands will generally perform that same operation, but across a *meta*
 repository and the *sub* repositories that are locally *opened*.  These
 commands work on any Git repository (even one without configured submodules);
 we do not provide duplicate commands for Git functionality that does not need
-to be applied across sub-modules such as 'clone' and 'init'.`;
+to be applied across sub-modules such as 'clone' and 'init'.  Note that
+git-meta will forward any subcommand that it does not implement to Git,
+as if run with 'git -C $(git meta root) ...'.`;
 
 const parser = new ArgumentParser({
     addHelp:true,
@@ -141,12 +143,6 @@ const commands = {
     "version": version,
 };
 
-// Configure forwarded commands.
-
-Array.from(Forward.forwardedCommands).forEach(name => {
-    commands[name] = Forward.makeModule(name);
-});
-
 // Configure the parser with commands in alphabetical order.
 
 Object.keys(commands).sort().forEach(name => {
@@ -154,13 +150,45 @@ Object.keys(commands).sort().forEach(name => {
     configureSubcommand(subParser, name, cmd);
 });
 
+const blacklist = new Set([
+    "--help",
+    "--version",
+    "-h",
+    "am",
+    "annotate",
+    "archimport",
+    "archive",
+    "blame",
+    "clean",
+    "cvsexportcommit",
+    "cvsimport",
+    "cvsserver",
+    "fast-export",
+    "fast-import",
+    "filter-branch",
+    "grep",
+    "merge-file",
+    "merge-index",
+    "merge-tree",
+    "mv",
+    "p4",
+    "quiltimport",
+    "revert",
+    "rm",
+    "shell",
+    "stage",
+    "svn",
+    "worktree",
+]);
+
 // If the first argument matches a forwarded sub-command, handle it manually.
 // I was not able to get ArgParse to allow unknown flags, e.g.
 // `git meta branch -r` to be passed to the REMAINDER positional argument on a
 // sub-parser level.
 
 if (2 < process.argv.length &&
-    Forward.forwardedCommands.has(process.argv[2])) {
+    !blacklist.has(process.argv[2]) &&
+    !(process.argv[2] in commands)) {
     const name = process.argv[2];
     const args = process.argv.slice(3);
     Forward.execute(name, args).catch(() => {
