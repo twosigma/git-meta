@@ -37,13 +37,57 @@ const NodeGit = require("nodegit");
 const SubmoduleUtil = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
+const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError = require("./user_error");
 const GitUtil = require("./git_util");
+const fs = require("fs");
 
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
 
-let refExists = function(existingReferences, sha) {
-    return existingReferences.has(sha);
+let detail = {
+    /**
+     * Return whether sha is in existingReferences.
+     *
+     * @param {Set<String>} existingReferences
+     * @param {String}      sha
+     * @return {Boolean}
+     */
+    refExists : function(existingReferences, sha) {
+        return existingReferences.has(sha);
+    },
+
+    /**
+     * Remove gubbins from the specified 'path'.
+     *
+     * @param {String}      path
+     * @return {String}
+     */
+    rebuildUrl : function(path) {
+        path = path.replace(new RegExp("../main/"), "");
+        path = path.replace(new RegExp(".d/", "g"), "/");
+        if (path.endsWith("-git")) {
+            path = path.replace(new RegExp("-git$"), ".git");
+        }
+    },
+
+    /**
+     * Return a collection of synthetic refs reachable locally for specified
+     * 'repo'.
+     *
+     * @param {NodeGit.Repository} repo
+     * @return {Set<String>}
+     */
+    getLocalSyntheticRefs : function*(repo) {
+        assert.instanceOf(repo, NodeGit.Repository);
+
+        let references = yield NodeGit.Reference.list(repo);
+        references = references.filter(
+                ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) === 0);
+        references = references.map(ref =>
+            ref.split(SYNTHETIC_BRANCH_BASE)[1]);
+
+        return new Set(references);
+    }
 };
 
 /**
@@ -112,14 +156,29 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
         const fetcher = new SubmoduleFetcher(repo, refHeadCommit);
 
         let subUrl = yield fetcher.getSubmoduleUrl(subName);
+        let subPath = subUrl;
 
-        const metaUrl = yield GitUtil.getOriginUrl(repo);
-        if (metaUrl !== null) {
-            subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(metaUrl,
-                                                             subUrl);
+        if (subUrl.startsWith(".")) {
+            // relative url specified
+            subUrl = detail.rebuildUrl(subUrl);
+            subPath = yield SyntheticBranchUtil.urlToLocalPath(repo, subUrl);
         }
 
-        const subRepo = yield NodeGit.Repository.open(subUrl);
+        if (!fs.existsSync(subPath)) {
+            console.log("Submodule at following path does not exists: " +
+                subPath);
+
+            const metaUrl = yield GitUtil.getOriginUrl(repo);
+            if (metaUrl !== null) {
+                subUrl = yield fetcher.getSubmoduleUrl(subName);
+                subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(metaUrl,
+                                                                 subUrl);
+                console.log("Going to clone bare repo from: " + subUrl);
+                yield GitUtil.cloneBareRepo(subUrl, subPath);
+            }
+        }
+
+        const subRepo = yield NodeGit.Repository.open(subPath);
 
         return subRepo;
 });
@@ -132,7 +191,7 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
  * @param {NodeGit.Commit}       commit
  */
 SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
-    function(repo, commit) {
+    function*(repo, commit) {
 
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
@@ -149,6 +208,8 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
     if (failed) {
         throw new UserError("Failed to remove the reference: " + synRefPath);
     }
+
+    yield GitUtil.removeRemoteRef(repo, synRefPath);
 });
 
 /**
@@ -185,7 +246,7 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
         // mode, since it provides a clear way to a user what actually is being
         // deleted. Also helps in debugging.
         if (isDeletable(parent) &&
-                refExists(existingReferences, parent.sha())) {
+                detail.refExists(existingReferences, parent.sha())) {
             thisState.removeSyntheticRef(repo, parent);
         }
         return yield thisState.recursiveSyntheticRefRemoval(repo, parent,
@@ -202,15 +263,30 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
  * @return {String[]}
  */
 SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
-    function*(subRepo) {
+    function*(repo) {
 
-    assert.instanceOf(subRepo, NodeGit.Repository);
-    let references = yield NodeGit.Reference.list(subRepo);
+    assert.instanceOf(repo, NodeGit.Repository);
 
-    references = references.filter(
-            ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) === 0);
+    // first lets check if we are on the git server itself.
+    let references = yield detail.getLocalSyntheticRefs(repo);
+    if (references.size !== 0) {
+        return references;
+    }
 
-    references = references.map(ref => ref.split(SYNTHETIC_BRANCH_BASE)[1]);
+    const syntheticRefExtractor = function(value) {
+        if (value && value.includes(SYNTHETIC_BRANCH_BASE)) {
+            return value.split("\t")[0];
+        }
+        return null;
+    };
+
+    references = yield GitUtil.getRefs(repo);
+
+    if (!Array.isArray(references)) {
+        return new Set([]);
+    }
+
+    references = references.map(syntheticRefExtractor).filter(commit => commit);
 
     return new Set(references);
 });
@@ -325,26 +401,33 @@ SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
         const submodules = yield SubmoduleUtil.getSubmoduleNamesForCommit(repo,
                                                                 commit);
         for (const subName of submodules) {
-            const subRepo =
-                yield this.getBareSubmoduleRepo(repo, subName,
-                                                commit);
-            const subSha = yield tree.entryByPath(subName);
-            const subCommit = yield subRepo.getCommit(subSha.sha());
-            const subPath = subRepo.path();
+            try {
+                const subRepo =
+                    yield this.getBareSubmoduleRepo(repo, subName,
+                                                    commit);
+                const subSha = yield tree.entryByPath(subName);
+                const subCommit = yield subRepo.getCommit(subSha.sha());
+                const subPath = subRepo.path();
 
-            // Record all unique paths from all references.
-            if (!(subPath in classAroots)) {
-                classAroots[subPath] = new Set();
-                this.d_subCommitStored[subPath] = {};
+                // Record all unique paths from all references.
+                if (!(subPath in classAroots)) {
+                    classAroots[subPath] = new Set();
+                    this.d_subCommitStored[subPath] = {};
+                }
+
+                if (subCommit.sha() in this.d_subCommitStored[subPath]) {
+                    continue;
+                }
+
+                classAroots[subPath].add(subCommit);
+                this.d_subCommitStored[subPath][subCommit.sha()] = 1;
+            } catch(exception) {
+                console.log("Cannot process submodule with following " +
+                    " exception: " + exception);
             }
-
-            if (subCommit.sha() in this.d_subCommitStored[subPath]) {
-                continue;
-            }
-
-            classAroots[subPath].add(subCommit);
-            this.d_subCommitStored[subPath][subCommit.sha()] = 1;
         }
+
+        // TODO: Flag for premature exit?
 
         const parents = yield commit.getParents(commit.parentcount());
         let thisState = this;

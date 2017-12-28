@@ -145,6 +145,23 @@ function getThresholdDate(args) {
     return date;
 }
 
+/**
+ * Set 'gitmeta.subreporootpath' if its not set.
+ *
+ */
+let setRepoRootPathIfNotConfigured = function*(repo) {
+    const config = yield repo.config();
+
+    // lame way of check and set
+    try {
+        yield config.getStringBuf("gitmeta.subreporootpath");
+    } catch (exception) {
+        console.log("cannot get subrepopath with following exception " +
+            exception + ", setting to current directory");
+        yield config.setString("gitmeta.subreporootpath", process.cwd());
+    }
+};
+
 let runIt = co.wrap(function *(args) {
 
     const syntheticGcUtil = new SyntheticGcUtil();
@@ -154,6 +171,7 @@ let runIt = co.wrap(function *(args) {
     }
 
     const repo = yield NodeGit.Repository.open(process.cwd());
+    yield setRepoRootPathIfNotConfigured(repo);
 
     const classAroots = yield syntheticGcUtil.populateRoots(repo);
 
