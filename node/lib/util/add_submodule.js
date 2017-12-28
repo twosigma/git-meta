@@ -93,7 +93,8 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
                                                         importArg.branch);
     if (null === remoteBranch) {
         throw new UserError(`
-The requested branch: ${colors.red(importArg.ranch)} does not exist.`);
+The requested branch: ${colors.red(importArg.branch)} does not exist; \
+try '-b [BRANCH]' to specify a different branch.`);
     }
     const commit = yield subRepo.getCommit(remoteBranch.target());
     yield GitUtil.setHeadHard(subRepo, commit);
