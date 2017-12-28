@@ -69,19 +69,6 @@ ${helpText}  See 'git ${name} --help' for more information.`,
 };
 
 /**
- * @property {Set} set of commands to forward
- */
-exports.forwardedCommands = new Set([
-    "branch",
-    "fetch",
-    "log",
-    "remote",
-    "rev-parse",
-    "show",
-    "tag",
-]);
-
-/**
  * Forward the specified `args` to the Git command having the specified `name`.
  *
  * @param {String}    name
