@@ -68,6 +68,8 @@ let detail = {
         if (path.endsWith("-git")) {
             path = path.replace(new RegExp("-git$"), ".git");
         }
+
+        return path;
     },
 
     /**
@@ -422,12 +424,13 @@ SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
                 classAroots[subPath].add(subCommit);
                 this.d_subCommitStored[subPath][subCommit.sha()] = 1;
             } catch(exception) {
-                console.log("Cannot process submodule with following " +
-                    " exception: " + exception);
+                console.log("Cannot process submodule " + subName +
+                    "  with following exception: " + exception);
             }
         }
 
         // TODO: Flag for premature exit?
+        // return classAroots
 
         const parents = yield commit.getParents(commit.parentcount());
         let thisState = this;
