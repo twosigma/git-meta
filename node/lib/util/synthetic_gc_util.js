@@ -45,16 +45,6 @@ const fs = require("fs");
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
 
 let detail = {
-    /**
-     * Return whether sha is in existingReferences.
-     *
-     * @param {Set<String>} existingReferences
-     * @param {String}      sha
-     * @return {Boolean}
-     */
-    refExists : function(existingReferences, sha) {
-        return existingReferences.has(sha);
-    },
 
     /**
      * Remove gubbins from the specified 'path'.
@@ -63,8 +53,8 @@ let detail = {
      * @return {String}
      */
     rebuildUrl : function(path) {
-        path = path.replace(new RegExp("../main/"), "");
-        path = path.replace(new RegExp(".d/", "g"), "/");
+        path = path.replace(new RegExp("\.\./main/"), "");
+        path = path.replace(new RegExp("\.d/", "g"), "/");
         if (path.endsWith("-git")) {
             path = path.replace(new RegExp("-git$"), ".git");
         }
@@ -84,7 +74,7 @@ let detail = {
 
         let references = yield NodeGit.Reference.list(repo);
         references = references.filter(
-                ref => ref.indexOf(SYNTHETIC_BRANCH_BASE) === 0);
+                ref => ref.startsWith(SYNTHETIC_BRANCH_BASE));
         references = references.map(ref =>
             ref.split(SYNTHETIC_BRANCH_BASE)[1]);
 
@@ -110,6 +100,8 @@ class SyntheticGcUtil {
         this.d_visited = {};
         this.d_metaVisited = {};
         this.d_simulation = true;
+        this.d_verbose = false;
+        this.d_headOnly = false;
 
         // due to absense of value inequality in set
         this.d_subCommitStored = {};
@@ -139,6 +131,19 @@ class SyntheticGcUtil {
         this.d_visited = value;
     }
 
+    get verbose() {
+        return this.d_verbose;
+    }
+    set verbose(value) {
+        this.d_verbose = value;
+    }
+
+    get headOnly() {
+        return this.d_headOnly;
+    }
+    set headOnly(value) {
+        this.d_headOnly = value;
+    }
 } // SyntheticGcUtil
 
 /**
@@ -167,17 +172,26 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
         }
 
         if (!fs.existsSync(subPath)) {
-            console.log("Submodule at following path does not exists: " +
-                subPath);
+
+            if (this.d_verbose) {
+                console.log("Submodule at following path does not exist: " +
+                    subPath);
+            }
 
             const metaUrl = yield GitUtil.getOriginUrl(repo);
-            if (metaUrl !== null) {
-                subUrl = yield fetcher.getSubmoduleUrl(subName);
-                subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(metaUrl,
-                                                                 subUrl);
-                console.log("Going to clone bare repo from: " + subUrl);
-                yield GitUtil.cloneBareRepo(subUrl, subPath);
+            if (metaUrl === null) {
+                console.error("Cannot determine origin url. Something is " +
+                    "wrong, exiting.");
+                process.exit(-1);
             }
+
+            subUrl = yield fetcher.getSubmoduleUrl(subName);
+            subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(metaUrl,
+                                                             subUrl);
+            if (this.d_verbose) {
+                console.log("Going to clone bare repo from: " + subUrl);
+            }
+            yield GitUtil.cloneBareRepo(subUrl, subPath);
         }
 
         const subRepo = yield NodeGit.Repository.open(subPath);
@@ -198,7 +212,7 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const synRefPath = SYNTHETIC_BRANCH_BASE + commit;
+    const synRefPath = SyntheticBranchUtil.getSyntheticBranchForCommit(commit);
 
     if (this.d_simulation) {
         // following 'git clean -n'
@@ -247,8 +261,7 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
         // delete references that do not exists. This is helpful in simulation
         // mode, since it provides a clear way to a user what actually is being
         // deleted. Also helps in debugging.
-        if (isDeletable(parent) &&
-                detail.refExists(existingReferences, parent.sha())) {
+        if (isDeletable(parent) && existingReferences.has(parent.sha())) {
             thisState.removeSyntheticRef(repo, parent);
         }
         return yield thisState.recursiveSyntheticRefRemoval(repo, parent,
@@ -282,12 +295,7 @@ SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
         return null;
     };
 
-    references = yield GitUtil.getRefs(repo);
-
-    if (!Array.isArray(references)) {
-        return new Set([]);
-    }
-
+    references = yield GitUtil.getRemoteRefs(repo);
     references = references.map(syntheticRefExtractor).filter(commit => commit);
 
     return new Set(references);
@@ -375,7 +383,7 @@ let isImportantRef = function(ref) {
     const IMPORTANT_REFS = ["refs/heads/", "refs/tags/"];
 
     for (let importantRef of IMPORTANT_REFS) {
-        if (ref.indexOf(importantRef) === 0) {
+        if (ref.startsWith(importantRef)) {
             return true;
         }
     }
@@ -397,6 +405,10 @@ let isImportantRef = function(ref) {
  */
 SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
     function*(repo, commit, classAroots) {
+
+        if (commit.sha() in this.d_metaVisited) {
+            return classAroots;
+        }
 
         const tree = yield commit.getTree();
 
@@ -424,21 +436,21 @@ SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
                 classAroots[subPath].add(subCommit);
                 this.d_subCommitStored[subPath][subCommit.sha()] = 1;
             } catch(exception) {
-                console.log("Cannot process submodule " + subName +
+                console.error("Cannot process submodule " + subName +
                     "  with following exception: " + exception);
+                process.exit(-1);
             }
         }
 
-        // TODO: Flag for premature exit?
-        // return classAroots
+        this.d_metaVisited[commit.sha()] = 1;
+
+        if (this.d_headOnly) {
+            return classAroots;
+        }
 
         const parents = yield commit.getParents(commit.parentcount());
         let thisState = this;
         yield parents.map(function *(parent) {
-            if (parent.sha() in thisState.d_metaVisited) {
-                return;
-            }
-            thisState.d_metaVisited[parent.sha()] = 1;
             classAroots = yield thisState.populatePerCommit(repo,
                                                       parent,
                                                       classAroots);

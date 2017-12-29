@@ -217,6 +217,51 @@ describe("synthetic_gc_util", function () {
         assert.equal(actualCommit.toString(), EXPECTED_COMMIT.toString());
     }));
 
+    // TESTING:  'synthetic_gc_util:populate_roots_relative_paths'
+    //
+    //  Same test as populate_roots, except it uses relative paths for
+    //  submodules.
+    //
+    // Concern:
+    //  1) 'populate_root' should have a mapping of submodule path to last
+    //      commit per reference.
+    //
+    // Plan:
+    //  1) Make two commits to the same submodule/same ref and observe that
+    //     root has one key that is a path of the submodule mapped to a Set
+    //     with one commit pointing to head of submodule. (C-1)
+    //
+    it("populate_roots_relative_paths", co.wrap(function *() {
+        const syntheticGcUtil = new SyntheticGcUtil();
+        const repo        = yield TestUtil.createSimpleRepository();
+
+        const subRootRepo = yield TestUtil.createSimpleRepository();
+        yield createCommit(subRootRepo, addFile, "TEST1", "Hello1");
+        const oid2 = yield createCommit(subRootRepo,
+            addFile, "TEST2", "Hello2");
+
+        const url      = subRootRepo.workdir();
+        const urlArray = url.split("/");
+        const relativeUrl = "../" + urlArray[urlArray.length - 2];
+
+        // for urlToLocalPath to work we need to set subreporootpath
+        const config = yield repo.config();
+        yield config.setString("gitmeta.subreporootpath", repo.workdir());
+
+        yield setupRepo(repo, subRootRepo, relativeUrl, "foo");
+
+        // roots should contain only last commit.
+        const EXPECTED_ROOT_KEY = url + ".git/";
+        const EXPECTED_ROOT_SIZE = 1;
+        const EXPECTED_COMMIT = oid2;
+
+        const roots = yield syntheticGcUtil.populateRoots(repo);
+        assert(EXPECTED_ROOT_KEY in roots);
+        assert(EXPECTED_ROOT_SIZE, roots[EXPECTED_ROOT_KEY].size);
+        const actualCommit = roots[EXPECTED_ROOT_KEY].values().next().value;
+        assert.equal(actualCommit.toString(), EXPECTED_COMMIT.toString());
+    }));
+
     // TESTING:  'synthetic_gc_util:cleanUpOldRefs'
     //
     // Concern:

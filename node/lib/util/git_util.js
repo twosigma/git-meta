@@ -913,13 +913,14 @@ exports.configIsTrue = co.wrap(function*(repo, configVar) {
 });
 
 /**
- * Fetch the remote having the specified `repo`.
+ * Fetch and return a list of remote refs in the origin for the specified
+ * 'repo'.
  * Throw a `UserError` object if the repository cannot be fetched.
  *
  * @async
  * @param {NodeGit.Repository} repo
  */
-exports.getRefs = co.wrap(function *(repo) {
+exports.getRemoteRefs = co.wrap(function *(repo) {
 	assert.instanceOf(repo, NodeGit.Repository);
 
     const execString = `git -C '${repo.path()}' ls-remote --refs`;

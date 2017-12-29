@@ -122,6 +122,24 @@ function parseOptions() {
         }
     );
 
+    parser.addArgument(
+        [ "--verbose" ],
+        {
+            help: "run in verbose mode.",
+            action: "storeTrue",
+            defaultValue: false,
+        }
+    );
+
+    parser.addArgument(
+        [ "--head-only" ],
+        {
+            help: "run only for head commit per ref",
+            action: "storeTrue",
+            defaultValue: false,
+        }
+    );
+
     return parser.parseArgs();
 }
 
@@ -145,23 +163,6 @@ function getThresholdDate(args) {
     return date;
 }
 
-/**
- * Set 'gitmeta.subreporootpath' if its not set.
- *
- */
-let setRepoRootPathIfNotConfigured = function*(repo) {
-    const config = yield repo.config();
-
-    // lame way of check and set
-    try {
-        yield config.getStringBuf("gitmeta.subreporootpath");
-    } catch (exception) {
-        console.log("cannot get subrepopath with following exception " +
-            exception + ", setting to current directory");
-        yield config.setString("gitmeta.subreporootpath", process.cwd());
-    }
-};
-
 let runIt = co.wrap(function *(args) {
 
     const syntheticGcUtil = new SyntheticGcUtil();
@@ -170,18 +171,23 @@ let runIt = co.wrap(function *(args) {
         syntheticGcUtil.simulation = false;
     }
 
-    const repo = yield NodeGit.Repository.open(process.cwd());
-    yield setRepoRootPathIfNotConfigured(repo);
+    syntheticGcUtil.verbose = args.verbose;
+    syntheticGcUtil.headOnly = args.head_only;
 
+    const repo = yield NodeGit.Repository.open(process.cwd());
     const classAroots = yield syntheticGcUtil.populateRoots(repo);
 
-    console.log(`Looking for removal of redundant synthetic refs. (parent refs
-                 of persistent branches).`);
+    if (args.verbose) {
+        console.log(`Looking for removal of redundant synthetic refs. (parent
+                     refs of persistent branches).`);
+    }
 
     yield syntheticGcUtil.cleanUpRedundant(repo, classAroots, function() {
         return true; });
 
-    console.log("Looking for removal of old synthetic refs.");
+    if (args.verbose) {
+        console.log("Looking for removal of old synthetic refs.");
+    }
     const isOldCommit = lessThanDate(getThresholdDate(args));
     yield syntheticGcUtil.cleanUpOldRefs(repo, classAroots, isOldCommit);
 });
