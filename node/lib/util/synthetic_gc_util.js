@@ -105,6 +105,7 @@ class SyntheticGcUtil {
 
         // due to absense of value inequality in set
         this.d_subCommitStored = {};
+        this.d_syntheticRefsBatchForRemoval = [];
     }
 
     /**
@@ -200,14 +201,32 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
 });
 
 /**
+ * Execute batch removal of synthetic references contained by
+ * 'd_syntheticRefsBatchForRemoval' for the specified 'repo'. Lastly, clean up
+ * 'd_syntheticRefsBatchForRemoval'.
+ *
+ * @param {NodeGit.Repository}   repo
+ */
+SyntheticGcUtil.prototype.commitSyntheticRefRemoval = co.wrap(
+    function*(repo) {
+
+   yield GitUtil.removeRemoteRef(repo,
+                                 this.d_syntheticRefsBatchForRemoval);
+   this.d_syntheticRefsBatchForRemoval = [];
+
+});
+
+/**
  * Remove synthetic ref corresponding to specified `commit` in the specified
  * `repo`.
+ * If running outside of git server, synthetic ref will be marked for batch
+ * removal, you will need to call 'SyntheticGcUtil.commitSyntheticRefRemoval'
+ * to actually remove them.
  *
  * @param {NodeGit.Repository}   repo
  * @param {NodeGit.Commit}       commit
  */
-SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
-    function*(repo, commit) {
+SyntheticGcUtil.prototype.removeSyntheticRef = function(repo, commit) {
 
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
@@ -225,8 +244,8 @@ SyntheticGcUtil.prototype.removeSyntheticRef = co.wrap(
         throw new UserError("Failed to remove the reference: " + synRefPath);
     }
 
-    yield GitUtil.removeRemoteRef(repo, synRefPath);
-});
+    this.d_syntheticRefsBatchForRemoval.push(synRefPath);
+};
 
 /**
  * Go through the parents of `commit` of the specified `repo` and remove
@@ -329,6 +348,7 @@ SyntheticGcUtil.prototype.cleanUpRedundant = co.wrap(
                                               predicate,
                                               existingReferences);
        }
+       this.commitSyntheticRefRemoval(subRepo);
    }
 });
 
@@ -367,6 +387,7 @@ SyntheticGcUtil.prototype.cleanUpOldRefs = co.wrap(
                this.removeSyntheticRef(subRepo, actualCommit);
            } // if
        } // for
+       this.commitSyntheticRefRemoval(subRepo);
    } // for
 }); // cleanUpOldRefs
 

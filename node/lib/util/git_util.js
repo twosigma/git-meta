@@ -935,19 +935,23 @@ exports.getRemoteRefs = co.wrap(function *(repo) {
 });
 
 /**
- * Delete the specified `ref` on the specified remote `repo`.
+ * Delete the specified `refs` on the specified remote `repo`.
  * Throw a `UserError` object if cannot push to remote repository.
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {String}             remoteName
+ * @param {Array<String>}      refs
  */
-exports.removeRemoteRef = co.wrap(function *(repo, ref) {
+exports.removeRemoteRef = co.wrap(function *(repo, refs) {
 
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const execString = `git -C '${repo.path()}' push origin :${ref}`;
+    if (refs.length === 0) {
+        return;
+    }
 
+    const execString = `git -C '${repo.path()}' push origin :` +
+                        refs.join(" :");
     try {
         return yield ChildProcess.exec(execString);
     }

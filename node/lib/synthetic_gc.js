@@ -143,11 +143,11 @@ function parseOptions() {
     return parser.parseArgs();
 }
 
-let lessThanDate = function(thresHold) {
+function lessThanDate(thresHold) {
     return function(input) {
         return input.date() < thresHold;
     };
-};
+}
 
 function getThresholdDate(args) {
 
@@ -163,7 +163,7 @@ function getThresholdDate(args) {
     return date;
 }
 
-let runIt = co.wrap(function *(args) {
+const runIt = co.wrap(function *(args) {
 
     const syntheticGcUtil = new SyntheticGcUtil();
 
