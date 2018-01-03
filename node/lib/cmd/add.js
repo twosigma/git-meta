@@ -60,6 +60,14 @@ to submodules with new commits in their working directories.
 `;
 
 exports.configureParser = function (parser) {
+    parser.addArgument(["-u", "--update"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: "Update tracked files.",
+        defaultValue:false
+    });
+
     parser.addArgument(["--meta"], {
         required: false,
         action: "storeConst",
@@ -94,5 +102,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const paths = yield args.paths.map(filename => {
         return  GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    yield Add.stagePaths(repo, paths, args.meta);
+    yield Add.stagePaths(repo, paths, args.meta, args.update);
 });
