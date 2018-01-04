@@ -102,6 +102,7 @@ class SyntheticGcUtil {
         this.d_simulation = true;
         this.d_verbose = false;
         this.d_headOnly = false;
+        this.d_continueOnError = false;
 
         // due to absense of value inequality in set
         this.d_subCommitStored = {};
@@ -144,6 +145,13 @@ class SyntheticGcUtil {
     }
     set headOnly(value) {
         this.d_headOnly = value;
+    }
+
+    get continueOnError() {
+        return this.d_continueOnError;
+    }
+    set continueOnError(value) {
+        this.d_continueOnError = value;
     }
 } // SyntheticGcUtil
 
@@ -196,6 +204,14 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
         }
 
         const subRepo = yield NodeGit.Repository.open(subPath);
+        try {
+            yield GitUtil.fetch(subRepo, "origin");
+        } catch (exception) {
+            // eat the exception here, most likely submodule is corrupted.
+            // 'populatePerCommit' has more infromative error for this
+            console.log("Error fetching submodule: " + subName +
+                " with error: " + exception);
+        }
 
         return subRepo;
 });
@@ -459,7 +475,9 @@ SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
             } catch(exception) {
                 console.error("Cannot process submodule " + subName +
                     "  with following exception: " + exception);
-                process.exit(-1);
+                if (!this.d_continueOnError) {
+                    process.exit(-1);
+                }
             }
         }
 

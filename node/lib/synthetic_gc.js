@@ -140,6 +140,24 @@ function parseOptions() {
         }
     );
 
+    parser.addArgument(
+        [ "--submodules-check-only" ],
+        {
+            help: "Just check if submodules refs are reachable from meta repo",
+            action: "storeTrue",
+            defaultValue: false,
+        }
+    );
+
+    parser.addArgument(
+        [ "-c", "--continue-on-error" ],
+        {
+            help: "Continue, if known error is encountered.",
+            action: "storeTrue",
+            defaultValue: false,
+        }
+    );
+
     return parser.parseArgs();
 }
 
@@ -173,9 +191,14 @@ const runIt = co.wrap(function *(args) {
 
     syntheticGcUtil.verbose = args.verbose;
     syntheticGcUtil.headOnly = args.head_only;
+    syntheticGcUtil.continueOnError = args.continue_on_error;
 
     const repo = yield NodeGit.Repository.open(process.cwd());
     const classAroots = yield syntheticGcUtil.populateRoots(repo);
+    if (args.submodules_check_only) {
+        console.log("Submodules checks performed, exiting.");
+        return;
+    }
 
     if (args.verbose) {
         console.log(`Looking for removal of redundant synthetic refs. (parent
