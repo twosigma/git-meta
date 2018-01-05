@@ -2515,7 +2515,7 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch master.
 #
@@ -2535,7 +2535,7 @@ only submodules
                 metaCommitData: new Commit.CommitMetaData(sig, "hiya"),
                 expected: `\
 hiya
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
@@ -2559,7 +2559,7 @@ only submodules
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch foo.
 # Changes to be committed:
@@ -2588,7 +2588,7 @@ only submodules
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch foo.
 # Changes to be committed:
@@ -2626,7 +2626,7 @@ only submodules
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch foo.
 #
@@ -2662,12 +2662,12 @@ only submodules
                 }),
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch foo.
 # -----------------------------------------------------------------------------
 
-# <bar> enter message for 'bar' above this line; delete this line to skip \
+<bar> enter message for 'bar' above this line; delete this line to skip \
 committing 'bar'
 # Changes to be committed:
 # \tmodified:     foo
@@ -2707,12 +2707,12 @@ committing 'bar'
                 },
                 expected: `\
 
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # On branch foo.
 # -----------------------------------------------------------------------------
 yoyoyo
-# <bar> enter message for 'bar' above this line; delete this line to skip \
+<bar> enter message for 'bar' above this line; delete this line to skip \
 committing 'bar'
 # If this sub-repo is skipped, it will not be amended and the original commit
 # will be used.
@@ -2757,14 +2757,14 @@ committing 'bar'
                 },
                 expected: `\
 yoyoyo
-# <*> enter meta-repo message above this line; delete this line to commit \
+<*> enter meta-repo message above this line; delete this line to commit \
 only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
 # On branch foo.
 # -----------------------------------------------------------------------------
 
-# <bar> enter message for 'bar' above this line; delete this line to skip \
+<bar> enter message for 'bar' above this line; delete this line to skip \
 committing 'bar'
 # If this sub-repo is skipped, it will not be amended and the original commit
 # will be used.

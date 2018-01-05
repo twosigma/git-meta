@@ -1660,7 +1660,7 @@ exports.formatSplitCommitEditorPrompt = function (status,
     }
     result += `\
 
-# <*> enter meta-repo message above this line; delete this line to \
+<*> enter meta-repo message above this line; delete this line to \
 commit only submodules
 `;
 
@@ -1716,7 +1716,7 @@ commit only submodules
 
         result += `\
 
-# <${subName}> enter message for '${subName}' above this line; delete this \
+<${subName}> enter message for '${subName}' above this line; delete this \
 line to skip committing '${subName}'
 `;
         if (undefined !== subData) {
