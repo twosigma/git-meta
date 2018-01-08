@@ -91,6 +91,7 @@
 const co = require("co");
 const NodeGit = require("nodegit");
 const SyntheticGcUtil = require("./util/synthetic_gc_util");
+const GitUtil = require("./util/git_util");
 const ArgumentParser = require("argparse").ArgumentParser;
 
 /**
@@ -194,6 +195,8 @@ const runIt = co.wrap(function *(args) {
     syntheticGcUtil.continueOnError = args.continue_on_error;
 
     const repo = yield NodeGit.Repository.open(process.cwd());
+    yield GitUtil.fetch(repo, "origin");
+
     const classAroots = yield syntheticGcUtil.populateRoots(repo);
     if (args.submodules_check_only) {
         console.log("Submodules checks performed, exiting.");

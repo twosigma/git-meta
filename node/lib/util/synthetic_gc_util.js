@@ -99,6 +99,8 @@ class SyntheticGcUtil {
     constructor() {
         this.d_visited = {};
         this.d_metaVisited = {};
+        // We only need to fetch submodule url once, so keeping track.
+        this.d_fetchedUrl = {};
         this.d_simulation = true;
         this.d_verbose = false;
         this.d_headOnly = false;
@@ -205,7 +207,10 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
 
         const subRepo = yield NodeGit.Repository.open(subPath);
         try {
-            yield GitUtil.fetch(subRepo, "origin");
+            if (!(subUrl in this.d_fetchedUrl)) {
+                yield GitUtil.fetch(subRepo, "origin");
+                this.d_fetchedUrl[subUrl] = 1;
+            }
         } catch (exception) {
             // eat the exception here, most likely submodule is corrupted.
             // 'populatePerCommit' has more infromative error for this
