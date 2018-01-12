@@ -36,7 +36,7 @@
 * @UTILITIES:
 *   synthetic_gc: utility for manipulating synthetic refs.
 *
-* @SEE_ALSO: synthetic_gc_util, synthetic_branch_util
+* @SEE_ALSO: synthetic_gc_runner, synthetic_branch_util
 *
 * /Usage
 * /-----
@@ -90,7 +90,7 @@
 
 const co = require("co");
 const NodeGit = require("nodegit");
-const SyntheticGcUtil = require("./util/synthetic_gc_util");
+const SyntheticGcRunner = require("./util/synthetic_gc_runner");
 const GitUtil = require("./util/git_util");
 const ArgumentParser = require("argparse").ArgumentParser;
 
@@ -184,20 +184,12 @@ function getThresholdDate(args) {
 
 const runIt = co.wrap(function *(args) {
 
-    const syntheticGcUtil = new SyntheticGcUtil();
-
-    if (args.force) {
-        syntheticGcUtil.simulation = false;
-    }
-
-    syntheticGcUtil.verbose = args.verbose;
-    syntheticGcUtil.headOnly = args.head_only;
-    syntheticGcUtil.continueOnError = args.continue_on_error;
+    const syntheticGcRunner = new SyntheticGcRunner(args);
 
     const repo = yield NodeGit.Repository.open(process.cwd());
     yield GitUtil.fetch(repo, "origin");
 
-    const classAroots = yield syntheticGcUtil.populateRoots(repo);
+    const classAroots = yield syntheticGcRunner.populateRoots(repo);
     if (args.submodules_check_only) {
         console.log("Submodules checks performed, exiting.");
         return;
@@ -208,14 +200,14 @@ const runIt = co.wrap(function *(args) {
                      refs of persistent branches).`);
     }
 
-    yield syntheticGcUtil.cleanUpRedundant(repo, classAroots, function() {
+    yield syntheticGcRunner.cleanUpRedundant(repo, classAroots, function() {
         return true; });
 
     if (args.verbose) {
         console.log("Looking for removal of old synthetic refs.");
     }
     const isOldCommit = lessThanDate(getThresholdDate(args));
-    yield syntheticGcUtil.cleanUpOldRefs(repo, classAroots, isOldCommit);
+    yield syntheticGcRunner.cleanUpOldRefs(repo, classAroots, isOldCommit);
 });
 
 const args = parseOptions();

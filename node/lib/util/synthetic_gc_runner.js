@@ -44,7 +44,7 @@ const fs = require("fs");
 
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
 
-let detail = {
+const detail = {
 
     /**
      * Remove gubbins from the specified 'path'.
@@ -91,20 +91,25 @@ let detail = {
  *
  * @SEE_ALSO: lib/synthetic_gc
  */
-class SyntheticGcUtil {
+class SyntheticGcRunner {
 
     /**
-    * Create a 'SyntheticGcUtil' object for synthetic refs manipulation.
+    * Create a 'SyntheticGcRunner' object for synthetic refs manipulation.
     */
-    constructor() {
+    constructor(args) {
+        if (args === undefined) {
+            throw new UserError("Specify args to SyntheticGcRunner");
+        }
+
+        this.d_simulation = !args.force;
+        this.d_verbose = args.verbose;
+        this.d_headOnly = args.head_only;
+        this.d_continueOnError = args.continue_on_error;
+
         this.d_visited = {};
         this.d_metaVisited = {};
         // We only need to fetch submodule url once, so keeping track.
         this.d_fetchedUrl = {};
-        this.d_simulation = true;
-        this.d_verbose = false;
-        this.d_headOnly = false;
-        this.d_continueOnError = false;
 
         // due to absense of value inequality in set
         this.d_subCommitStored = {};
@@ -155,7 +160,7 @@ class SyntheticGcUtil {
     set continueOnError(value) {
         this.d_continueOnError = value;
     }
-} // SyntheticGcUtil
+} // SyntheticGcRunner
 
 /**
  * Return bare submodule repository corresponding to a specified `refHeadCommit`
@@ -165,7 +170,7 @@ class SyntheticGcUtil {
  * @param {NodeGit.Commit}       commit
  * @return {NodeGit.Repository}  subRepo
  */
-SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
+SyntheticGcRunner.prototype.getBareSubmoduleRepo = co.wrap(
     function*(repo, subName, refHeadCommit) {
 
         assert.instanceOf(repo, NodeGit.Repository);
@@ -208,8 +213,8 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
         const subRepo = yield NodeGit.Repository.open(subPath);
         try {
             if (!(subUrl in this.d_fetchedUrl)) {
-                yield GitUtil.fetch(subRepo, "origin");
                 this.d_fetchedUrl[subUrl] = 1;
+                yield GitUtil.fetch(subRepo, "origin");
             }
         } catch (exception) {
             // eat the exception here, most likely submodule is corrupted.
@@ -228,7 +233,7 @@ SyntheticGcUtil.prototype.getBareSubmoduleRepo = co.wrap(
  *
  * @param {NodeGit.Repository}   repo
  */
-SyntheticGcUtil.prototype.commitSyntheticRefRemoval = co.wrap(
+SyntheticGcRunner.prototype.commitSyntheticRefRemoval = co.wrap(
     function*(repo) {
 
    yield GitUtil.removeRemoteRef(repo,
@@ -241,13 +246,13 @@ SyntheticGcUtil.prototype.commitSyntheticRefRemoval = co.wrap(
  * Remove synthetic ref corresponding to specified `commit` in the specified
  * `repo`.
  * If running outside of git server, synthetic ref will be marked for batch
- * removal, you will need to call 'SyntheticGcUtil.commitSyntheticRefRemoval'
+ * removal, you will need to call 'SyntheticGcRunner.commitSyntheticRefRemoval'
  * to actually remove them.
  *
  * @param {NodeGit.Repository}   repo
  * @param {NodeGit.Commit}       commit
  */
-SyntheticGcUtil.prototype.removeSyntheticRef = function(repo, commit) {
+SyntheticGcRunner.prototype.removeSyntheticRef = function(repo, commit) {
 
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
@@ -279,7 +284,7 @@ SyntheticGcUtil.prototype.removeSyntheticRef = function(repo, commit) {
  * @param {Set<String>}          existingReferences
  */
 
-SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
+SyntheticGcRunner.prototype.recursiveSyntheticRefRemoval = co.wrap(
     function* (repo, commit, isDeletable, existingReferences) {
 
     assert.instanceOf(repo, NodeGit.Repository);
@@ -317,7 +322,7 @@ SyntheticGcUtil.prototype.recursiveSyntheticRefRemoval = co.wrap(
  * @param {NodeGit.Repo}   subRepo
  * @return {String[]}
  */
-SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
+SyntheticGcRunner.prototype.getSyntheticRefs = co.wrap(
     function*(repo) {
 
     assert.instanceOf(repo, NodeGit.Repository);
@@ -353,7 +358,7 @@ SyntheticGcUtil.prototype.getSyntheticRefs = co.wrap(
  * @param {Object[]}       roots
  * @param {Function}       predicate
  */
-SyntheticGcUtil.prototype.cleanUpRedundant = co.wrap(
+SyntheticGcRunner.prototype.cleanUpRedundant = co.wrap(
     function*(repo, roots, predicate) {
 
    assert.instanceOf(repo, NodeGit.Repository);
@@ -381,7 +386,7 @@ SyntheticGcUtil.prototype.cleanUpRedundant = co.wrap(
  * @param {Object[]}       roots
  * @param {Function}       isOldCommit
  */
-SyntheticGcUtil.prototype.cleanUpOldRefs = co.wrap(
+SyntheticGcRunner.prototype.cleanUpOldRefs = co.wrap(
     function*(repo, roots, isOldCommit) {
 
    assert.instanceOf(repo, NodeGit.Repository);
@@ -445,7 +450,7 @@ let isImportantRef = function(ref) {
  * @param {Map<String, Set<String>>} classAroots
  * @return {Map<String, Set<String>>}
  */
-SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
+SyntheticGcRunner.prototype.populatePerCommit = co.wrap(
     function*(repo, commit, classAroots) {
 
         if (commit.sha() in this.d_metaVisited) {
@@ -513,7 +518,7 @@ SyntheticGcUtil.prototype.populatePerCommit = co.wrap(
  * @param {NodeGit.Repo}   repo
  * @return {Map<String, Set<String>>}
  */
-SyntheticGcUtil.prototype.populateRoots = co.wrap(
+SyntheticGcRunner.prototype.populateRoots = co.wrap(
     function*(repo) {
 
     assert.instanceOf(repo, NodeGit.Repository);
@@ -537,5 +542,5 @@ SyntheticGcUtil.prototype.populateRoots = co.wrap(
     return classAroots;
 });
 
-module.exports = SyntheticGcUtil;
+module.exports = SyntheticGcRunner;
 

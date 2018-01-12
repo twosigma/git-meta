@@ -930,7 +930,7 @@ exports.getRemoteRefs = co.wrap(function *(repo) {
         return result.stdout.split("\n");
     }
     catch (e) {
-        return new UserError(e.message);
+        throw new UserError(e.message);
     }
 });
 
@@ -956,7 +956,7 @@ exports.removeRemoteRef = co.wrap(function *(repo, refs) {
         return yield ChildProcess.exec(execString);
     }
     catch (e) {
-        return new UserError(e.message);
+        throw new UserError(e.message);
     }
 });
 
@@ -975,7 +975,7 @@ exports.cloneBareRepo = co.wrap(function*(url, path) {
         const result = yield ChildProcess.exec(execString);
         return result;
     } catch(e) {
-        return new UserError(e.message);
+        throw new UserError(e.message);
     }
 });
 

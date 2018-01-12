@@ -36,7 +36,7 @@ const fsp     = require("fs-promise");
 const path    = require("path");
 const NodeGit = require("nodegit");
 const TestUtil        = require("../../lib/util/test_util");
-const SyntheticGcUtil = require("../../lib/util/synthetic_gc_util");
+const SyntheticGcRunner = require("../../lib/util/synthetic_gc_runner");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const DeinitUtil          = require("../../lib/util/deinit_util");
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
@@ -110,9 +110,9 @@ let isOlderThanTomorrow = function(input) {
 };
 //------------------------------------------------------------------------------
 
-describe("synthetic_gc_util", function () {
+describe("synthetic_gc_runner", function () {
 
-    // TESTING:  'synthetic_gc_util:recursiveSyntheticRefRemoval'
+    // TESTING:  'synthetic_gc_runner:recursiveSyntheticRefRemoval'
     //
     // Concern:
     //  1) Parents of a commit pointed by persistent ref. should be deleted.
@@ -125,7 +125,8 @@ describe("synthetic_gc_util", function () {
     //     that no changes made. (C-2)
     //
     it("parent_of_persistent", co.wrap(function *() {
-        const syntheticGcUtil = new SyntheticGcUtil();
+        const args = { force : false };
+        const syntheticGcRunner = new SyntheticGcRunner(args);
         const root = yield TestUtil.makeTempDir();
         const rootDirectory = yield fsp.realpath(root);
         const repo = yield NodeGit.Repository.init(rootDirectory, 0);
@@ -147,7 +148,7 @@ describe("synthetic_gc_util", function () {
 
         // First check that we can extract all synthetic refs.
         let EXPECTED_SYNTHETIC_REFS = 3;
-        let allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
+        let allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
         assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
         assert(allSyntheticRefs.has(oid1.toString()));
         assert(allSyntheticRefs.has(oid2.toString()));
@@ -156,25 +157,25 @@ describe("synthetic_gc_util", function () {
         const lastCommit = yield repo.getCommit(oid3);
         // Then, we will try to run in simulation mode(default),
         // this should do nothing.
-        yield syntheticGcUtil.recursiveSyntheticRefRemoval(repo, lastCommit,
+        yield syntheticGcRunner.recursiveSyntheticRefRemoval(repo, lastCommit,
                                            isDeletable,
                                            allSyntheticRefs);
 
-        allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
+        allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
         assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
         assert(allSyntheticRefs.has(oid1.toString()));
         assert(allSyntheticRefs.has(oid2.toString()));
 
         // Now, lets disable simulation, and observe the effects
         // We should see that refs for parent of last commit be deleted.
-        syntheticGcUtil.simulation = false;
-        syntheticGcUtil.visited = {};
-        yield syntheticGcUtil.recursiveSyntheticRefRemoval(repo, lastCommit,
+        syntheticGcRunner.simulation = false;
+        syntheticGcRunner.visited = {};
+        yield syntheticGcRunner.recursiveSyntheticRefRemoval(repo, lastCommit,
                                            isDeletable,
                                            allSyntheticRefs);
 
         EXPECTED_SYNTHETIC_REFS = 1;
-        allSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(repo);
+        allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
         assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
         assert(!allSyntheticRefs.has(oid1.toString()));
         assert(!allSyntheticRefs.has(oid2.toString()));
@@ -182,7 +183,7 @@ describe("synthetic_gc_util", function () {
     }));
 
 
-    // TESTING:  'synthetic_gc_util:populate_roots'
+    // TESTING:  'synthetic_gc_runner:populate_roots'
     //
     // Concern:
     //  1) 'populate_root' should have a mapping of submodule path to last
@@ -194,7 +195,8 @@ describe("synthetic_gc_util", function () {
     //     with one commit pointing to head of submodule. (C-1)
     //
     it("populate_roots", co.wrap(function *() {
-        const syntheticGcUtil = new SyntheticGcUtil();
+        const args = { force : false };
+        const syntheticGcRunner = new SyntheticGcRunner(args);
         const repo        = yield TestUtil.createSimpleRepository();
 
         const subRootRepo = yield TestUtil.createSimpleRepository();
@@ -210,14 +212,14 @@ describe("synthetic_gc_util", function () {
         const EXPECTED_ROOT_SIZE = 1;
         const EXPECTED_COMMIT = oid2;
 
-        const roots = yield syntheticGcUtil.populateRoots(repo);
+        const roots = yield syntheticGcRunner.populateRoots(repo);
         assert(EXPECTED_ROOT_KEY in roots);
         assert(EXPECTED_ROOT_SIZE, roots[EXPECTED_ROOT_KEY].size);
         const actualCommit = roots[EXPECTED_ROOT_KEY].values().next().value;
         assert.equal(actualCommit.toString(), EXPECTED_COMMIT.toString());
     }));
 
-    // TESTING:  'synthetic_gc_util:populate_roots_relative_paths'
+    // TESTING:  'synthetic_gc_runner:populate_roots_relative_paths'
     //
     //  Same test as populate_roots, except it uses relative paths for
     //  submodules.
@@ -232,7 +234,8 @@ describe("synthetic_gc_util", function () {
     //     with one commit pointing to head of submodule. (C-1)
     //
     it("populate_roots_relative_paths", co.wrap(function *() {
-        const syntheticGcUtil = new SyntheticGcUtil();
+        const args = { force : false };
+        const syntheticGcRunner = new SyntheticGcRunner(args);
         const repo        = yield TestUtil.createSimpleRepository();
 
         const subRootRepo = yield TestUtil.createSimpleRepository();
@@ -255,14 +258,14 @@ describe("synthetic_gc_util", function () {
         const EXPECTED_ROOT_SIZE = 1;
         const EXPECTED_COMMIT = oid2;
 
-        const roots = yield syntheticGcUtil.populateRoots(repo);
+        const roots = yield syntheticGcRunner.populateRoots(repo);
         assert(EXPECTED_ROOT_KEY in roots);
         assert(EXPECTED_ROOT_SIZE, roots[EXPECTED_ROOT_KEY].size);
         const actualCommit = roots[EXPECTED_ROOT_KEY].values().next().value;
         assert.equal(actualCommit.toString(), EXPECTED_COMMIT.toString());
     }));
 
-    // TESTING:  'synthetic_gc_util:cleanUpOldRefs'
+    // TESTING:  'synthetic_gc_runner:cleanUpOldRefs'
     //
     // Concern:
     //  1) 'cleanUpOldRefs' should delete all synthetic references that are
@@ -280,8 +283,9 @@ describe("synthetic_gc_util", function () {
     //       all but the last synthetic ref is being deleted.
     //
     it("cleanUpOldRefs", co.wrap(function *() {
-        const syntheticGcUtil = new SyntheticGcUtil();
-        syntheticGcUtil.simulation = false;
+        const args = { force : false };
+        const syntheticGcRunner = new SyntheticGcRunner(args);
+        syntheticGcRunner.simulation = false;
         const repo        = yield TestUtil.createSimpleRepository();
         const subRootRepo = yield TestUtil.createSimpleRepository();
 
@@ -298,30 +302,32 @@ describe("synthetic_gc_util", function () {
 
         yield setupRepo(repo, subRootRepo, subRootRepo.workdir(), "foo");
 
-        const roots = yield syntheticGcUtil.populateRoots(repo);
+        const roots = yield syntheticGcRunner.populateRoots(repo);
 
         let originalSyntheticRefs
-            = yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
+            = yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
 
-        yield syntheticGcUtil.cleanUpOldRefs(repo, roots, isOlderThanToday);
+        yield syntheticGcRunner.cleanUpOldRefs(repo, roots, isOlderThanToday);
 
         let newSyntheticRefs =
-            yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
+            yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
         assert.equal(originalSyntheticRefs.toString(),
                      newSyntheticRefs.toString());
 
         // Now we go into the future, that should delete one of our 'old' non
         // reserved commits.
-        syntheticGcUtil.visited = {};
-        yield syntheticGcUtil.cleanUpOldRefs(repo, roots, isOlderThanTomorrow);
+        syntheticGcRunner.visited = {};
+        yield syntheticGcRunner.cleanUpOldRefs(repo, roots,
+                                               isOlderThanTomorrow);
 
-        newSyntheticRefs = yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
+        newSyntheticRefs =
+            yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
         let EXPECTED_SYNTHETIC_REFS = 1;
         assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
         assert(newSyntheticRefs.has(oid2.toString()));
     }));
 
-    // TESTING:  'synthetic_gc_util:cleanUpRedundant'
+    // TESTING:  'synthetic_gc_runner:cleanUpRedundant'
     //
     // Concern:
     //  1) 'cleanUpRedundant' should delete all synthetic references that are
@@ -334,8 +340,9 @@ describe("synthetic_gc_util", function () {
     //       refrence is around. (C-1)
     //
     it("cleanUpRedundant", co.wrap(function *() {
-        const syntheticGcUtil = new SyntheticGcUtil();
-        syntheticGcUtil.simulation = false;
+        const args = { force : false };
+        const syntheticGcRunner = new SyntheticGcRunner(args);
+        syntheticGcRunner.simulation = false;
         const repo        = yield TestUtil.createSimpleRepository();
         const subRootRepo = yield TestUtil.createSimpleRepository();
 
@@ -352,12 +359,12 @@ describe("synthetic_gc_util", function () {
 
         yield setupRepo(repo, subRootRepo, subRootRepo.workdir(), "foo");
 
-        const roots = yield syntheticGcUtil.populateRoots(repo);
+        const roots = yield syntheticGcRunner.populateRoots(repo);
 
-        yield syntheticGcUtil.cleanUpRedundant(repo, roots, isDeletable);
+        yield syntheticGcRunner.cleanUpRedundant(repo, roots, isDeletable);
 
         let newSyntheticRefs =
-            yield syntheticGcUtil.getSyntheticRefs(subRootRepo);
+            yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
         let EXPECTED_SYNTHETIC_REFS = 1;
         assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
         assert(newSyntheticRefs.has(oid2.toString()));
