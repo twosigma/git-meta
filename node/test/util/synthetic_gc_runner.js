@@ -147,9 +147,9 @@ describe("synthetic_gc_runner", function () {
             oid3, 1, "TEST3 commit");
 
         // First check that we can extract all synthetic refs.
-        let EXPECTED_SYNTHETIC_REFS = 3;
+        let expectedSyntheticRefSize = 3;
         let allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert.equal(allSyntheticRefs.size, expectedSyntheticRefSize);
         assert(allSyntheticRefs.has(oid1.toString()));
         assert(allSyntheticRefs.has(oid2.toString()));
         assert(allSyntheticRefs.has(oid3.toString()));
@@ -162,7 +162,7 @@ describe("synthetic_gc_runner", function () {
                                            allSyntheticRefs);
 
         allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert.equal(allSyntheticRefs.size, expectedSyntheticRefSize);
         assert(allSyntheticRefs.has(oid1.toString()));
         assert(allSyntheticRefs.has(oid2.toString()));
 
@@ -174,9 +174,9 @@ describe("synthetic_gc_runner", function () {
                                            isDeletable,
                                            allSyntheticRefs);
 
-        EXPECTED_SYNTHETIC_REFS = 1;
+        expectedSyntheticRefSize = 1;
         allSyntheticRefs = yield syntheticGcRunner.getSyntheticRefs(repo);
-        assert.equal(allSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        assert.equal(allSyntheticRefs.size, expectedSyntheticRefSize);
         assert(!allSyntheticRefs.has(oid1.toString()));
         assert(!allSyntheticRefs.has(oid2.toString()));
         assert(allSyntheticRefs.has(oid3.toString()));
@@ -322,8 +322,8 @@ describe("synthetic_gc_runner", function () {
 
         newSyntheticRefs =
             yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
-        let EXPECTED_SYNTHETIC_REFS = 1;
-        assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        let expectedSyntheticRefSize = 1;
+        assert.equal(newSyntheticRefs.size, expectedSyntheticRefSize);
         assert(newSyntheticRefs.has(oid2.toString()));
     }));
 
@@ -365,8 +365,8 @@ describe("synthetic_gc_runner", function () {
 
         let newSyntheticRefs =
             yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
-        let EXPECTED_SYNTHETIC_REFS = 1;
-        assert.equal(newSyntheticRefs.size, EXPECTED_SYNTHETIC_REFS);
+        let expectedSyntheticRefSize = 1;
+        assert.equal(newSyntheticRefs.size, expectedSyntheticRefSize);
         assert(newSyntheticRefs.has(oid2.toString()));
     }));
 });

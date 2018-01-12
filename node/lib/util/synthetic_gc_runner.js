@@ -111,7 +111,7 @@ class SyntheticGcRunner {
         // We only need to fetch submodule url once, so keeping track.
         this.d_fetchedUrl = {};
 
-        // due to absense of value inequality in set
+        // To keep track of visited submodule commits.
         this.d_subCommitStored = {};
         this.d_syntheticRefsBatchForRemoval = [];
     }
