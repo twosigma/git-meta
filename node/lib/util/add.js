@@ -34,6 +34,7 @@ const assert    = require("chai").assert;
 const co        = require("co");
 const NodeGit   = require("nodegit");
 
+const RepoStatus    = require("./repo_status");
 const StatusUtil    = require("./status_util");
 const SubmoduleUtil = require("./submodule_util");
 
@@ -49,10 +50,11 @@ const SubmoduleUtil = require("./submodule_util");
  * @param {NodeGit.Repository} repo
  * @param {String []}          paths
  */
-exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges) {
+exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isArray(paths);
     assert.isBoolean(stageMetaChanges);
+    assert.isBoolean(update);
 
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,
@@ -69,8 +71,16 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges) {
             const subRepo = yield SubmoduleUtil.getRepo(repo, name);
             const workdir = subStat.workdir.status.workdir;
             const index = yield subRepo.index();
-            yield Object.keys(workdir).map(
-                filename => index.addByPath(filename));
+            yield Object.keys(workdir).map(filename => {
+                // if -u flag is provided, update tracked files only.
+                if (update) {
+                    if (RepoStatus.FILESTATUS.ADDED !== workdir[filename]) {
+                       return index.addByPath(filename);
+                    }
+                } else {
+                    return index.addByPath(filename);
+                }
+            });
             yield index.write();
         }
     }));
