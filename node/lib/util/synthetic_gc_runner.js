@@ -83,11 +83,8 @@ const detail = {
 };
 
 /**
- * This class provides a way to list/delete synthetic refs, by following two
- * main algorithms.
- *  1) Removing refs that have persistent descendant.
- *  2) Removing refs that are older than specific threshold date and not part
- *     of the persistent descendant list.
+ * This class provides a way to list/delete redundant synthetic refs, i.e
+ * synthetic refs of the commits reachable by any of their children.
  *
  * @SEE_ALSO: lib/synthetic_gc
  */
@@ -379,66 +376,6 @@ SyntheticGcRunner.prototype.cleanUpRedundant = co.wrap(
 });
 
 /**
- * Delete all synthetic refs within specified `repo` that satisfy `isOldCommit`,
- * that not part of specified `roots`.
- *
- * @param {NodeGit.Repo}   repo
- * @param {Object[]}       roots
- * @param {Function}       isOldCommit
- */
-SyntheticGcRunner.prototype.cleanUpOldRefs = co.wrap(
-    function*(repo, roots, isOldCommit) {
-
-   assert.instanceOf(repo, NodeGit.Repository);
-
-   for (let subPath in roots) {
-
-       const subRepo = yield NodeGit.Repository.open(subPath);
-
-       const reservedCommits = roots[subPath];
-       const reservedSha = Array.from(reservedCommits).map(function(commit) {
-                            return commit.sha();
-                        });
-
-       let allRefs = yield this.getSyntheticRefs(subRepo);
-
-       for (let ref of allRefs) {
-           // filter out all the references from rootA
-           if (reservedSha.includes(ref)) {
-               continue;
-           }
-
-           const actualCommit = yield subRepo.getCommit(ref);
-           if (isOldCommit(actualCommit)) {
-               this.removeSyntheticRef(subRepo, actualCommit);
-           } // if
-       } // for
-       this.commitSyntheticRefRemoval(subRepo);
-   } // for
-}); // cleanUpOldRefs
-
-/**
-* Indicate whether 'ref' is a part of important ref set.
-*
-* @param {String} ref
-* @return {Boolean}
-*/
-let isImportantRef = function(ref) {
-
-    // `important root` - means the root that most likely be around, so that we
-    // can remove all parent synthetic refs.
-    const IMPORTANT_REFS = ["refs/heads/", "refs/tags/"];
-
-    for (let importantRef of IMPORTANT_REFS) {
-        if (ref.startsWith(importantRef)) {
-            return true;
-        }
-    }
-
-    return false;
-};
-
-/**
  * Go through every commit of meta repository and populate a map of submodule
  * to its commits.
  *
@@ -528,11 +465,7 @@ SyntheticGcRunner.prototype.populateRoots = co.wrap(
 
     const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
     for (let ref of refs) {
-
-        if (!isImportantRef(ref)) {
-            continue;
-        }
-
+        console.log("looking at ref: " + ref);
         const refHeadCommit = yield repo.getReferenceCommit(ref);
         classAroots = yield this.populatePerCommit(repo,
                                                    refHeadCommit,

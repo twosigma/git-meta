@@ -47,15 +47,11 @@
 *  Suppose that you have many submodules in your meta repo. Over time you
 *  have accumulated myriad of synthetic refs that now probably slow down your
 *  git operations within the repo. Most likely, most of those synthetic refs
-*  point to commits that you eiher don't care about anymore or commits that
-*  have descendants with synthetic refs pointing to them, making parent
-*  synthetic refs superfluous.
+*  point to commits that have descendants with synthetic refs pointing to
+*  them, making some old parent synthetic refs unnecessary.
 *
-*  You might decide that you don't care about any commits that were made on
-*  custom user branches longer than 1 year. At the same time you do care about
-*  any commits that made on some set of branches(i.e master, team branches).
-*
-*  Following demonstrates how to achieve these goals with 'synthetic_gc'.
+*  Following demonstrates how to clean up redundant synthetic refs with
+*  'synthetic_gc'.
 *
 *  First, go to the root of your meta repository (bare or workdir).
 *  and run following command:
@@ -63,7 +59,7 @@
 *   synthetic-gc
 * ..
 *  It will run synthetic garbage collection in simulation mode with the default
-*  cut-off date for synthetic refs on user branches.
+*  cut-off date for synthetic refs.
 *
 *  You should be presented with list of synthetic refs candidates for removal.
 *
@@ -71,10 +67,6 @@
 *..
 * Looking for removal of redundant synthetic refs. (parent refs
 *                  of persistent branches).
-* Removing ref: refs/commits/7f407c80953043b674b94f5137bfa24803fcead7
-* Looking for removal of old synthetic refs.
-* Removing ref: refs/commits/30008099305d1a1a7f7bff78d3990d87b9100570
-* Removing ref: refs/commits/92865532d16a5d0628ac50b5ac8d43a82344e622
 * Removing ref: refs/commits/7f407c80953043b674b94f5137bfa24803fcead7
 *..
 * Now, if you are satisfied with the candidates for removal, you can run
@@ -103,8 +95,8 @@ function parseOptions() {
     let parser = new ArgumentParser({
         version: "0.1",
         addHelp:true,
-        description: `Old synthetic refs removal. By default removes all
-           synthetic refs that are older than 6 moths.`
+        description: `Redundant synthetic refs removal. Removes old synthetic
+           refs that are reachable by any child.`
     });
 
     parser.addArgument(
@@ -172,7 +164,7 @@ function getThresholdDate(args) {
 
     let date = new Date();
 
-    if (args.date !== undefined) {
+    if (args.date !== null) {
         date = new Date(args.date);
     } else {
         const THRESHOLD_MONTHS = 6;
@@ -200,14 +192,8 @@ const runIt = co.wrap(function *(args) {
                      refs of persistent branches).`);
     }
 
-    yield syntheticGcRunner.cleanUpRedundant(repo, classAroots, function() {
-        return true; });
-
-    if (args.verbose) {
-        console.log("Looking for removal of old synthetic refs.");
-    }
     const isOldCommit = lessThanDate(getThresholdDate(args));
-    yield syntheticGcRunner.cleanUpOldRefs(repo, classAroots, isOldCommit);
+    yield syntheticGcRunner.cleanUpRedundant(repo, classAroots, isOldCommit);
 });
 
 const args = parseOptions();

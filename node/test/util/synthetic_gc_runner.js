@@ -265,24 +265,22 @@ describe("synthetic_gc_runner", function () {
         assert.equal(actualCommit.toString(), EXPECTED_COMMIT.toString());
     }));
 
-    // TESTING:  'synthetic_gc_runner:cleanUpOldRefs'
+    // TESTING:  'synthetic_gc_runner:cleanUpRedundant'
     //
     // Concern:
-    //  1) 'cleanUpOldRefs' should delete all synthetic references that are
-    //     older that specified date.
-    //  2) It should not delete synthetic references that are part of the root
-    //     references (i.e master) even if it is old.
+    //  1) 'cleanUpRedundant' should delete only redundant synthetic refs that
+    //     are older than the specified date.
     //
     // Plan:
     //  1) Create a submodule with two commits on the same persistent ref.
     //
-    //     - Run 'cleanUpOldRefs' with today date as threshold. Observe that
-    //       no synthetic ref is being deleted.
+    //     - Run 'cleanUpRedundant' with today date as threshold. Observe
+    //       that no synthetic ref is being deleted.
     //
-    //     - Run 'cleanUpOldRefs' with tomorrow date as threshold. Observe that
-    //       all but the last synthetic ref is being deleted.
+    //     - Run 'cleanUpRedundant' with tomorrow date as threshold.
+    //       Observe that all but the last synthetic ref is being deleted.
     //
-    it("cleanUpOldRefs", co.wrap(function *() {
+    it("cleanUpRedundant_threshold_date", co.wrap(function *() {
         const args = { force : false };
         const syntheticGcRunner = new SyntheticGcRunner(args);
         syntheticGcRunner.simulation = false;
@@ -307,7 +305,8 @@ describe("synthetic_gc_runner", function () {
         let originalSyntheticRefs
             = yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
 
-        yield syntheticGcRunner.cleanUpOldRefs(repo, roots, isOlderThanToday);
+        yield syntheticGcRunner.cleanUpRedundant(repo, roots,
+                                                 isOlderThanToday);
 
         let newSyntheticRefs =
             yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
@@ -317,8 +316,8 @@ describe("synthetic_gc_runner", function () {
         // Now we go into the future, that should delete one of our 'old' non
         // reserved commits.
         syntheticGcRunner.visited = {};
-        yield syntheticGcRunner.cleanUpOldRefs(repo, roots,
-                                               isOlderThanTomorrow);
+        yield syntheticGcRunner.cleanUpRedundant(repo, roots,
+                                                 isOlderThanTomorrow);
 
         newSyntheticRefs =
             yield syntheticGcRunner.getSyntheticRefs(subRootRepo);
