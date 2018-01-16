@@ -8,7 +8,8 @@
   },
   "directories": {},
   "bin": {
-    "git-meta": "./lib/git-meta.js"
+    "git-meta": "./lib/git-meta.js",
+    "synthetic-gc": "./lib/synthetic_gc.js"
   },
   "repository": {
     "type": "git",

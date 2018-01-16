@@ -361,3 +361,4 @@ exports.checkUpdate = co.wrap(checkUpdate);
 exports.submoduleIsBad = co.wrap(submoduleIsBad);
 exports.metaUpdateIsBad = co.wrap(metaUpdateIsBad);
 exports.initAltOdb = co.wrap(initAltOdb);
+exports.urlToLocalPath = co.wrap(urlToLocalPath);

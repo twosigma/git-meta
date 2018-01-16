@@ -911,3 +911,71 @@ exports.configIsTrue = co.wrap(function*(repo, configVar) {
     return (configured === "true" || configured === "yes" ||
             configured === "on");
 });
+
+/**
+ * Fetch and return a list of remote refs in the origin for the specified
+ * 'repo'.
+ * Throw a `UserError` object if the repository cannot be fetched.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ */
+exports.getRemoteRefs = co.wrap(function *(repo) {
+	assert.instanceOf(repo, NodeGit.Repository);
+
+    const execString = `git -C '${repo.path()}' ls-remote --refs`;
+
+    try {
+        const result = yield ChildProcess.exec(execString);
+        return result.stdout.split("\n");
+    }
+    catch (e) {
+        throw new UserError(e.message);
+    }
+});
+
+/**
+ * Delete the specified `refs` on the specified remote `repo`.
+ * Throw a `UserError` object if cannot push to remote repository.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {Array<String>}      refs
+ */
+exports.removeRemoteRef = co.wrap(function *(repo, refs) {
+
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    if (refs.length === 0) {
+        return;
+    }
+
+    const execString = `git -C '${repo.path()}' push origin :` +
+                        refs.join(" :");
+    try {
+        return yield ChildProcess.exec(execString);
+    }
+    catch (e) {
+        throw new UserError(e.message);
+    }
+});
+
+/**
+ * Clone a repo from a specified 'url' to a specified 'path'.
+ * Throw a `UserError` object if cannot push to remote repository.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             remoteName
+ */
+exports.cloneBareRepo = co.wrap(function*(url, path) {
+    const execString = `git clone --bare '${url}' '${path}'`;
+
+    try {
+        const result = yield ChildProcess.exec(execString);
+        return result;
+    } catch(e) {
+        throw new UserError(e.message);
+    }
+});
+
