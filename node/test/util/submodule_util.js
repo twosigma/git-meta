@@ -106,7 +106,7 @@ describe("SubmoduleUtil", function () {
         });
     });
 
-    describe("getSubmoduleNamesForBranch", function () {
+    describe("getSubmoduleNamesForCommittish", function () {
         // This method is implemented in terms of `getSubmoduleNamesForCommit`;
         // we just need to do basic verification.
 
@@ -194,7 +194,7 @@ describe("SubmoduleUtil", function () {
         });
     });
 
-    describe("getSubmoduleShasForBranch", function () {
+    describe("getSubmoduleShasForCommitish", function () {
         // The implementation of this method is delegated to
         // `getSubmoduleShasForCommit`; just exercise basic functionality.
 
@@ -203,7 +203,7 @@ describe("SubmoduleUtil", function () {
                         yield RepoASTTestUtil.createRepo("S:C2-1 x=Sa:1;Bm=2");
             const repo = written.repo;
             const result =
-                    yield SubmoduleUtil.getSubmoduleShasForBranch(repo, "m");
+                  yield SubmoduleUtil.getSubmoduleShasForCommitish(repo, "m");
             assert.equal(written.commitMap[result.x], "1");
         }));
     });
