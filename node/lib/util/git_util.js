@@ -911,3 +911,28 @@ exports.configIsTrue = co.wrap(function*(repo, configVar) {
     return (configured === "true" || configured === "yes" ||
             configured === "on");
 });
+
+/**
+ * Returns the URL for the specified remote.  If the remote is already
+ * a URL, it is returned unmodified.
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String} remoteName
+ * @return String
+ * @throws if there's no such named remote
+*/
+exports.getUrlFromRemoteName = co.wrap(function *(repo, remoteName) {
+    if (remoteName.startsWith("http:") || remoteName.startsWith("https:") ||
+        remoteName.includes("@")) {
+        return remoteName;
+    } else {
+        let remote;
+        try {
+            remote = yield repo.getRemote(remoteName);
+        }
+        catch (e) {
+            throw new UserError(`No remote named ${colors.red(remoteName)}.`);
+        }
+        return yield exports.getRemoteUrl(repo, remote);
+    }
+});
