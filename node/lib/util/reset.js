@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const DoWorkQueue         = require("../util/do_work_queue");
 const GitUtil          = require("./git_util");
 const Open             = require("./open");
 const StatusUtil       = require("./status_util");
@@ -114,7 +115,7 @@ exports.reset = co.wrap(function *(repo, commit, type) {
                                                                pathsToReset,
                                                                commit);
     const index = yield repo.index();
-    yield pathsToReset.map(co.wrap(function *(name) {
+    const resetSubmodule = co.wrap(function *(name) {
         const change = changedSubs[name];
         if (undefined !== change &&
             (null === change.oldSha || null === change.newSha)) {
@@ -145,8 +146,8 @@ exports.reset = co.wrap(function *(repo, commit, type) {
         // for the submodule.
 
         yield index.addByPath(name);
-    }));
-
+    });
+    yield DoWorkQueue.doInParallel(pathsToReset, resetSubmodule, 30);
     // Write the index in case we've had to stage submodule changes.
 
     yield index.write();
