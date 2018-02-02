@@ -93,7 +93,8 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     // First, push the submodules.
 
     let errorMessage = "";
-    const shas = yield SubmoduleUtil.getSubmoduleShasForBranch(repo, source);
+    const shas = yield SubmoduleUtil.getSubmoduleShasForCommitish(repo,
+                                                                   source);
     const annotatedCommit = yield GitUtil.resolveCommitish(repo, source);
     const commit = yield repo.getCommit(annotatedCommit.id());
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,

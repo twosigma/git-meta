@@ -152,18 +152,19 @@ exports.getSubmoduleShasForCommit =
 
 /**
  * Return a map from submodule name to string representing the expected sha1
- * for its repository in the specified `repo` on the branch having the
- * specified `branchName`.
+ * for its repository in the specified `repo` on the specified `commitish`.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {String}             branchName
  * @return {Object}
  */
-exports.getSubmoduleShasForBranch = co.wrap(function *(repo, branchName) {
+exports.getSubmoduleShasForCommitish = co.wrap(function *(repo, commitish) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(branchName);
-    const commit = yield repo.getBranchCommit(branchName);
+    assert.isString(commitish);
+    const annotated = yield NodeGit.AnnotatedCommit.fromRevspec(repo,
+                                                                commitish);
+    const commit = yield NodeGit.Commit.lookup(repo, annotated.id());
     const submoduleNames =
                     yield exports.getSubmoduleNamesForCommit(repo, commit);
 
