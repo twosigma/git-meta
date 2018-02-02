@@ -38,6 +38,7 @@ const path    = require("path");
 const rimraf  = require("rimraf");
 
 const DeinitUtil          = require("./deinit_util");
+const DoWorkQueue         = require("../util/do_work_queue");
 const Open                = require("./open");
 const GitUtil             = require("./git_util");
 const RepoStatus          = require("./repo_status");
@@ -461,7 +462,7 @@ const driveRebase = co.wrap(function *(metaRepo,
         const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(metaRepo,
                                                                    openSubs,
                                                                    ontoCommit);
-        yield openSubs.map(co.wrap(function *(name) {
+        const fetchOpened = co.wrap(function *(name) {
             const subRepo = yield opener.getSubrepo(name);
             const head = yield subRepo.head();
             const sha = shas[name];
@@ -469,7 +470,8 @@ const driveRebase = co.wrap(function *(metaRepo,
                 yield fetcher.fetchSha(subRepo, name, sha);
                 yield setHead(subRepo, sha);
             }
-        }));
+        });
+        yield DoWorkQueue.doInParallel(openSubs, fetchOpened, 30);
     }
 
     yield callFinish(metaRepo, rebase);
