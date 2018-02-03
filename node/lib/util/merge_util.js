@@ -420,7 +420,7 @@ ${colors.green(subSha)}.`);
     });
 
     const entries = index.entries();
-    yield DoWorkQueue.doInParallel(entries, mergeEntry, 30);
+    yield DoWorkQueue.doInParallel(entries, mergeEntry);
 
     if (hasModulesFile) {
         const good = yield SubmoduleUtil.mergeModulesFile(repo, head, commit);
@@ -472,7 +472,7 @@ ${colors.green(subSha)}.`);
         }
     });
     const opened = Array.from(yield opener.getOpenedSubs());
-    DoWorkQueue.doInParallel(opened, closeSub, 30);
+    DoWorkQueue.doInParallel(opened, closeSub);
     return result;
 });
 
@@ -574,7 +574,7 @@ exports.continue = co.wrap(function *(repo) {
         yield index.conflictRemove(subPath);
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
-    yield DoWorkQueue.doInParallel(openSubs, continueSub, 30);
+    yield DoWorkQueue.doInParallel(openSubs, continueSub);
 
     yield index.write();
 
@@ -646,7 +646,7 @@ exports.abort = co.wrap(function *(repo) {
         yield MergeFileUtil.cleanMerge(subRepo.path());
         yield index.addByPath(subName);
     });
-    yield DoWorkQueue.doInParallel(openSubs, abortSub, 30);
+    yield DoWorkQueue.doInParallel(openSubs, abortSub);
     yield index.conflictCleanup();
     yield index.write();
     yield resetMerge(repo);

@@ -43,6 +43,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
+const DoWorkQueue         = require("../util/do_work_queue");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
@@ -888,7 +889,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     const subsToInspect = Array.from(new Set(
                         Object.keys(submodules).concat(Object.keys(changes))));
 
-    yield subsToInspect.map(co.wrap(function *(name) {
+    const inspectSub = co.wrap(function *(name) {
         const change = changes[name];
         let currentSub = submodules[name];
         let old = null;
@@ -956,8 +957,8 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
         if (null !== result.oldCommit) {
             subsToAmend[name] = result.oldCommit;
         }
-    }));
-
+    });
+    yield DoWorkQueue.doInParallel(subsToInspect, inspectSub);
     // Look for subs that were removed in the commit we are amending; reflect
     // their status.
 
