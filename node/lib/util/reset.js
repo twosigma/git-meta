@@ -147,7 +147,7 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
         yield index.addByPath(name);
     });
-    yield DoWorkQueue.doInParallel(pathsToReset, resetSubmodule, 30);
+    yield DoWorkQueue.doInParallel(pathsToReset, resetSubmodule);
     // Write the index in case we've had to stage submodule changes.
 
     yield index.write();

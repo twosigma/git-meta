@@ -471,7 +471,7 @@ const driveRebase = co.wrap(function *(metaRepo,
                 yield setHead(subRepo, sha);
             }
         });
-        yield DoWorkQueue.doInParallel(openSubs, fetchOpened, 30);
+        yield DoWorkQueue.doInParallel(openSubs, fetchOpened);
     }
 
     yield callFinish(metaRepo, rebase);

@@ -136,7 +136,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         }
         console.log(`Finished opening ${colors.blue(name)}.`);
     });
-    yield DoWorkQueue.doInParallel(subsToOpen, opener, 30);
+    yield DoWorkQueue.doInParallel(subsToOpen, opener);
 
     if (failed) {
         process.exit(1);
