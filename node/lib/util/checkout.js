@@ -38,6 +38,7 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
+const DoWorkQueue         = require("../util/do_work_queue");
 const GitUtil          = require("./git_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
 const RepoStatus       = require("./repo_status");
@@ -101,13 +102,14 @@ const loadSubmodulesToCheckout = co.wrap(function *(repo, commit) {
 
     const result = {};
     const subFetcher = new SubmoduleFetcher(repo, commit);
-    yield open.map(co.wrap(function *(name) {
+    const doSub = co.wrap(function *(name) {
         const subRepo = yield SubmoduleUtil.getRepo(repo, name);
         const sha = shas[name];
         yield subFetcher.fetchSha(subRepo, name, sha);
         const commit = yield subRepo.getCommit(sha);
         result[name] = { repo: subRepo, commit: commit };
-    }));
+    });
+    yield DoWorkQueue.doInParallel(open, doSub);
     return result;
 });
 
