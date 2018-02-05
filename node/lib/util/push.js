@@ -81,14 +81,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     assert.isString(target);
     assert.isBoolean(force);
 
-    let remote;
-    try {
-        remote = yield repo.getRemote(remoteName);
-    }
-    catch (e) {
-        throw new UserError(`No remote named ${colors.red(remoteName)}.`);
-    }
-    const remoteUrl = yield GitUtil.getRemoteUrl(repo, remote);
+    let remoteUrl = yield GitUtil.getUrlFromRemoteName(repo, remoteName);
 
     // First, push the submodules.
 

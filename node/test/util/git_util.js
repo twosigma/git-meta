@@ -199,6 +199,18 @@ describe("GitUtil", function () {
         });
     });
 
+    describe("getUrlFromRemoteName", function () {
+        it("works", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const func = GitUtil.getUrlFromRemoteName;
+            yield NodeGit.Remote.create(repo, "upstream",
+                                        "https://example.com");
+            assert.equal("https://example.com", yield func(repo, "upstream"));
+            assert.equal("https://example.org",
+                         yield func(repo, "https://example.org"));
+        }));
+    });
+
     describe("getOriginUrl", function () {
         it("url from branch remote", co.wrap(function *() {
             // TODO: don't have it in my shorthand to associate a branch with
