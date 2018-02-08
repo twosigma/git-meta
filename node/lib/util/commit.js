@@ -1107,7 +1107,10 @@ exports.amendMetaRepo = co.wrap(function *(repo,
 
             }
             const subIndex = yield subRepo.index();
-            yield stageFiles(subRepo, staged, subIndex);
+            if (all) {
+                yield subIndex.addAll(["*"], -1);
+                yield subIndex.write();
+            }
             subCommits[subName] = yield exports.amendRepo(subRepo, subMessage);
             return;                                                   // RETURN
         }

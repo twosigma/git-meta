@@ -1489,6 +1489,14 @@ a=B:Ca-1;Bx=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os;I foo=moo`,
                 expected: `
 x=U:Chi\n#x-2 foo=moo,s=Sa:s;Bmaster=x;Os Cmeh\n#s-1 a=a!H=s`,
             },
+            "one reverted, one not": {
+                input: `
+a=B:Cb-1 a=1,b=2;Cc-b a=2;Bc=c|
+x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=4;Os W a=1,b=1`,
+                all: true,
+                expected: `
+x=U:C3-2 s=Sa:b;Cx-3 s=Sa:s;Bmaster=x;Os Cs-b b=1`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
