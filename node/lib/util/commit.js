@@ -1987,7 +1987,8 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * commit messages for each changed submodules.  Use the specified
  * `editMessage` function to invoke an editor when needed.  If
  * `null === editMessage`, use the message of the previous commit.  The
- * behavior is undefined if `null !== message && true === interactive`.
+ * behavior is undefined if `null !== message && true === interactive`.  Do not
+ * generate a commit if it would be empty.
  *
  * @param {NodeGit.Repository}                    repo
  * @param {String}                                cwd
@@ -1996,7 +1997,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * @param {Boolean}                               interactive
  * @param {(repo, txt) -> Promise(String) | null} editMessage
  * @return {Object}
- * @return {String} return.metaCommit
+ * @return {String|null} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
  */
 exports.doAmendCommand = co.wrap(function *(repo,
@@ -2084,6 +2085,18 @@ You can make this commit using the interactive ('-i') commit option.`;
         abortForNoMessage();
     }
 
+    if (!exports.shouldCommit(status,
+                              null === message,
+                              subMessages || undefined)) {
+        process.stdout.write(PrintStatusUtil.printRepoStatus(status, relCwd));
+        process.stdout.write(`
+You asked to amend the most recent commit, but doing so would make
+it empty. You can remove the commit entirely with "git meta reset HEAD^".`);
+        return {
+            metaCommit: null,
+            submoduleCommits: {}
+        };
+    }
     // Finally, perform the operation.
 
     return yield exports.amendMetaRepo(repo,
