@@ -141,6 +141,11 @@ a=B|x=S:C2-1 a/b=Sa:1;Oa/b W x/y/z=a,x/r/z=b;Bmaster=2`,
                 expected: "x=E:Os I README.md=foo,newFile=a",
                 update: false,
             },
+            "deleted": {
+                initial: "a=B|x=U:Os W README.md",
+                expected: "x=U:Os I README.md",
+                paths: [""],
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

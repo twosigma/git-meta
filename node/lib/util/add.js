@@ -73,7 +73,9 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
             const index = yield subRepo.index();
             yield Object.keys(workdir).map(filename => {
                 // if -u flag is provided, update tracked files only.
-                if (update) {
+                if (RepoStatus.FILESTATUS.REMOVED === workdir[filename]) {
+                    return index.removeByPath(filename);
+                } else if (update) {
                     if (RepoStatus.FILESTATUS.ADDED !== workdir[filename]) {
                        return index.addByPath(filename);
                     }
