@@ -3059,25 +3059,32 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
 
             },
             "simple amend": {
-                initial: "x=S:C2-1 README.md=foo;Bmaster=2",
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os`,
                 message: "foo",
-                expected: "x=S:Cfoo\n#x-1 README.md=foo;Bmaster=x",
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=foo`
+            },
+            "would be empty": {
+                initial: "x=S:C2-1 foo=bar;C3-2 foo=foo;Bmaster=3;W foo=bar",
+                message: "foo",
             },
             "amend with change": {
-                initial: "x=S:C2-1 README.md=foo;Bmaster=2;I a=b",
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os I a=b`,
                 message: "foo",
-                expected: "x=S:Cfoo\n#x-1 README.md=foo,a=b;Bmaster=x",
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=foo,a=b`
             },
             "amend with no all": {
-                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=8`,
                 message: "foo",
-                expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
-            },
-            "amend with all but no meta": {
-                initial: "x=S:C2-1;Bmaster=2;W README.md=8",
-                message: "foo",
-                all: true,
-                expected: "x=S:Cfoo\n#x-1 2=2;Bmaster=x;W README.md=8",
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=foo!W README.md=8`
             },
             "mismatch": {
                 initial: `
@@ -3100,9 +3107,12 @@ there
 x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
             },
             "simple amend with editor": {
-                initial: "x=S:C2-1 README.md=foo;Bmaster=2",
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os`,
                 editor: () => Promise.resolve("heya"),
-                expected: "x=S:Cheya\n#x-1 README.md=foo;Bmaster=x",
+                expected: `
+x=U:Cheya\n#x-2 s=Sa:s;Bmaster=x;Os Cheya\n#s-1 README.md=foo`
             },
             "simple amend with editor, no message": {
                 initial: "x=S:C2-1 README.md=foo;Bmaster=2",
@@ -3110,8 +3120,11 @@ x=U:Chola\n#x-2 s=Sa:s;Bmaster=x;Os Cthere\n#s-1 a=a!H=s`,
                 fails: true,
             },
             "reuse old message": {
-                initial: "x=S:Cbar\n#2-1 README.md=foo;I a=b;Bmaster=2",
-                expected: "x=S:Cbar\n#x-1 README.md=foo, a=b;Bmaster=x",
+                initial: `
+a=B:Cbar\n#a-1 README.md=foo;Bmaster=a|
+x=U:Cbar\n#3-2 s=Sa:a;Bmaster=3;Os I a=b`,
+                expected: `
+x=U:Cbar\n#x-2 s=Sa:s;Bmaster=x;Os Cbar\n#s-1 README.md=foo, a=b`,
                 editor: null,
             },
         };
