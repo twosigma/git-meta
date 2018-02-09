@@ -2050,14 +2050,16 @@ exports.doAmendCommand = co.wrap(function *(repo,
         });
         if (0 !== mismatched.length) {
             let error = `\
-Cannot amend because the signatures of the affected commits in the
-following sub-repos do not match that of the meta-repo:
+The last meta-repo commit (message or author)
+does not match that of the last commit in the following sub-repos:
 `;
             mismatched.forEach(name => {
                 error += `    ${colors.red(name)}\n`;
             });
             error += `\
-You can make this commit using the interactive ('-i') commit option.`;
+To prevent errors, you must make this commit using the interactive ('-i')
+option, which will allow you to see and edit the commit messages for each
+repository independently.`;
             throw new UserError(error);
         }
 
