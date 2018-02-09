@@ -52,55 +52,88 @@ describe("PrintStatusUtil", function () {
             it("breathing", function () {
                 const descriptor = new StatusDescriptor(FILESTATUS.ADDED,
                                                         "foo",
-                                                        "bar");
+                                                        "bar",
+                                                        true);
                 assert.equal(descriptor.status, FILESTATUS.ADDED);
                 assert.equal(descriptor.path, "foo");
                 assert.equal(descriptor.detail, "bar");
+                assert.equal(descriptor.showRelative, true);
             });
         });
         describe("print", function () {
             const cases = {
                 "basic": {
-                    des: new StatusDescriptor(FILESTATUS.ADDED, "foo", "bar"),
+                    des: new StatusDescriptor(FILESTATUS.ADDED,
+                                              "foo",
+                                              "bar",
+                                              true),
                     check: /foo.*bar/,
                 },
                 "added": {
-                    des: new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.ADDED,
+                                              "x",
+                                              "y",
+                                              true),
                     check: /^new file/,
                 },
                 "modified": {
-                    des: new StatusDescriptor(FILESTATUS.MODIFIED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.MODIFIED,
+                                              "x",
+                                              "y",
+                                              true),
                     check: /^modified/,
                 },
                 "deleted": {
-                    des: new StatusDescriptor(FILESTATUS.REMOVED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.REMOVED,
+                                              "x",
+                                              "y",
+                                              true),
                     check: /^deleted/,
                 },
                 "conflicted": {
-                    des: new StatusDescriptor(FILESTATUS.CONFLICTED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.CONFLICTED,
+                                              "x",
+                                              "y",
+                                              true),
                     check: /^conflicted/,
                 },
                 "renamed": {
-                    des: new StatusDescriptor(FILESTATUS.RENAMED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.RENAMED,
+                                              "x",
+                                              "y",
+                                              true),
                     check: /^renamed/,
                 },
                 "type changed": {
                     des: new StatusDescriptor(FILESTATUS.TYPECHANGED,
                                               "x",
-                                              "y"),
+                                              "y",
+                                              true),
                     check: /^type changed/,
                 },
                 "with color": {
                     des: new StatusDescriptor(FILESTATUS.TYPECHANGED,
                                               "x",
-                                              "y"),
+                                              "y",
+                                              true),
                     color: text => `RED${text}RED`,
                     check: /RED.*RED/,
                 },
                 "with cwd": {
-                    des: new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    des: new StatusDescriptor(FILESTATUS.ADDED,
+                                              "x",
+                                              "y",
+                                              true),
                     cwd: "q",
                     check: /\.\.\/x/,
+                },
+                "without cwd": {
+                    des: new StatusDescriptor(FILESTATUS.ADDED,
+                                              "x",
+                                              "y",
+                                              false),
+                    cwd: "q",
+                    check: / x/,
                 },
             };
             Object.keys(cases).forEach(caseName => {
@@ -128,25 +161,31 @@ describe("PrintStatusUtil", function () {
                 expected: [],
             },
             "one": {
-                input: [new StatusDescriptor(FILESTATUS.ADDED, "x", "y")],
-                expected: [new StatusDescriptor(FILESTATUS.ADDED, "x", "y")],
+                input: [new StatusDescriptor(FILESTATUS.ADDED,
+                                             "x",
+                                             "y",
+                                             false)],
+                expected: [new StatusDescriptor(FILESTATUS.ADDED,
+                                                "x",
+                                                "y",
+                                                false)],
             },
             "a few": {
                 input: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s", true),
                 ],
                 expected: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "a", "a", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "b", "b", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "q", "q", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "s", "s", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "y", "y", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "z", "z", true),
                 ],
             },
         };
@@ -171,27 +210,27 @@ describe("PrintStatusUtil", function () {
             },
             "one": {
                 descriptors: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y", true),
                 ],
                 check: /new.*x.*y.*\n$/,
             },
             "color": {
                 descriptors: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "x", "y", true),
                 ],
                 color: x => `BLUE${x}BLUE`,
                 check: /BLUE/,
             },
             "order": {
                 descriptors: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "Z", "y"),
-                    new StatusDescriptor(FILESTATUS.ADDED, "X", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "Z", "y", true),
+                    new StatusDescriptor(FILESTATUS.ADDED, "X", "y", true),
                 ],
                 check: /X.*\n.*Z/,
             },
             "cwd": {
                 descriptors: [
-                    new StatusDescriptor(FILESTATUS.ADDED, "Z/q", "y"),
+                    new StatusDescriptor(FILESTATUS.ADDED, "Z/q", "y", true),
                 ],
                 cwd: "Z",
                 check: /\sq/,
@@ -291,7 +330,10 @@ describe("PrintStatusUtil", function () {
                     },
                 }),
                 staged: [
-                    new StatusDescriptor(FILESTATUS.REMOVED, "x", "submodule"),
+                    new StatusDescriptor(FILESTATUS.REMOVED,
+                                         "x",
+                                         "submodule",
+                                         false),
                 ],
             },
             "new url": {
@@ -306,7 +348,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new url"),
+                                         "submodule, new url",
+                                         false),
                 ],
             },
             "new commits in index and new url": {
@@ -321,7 +364,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new url, new commits"),
+                                         "submodule, new url, new commits",
+                                         false),
                 ],
             },
             "new commits in index": {
@@ -336,7 +380,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new commits"),
+                                         "submodule, new commits",
+                                         false),
                 ],
             },
             "new commits in workdir": {
@@ -354,7 +399,8 @@ describe("PrintStatusUtil", function () {
                 workdir: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new commits"),
+                                         "submodule, new commits",
+                                         false),
                 ],
             },
             "new commits in index and workdir": {
@@ -372,12 +418,14 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, new commits"),
+                                         "submodule, new commits",
+                                         false),
                 ],
                 workdir: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, on old commit"),
+                                         "submodule, on old commit",
+                                         false),
                 ],
             },
             "behind in index": {
@@ -392,7 +440,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, on old commit"),
+                                         "submodule, on old commit",
+                                         false),
                 ],
             },
             "unrelated in index": {
@@ -407,7 +456,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, on unrelated commit"),
+                                         "submodule, on unrelated commit",
+                                         false),
                 ],
             },
             "unknown in index": {
@@ -422,7 +472,8 @@ describe("PrintStatusUtil", function () {
                 staged: [
                     new StatusDescriptor(FILESTATUS.MODIFIED,
                                          "x",
-                                         "submodule, on unknown commit"),
+                                         "submodule, on unknown commit",
+                                         false),
                 ],
             },
             "new sub, no commit": {
@@ -437,7 +488,8 @@ describe("PrintStatusUtil", function () {
                     new StatusDescriptor(
                                   FILESTATUS.ADDED,
                                   "x",
-                                  "submodule, create commit or stage changes"),
+                                  "submodule, create commit or stage changes",
+                                  false),
                 ],
             },
             "new sub, no commit, open": {
@@ -453,7 +505,8 @@ describe("PrintStatusUtil", function () {
                     new StatusDescriptor(
                                   FILESTATUS.ADDED,
                                   "x",
-                                  "submodule, create commit or stage changes"),
+                                  "submodule, create commit or stage changes",
+                                  false),
                 ],
             },
             "new sub, no commit but staged": {
@@ -471,7 +524,8 @@ describe("PrintStatusUtil", function () {
                     new StatusDescriptor(
                                   FILESTATUS.ADDED,
                                   "x",
-                                  "submodule, newly created"),
+                                  "submodule, newly created",
+                                  false),
                 ],
             },
             "headless": {
@@ -490,7 +544,8 @@ describe("PrintStatusUtil", function () {
                     new StatusDescriptor(
                          FILESTATUS.MODIFIED,
                          "x",
-                         "submodule is headless -- try closing and reopening"),
+                         "submodule is headless -- try closing and reopening",
+                         false),
 
                 ],
             },
@@ -528,7 +583,7 @@ describe("PrintStatusUtil", function () {
                     staged: { x: FILESTATUS.REMOVED },
                 }),
                 expected: {
-                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "") ],
+                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "", true) ],
                     workdir: [],
                     untracked: [],
                 },
@@ -539,7 +594,7 @@ describe("PrintStatusUtil", function () {
                 }),
                 expected: {
                     staged: [],
-                    workdir: [new Desc(FILESTATUS.MODIFIED, "x", "")],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "x", "", true)],
                     untracked: [],
                 },
             },
@@ -562,8 +617,8 @@ describe("PrintStatusUtil", function () {
                     },
                 }),
                 expected: {
-                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "") ],
-                    workdir: [new Desc(FILESTATUS.MODIFIED, "y", "")],
+                    staged: [ new Desc(FILESTATUS.REMOVED, "x", "", true) ],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "y", "", true)],
                     untracked: ["z"],
                 },
             },
@@ -580,7 +635,8 @@ describe("PrintStatusUtil", function () {
                     staged: [
                         new Desc(FILESTATUS.MODIFIED,
                                  "s",
-                                 "submodule, new url"),
+                                 "submodule, new url",
+                                 false),
                     ],
                     workdir: [],
                     untracked: [],
@@ -604,8 +660,8 @@ describe("PrintStatusUtil", function () {
                     },
                 }),
                 expected: {
-                    staged: [ new Desc(FILESTATUS.REMOVED, "s/x", "") ],
-                    workdir: [new Desc(FILESTATUS.MODIFIED, "s/y", "")],
+                    staged: [ new Desc(FILESTATUS.REMOVED, "s/x", "", true) ],
+                    workdir: [new Desc(FILESTATUS.MODIFIED, "s/y", "", true)],
                     untracked: ["s/z"],
                 },
             },
