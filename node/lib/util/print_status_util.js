@@ -54,11 +54,14 @@ class StatusDescriptor {
      * @param {RepoStatus.FILESTATUS} status
      * @param {String}                path
      * @param {String}                detail
+     * @param {Bool}                  showRelative
      */
-    constructor(status, path, detail) {
+    constructor(status, path, detail, showRelative) {
+        assert.isBoolean(showRelative);
         this.status = status;
         this.path = path;
         this.detail = detail;
+        this.showRelative = showRelative;
     }
 
     /**
@@ -92,7 +95,11 @@ class StatusDescriptor {
                 result += "type changed: ";
                 break;
         }
-        result += path.relative(cwd, this.path);
+        let filename = this.path;
+        if (this.showRelative) {
+            filename = path.relative(cwd, this.path);
+        }
+        result += filename;
         result = color(result);
         if ("" !== this.detail) {
             result += ` (${this.detail})`;
@@ -207,7 +214,8 @@ exports.listSubmoduleDescriptors = function (status) {
             workdir.push(new StatusDescriptor(
                                  FILESTATUS.ADDED,
                                  subName,
-                                 "submodule, create commit or stage changes"));
+                                 "submodule, create commit or stage changes",
+                                 false));
             return;                                                   // RETURN
         }
 
@@ -219,7 +227,8 @@ exports.listSubmoduleDescriptors = function (status) {
         if (null === index) {
             staged.push(new StatusDescriptor(FILESTATUS.REMOVED,
                                              subName,
-                                             "submodule"));
+                                             "submodule",
+                                             false));
             return;                                                   // RETURN
         }
 
@@ -251,7 +260,8 @@ exports.listSubmoduleDescriptors = function (status) {
         if ("" !== stagedDetail) {
             staged.push(new StatusDescriptor(stagedStatus,
                                              subName,
-                                             "submodule" + stagedDetail));
+                                             "submodule" + stagedDetail,
+                                             false));
         }
 
         // Register unstaged commits on an open submodule.
@@ -262,7 +272,8 @@ exports.listSubmoduleDescriptors = function (status) {
             const desc = "submodule is headless -- try closing and reopening";
             workdir.push(new StatusDescriptor(FILESTATUS.MODIFIED,
                                               subName,
-                                              desc));
+                                              desc,
+                                              false));
         }
         else if (null !== sub.workdir &&
             null !== sub.workdir.relation &&
@@ -271,7 +282,8 @@ exports.listSubmoduleDescriptors = function (status) {
                 exports.getRelationDescription(sub.workdir.relation);
             workdir.push(new StatusDescriptor(FILESTATUS.MODIFIED,
                                               subName,
-                                              desc));
+                                              desc,
+                                              false));
         }
     });
     return {
@@ -301,7 +313,8 @@ exports.accumulateStatus = function (status) {
         Object.keys(stagedFiles).forEach(filename => {
             staged.push(new StatusDescriptor(stagedFiles[filename],
                                              path.join(prefixPath, filename),
-                                             ""));
+                                             "",
+                                             true));
         });
     }
 
@@ -313,7 +326,7 @@ exports.accumulateStatus = function (status) {
                 untracked.push(fullPath);
             }
             else {
-                workdir.push(new StatusDescriptor(status, fullPath, ""));
+                workdir.push(new StatusDescriptor(status, fullPath, "", true));
             }
         });
     }
