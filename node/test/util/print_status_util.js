@@ -102,6 +102,11 @@ describe("PrintStatusUtil", function () {
                     cwd: "q",
                     check: /\.\.\/x/,
                 },
+                "same as cwd": {
+                    des: new StatusDescriptor(FILESTATUS.ADDED, "x", "y"),
+                    cwd: "x",
+                    check: / \. /,
+                },
             };
             Object.keys(cases).forEach(caseName => {
                 const c = cases[caseName];
