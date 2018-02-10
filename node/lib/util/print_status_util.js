@@ -92,7 +92,11 @@ class StatusDescriptor {
                 result += "type changed: ";
                 break;
         }
-        result += path.relative(cwd, this.path);
+        let filename = path.relative(cwd, this.path);
+        if ("" === filename) {
+            filename = ".";
+        }
+        result += filename;
         result = color(result);
         if ("" !== this.detail) {
             result += ` (${this.detail})`;
