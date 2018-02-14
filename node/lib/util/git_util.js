@@ -111,15 +111,36 @@ exports.findBranch = co.wrap(function *(repo, branchName) {
 });
 
 /**
+ * Return the string in the specified `config` for the specified `key`, or null
+ * if `key` does not exist in `config`.
+ *
+ * @param {NodeGit.Config} config
+ * @param {String}         key
+ * @return {String|null}
+ */
+exports.getConfigString = co.wrap(function *(config, key) {
+    try {
+        return yield config.getStringBuf(key);
+    }
+    catch (e) {
+        // Unfortunately, no other way to handle a missing config entry
+    }
+    return null;
+});
+
+/**
  * Return the tracking information for the specified `branch`, or null if it
  * has none.
  *
+ * @param {NodeGit.Repository} repo
  * @param {NodeGit.Reference} branch
  * @return {Object|null}
  * @return {String|null} return.remoteName
+ * @return {String|null} return.pushRemoteName
  * @return {String} return.branchName
  */
-exports.getTrackingInfo = co.wrap(function *(branch) {
+exports.getTrackingInfo = co.wrap(function *(repo, branch) {
+    assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(branch, NodeGit.Reference);
     let upstream;
     try {
@@ -131,16 +152,33 @@ exports.getTrackingInfo = co.wrap(function *(branch) {
     }
     const name = upstream.shorthand();
     const parts = name.split("/");
+    const config = yield repo.config();
+
+    // Try to read a 'pushRemote' for the branch.
+
+    let pushRemote = yield exports.getConfigString(
+                                     config,
+                                    `branch.${branch.shorthand()}.pushRemote`);
+
+    // If no 'pushRemote', try to read a 'pushDefault' for the repo.
+
+    if (null === pushRemote) {
+        pushRemote = yield exports.getConfigString(config,
+                                                   "remote.pushDefault");
+    }
+
     if (1 === parts.length) {
         return {
             branchName: parts[0],
             remoteName: null,
+            pushRemoteName: pushRemote,
         };
     }
     const remoteName = parts.shift();
     return {
         branchName: parts.join("/"),
         remoteName: remoteName,
+        pushRemoteName: pushRemote || remoteName,
     };
 });
 
@@ -155,7 +193,7 @@ exports.getTrackingInfo = co.wrap(function *(branch) {
 exports.getRemoteForBranch = co.wrap(function *(repo, branch) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(branch, NodeGit.Reference);
-    const trackingInfo = yield exports.getTrackingInfo(branch);
+    const trackingInfo = yield exports.getTrackingInfo(repo, branch);
     if (null === trackingInfo || null === trackingInfo.remoteName) {
         return null;
     }
