@@ -101,7 +101,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // TODO: this all needs to move into the `util` and get a test driver.
 
     const branch = yield repo.getCurrentBranch();
-    const tracking = (yield GitUtil.getTrackingInfo(branch)) || {};
+    const tracking = (yield GitUtil.getTrackingInfo(repo, branch)) || {};
 
     let strRefspecs = [];
     if (0 === args.refspec.length) {
@@ -115,7 +115,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // The repo is the value passed by the user, the tracking branch's remote,
     // or just "origin", in order of preference.
 
-    const remoteName = args.repository || tracking.remoteName || "origin";
+    const remoteName = args.repository || tracking.pushRemoteName || "origin";
 
     yield strRefspecs.map(co.wrap(function *(strRefspec) {
         const refspec = GitUtil.parseRefspec(strRefspec);

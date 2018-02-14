@@ -47,6 +47,23 @@ const UserError           = require("../../lib/util/user_error");
 const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("GitUtil", function () {
+    describe("getConfigString", function () {
+        it("exists", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo("S");
+            const repo = written.repo;
+            const configPath = path.join(repo.path(), "config");
+            yield fs.appendFile(configPath, `\
+[foo]
+        bar = baz
+`);
+            const config = yield repo.config();
+            const goodResult =
+                              yield GitUtil.getConfigString(config, "foo.bar");
+            assert.equal(goodResult, "baz");
+            const badResult = yield GitUtil.getConfigString(config, "yyy.zzz");
+            assert.isNull(badResult);
+        }));
+    });
     describe("getTrackingInfo", function () {
         const cases = {
             "no tracking": {
@@ -60,6 +77,7 @@ describe("GitUtil", function () {
                 expected: {
                     remoteName: null,
                     branchName: "master",
+                    pushRemoteName: null,
                 },
             },
             "with remote": {
@@ -67,6 +85,7 @@ describe("GitUtil", function () {
                 branch: "bar",
                 expected: {
                     remoteName: "hoo",
+                    pushRemoteName: "hoo",
                     branchName: "gob",
                 },
             },
@@ -75,17 +94,63 @@ describe("GitUtil", function () {
                 branch: "bar",
                 expected: {
                     remoteName: "hoo",
+                    pushRemoteName: "hoo",
                     branchName: "foo/bar",
                 },
             },
+            "with pushRemote": {
+                state: "S:Rhoo=/a gob=1;Bbar=1 hoo/gob",
+                branch: "bar",
+                pushRemote: "bah",
+                expected: {
+                    remoteName: "hoo",
+                    pushRemoteName: "bah",
+                    branchName: "gob",
+                },
+            },
+            "with pushDefault": {
+                state: "S:Rhoo=/a gob=1;Bbar=1 hoo/gob",
+                branch: "bar",
+                pushDefault: "bah",
+                expected: {
+                    remoteName: "hoo",
+                    pushRemoteName: "bah",
+                    branchName: "gob",
+                },
+            },
+            "with pushRemote and pushDefault": {
+                state: "S:Rhoo=/a gob=1;Bbar=1 hoo/gob",
+                branch: "bar",
+                pushRemote: "hehe",
+                pushDefault: "bah",
+                expected: {
+                    remoteName: "hoo",
+                    pushRemoteName: "hehe",
+                    branchName: "gob",
+                },
+            }
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 const written = yield RepoASTTestUtil.createRepo(c.state);
                 const repo = written.repo;
+                if (undefined !== c.pushRemote) {
+                    const configPath = path.join(repo.path(), "config");
+                    yield fs.appendFile(configPath, `\
+[branch "${c.branch}"]
+        pushRemote = ${c.pushRemote}
+`);
+                }
+                if (undefined !== c.pushDefault) {
+                    const configPath = path.join(repo.path(), "config");
+                    yield fs.appendFile(configPath, `\
+[remote]
+        pushDefault = ${c.pushDefault}
+`);
+                }
                 const branch = yield repo.getBranch(c.branch);
-                const result = yield GitUtil.getTrackingInfo(branch);
+                const result = yield GitUtil.getTrackingInfo(repo, branch);
                 assert.deepEqual(result, c.expected);
             }));
         });

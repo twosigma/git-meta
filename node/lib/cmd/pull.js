@@ -100,7 +100,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     // TODO: move the following code into `util/push.js` and add test
 
-    const tracking = (yield GitUtil.getTrackingInfo(branch)) || {};
+    const tracking = (yield GitUtil.getTrackingInfo(repo, branch)) || {};
 
     // The source branch is (in order of preference): the name passed on the
     // commandline, the tracking branch name, or the current branch name.
