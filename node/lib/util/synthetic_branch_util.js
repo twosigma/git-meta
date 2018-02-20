@@ -61,7 +61,13 @@ exports.getSyntheticBranchForCommit = function(commit) {
     return SYNTHETIC_BRANCH_BASE + commit;
 };
 
-function *urlToLocalPath(repo, url) {
+    /**
+      * Public for testing.  Gets the local path corresponding to
+      * a submodule's URL.
+      * @param {NodeGit.Repository} repo
+      * @param {String} url
+      */
+exports.urlToLocalPath = function *(repo, url) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(url);
 
@@ -70,7 +76,7 @@ function *urlToLocalPath(repo, url) {
        (yield GitUtil.getConfigString(config, "gitmeta.subrepourlbase")) || "";
     const subrepoRootPath =
         yield config.getStringBuf("gitmeta.subreporootpath");
-    const subrepoSuffix =
+    let subrepoSuffix =
         (yield GitUtil.getConfigString(config, "gitmeta.subreposuffix")) || "";
     if (!url.startsWith(subrepoUrlBase)) {
         throw "Your git configuration gitmeta.subrepoUrlBase, '" +
@@ -78,13 +84,16 @@ function *urlToLocalPath(repo, url) {
             "urls.  Submodule url '" + url + "' fails.";
     }
     const remotePath = url.slice(subrepoUrlBase.length);
+    if (remotePath.endsWith(subrepoSuffix)) {
+        subrepoSuffix = "";
+    }
     const localPath = path.join(subrepoRootPath, remotePath + subrepoSuffix);
     if (localPath[0] === "/") {
         return localPath;
     } else {
         return path.normalize(path.join(repo.path(), localPath));
     }
-}
+};
 
 /**
  * Check that a commit exists exists for a given submodule
@@ -99,7 +108,7 @@ function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(submoduleEntry, NodeGit.TreeEntry);
 
-    const localPath = yield *urlToLocalPath(repo, url);
+    const localPath = yield *exports.urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
     const submoduleCommitId = submoduleEntry.id();
     try {
