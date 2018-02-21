@@ -227,6 +227,46 @@ describe("synthetic-branch-submodule-pre-receive", function () {
     }));
 });
 
+describe("urlToLocalPath", function () {
+    const init = co.wrap(function*() {
+        const base = yield TestUtil.makeTempDir();
+        const dir = yield fsp.realpath(base);
+        const repo = yield NodeGit.Repository.init(dir, 0);
+        const config = yield repo.config();
+        yield config.setString("gitmeta.subrepourlbase", "http://example.com");
+        yield config.setString("gitmeta.subreposuffix", ".GiT");
+        yield config.setString("gitmeta.subreporootpath", "/a/b/c");
+        return repo;
+    });
+    const cases = {
+        "works without suffix" : {
+            input: "http://example.com/foo",
+            expected: "/a/b/c/foo.GiT"
+        },
+        "works with existing suffix" : {
+            input: "http://example.com/foo.GiT",
+            expected: "/a/b/c/foo.GiT"
+        },
+        "works with wrong prefix" : {
+            input: "http://wrong/foo.GiT",
+            expected: null
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            try {
+                const repo = yield init();
+                const actual =
+                      yield SyntheticBranch.urlToLocalPath(repo, c.input);
+                assert(c.expected === actual);
+            } catch (e) {
+                assert(c.expected === null);
+            }
+        }));
+    });
+});
+
 describe("synthetic-branch-meta-pre-receive", function () {
     it("works", co.wrap(function *() {
         const base = yield TestUtil.makeTempDir();
