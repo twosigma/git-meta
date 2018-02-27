@@ -32,6 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -52,8 +53,8 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 exports.buildDirectoryTree = function (flatTree) {
     let result = {};
 
-    for (let path in flatTree) {
-        const paths = path.split("/");
+    for (let subpath in flatTree) {
+        const paths = subpath.split("/");
         let tree = result;
 
         // Navigate/build the tree until there is only one path left in paths,
@@ -73,7 +74,7 @@ exports.buildDirectoryTree = function (flatTree) {
         }
         const leafPath = paths[paths.length - 1];
         assert.notProperty(tree, leafPath, `duplicate entry for ${path}`);
-        const data = flatTree[path];
+        const data = flatTree[subpath];
         tree[leafPath] = data;
     }
 
@@ -228,7 +229,7 @@ exports.hashFile = function (repo, filename) {
  * @param {Boolean}            includeUnstaged
  * @return {Object}
  */
-exports.listWorkdirChanges = function (repo, status, includeUnstaged) {
+exports.listWorkdirChanges = co.wrap(function *(repo, status, includeUnstaged) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isBoolean(includeUnstaged);
@@ -242,20 +243,29 @@ exports.listWorkdirChanges = function (repo, status, includeUnstaged) {
     // first, plain files.
 
     const workdir = status.workdir;
-    for (let path in workdir) {
-        switch (workdir[path]) {
+    for (let subpath in workdir) {
+        let filemode = FILEMODE.EXECUTABLE;
+        const fullpath = path.join(repo.workdir(), subpath);
+        try {
+            yield fs.access(fullpath, fs.constants.X_OK);
+        } catch (e) {
+            // if unable to execute, use BLOB.
+            filemode = FILEMODE.BLOB
+        }
+        switch (workdir[subpath]) {
             case FILESTATUS.ADDED:
                 if (includeUnstaged) {
-                    result[path] = new Change(exports.hashFile(repo, path),
-                                              FILEMODE.BLOB);
+                    result[subpath] = new Change(
+                                            exports.hashFile(repo, subpath),
+                                            filemode);
                 }
                 break;
             case FILESTATUS.MODIFIED:
-                result[path] = new Change(exports.hashFile(repo, path),
-                                          FILEMODE.BLOB);
+                result[subpath] = new Change(exports.hashFile(repo, subpath),
+                                                                    filemode);
                 break;
             case FILESTATUS.REMOVED:
-                result[path] = null;
+                result[subpath] = null;
                 break;
         }
     }
@@ -299,4 +309,4 @@ exports.listWorkdirChanges = function (repo, status, includeUnstaged) {
     }
 
     return result;
-};
+});
