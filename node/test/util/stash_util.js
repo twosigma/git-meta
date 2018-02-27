@@ -752,6 +752,13 @@ meta-stash@{1}: log of 1
                 expected: `
 x=E:Cm-2 s=Sa:s;Bm=m;Os W x/y/z=3!Cs-1 x/y/z=3!Bs=s`,
             },
+            "new file in open submodule, staged": {
+                state: "a=B|x=U:Os I x/y/z=3",
+                expected: `
+x=E:Cm-2 s=Sa:s;Bm=m;Os I x/y/z=3!Cs-1 x/y/z=3!Bs=s`,
+                includeMeta: true,
+                includeUntracked: false,
+            },
             "new submodule with a commit": {
                 state: "a=B|x=S:I s=Sa:;Os Cq-1!H=q",
                 includeMeta: false,
