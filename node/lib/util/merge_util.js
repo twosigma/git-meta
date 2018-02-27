@@ -544,9 +544,9 @@ exports.continue = co.wrap(function *(repo) {
             // changes we need to make a commit.
 
             const status = yield StatusUtil.getRepoStatus(subRepo, {
-                showMeta: true,
+                showMetaChanges: true,
             });
-            if (0 !== Object.keys(status.staged)) {
+            if (!status.isIndexClean()) {
                 const id = yield subRepo.createCommitOnHead([],
                                                             sig,
                                                             sig,
