@@ -409,6 +409,21 @@ x=U:C3-1;Mhi\n,2,3;B3=3;Os I README.md=8!Myo\n,1,a!Ba=a`,
                 expected: `
 x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;M;Os Cyo\n#s-1,a README.md=8!H=s!Ba=a`,
             },
+            "continue in one sub, done in another": {
+                initial: `
+a=B:Ca-1;Cac-1 a=2;Cb-1;Cmab-a,b b=b;Bmab=mab;Bb=b;Ba=a;Bac=ac|
+x=S:C2-1 s=Sa:1,t=Sa:1;
+    C3-2 s=Sa:a,t=Sa:a;
+    C4-2 s=Sa:ac,t=Sa:b;
+    Bmaster=3;Bfoo=4;
+    Mhi\n,3,4;
+    Os I a=foo!Myou\n,a,ac!Bac=ac;
+    Ot H=mab`,
+                expected: `
+x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;M;
+  Os Cyou\n#s-a,ac a=foo!H=s!Bac=ac;
+  Ot`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
