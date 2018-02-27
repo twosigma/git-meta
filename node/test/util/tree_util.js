@@ -262,7 +262,8 @@ describe("TreeUtil", function () {
             const status = new RepoStatus({
                 workdir: { foo: FILESTATUS.REMOVED },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
             assert.deepEqual(result, { foo: null });
         }));
         it("modified", co.wrap(function *() {
@@ -274,7 +275,8 @@ describe("TreeUtil", function () {
             const status = new RepoStatus({
                 workdir: { foo: FILESTATUS.MODIFIED },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
             const db = yield repo.odb();
             const BLOB = 3;
             const id  = yield db.write(content, content.length, BLOB);
@@ -298,7 +300,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
             assert.deepEqual(result, {});
         }));
         it("submodule", co.wrap(function *() {
@@ -315,7 +318,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
             assert.deepEqual(result, {
                 sub: new Change(NodeGit.Oid.fromString(commit),
                                 FILEMODE.COMMIT),
@@ -335,7 +339,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        true);
             assert.deepEqual(result, {
                 sub: new Change(NodeGit.Oid.fromString(commit),
                                 FILEMODE.COMMIT),
@@ -363,7 +368,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        true);
             assert.deepEqual(result, {
                 sub: new Change(NodeGit.Oid.fromString(commit),
                                 FILEMODE.COMMIT),
@@ -390,7 +396,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        true);
             assert.deepEqual(result, {
                 sub: null,
                 ".gitmodules": new Change(modId, FILEMODE.BLOB),
@@ -415,7 +422,8 @@ describe("TreeUtil", function () {
                     }),
                 },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, false);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
             assert.deepEqual(result, {});
         }));
         it("added, with includeUnstaged", co.wrap(function *() {
@@ -427,13 +435,48 @@ describe("TreeUtil", function () {
             const status = new RepoStatus({
                 workdir: { foo: FILESTATUS.ADDED, },
             });
-            const result = TreeUtil.listWorkdirChanges(repo, status, true);
+            const result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        true);
             const db = yield repo.odb();
             const BLOB = 3;
             const id  = yield db.write(content, content.length, BLOB);
             assert.deepEqual(Object.keys(result), ["foo"]);
             assert.equal(result.foo.id.tostrS(), id.tostrS());
             assert.equal(result.foo.mode, FILEMODE.BLOB);
+        }));
+        it("executable", co.wrap(function *() {
+            const content = "abcdefg";
+            const repo = yield TestUtil.createSimpleRepository();
+
+            const filename1 = "foo";
+            const filepath1 = path.join(repo.workdir(), filename1);
+            yield fs.writeFile(filepath1, content, { mode: 0o744 });
+
+            const filename2 = "bar";
+            const filepath2 = path.join(repo.workdir(), filename2);
+            yield fs.writeFile(filepath2, content, { mode: 0o744 });
+
+            const status = new RepoStatus({
+                workdir: { foo: FILESTATUS.MODIFIED, bar: FILESTATUS.ADDED },
+            });
+
+            const db = yield repo.odb();
+            const BLOB = 3;
+            const id  = yield db.write(content, content.length, BLOB);
+
+            // executable ignoring new files
+            let result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                        false);
+            assert.deepEqual(Object.keys(result), ["foo"]);
+            assert.equal(result.foo.id.tostrS(), id.tostrS());
+            assert.equal(result.foo.mode, FILEMODE.EXECUTABLE);
+
+            // executable including added files
+            result = yield TreeUtil.listWorkdirChanges(repo, status,
+                                                                    true);
+            assert.deepEqual(Object.keys(result), ["foo", "bar"]);
+            assert.equal(result.bar.id.tostrS(), id.tostrS());
+            assert.equal(result.bar.mode, FILEMODE.EXECUTABLE);
         }));
     });
 });

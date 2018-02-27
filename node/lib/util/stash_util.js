@@ -69,7 +69,7 @@ exports.stashRepo = co.wrap(function *(repo, status, includeUntracked) {
     // Create a tree for the workdir based on the index.
 
     const indexTree = yield NodeGit.Tree.lookup(repo, indexId);
-    const changes = TreeUtil.listWorkdirChanges(repo,
+    const changes = yield TreeUtil.listWorkdirChanges(repo,
                                                 status,
                                                 includeUntracked);
     const workdirTree = yield TreeUtil.writeTree(repo, indexTree, changes);
