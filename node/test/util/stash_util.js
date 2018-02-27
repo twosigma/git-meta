@@ -746,14 +746,16 @@ meta-stash@{1}: log of 1
                 expected: "x=E:Cm-2 s=Sa:a;Bm=m",
                 includeMeta: true,
             },
-            "new file in open submodule": {
+            "new file in open submodule, untracked not included": {
                 state: "a=B|x=U:Os W x/y/z=3",
                 includeMeta: true,
                 expected: `
 x=E:Cm-2 s=Sa:s;Bm=m;Os W x/y/z=3!Cs-1 x/y/z=3!Bs=s`,
             },
-            "new file in open submodule, untracked not included": {
-                state: "a=B|x=U:Os W x/y/z=3",
+            "new file in open submodule, staged": {
+                state: "a=B|x=U:Os I x/y/z=3",
+                expected: `
+x=E:Cm-2 s=Sa:s;Bm=m;Os I x/y/z=3!Cs-1 x/y/z=3!Bs=s`,
                 includeMeta: true,
                 includeUntracked: false,
             },

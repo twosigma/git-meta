@@ -483,13 +483,16 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
                                                       status,
                                                       includeUntracked);
     const head = yield repo.getHeadCommit();
-    let headTree = null;
     const parents = [];
     if (null !== head) {
         parents.push(head);
-        headTree = yield head.getTree();
     }
-    const newTree = yield TreeUtil.writeTree(repo, headTree, changes);
+
+    const index = yield repo.index();
+    const treeOid = yield index.writeTree();
+    const indexTree = yield repo.getTree(treeOid);
+
+    const newTree = yield TreeUtil.writeTree(repo, indexTree, changes);
     const sig = repo.defaultSignature();
     const id = yield NodeGit.Commit.create(repo,
                                            null,
@@ -538,7 +541,7 @@ exports.makeShadowCommit = co.wrap(function *(repo,
     const status = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: includeMeta,
         showAllUntracked: true,
-        ignoreIndex: true,
+        ignoreIndex: false,
     });
     if (status.isDeepClean(includeUntracked)) {
         return null;                                                  // RETURN
