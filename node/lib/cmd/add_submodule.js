@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `new` command.
@@ -124,4 +125,7 @@ Added new sub-repo ${colors.blue(args.path)}.  It is currently empty.  Please
 stage changes under sub-repo before finishing with 'git meta commit';
 you will not be able to use 'git meta commit' until you do so.`);
     }
+
+    //Run post-add-submodule hook with submodule names which added successfully.
+    yield Hook.execHook("post-add-submodule", [args.path]);
 });
