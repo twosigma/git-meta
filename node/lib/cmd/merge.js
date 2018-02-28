@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `merge` command.
@@ -163,4 +164,9 @@ Merge of '${args.commit}'
     };
     const commit = yield repo.getCommit(commitish.id());
     yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
+
+    // Run post-merge hook if merge successfully.
+    // Fixme: --squash is not supported yet, once supported, need to parse 0/1
+    // as arg into the post-merge hook, 1 means it is a squash merge, 0 means not.
+    yield Hook.execHook("post-merge", ["0"]);
 });

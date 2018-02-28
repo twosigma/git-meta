@@ -35,6 +35,7 @@
  */
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * help text for the `open` command
@@ -102,6 +103,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const fetcher = new SubmoduleFetcher(repo, head);
 
     let failed = false;
+    let subsOpenSuccessfully = [];
 
     const openSubs = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
 
@@ -123,6 +125,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
 
         try {
             yield Open.openOnCommit(fetcher, name, shas[index], templatePath);
+            subsOpenSuccessfully.push(name);
         }
         catch (e) {
             if (e instanceof UserError) {
@@ -137,6 +140,9 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         console.log(`Finished opening ${colors.blue(name)}.`);
     });
     yield DoWorkQueue.doInParallel(subsToOpen, opener);
+
+    // Run post-open-submodule hook with submodules which opened successfully.
+    yield Hook.execHook("post-open-submodule", subsOpenSuccessfully);
 
     if (failed) {
         process.exit(1);

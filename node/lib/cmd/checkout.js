@@ -30,6 +30,7 @@
  */
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * This module contains the entrypoint for the `checkout` command.
@@ -88,6 +89,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Checkout  = require("../util/checkout");
     const GitUtil   = require("../util/git_util");
     let newBranch = null;
+    let branchCheckout = "1";
 
     const newBranchNameArr = args["new branch name"];
     if (newBranchNameArr) {
@@ -130,10 +132,20 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     if (null !== op.commit && null === op.switchBranch) {
         // In this case, we're not making a branch; just let the user know what
         // we checked out.
-
+        
+        branchCheckout = "0";
         console.log(`Checked out ${colors.green(args.committish)}.`);
     }
 
+    // Run post-checkout hook.
+    // Note: The hook is given three parameters: the ref of the previous HEAD,
+    // the ref of the new HEAD (which may or may not have changed),
+    // and a flag indicating whether the checkout was a branch checkout (changing branches, flag = "1"),
+    // or a file checkout (retrieving a file from the index, flag = "0").
+    const headId = yield repo.getHeadCommit();
+    const oldHead = headId.id().tostrS();
+    const newHead = op.commit;
+    yield Hook.execHook("post-checkout", [oldHead, newHead, branchCheckout]);
     // If we made a new branch, let the user know about it.
 
     const newB = op.newBranch;

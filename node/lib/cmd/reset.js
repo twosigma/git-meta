@@ -32,6 +32,7 @@
 
 const ArgParse = require("argparse");
 const co       = require("co");
+const Hook     = require("../util/hook");
 
 /**
  * This submodule provides the entrypoint for the `reset` command.
@@ -206,4 +207,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const relCwd = path.relative(repo.workdir(), cwd);
     const statusText = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
     process.stdout.write(statusText);
+
+    // Run post-reset hook.
+    yield Hook.execHook("post-reset");
 });

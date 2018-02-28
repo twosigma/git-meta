@@ -36,6 +36,7 @@ const co      = require("co");
 const colors  = require("colors");
 
 const DeinitUtil      = require("../util/deinit_util");
+const Hook            = require("../util/hook");
 const StatusUtil      = require("../util/status_util");
 const SubmoduleUtil   = require("../util/submodule_util");
 const UserError       = require("../util/user_error");
@@ -71,6 +72,7 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
     });
     const subStats = repoStatus.submodules;
     let errorMessage = "";
+    let subsClosedSuccessfully = [];
 
     const closers = subsToClose.map(co.wrap(function *(name) {
         const sub = subStats[name];
@@ -94,8 +96,12 @@ Pass ${colors.magenta("--force")} to close it anyway.
             }
         }
         yield DeinitUtil.deinit(repo, name);
+        subsClosedSuccessfully.push(name);
     }));
     yield closers;
+
+    // Run post-close-submodule hook with submodules which closed successfully.
+    yield Hook.execHook("post-close-submodule", subsClosedSuccessfully);
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
     }

@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `cherry-pick` command.
@@ -97,4 +98,7 @@ commit.`);
             yield CherryPick.cherryPick(repo, commit);
         }
     }
+
+    // Run post-commit hook as regular git.
+    yield Hook.execHook("post-commit");
 });
