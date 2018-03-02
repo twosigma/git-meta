@@ -292,13 +292,13 @@ explain our high-level branching and tagging strategy.  Then, we define
 synthetic-meta-refs and discuss how they fit into git-meta workflows.  Finally,
 we present two variations on synthetic-meta-refs to help illustrate how the
 concept evolved; one of these variations, *mega-refs*, may prove necessary for
-old version of Git.
+old versions of Git.
 
 ## Branches and Tags
 
 In git-meta, branches and tags are applied only to meta-repos.  Because each
 commit in a meta-repo unambiguously describes the state of all sub-repos, it is
-unnecessary to apply branches and tags to sup-repos.  Furthermore, as described
+unnecessary to apply branches and tags to sub-repos.  Furthermore, as described
 in the "Design and Evolution" section below, schemes relying on sub-repo
 branches proved to be impractical.
 
