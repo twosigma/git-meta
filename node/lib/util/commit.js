@@ -1108,7 +1108,25 @@ exports.amendMetaRepo = co.wrap(function *(repo,
             }
             const subIndex = yield subRepo.index();
             if (all) {
-                yield subIndex.addAll(["*"], -1);
+                const actualStatus = yield StatusUtil.getRepoStatus(subRepo, {
+                    showMetaChanges: true,
+                });
+
+                // TODO: factor this out.  We cannot use `repoStatus` to
+                // determine what to stage as it shows the status vs. HEAD^
+                // and so some things that should be changed will not be in it.
+                //  We cannot call `Index.addAll` because it will stage
+                //  untracked files.  Therefore, we need to use our normal
+                //  status routine to examime the workdir and stage changed
+                //  files.
+
+                const workdir = actualStatus.workdir;
+                for (let path in actualStatus.workdir) {
+                    const change = workdir[path];
+                    if (RepoStatus.FILESTATUS.ADDED !== change) {
+                        yield exports.stageChange(subIndex, path, change);
+                    }
+                }
                 yield subIndex.write();
             }
             subCommits[subName] = yield exports.amendRepo(subRepo, subMessage);
