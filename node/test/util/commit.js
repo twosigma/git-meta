@@ -3086,6 +3086,24 @@ x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=8`,
                 expected: `
 x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=foo!W README.md=8`
             },
+            "amend with all": {
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=8`,
+                message: "foo",
+                all: true,
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=8`,
+            },
+            "amend with all and untracked": {
+                initial: `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=8,foo=bar`,
+                message: "foo",
+                all: true,
+                expected: `
+x=U:Cfoo\n#x-2 s=Sa:s;Bmaster=x;Os Cfoo\n#s-1 README.md=8!W foo=bar`,
+            },
             "mismatch": {
                 initial: `
 a=B:Chello\n#a-1;Ba=a|x=U:Cworld\n#3-2 s=Sa:a;Bmaster=3`,
