@@ -30,7 +30,6 @@
  */
 
 const co = require("co");
-const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `rebase` command.
@@ -111,7 +110,4 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         const commit = yield repo.getCommit(committish.id());
         yield RebaseUtil.rebase(repo, commit);
     }
-
-    // Run post-rewrite hook with "rebase" as args, means rebase command invoked this hook.
-    yield Hook.execHook("post-rewrite", ["rebase"]);
 });
