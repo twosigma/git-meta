@@ -557,7 +557,9 @@ up-to-date.`);
     });
     const result = yield driveRebase(metaRepo, initialize, fromCommit, commit);
 
-    // Run post-rewrite hook with "rebase" as args, means rebase command invoked this hook.
+    // Run post-rewrite hook with "rebase" as args, means rebase command
+    // invoked this hook.
+
     yield Hook.execHook("post-rewrite", ["rebase"]);
     return result;
 });

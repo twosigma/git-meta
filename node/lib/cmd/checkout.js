@@ -139,9 +139,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     // Run post-checkout hook.
     // Note: The hook is given three parameters: the ref of the previous HEAD,
-    // the ref of the new HEAD (which may or may not have changed),
-    // and a flag indicating whether the checkout was a branch checkout (changing branches, flag = "1"),
-    // or a file checkout (retrieving a file from the index, flag = "0").
+    // the ref of the new HEAD (which may or may not have changed), and a flag
+    // indicating whether the checkout was a branch checkout (changing
+    // branches, flag = "1"), or a file checkout (retrieving a file from the
+    // index, flag = "0").
+
     const headId = yield repo.getHeadCommit();
     const oldHead = headId.id().tostrS();
     const newHead = op.commit;
