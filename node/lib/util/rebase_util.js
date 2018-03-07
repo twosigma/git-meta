@@ -41,6 +41,7 @@ const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("../util/do_work_queue");
 const Open                = require("./open");
 const GitUtil             = require("./git_util");
+const Hook                = require("../util/hook");
 const RepoStatus          = require("./repo_status");
 const RebaseFileUtil      = require("./rebase_file_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -554,7 +555,11 @@ up-to-date.`);
             };
         }));
     });
-    return yield driveRebase(metaRepo, initialize, fromCommit, commit);
+    const result = yield driveRebase(metaRepo, initialize, fromCommit, commit);
+
+    // Run post-rewrite hook with "rebase" as args, means rebase command invoked this hook.
+    yield Hook.execHook("post-rewrite", ["rebase"]);
+    return result;
 });
 
 /**
