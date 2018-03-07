@@ -58,7 +58,8 @@ describe("Hook", function () {
             process.chdir(workDir);
             const hooksDir = path.join(workDir, ".git/hooks");
             const hookFile = path.join(hooksDir, hookName);
-            yield fs.writeFile(hookFile, "#!/bin/bash \necho 'it is a test hook'\n");
+            yield fs.writeFile(hookFile,
+                               "#!/bin/bash \necho 'it is a test hook'\n");
             yield fs.chmod(hookFile, "755");
             const result = yield Hook.execHook(hookName);
             assert.equal(result, "it is a test hook\n");

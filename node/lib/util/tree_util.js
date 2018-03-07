@@ -250,7 +250,7 @@ exports.listWorkdirChanges = co.wrap(function *(repo, status, includeUnstaged) {
             yield fs.access(fullpath, fs.constants.X_OK);
         } catch (e) {
             // if unable to execute, use BLOB.
-            filemode = FILEMODE.BLOB
+            filemode = FILEMODE.BLOB;
         }
         switch (workdir[subpath]) {
             case FILESTATUS.ADDED:
