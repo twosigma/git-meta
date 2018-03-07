@@ -46,6 +46,7 @@ const Submodule           = require("./submodule");
 const SubmoduleChange     = require("./submodule_change");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
+const UserError           = require("./user_error");
 
 /**
  * Return the names of the submodules (visible or otherwise) for the index
@@ -313,20 +314,24 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
 });
 
 /**
- * Return a summary of the submodule SHA changes in the specified `diff`.
- * TODO: Test this separately from `getSubmoduleChanges`.
+ * Return a summary of the submodule SHA changes in the specified `diff`.  Fail
+ * if the specified 'allowMetaChanges' is not true and `diff` contains
+ * non-submodule changes to the meta-repo.
  *
  * @asycn
  * @param {NodeGit.Diff} diff
+ * @param {Bool} allowMetaChanges
  * @return {Object} map from name to `SubmoduleChange`
  */
-exports.getSubmoduleChangesFromDiff = function (diff) {
+exports.getSubmoduleChangesFromDiff = function (diff, allowMetaChanges) {
     assert.instanceOf(diff, NodeGit.Diff);
+    assert.isBoolean(allowMetaChanges);
 
     const num = diff.numDeltas();
     const result = {};
     const DELTA = NodeGit.Diff.DELTA;
     const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
+    const modulesFileName = SubmoduleConfigUtil.modulesFileName;
     for (let i = 0; i < num; ++i) {
         const delta = diff.getDelta(i);
         switch (delta.status()) {
@@ -346,6 +351,9 @@ exports.getSubmoduleChangesFromDiff = function (diff) {
                     result[path] = new SubmoduleChange(
                                                  delta.oldFile().id().tostrS(),
                                                  newFile.id().tostrS());
+                } else if (!allowMetaChanges && path !== modulesFileName) {
+                    throw new UserError(`\
+Modification to meta-repo file ${colors.red(path)} is not supported.`);
                 }
             } break;
             case DELTA.ADDED: {
@@ -354,6 +362,9 @@ exports.getSubmoduleChangesFromDiff = function (diff) {
                 if (COMMIT === newFile.mode()) {
                     result[path] = new SubmoduleChange(null,
                                                        newFile.id().tostrS());
+                } else if (!allowMetaChanges && path !== modulesFileName) {
+                    throw new UserError(`\
+Addtion to meta-repo of file ${colors.red(path)} is not supported.`);
                 }
             } break;
             case DELTA.DELETED: {
@@ -362,6 +373,9 @@ exports.getSubmoduleChangesFromDiff = function (diff) {
                 if (COMMIT === oldFile.mode()) {
                     result[path] = new SubmoduleChange(oldFile.id().tostrS(),
                                                        null);
+                } else if (!allowMetaChanges && path !== modulesFileName) {
+                    throw new UserError(`\
+Deletion of meta-repo file ${colors.red(path)} is not supported.`);
                 }
             } break;
         }
@@ -372,16 +386,21 @@ exports.getSubmoduleChangesFromDiff = function (diff) {
 /**
  * Return a summary of the submodule SHAs changed by the specified `commitId`
  * in the specified `repo`, and flag denoting whether or not the `.gitmodules`
- * file was changed.
+ * file was changed.  If 'commit' contains changes to the meta-repo and the
+ * specified 'allowMetaChanges' is not true, throw a 'UserError'.
  *
  * @asycn
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {Bool} allowMetaChanges
  * @return {Object} map from name to `SubmoduleChange`
  */
-exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
+exports.getSubmoduleChanges = co.wrap(function *(repo,
+                                                 commit,
+                                                 allowMetaChanges) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    assert.isBoolean(allowMetaChanges);
 
     // We calculate the changes of a commit against its first parent.  If it
     // has no parents, then the calculation is against an empty tree.
@@ -394,24 +413,34 @@ exports.getSubmoduleChanges = co.wrap(function *(repo, commit) {
 
     const tree = yield commit.getTree();
     const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree, null);
-    return yield exports.getSubmoduleChangesFromDiff(diff);
+    return yield exports.getSubmoduleChangesFromDiff(diff, allowMetaChanges);
 });
 
 /**
  * Return the states of the submodules in the specified `commit` in the
- * specified `repo`.
+ * specified `repo`.  If the specified 'names' is not null, return only
+ * submodules in 'names'; otherwise, return all submodules.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {String[]|null}      names
  * @return {Object} map from submodule name to `Submodule` object
  */
-exports.getSubmodulesForCommit = co.wrap(function *(repo, commit) {
+exports.getSubmodulesForCommit = co.wrap(function *(repo, commit, names) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    if (null !== names) {
+        assert.isArray(names);
+    }
     const urls =
                yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, commit);
-    const names = Object.keys(urls);
+    if (null === names) {
+        names = Object.keys(urls);
+    }
+    else {
+        names = names.filter(n => n in urls);
+    }
     const shas = yield exports.getSubmoduleShasForCommit(repo, names, commit);
     let result = {};
     names.forEach(name => {
@@ -713,4 +742,3 @@ exports.mergeModulesFile = co.wrap(function *(repo,
     }
     return false;
 });
-

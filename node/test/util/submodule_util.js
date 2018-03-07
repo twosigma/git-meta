@@ -371,27 +371,52 @@ describe("SubmoduleUtil", function () {
         }));
     });
 
-    describe("getSubmoduleChanges", function () {
+    describe("getSubmoduleChangesFromDiff", function () {
         const cases = {
             "trivial": {
                 state: "S",
                 from: "1",
                 result: {},
+                allowMetaChanges: true,
+            },
+            "trivial, no meta": {
+                state: "S",
+                from: "1",
+                result: {},
+                allowMetaChanges: false,
+                fails: true,
             },
             "changed something else": {
                 state: "S:C2-1 README.md=foo;H=2",
                 from: "2",
                 result: {},
+                allowMetaChanges: true,
+            },
+            "changed something in meta, not allowed": {
+                state: "S:C2-1 README.md=foo;H=2",
+                from: "2",
+                result: {},
+                allowMetaChanges: false,
+                fails: true,
             },
             "removed something else": {
                 state: "S:C2-1 README.md;H=2",
                 from: "2",
                 result: {},
+                allowMetaChanges: true,
+            },
+            "removed in meta, not allowed": {
+                state: "S:C2-1 README.md;H=2",
+                from: "2",
+                result: {},
+                allowMetaChanges: false,
+                fails: true,
             },
             "not on current commit": {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "1",
                 result: {},
+                allowMetaChanges: true,
             },
             "added one": {
                 state: "S:C2-1 x=Sa:1;H=2",
@@ -399,6 +424,7 @@ describe("SubmoduleUtil", function () {
                 result: {
                     "x": new SubmoduleChange(null, "1"),
                 },
+                allowMetaChanges: false,
             },
             "added two": {
                 state: "S:C2-1 a=Sa:1,x=Sa:1;H=2",
@@ -407,6 +433,7 @@ describe("SubmoduleUtil", function () {
                     a: new SubmoduleChange(null, "1"),
                     x: new SubmoduleChange(null, "1"),
                 },
+                allowMetaChanges: true,
             },
             "changed one": {
                 state: "S:C3-2 a=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
@@ -414,11 +441,13 @@ describe("SubmoduleUtil", function () {
                 result: {
                     a: new SubmoduleChange("1", "2"),
                 },
+                allowMetaChanges: true,
             },
             "changed url": {
                 state: "S:C3-2 a=Sb:1;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {},
+                allowMetaChanges: true,
             },
             "changed and added": {
                 state: "S:C3-2 a=Sa:2,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
@@ -427,13 +456,15 @@ describe("SubmoduleUtil", function () {
                     a: new SubmoduleChange("1", "2"),
                     c: new SubmoduleChange(null, "2"),
                 },
+                allowMetaChanges: true,
             },
             "removed one": {
-                state: "S:C3-2 a=;C2-1 a=Sa:1,x=Sa:1;H=3",
+                state: "S:C3-2 a;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {
                     a: new SubmoduleChange("1", null),
                 },
+                allowMetaChanges: false,
             },
             "added and removed": {
                 state: "S:C3-2 a,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
@@ -442,6 +473,7 @@ describe("SubmoduleUtil", function () {
                     c: new SubmoduleChange(null, "2"),
                     a: new SubmoduleChange("1", null),
                 },
+                allowMetaChanges: true,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -452,8 +484,106 @@ describe("SubmoduleUtil", function () {
                 const fromSha = written.oldCommitMap[c.from];
                 const fromId = NodeGit.Oid.fromString(fromSha);
                 const commit = yield repo.getCommit(fromId);
-                const changes =
-                         yield SubmoduleUtil.getSubmoduleChanges(repo, commit);
+                let parentTree = null;
+                const parents = yield commit.getParents();
+                if (0 !== parents.length) {
+                    parentTree = yield parents[0].getTree();
+                }
+                const tree = yield commit.getTree();
+                const diff = yield NodeGit.Diff.treeToTree(repo,
+                                                           parentTree,
+                                                           tree,
+                                                           null);
+                let changes;
+                let exception;
+                try {
+                    changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(
+                                                           diff,
+                                                           c.allowMetaChanges);
+                }
+                catch (e) {
+                    exception = e;
+                }
+                const shouldFail = c.fails || false;
+                if (undefined === exception) {
+                    assert.equal(false, shouldFail);
+                }
+                else {
+                    if (!(exception instanceof UserError)) {
+                        throw exception;
+                    }
+                    assert.equal(true, shouldFail);
+                    return;                                           // RETURN
+                }
+
+                const commitMap = written.commitMap;
+
+                // map the logical commits in the expected results to the
+                // actual commit ids
+
+                Object.keys(changes).forEach(name => {
+                    const change = changes[name];
+                    assert.instanceOf(change, SubmoduleChange);
+                    const oldSha = change.oldSha && commitMap[change.oldSha];
+                    const newSha = change.newSha && commitMap[change.newSha];
+                    changes[name] = new SubmoduleChange(oldSha, newSha);
+                });
+                assert.deepEqual(changes, c.result);
+            }));
+        });
+    });
+
+    describe("getSubmoduleChanges", function () {
+        // We know this is implemented in terms of
+        // `getSubmoduleChangesFromDiff`, so we just need to verify that it's
+        // hooked up correctly.
+
+        const cases = {
+            "trivial": {
+                state: "S",
+                from: "1",
+                fails: true,
+                allowMetaChanges: false,
+            },
+            "added one": {
+                state: "S:C2-1 x=Sa:1;H=2",
+                from: "2",
+                result: {
+                    "x": new SubmoduleChange(null, "1"),
+                },
+                allowMetaChanges: false,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const fromSha = written.oldCommitMap[c.from];
+                const fromId = NodeGit.Oid.fromString(fromSha);
+                const commit = yield repo.getCommit(fromId);
+                let changes;
+                let exception;
+                try {
+                    changes = yield SubmoduleUtil.getSubmoduleChanges(
+                                                           repo,
+                                                           commit,
+                                                           c.allowMetaChanges);
+                }
+                catch (e) {
+                    exception = e;
+                }
+                const shouldFail = c.fails || false;
+                if (undefined === exception) {
+                    assert.equal(false, shouldFail);
+                }
+                else {
+                    if (!(exception instanceof UserError)) {
+                        throw exception;
+                    }
+                    assert.equal(true, shouldFail);
+                    return;                                           // RETURN
+                }
 
                 const commitMap = written.commitMap;
 
@@ -477,16 +607,48 @@ describe("SubmoduleUtil", function () {
                 state: "S:C2-1 foo=Sa:1;H=2",
                 commit: "2",
                 expected: { foo: new Submodule("a", "1") },
+                names: null,
+            },
+            "two": {
+                state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
+                commit: "2",
+                expected: {
+                    foo: new Submodule("a", "1"),
+                    bar: new Submodule("a", "1"),
+                },
+                names: null,
+            },
+            "no names": {
+                state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
+                commit: "2",
+                expected: {},
+                names: [],
+            },
+            "bad name": {
+                state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
+                commit: "2",
+                expected: {},
+                names: ["whoo"],
+            },
+            "good name": {
+                state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
+                commit: "2",
+                expected: {
+                    bar: new Submodule("a", "1"),
+                },
+                names: ["bar"],
             },
             "from later commit": {
                 state: "S:C2-1 x=S/a:1;C3-2 x=S/a:2;H=3",
                 commit: "3",
                 expected: { x: new Submodule("/a", "2") },
+                names: null,
             },
              "none": {
                  state: "S:Cu 1=1;Bu=u",
                  commit: "u",
                  expected: {},
+                 names: null,
              },
         };
         Object.keys(cases).forEach(caseName => {
@@ -497,8 +659,9 @@ describe("SubmoduleUtil", function () {
                 const mappedCommitSha = written.oldCommitMap[c.commit];
                 const commit = yield repo.getCommit(mappedCommitSha);
                 const result = yield SubmoduleUtil.getSubmodulesForCommit(
-                                                                       repo,
-                                                                       commit);
+                                                                      repo,
+                                                                      commit,
+                                                                      c.names);
                 let mappedResult = {};
                 Object.keys(result).forEach((name) => {
                     const resultSub = result[name];

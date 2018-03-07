@@ -199,14 +199,7 @@ exports.merge = co.wrap(function *(repo,
         showMetaChanges: true,
     });
 
-    // Cannot merge if there is an existing merge
-
-    if (null !== status.merge) {
-        throw new UserError(`\
-There is an existing merge in progress.  Run 'git meta merge --continue'
-to complete it, or 'git meta merge --abort' to abandon it.
-`);
-    }
+    StatusUtil.ensureReady(status);
 
     // Cannot merge if any staged changes.
 
@@ -297,7 +290,7 @@ ${colors.red(commitSha)}.`);
 
     const mergeEntry = co.wrap(function *(entry) {
         const path = entry.path;
-        const stage = RepoStatus.getStage(entry.flags);
+        const stage = NodeGit.Index.entryStage(entry);
 
         if (path === SubmoduleConfigUtil.modulesFileName) {
             hasModulesFile = true;
@@ -393,7 +386,7 @@ ${colors.green(subSha)}.`);
             const entries = subIndex.entries();
             for (let i = 0; i < entries.length; ++i) {
                 const subEntry = entries[i];
-                const subStage = RepoStatus.getStage(subEntry.flags);
+                const subStage = NodeGit.Index.entryStage(subEntry);
                 if (RepoStatus.STAGE.OURS === subStage) {
                     errorMessage += `\t${colors.red(subEntry.path)}\n`;
                 }
@@ -487,7 +480,7 @@ const checkForConflicts = function (index) {
     const entries = index.entries();
     for (let i = 0; i < entries.length; ++i) {
         const entry = entries[i];
-        const stage = RepoStatus.getStage(entry.flags);
+        const stage = NodeGit.Index.entryStage(entry);
         if (RepoStatus.STAGE.OURS === stage &&
             NodeGit.TreeEntry.FILEMODE.COMMIT !== entry.mode) {
             throw new UserError("Meta-repo has conflicts.");

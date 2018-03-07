@@ -1072,7 +1072,9 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
                 let oldSubs = {};
                 if (null !== parent) {
                     oldSubs =
-                      yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
+                      yield SubmoduleUtil.getSubmodulesForCommit(repo,
+                                                                 parent,
+                                                                 null);
                 }
                 const old = oldSubs.s || null;
                 const getRepo = co.wrap(function *() {

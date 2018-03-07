@@ -128,9 +128,10 @@ function* checkSubmodules(repo, commit) {
     assert.instanceOf(commit, NodeGit.Commit);
 
     const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
-                                                                  commit);
+                                                                  commit,
+                                                                  null);
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
-    const changes = yield getChanges(repo, commit);
+    const changes = yield getChanges(repo, commit, true);
     const allChanges = [
         Object.keys(changes).filter(changeName => {
             const change = changes[changeName];

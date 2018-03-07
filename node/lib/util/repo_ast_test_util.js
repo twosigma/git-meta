@@ -351,3 +351,50 @@ exports.testMultiRepoManipulator =
 
     RepoASTUtil.assertEqualRepoMaps(actualASTs, expectedASTs);
 });
+
+function addNewCommit(result, commitMap, newCommit, oldCommit, suffix) {
+    assert.property(commitMap, oldCommit);
+    const oldLogicalCommit = commitMap[oldCommit];
+    result[newCommit] = oldLogicalCommit + suffix;
+}
+
+/**
+ * Populate the specified `result` with translation of the specified `commits`
+ * using the specified `commitMap` such that each sha becomes ${logical
+ * sha}${suffix}.
+ *
+ * @param {Object} result    output, new physical to new logical sha
+ * @param {Object} commits   from new physical to old physical sha
+ * @param {Object} commitMap from old physical to old logical sha
+ * @param {String} suffix
+ */
+exports.mapCommits = function (result, commits, commitMap, suffix) {
+    assert.isObject(result);
+    assert.isObject(commits);
+    assert.isObject(commitMap);
+    assert.isString(suffix);
+
+    Object.keys(commits).forEach(newCommit => {
+        addNewCommit(result, commitMap, newCommit, commits[newCommit], suffix);
+    });
+};
+
+/**
+ * Populate the specified `result` with translations of the specified
+ * `subCommits` based on the specified `commitMap` such that each submodule
+ * commit becomes ${logical id}${sub name}.
+ *
+ * @param {Object} result      output, new physical to new logical sha
+ * @param {Object} subCommits  from sub name to map from new to old sha
+ * @param {Object} commitMap   from  old physical to old logical sha
+ */
+exports.mapSubCommits = function (result, subCommits, commitMap) {
+    assert.isObject(result);
+    assert.isObject(subCommits);
+    assert.isObject(commitMap);
+
+    Object.keys(subCommits).forEach(subName => {
+        const commits = subCommits[subName];
+        exports.mapCommits(result, commits, commitMap, subName);
+    });
+};

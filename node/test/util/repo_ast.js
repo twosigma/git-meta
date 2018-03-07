@@ -61,6 +61,83 @@ describe("RepoAST", function () {
             const s = new RepoAST.Submodule("foo", null);
             assert.isNull(s.sha);
         });
+        it("equal", function () {
+            const Submodule = RepoAST.Submodule;
+            const cases = {
+                "same": {
+                    lhs: new Submodule("foo", "bar"),
+                    rhs: new Submodule("foo", "bar"),
+                    expected: true,
+                },
+                "diff url": {
+                    lhs: new Submodule("boo", "bar"),
+                    rhs: new Submodule("foo", "bar"),
+                    expected: false,
+                },
+                "diff sha": {
+                    lhs: new Submodule("foo", "bar"),
+                    rhs: new Submodule("foo", "baz"),
+                    expected: false,
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                assert.equal(c.lhs.equal(c.rhs), c.expected);
+            });
+        });
+    });
+
+    describe("Conflict", function () {
+        it("breath", function () {
+            const c = new RepoAST.Conflict("foo", "bar", "baz");
+            assert.equal(c.ancestor, "foo");
+            assert.equal(c.our, "bar");
+            assert.equal(c.their, "baz");
+        });
+        it("nulls", function () {
+            const c = new RepoAST.Conflict(null, null, null);
+            assert.equal(c.ancestor, null);
+            assert.equal(c.our, null);
+            assert.equal(c.their, null);
+        });
+        it("subs", function () {
+            const s0 = new RepoAST.Submodule("foo", null);
+            const s1 = new RepoAST.Submodule("bar", null);
+            const s2 = new RepoAST.Submodule("baz", null);
+            const c = new RepoAST.Conflict(s0, s1, s2);
+            assert.deepEqual(c.ancestor, s0);
+            assert.deepEqual(c.our, s1);
+            assert.deepEqual(c.their, s2);
+        });
+        it("equal", function () {
+            const Conflict = RepoAST.Conflict;
+            const cases = {
+                "same": {
+                    lhs: new Conflict("foo", "bar", "baz"),
+                    rhs: new Conflict("foo", "bar", "baz"),
+                    expected: true,
+                },
+                "diff ancestor": {
+                    lhs: new Conflict("foo", "bar", "baz"),
+                    rhs: new Conflict("food", "bar", "baz"),
+                    expected: false,
+                },
+                "diff ours": {
+                    lhs: new Conflict("foo", "bar", "baz"),
+                    rhs: new Conflict("foo", "bark", "baz"),
+                    expected: false,
+                },
+                "diff theirs": {
+                    lhs: new Conflict("foo", "bar", "baz"),
+                    rhs: new Conflict("foo", "bar", "bam"),
+                    expected: false,
+                },
+            };
+            Object.keys(cases).forEach(caseName => {
+                const c = cases[caseName];
+                assert.equal(c.lhs.equal(c.rhs), c.expected);
+            });
+        });
     });
 
     describe("Commit", function () {
@@ -166,6 +243,7 @@ describe("RepoAST", function () {
             const Commit = RepoAST.Commit;
             const Rebase = RepoAST.Rebase;
             const Merge  = RepoAST.Merge;
+            const CherryPick  = RepoAST.CherryPick;
             const Remote = RepoAST.Remote;
 
             const c1       = new Commit();
@@ -195,6 +273,8 @@ describe("RepoAST", function () {
                                                   expected.openSubmodules : {},
                     erebase: ("rebase" in expected) ?  expected.rebase : null,
                     emerge: ("merge" in expected) ? expected.merge : null,
+                    echerryPick: ("cherryPick" in expected) ?
+                        expected.cherryPick : null,
                     fails   : fails,
                 };
             }
@@ -209,6 +289,7 @@ describe("RepoAST", function () {
                         currentBranchName: null,
                         rebase: null,
                         merge: null,
+                        cherryPick: null,
                         bare: false,
                     },
                     undefined,
@@ -235,6 +316,12 @@ describe("RepoAST", function () {
                 "bad bare with merge": m({
                     bare: true,
                     merge: new Merge("foo", "1", "1"),
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
+                "bad bare with cherry": m({
+                    bare: true,
+                    cherryPick: new CherryPick("1", "1"),
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -381,6 +468,17 @@ describe("RepoAST", function () {
                     head: "1",
                     index: { foo: new RepoAST.Submodule("z", "a") },
                 }, false),
+                "index with conflict": m({
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: new RepoAST.Conflict("foo", "bar", "baz") },
+                    workdir: { foo: "bar" },
+                }, {
+                    commits: { "1": c1},
+                    head: "1",
+                    index: { foo: new RepoAST.Conflict("foo", "bar", "baz") },
+                    workdir: { foo: "bar" },
+                }, false),
                 "workdir": m({
                     commits: { "1": c1},
                     head: "1",
@@ -496,18 +594,18 @@ describe("RepoAST", function () {
                 "bad rebase": m({
                     rebase: new Rebase("fff", "1", "1"),
                 }, undefined, true),
-                "with merge": m({
+                "with cherry": m({
                     commits: {
                         "1": new Commit(),
                     },
                     head: "1",
-                    merge: new Merge("fff", "1", "1"),
+                    cherryPick: new CherryPick( "1", "1"),
                 }, {
                     commits: {
                         "1": new Commit(),
                     },
                     head: "1",
-                    merge: new Merge("fff", "1", "1"),
+                    cherryPick: new CherryPick("1", "1"),
                 }),
                 "with merge specific commits": m({
                     commits: {
@@ -524,8 +622,23 @@ describe("RepoAST", function () {
                     head: "1",
                     merge: new Merge("fff", "2", "2"),
                 }),
-                "bad merge": m({
-                    merge: new Merge("fff", "1", "1"),
+                "with cherry-pick specific commits": m({
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    cherryPick: new CherryPick("2", "2"),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                    },
+                    head: "1",
+                    cherryPick: new CherryPick("2", "2"),
+                }),
+                "bad cherry-pick": m({
+                    cherryPick: new CherryPick("1", "1"),
                 }, undefined, true),
             };
             Object.keys(cases).forEach(caseName => {
@@ -550,6 +663,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
                     assert.deepEqual(obj.rebase, c.erebase);
                     assert.deepEqual(obj.merge, c.emerge);
+                    assert.deepEqual(obj.cherryPick, c.echerryPick);
                     assert.equal(obj.bare, c.ebare);
 
                     if (c.input) {
@@ -689,6 +803,7 @@ describe("RepoAST", function () {
         describe("AST.copy", function () {
             const Rebase = RepoAST.Rebase;
             const Merge  = RepoAST.Merge;
+            const CherryPick  = RepoAST.CherryPick;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": new RepoAST.Branch("1", null) },
@@ -699,6 +814,7 @@ describe("RepoAST", function () {
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello", "1", "1"),
                 merge: new Merge("hello", "1", "1"),
+                cherryPick: new CherryPick("1", "1"),
                 bare: false,
             });
             const newArgs = {
@@ -712,6 +828,7 @@ describe("RepoAST", function () {
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello world", "2", "2"),
                 merge: new Merge("hello world", "2", "2"),
+                cherryPick: new CherryPick("2", "2"),
                 bare: false,
             };
             const cases = {
@@ -730,6 +847,7 @@ describe("RepoAST", function () {
                         workdir: {},
                         rebase: null,
                         merge: null,
+                        cherryPick: null,
                     },
                     e: new RepoAST({
                         commits: { "1": new RepoAST.Commit()},
@@ -756,6 +874,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                     assert.deepEqual(obj.rebase, c.e.rebase);
                     assert.deepEqual(obj.merge, c.e.merge);
+                    assert.deepEqual(obj.cherryPick, c.e.cherryPick);
                     assert.equal(obj.bare, c.e.bare);
                 });
             });
@@ -768,6 +887,7 @@ describe("RepoAST", function () {
             // together properly.
 
             const Commit = RepoAST.Commit;
+            const Conflict = RepoAST.Conflict;
             const c1 = new Commit({ changes: { foo: "bar" }});
             const cases = {
                 "no index": {
@@ -779,6 +899,12 @@ describe("RepoAST", function () {
                     commits: { "1": c1},
                     from: "1",
                     index: { y: "z" },
+                    expected: { foo: "bar", y: "z" },
+                },
+                "ignore conflict": {
+                    commits: { "1": c1},
+                    from: "1",
+                    index: { y: "z", foo: new Conflict("foo", "bar", "bb") },
                     expected: { foo: "bar", y: "z" },
                 },
             };

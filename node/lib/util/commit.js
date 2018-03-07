@@ -877,7 +877,8 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     }
     const diff =
                yield NodeGit.Diff.treeToTree(repo, parentTree, headTree, null);
-    const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
+    const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
+                                                                    true);
     const submodules = baseStatus.submodules;  // holds resulting sub statuses
     const opener = new Open.Opener(repo, null);
 

@@ -33,7 +33,9 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const path    = require("path");
+const NodeGit = require("nodegit");
 
+const CherryPick          = require("../../lib/util/cherry_pick");
 const Merge               = require("../../lib/util/merge");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
@@ -42,10 +44,13 @@ const RepoStatus          = require("../../lib/util/repo_status");
 const StatusUtil          = require("../../lib/util/status_util");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
+const UserError           = require("../../lib/util/user_error");
 
 // test utilities
 
 describe("StatusUtil", function () {
+    const FILEMODE         = NodeGit.TreeEntry.FILEMODE;
+    const BLOB             = FILEMODE.BLOB;
     const FILESTATUS       = RepoStatus.FILESTATUS;
     const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
     const Submodule        = RepoStatus.Submodule;
@@ -107,6 +112,7 @@ describe("StatusUtil", function () {
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
+                    cherryPick: new CherryPick("1", "1"),
                 }),
                 commitMap: { "1": "3"},
                 urlMap: {},
@@ -117,6 +123,7 @@ describe("StatusUtil", function () {
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "3", "3"),
                     merge: new Merge("foo", "3", "3"),
+                    cherryPick: new CherryPick("3", "3"),
                 }),
             },
             "with a sub": {
@@ -480,6 +487,62 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
         }));
     });
 
+    describe("readConflicts", function () {
+        const Conflict = RepoStatus.Conflict;
+        const FILEMODE = NodeGit.TreeEntry.FILEMODE;
+        const BLOB = FILEMODE.BLOB;
+        const cases = {
+            "trivial": {
+                state: "S",
+                expected: {},
+            },
+            "a conflict": {
+                state: "S:I *README.md=a*b*c,foo=bar",
+                expected: {
+                    "README.md": new Conflict(BLOB, BLOB, BLOB),
+                },
+            },
+            "missing ancestor": {
+                state: "S:I *README.md=~*a*c",
+                expected: {
+                    "README.md": new Conflict(null, BLOB, BLOB),
+                },
+            },
+            "missing our": {
+                state: "S:I *README.md=a*~*c",
+                expected: {
+                    "README.md": new Conflict(BLOB, null, BLOB),
+                },
+            },
+            "missing their": {
+                state: "S:I *README.md=a*a*~",
+                expected: {
+                    "README.md": new Conflict(BLOB, BLOB, null),
+                },
+            },
+            "submodule": {
+                state: "S:I *README.md=a*a*S:1",
+                expected: {
+                    "README.md": new Conflict(BLOB, BLOB, FILEMODE.COMMIT),
+                },
+            },
+            "ignore submodule sha conflict": {
+                state: "S:I *README.md=a*S:1*S:1",
+                expected: {},
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const index = yield repo.index();
+                const result = StatusUtil.readConflicts(index);
+                assert.deepEqual(result, c.expected);
+            }));
+        });
+    });
+
     describe("getRepoStatus", function () {
         // The logic for reading individual files is tested by `getChanges`, so
         // we don't need to do exhaustive testing on that here.
@@ -511,6 +574,14 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     headCommit: "2",
                     currentBranchName: "master",
                     merge: new Merge("hi\n", "2", "3"),
+                }),
+            },
+            "cherry-pick": {
+                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;P2,3",
+                expected: new RepoStatus({
+                    headCommit: "2",
+                    currentBranchName: "master",
+                    cherryPick: new CherryPick("2", "3"),
                 }),
             },
             "staged change": {
@@ -774,6 +845,16 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                    },
                }),
            },
+           "conflict": {
+               state: "x=S:I *foo=~*ff*~",
+               expected: new RepoStatus({
+                   currentBranchName: "master",
+                   headCommit: "1",
+                   staged: {
+                       foo: new RepoStatus.Conflict(null, BLOB, null),
+                   },
+               }),
+           },
        };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -792,6 +873,52 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                                                                 w.urlMap);
                 assert.deepEqual(mappedResult, c.expected);
             }));
+        });
+    });
+
+    describe("ensureReady", function () {
+        const cases = {
+            "ready": {
+                input: new RepoStatus(),
+                fails: false,
+            },
+            "rebase": {
+                input: new RepoStatus({
+                    rebase: new Rebase("foo", "bart", "baz"),
+                }),
+                fails: true,
+            },
+            "merge": {
+                input: new RepoStatus({
+                    merge: new Merge("foo", "bart", "baz"),
+                }),
+                fails: true,
+            },
+            "cherry-pick": {
+                input: new RepoStatus({
+                    cherryPick: new CherryPick("foo", "bart"),
+                }),
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, function () {
+                const c = cases[caseName];
+                let exception;
+                try {
+                    StatusUtil.ensureReady(c.input);
+                } catch (e) {
+                    exception = e;
+                }
+                if (undefined === exception) {
+                    assert.equal(c.fails, false);
+                } else {
+                    if (!(exception instanceof UserError)) {
+                        throw exception;
+                    }
+                    assert.equal(c.fails, true);
+                }
+            });
         });
     });
 });

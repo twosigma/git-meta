@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Two Sigma Open Source
+ * Copyright (c) 2018, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,74 +36,68 @@ const fs     = require("fs-promise");
 const path   = require("path");
 const rimraf = require("rimraf");
 
-const Merge = require("./merge");
+const CherryPick = require("./cherry_pick");
 
 /**
  * This module contains methods for accessing files that pertain to in-progress
- * merges.
+ * cherry-picks.
  */
 
-const metaMergeDir = "META_MERGE";
-const messageFile = "MSG";
+const metaCherryPickDir = "META_CHERRY_PICK";
 const originalHeadFile = "ORIG_HEAD";
-const mergeHeadFile = "MERGE_HEAD";
+const pickFile = "PICK";
 
 /**
- * Return the `Merge` object in the specified `gitDir`, if one exists, or null
- * if there is no merge in progress.
+ * Return the `CherryPick` object in the specified `gitDir`, if one exists, or
+ * null if there is no cherry-pick in progress.
  *
  * @param {String} gitDir
  * @return {String|null}
  */
-exports.readMerge = co.wrap(function *(gitDir) {
+exports.readCherryPick = co.wrap(function *(gitDir) {
     assert.isString(gitDir);
-    let message;
     let originalHead;
-    let mergeHead;
-    const root = path.join(gitDir, metaMergeDir);
+    let pick;
+    const root = path.join(gitDir, metaCherryPickDir);
     try {
-        message = yield fs.readFile(path.join(root, messageFile),
-                                    "utf8");
         originalHead = yield fs.readFile(path.join(root, originalHeadFile),
                                          "utf8");
-        mergeHead = yield fs.readFile(path.join(root, mergeHeadFile), "utf8");
+        pick = yield fs.readFile(path.join(root, pickFile), "utf8");
     }
     catch (e) {
+        // TODO: Emit diagnostic if directory exists but is malformed.
         return null;
     }
-    return new Merge(message,
-                     originalHead.split("\n")[0],
-                     mergeHead.split("\n")[0]);
+    return new CherryPick(originalHead.split("\n")[0], pick.split("\n")[0]);
 });
 
 /**
- * Write the specified `merge` to the specified `gitDir`.  The behavior is
- * undefined if there is already a merge recorded in `gitDir`.
+ * Write the specified `cherryPick` to the specified `gitDir`.  The behavior is
+ * undefined if there is already a cherry-pick recorded in `gitDir`.
  *
- * @param {String} gitDir
- * @param {Merge}  merge
+ * @param {String}     gitDir
+ * @param {CherryPick} cherryPick
  */
-exports.writeMerge = co.wrap(function *(gitDir, merge) {
+exports.writeCherryPick = co.wrap(function *(gitDir, cherryPick) {
     assert.isString(gitDir);
-    assert.instanceOf(merge, Merge);
+    assert.instanceOf(cherryPick, CherryPick);
 
-    const root = path.join(gitDir, metaMergeDir);
+    const root = path.join(gitDir, metaCherryPickDir);
     yield fs.mkdir(root);
-    yield fs.writeFile(path.join(root, messageFile), merge.message);
     yield fs.writeFile(path.join(root, originalHeadFile),
-                       merge.originalHead + "\n");
-    yield fs.writeFile(path.join(root, mergeHeadFile),
-                       merge.mergeHead + "\n");
+                       cherryPick.originalHead + "\n");
+    yield fs.writeFile(path.join(root, pickFile),
+                       cherryPick.picked + "\n");
 });
 
 /**
- * Remove files related to a meta merge.
+ * Remove files related to a meta cherry-pick.
  *
  * @param {String} gitDir
  */
-exports.cleanMerge = co.wrap(function *(gitDir) {
+exports.cleanCherryPick = co.wrap(function *(gitDir) {
     assert.isString(gitDir);
-    const root = path.join(gitDir, metaMergeDir);
+    const root = path.join(gitDir, metaCherryPickDir);
     const promise = new Promise(callback => {
         return rimraf(root, {}, callback);
     });

@@ -343,10 +343,13 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q",
 S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
             },
             "with in-progress merge": "S:Mhello,1,1",
+            "with in-progress cherry-pick": "S:P1,1",
             "headless": {
                 input: new RepoAST(),
                 expected: new RepoAST(),
             },
+            "conflict": "S:I *README.md=aa*bb*cc;W README.md=yyy",
+            "submodule conflict": "S:I *README.md=aa*S:1*cc;W README.md=yyy",
         };
 
         Object.keys(cases).forEach(caseName => {
@@ -396,6 +399,8 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
             "cloned": "a=B|x=Ca",
             "pathed tracking branch":
                 "a=B:Bfoo/bar=1|x=Ca:Bfoo/bar=1 origin/foo/bar",
+            "open submodule conflict":
+                "a=B|x=U:I *README.md=aa*S:1*cc;W README.md=yyy;Os",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];

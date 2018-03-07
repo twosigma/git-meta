@@ -558,3 +558,19 @@ exports.writeConfigText = function (urls) {
     }
     return result;
 };
+
+/**
+ * Write, to the `.gitmodules` file, the specified `urls` in the specified
+ * `index`, in the specified `repo` and stage the change to the index.
+ * 
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index
+ * @param {Object}             urls   submodule name to url
+ */
+exports.writeUrls = co.wrap(function *(repo, index, urls) {
+    const modulesPath = path.join(repo.workdir(),
+                                  exports.modulesFileName);
+    const newConf = exports.writeConfigText(urls);
+    yield fs.writeFile(modulesPath, newConf);
+    yield index.addByPath(exports.modulesFileName);
+});

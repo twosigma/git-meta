@@ -56,10 +56,6 @@ describe("DiffUtil", function () {
                 input: DELTA.DELETED,
                 expected: FILESTATUS.REMOVED,
             },
-            "conflicted": {
-                input: DELTA.CONFLICTED,
-                expected: FILESTATUS.CONFLICTED,
-            },
             "renamed": {
                 input: DELTA.RENAMED,
                 expected: FILESTATUS.RENAMED,
@@ -87,6 +83,9 @@ describe("DiffUtil", function () {
         const cases = {
             "trivial": {
                 input: "x=S",
+            },
+            "conflict ignored": {
+                input: "x=S:I *READMEmd=a*b*c",
             },
             "index - modified": {
                 input: "x=S:I README.md=hhh",
