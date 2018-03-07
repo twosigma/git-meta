@@ -83,6 +83,16 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
                     return index.addByPath(filename);
                 }
             });
+
+            // Add conflicted files.
+
+            const staged = subStat.workdir.status.staged;
+            yield Object.keys(staged).map(co.wrap(function *(filename) {
+                const change = staged[filename];
+                if (change instanceof RepoStatus.Conflict) {
+                    yield index.addByPath(filename);
+                }
+            }));
             yield index.write();
         }
     }));
