@@ -390,11 +390,16 @@ exports.removeStash = co.wrap(function *(repo, index) {
     if (0 === index) {
         if (count > 1) {
             const entry = log.entryByIndex(0);
-            NodeGit.Reference.create(repo,
-                                     metaStashRef,
-                                     entry.idNew(),
-                                     1,
-                                     "removeStash");
+            yield NodeGit.Reference.create(repo,
+                                           metaStashRef,
+                                           entry.idNew(),
+                                           1,
+                                           "removeStash");
+            // But then in doing so, we've written a new entry for the ref,
+            // remove the old one.
+
+            log.drop(1, 1 /* rewrite previous entry */);
+            log.write();
         }
         else {
             NodeGit.Reference.remove(repo, metaStashRef);
