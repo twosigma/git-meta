@@ -40,15 +40,19 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const CherryPick          = require("./cherry_pick");
+const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
 const Merge               = require("./merge");
 const MergeFileUtil       = require("./merge_file_util");
+const PrintStatusUtil     = require("./print_status_util");
 const Rebase              = require("./rebase");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
+const UserError           = require("./user_error");
 
 /**
  * Return a new `RepoStatus.Submodule` object having the same value as the
@@ -99,6 +103,7 @@ exports.remapSubmodule = function (sub, commitMap, urlMap) {
  *
  * @param {Rebase} rebase
  * @param {Object} commitMap from sha to sha
+ * @return {Rebase}
  */
 function remapRebase(rebase, commitMap) {
     assert.instanceOf(rebase, Rebase);
@@ -119,8 +124,9 @@ function remapRebase(rebase, commitMap) {
  * Return a new `Merge` object having the same value as the specified `merge`
  * but with commit shas being replaced by commits in the specified `commitMap`.
  *
- * @param {Merge} merg
+ * @param {Merge} merge
  * @param {Object} commitMap from sha to sha
+ * @return {Merge}
  */
 function remapMerge(merge, commitMap) {
     assert.instanceOf(merge, Merge);
@@ -137,6 +143,29 @@ function remapMerge(merge, commitMap) {
     return new Merge(merge.message, originalHead, mergeHead);
 }
 
+/**
+ * Return a new `CherryPick` object having the same value as the specified
+ * `cherryPick` but with commit shas being replaced by commits in the specified
+ * `commitMap`.
+ *
+ * @param {CherryPick} cherryPick
+ * @param {Object} commitMap from sha to sha
+ * @return {CherryPick}
+ */
+function remapCherryPick(cherryPick, commitMap) {
+    assert.instanceOf(cherryPick, CherryPick);
+    assert.isObject(commitMap);
+
+    let originalHead = cherryPick.originalHead;
+    let picked = cherryPick.picked;
+    if (originalHead in commitMap) {
+        originalHead = commitMap[originalHead];
+    }
+    if (picked in commitMap) {
+        picked = commitMap[picked];
+    }
+    return new CherryPick(originalHead, picked);
+}
 
 /**
  * Return a new `RepoStatus` object having the same value as the specified
@@ -175,6 +204,9 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
                                                             commitMap),
         merge: status.merge === null ? null : remapMerge(status.merge,
                                                          commitMap),
+        cherryPick: status.cherryPick === null ?
+                          null :
+                          remapCherryPick(status.cherryPick, commitMap),
     });
 };
 
@@ -315,6 +347,59 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
 });
 
 /**
+ * Return the conflicts listed in the specified `index`.
+ *
+ * @param {NodeGit.Index} index
+ * @return {Object} map from entry name to `RepoStatus.Conflict`
+ */
+exports.readConflicts = function (index) {
+    assert.instanceOf(index, NodeGit.Index);
+    const conflicted = {};
+    function getConflict(path) {
+        let obj = conflicted[path];
+        if (undefined === obj) {
+            obj = {
+                ancestor: null,
+                our: null,
+                their: null,
+            };
+            conflicted[path] = obj;
+        }
+        return obj;
+    }
+    const entries = index.entries();
+    const STAGE = RepoStatus.STAGE;
+    for (let entry of entries) {
+        const stage = NodeGit.Index.entryStage(entry);
+        switch (stage) {
+            case STAGE.NORMAL:
+                break;
+            case STAGE.ANCESTOR:
+                getConflict(entry.path).ancestor = entry.mode;
+                break;
+            case STAGE.OURS:
+                getConflict(entry.path).our = entry.mode;
+                break;
+            case STAGE.THEIRS:
+                getConflict(entry.path).their = entry.mode;
+                break;
+        }
+    }
+    const result = {};
+    const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
+    for (let name in conflicted) {
+        const c = conflicted[name];
+
+        // Ignore the conflict if it's just between submodule SHAs
+
+        if (COMMIT !== c.our || COMMIT !== c.their) {
+            result[name] = new RepoStatus.Conflict(c.ancestor, c.our, c.their);
+        }
+    }
+    return result;
+};
+
+/**
  * Return a description of the status of changes to the specified `repo`.  If
  * the optionally specified `options.showAllUntracked` is true (default false),
  * return each untracked file individually rather than rolling up to the
@@ -410,6 +495,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     }
 
     args.merge = yield MergeFileUtil.readMerge(repo.path());
+    args.cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
 
     if (options.showMetaChanges && !repo.isBare()) {
         const head = yield repo.getHeadCommit();
@@ -444,9 +530,13 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
         const openSet = new Set(openArray);
         const index = yield repo.index();
+
+        Object.assign(args.staged, exports.readConflicts(index));
+
         const headTree = yield headCommit.getTree();
         const diff = yield NodeGit.Diff.treeToIndex(repo, headTree, index);
-        const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
+        const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
+                                                                        true);
         const indexUrls =
                  yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
         const headUrls =
@@ -538,3 +628,39 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 
     return new RepoStatus(args);
 });
+
+/**
+ * Throw a `UserError` unless the specified `status` reflects a repository in a
+ * normal, ready state, that is, it does not have any conflicts or in-progress
+ * operations such as a rebase, merge, or cherry-pick.  Adjust output paths to
+ * be relative to the specified `cwd`.
+ *
+ * @param {RepoStatus} status
+ */
+exports.ensureReady = function (status) {
+    assert.instanceOf(status, RepoStatus);
+
+    if (null !== status.rebase) {
+        throw new UserError(`\
+Before proceeding, you must complete the rebase in progress (by running
+'git meta rebase --continue') or abort it (by running
+'git meta rebase --abort').`);
+    }
+    if (null !== status.merge) {
+        throw new UserError(`\
+Before proceeding, you must complete the merge in progress (by running
+'git meta merge --continue') or abort it (by running
+'git meta merge --abort').`);
+    }
+    if (null !== status.cherryPick) {
+        throw new UserError(`\
+Before proceeding, you must complete the cherry-pick in progress (by running
+'git meta cherry-pick --continue') or abort it (by running
+'git meta cherry-pick --abort').`);
+    }
+    if (status.isConflicted()) {
+        throw new UserError(`\
+Please resolve outstanding conflicts before proceeding:
+${PrintStatusUtil.printRepoStatus(status, "")}`);
+    }
+};

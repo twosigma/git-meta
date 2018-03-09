@@ -88,7 +88,8 @@ exports.reset = co.wrap(function *(repo, commit, type) {
                                                commitTree,
                                                headTree,
                                                null);
-    const changedSubs = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff);
+    const changedSubs = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
+                                                                        true);
 
     // Prep the opener to open submodules on HEAD; otherwise, our resets will
     // be noops.

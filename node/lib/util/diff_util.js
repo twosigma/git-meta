@@ -37,6 +37,8 @@ const NodeGit = require("nodegit");
 const RepoStatus          = require("./repo_status");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
+const DELTA = NodeGit.Diff.DELTA;
+
 /**
  * Return the `RepoStatus.FILESTATUS` value that corresponds to the specified
  * flag.  The behavior is undefined unless `flag` represents one of the types
@@ -46,13 +48,11 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
  * @return {RepoStatus.FILESTATUS}
  */
 exports.convertDeltaFlag = function (flag) {
-    const DELTA = NodeGit.Diff.DELTA;
     const FILESTATUS = RepoStatus.FILESTATUS;
     switch (flag) {
         case DELTA.MODIFIED: return FILESTATUS.MODIFIED;
         case DELTA.ADDED: return FILESTATUS.ADDED;
         case DELTA.DELETED: return FILESTATUS.REMOVED;
-        case DELTA.CONFLICTED: return FILESTATUS.CONFLICTED;
         case DELTA.RENAMED: return FILESTATUS.RENAMED;
         case DELTA.TYPECHANGE: return FILESTATUS.TYPECHANGED;
 
@@ -62,7 +62,7 @@ exports.convertDeltaFlag = function (flag) {
 
         case DELTA.UNTRACKED: return FILESTATUS.ADDED;
     }
-    assert(`Unrecognized DELTA type: ${flag}.`);
+    assert(false, `Unrecognized DELTA type: ${flag}.`);
 };
 
 function readDiff(diff) {
@@ -72,6 +72,9 @@ function readDiff(diff) {
     for (let i = 0;  i < numDeltas; ++i) {
         const delta = diff.getDelta(i);
         const diffStatus = delta.status();
+        if (DELTA.CONFLICTED === diffStatus) {
+            continue;                                               // CONTINUE
+        }
         const fileStatus = exports.convertDeltaFlag(diffStatus);
         const file = FILESTATUS.REMOVED === fileStatus ?
                      delta.oldFile() :
@@ -100,6 +103,8 @@ function readDiff(diff) {
  * `workdir` field, the difference between the workir and the index; and in the
  * `staged` field, the difference between the index and `tree`.  Note that when
  * `ignoreIndex` is true, the returned `staged` field will always be `{}`.
+ * Note also that conflicts are ignored; we don't have enough information here
+ * to handle them properly.
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Tree|null} tree

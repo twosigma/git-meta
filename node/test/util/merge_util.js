@@ -312,7 +312,14 @@ x=S:C2-1 s=Sa:1;C3-1 s=Sb:1;Bmaster=2;Bfoo=3`,
             "conflict in meta": {
                 initial: "x=S:C2-1 foo=bar;C3-1 foo=baz;Bmaster=2;Bfoo=3",
                 fromCommit: "3",
-                expected: "x=E:Mmessage\n,2,3",
+                expected: `
+x=E:Mmessage\n,2,3;I *foo=~*bar*baz;W foo=<<<<<<< ours
+bar
+=======
+baz
+>>>>>>> theirs
+;
+`,
                 fails: true,
             },
             "conflict in submodule": {
@@ -320,7 +327,16 @@ x=S:C2-1 s=Sa:1;C3-1 s=Sb:1;Bmaster=2;Bfoo=3`,
 a=B:Ca-1 README.md=8;Cb-1 README.md=9;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Mmessage\n,3,4;Os Mmessage\n,a,b",
+                expected: `
+x=E:Mmessage\n,3,4;I *s=S:1*S:a*S:b;
+Os Mmessage\n,a,b!I *README.md=hello world*8*9!W README.md=\
+<<<<<<< ours
+8
+=======
+9
+>>>>>>> theirs
+;
+`,
                 fails: true,
             },
             "new commit in sub in target branch but not in HEAD branch": {

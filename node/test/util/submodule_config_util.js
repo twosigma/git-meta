@@ -798,5 +798,17 @@ foo
             });
         });
     });
+    it("writeUrls", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const index = yield repo.index();
+        yield SubmoduleConfigUtil.writeUrls(repo, index, {
+            foo: "/bar"
+        });
+        const fromIndex =
+                 yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+        assert.deepEqual(fromIndex, {
+            foo: "/bar"
+        });
+    }));
 });
 

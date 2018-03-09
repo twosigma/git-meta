@@ -36,7 +36,8 @@ const RepoAST     = require("../../lib/util/repo_ast");
 const RepoASTUtil = require("../../lib/util/repo_ast_util");
 
 describe("RepoAstUtil", function () {
-
+    const Conflict = RepoAST.Conflict;
+    const Submodule = RepoAST.Submodule;
     describe("assertEqualCommits", function () {
         const Commit = RepoAST.Commit;
         const cases = {
@@ -131,9 +132,11 @@ describe("RepoAstUtil", function () {
 
     describe("assertEqualASTs", function () {
         const AST = RepoAST;
+        const Conflict = RepoAST.Conflict;
         const Commit = AST.Commit;
         const Rebase = AST.Rebase;
         const Merge = AST.Merge;
+        const CherryPick = AST.CherryPick;
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
 
@@ -167,6 +170,7 @@ describe("RepoAstUtil", function () {
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
+                    cherryPick: new CherryPick("1", "1"),
                     bare: false,
                 }),
                 expected: new AST({
@@ -181,6 +185,7 @@ describe("RepoAstUtil", function () {
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
+                    cherryPick: new CherryPick("1", "1"),
                     bare: false,
                 }),
             },
@@ -361,6 +366,33 @@ describe("RepoAstUtil", function () {
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
+            },
+            "wrong file data": {
+                actual: new AST({
+                    index: { foo: "bar", },
+                }),
+                expected: new AST({
+                    index: { foo: "baz", },
+                }),
+                fails: true,
+            },
+            "regex match data miss": {
+                actual: new AST({
+                    index: { foo: "bar", },
+                }),
+                expected: new AST({
+                    index: { foo: "^^ar", },
+                }),
+                fails: true,
+            },
+            "regex match data hit": {
+                actual: new AST({
+                    index: { foo: "bar", },
+                }),
+                expected: new AST({
+                    index: { foo: "^^ba", },
+                }),
+                fails: false,
             },
             "bad workdir": {
                 actual: new AST({
@@ -567,6 +599,82 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
+            "missing cherry": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                fails: true,
+            },
+            "unexpected cherry": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                fails: true,
+            },
+            "wrong cherry": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    cherryPick: new CherryPick("2", "1"),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                fails: true,
+            },
+            "same Conflict": {
+                actual: new AST({
+                    index: {
+                        "foo": new Conflict("foo", "bar", "baz"),
+                    },
+                    workdir: {
+                        "foo": "boo",
+                    },
+                }),
+                expected: new AST({
+                    index: {
+                        "foo": new Conflict("foo", "bar", "baz"),
+                    },
+                    workdir: {
+                        "foo": "boo",
+                    },
+                }),
+            },
+            "diff Conflict": {
+                actual: new AST({
+                    index: {
+                        "foo": new Conflict("foo", "bar", "baz"),
+                    },
+                    workdir: {
+                        "foo": "boo",
+                    },
+                }),
+                expected: new AST({
+                    index: {
+                        "foo": new Conflict("foo", "bar", "bam"),
+                    },
+                    workdir: {
+                        "foo": "boo",
+                    },
+                }),
+                fails: true,
+            },
         };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
@@ -587,6 +695,7 @@ describe("RepoAstUtil", function () {
         const Commit = RepoAST.Commit;
         const Rebase = RepoAST.Rebase;
         const Merge = RepoAST.Merge;
+        const CherryPick = RepoAST.CherryPick;
         const c1 = new Commit({ message: "foo" });
         const cases = {
             "trivial": { i: new RepoAST(), m: {}, e: new RepoAST() },
@@ -870,6 +979,28 @@ describe("RepoAstUtil", function () {
                     },
                 }),
             },
+            "index conflicted submodule": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    index: {
+                        baz: new Conflict(new Submodule("q", "1"),
+                                          new Submodule("r", "1"),
+                                          new Submodule("s", "1")),
+                    },
+                }),
+                m: { "1": "2"},
+                u: { "q": "z", "r": "a", "s": "b" },
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    index: {
+                        baz: new Conflict(new Submodule("z", "2"),
+                                          new Submodule("a", "2"),
+                                          new Submodule("b", "2")),
+                    },
+                }),
+            },
             "workdir, unchanged": {
                 i: new RepoAST({
                     commits: { "1": c1 },
@@ -967,6 +1098,32 @@ describe("RepoAstUtil", function () {
                     commits: { "1": c1 },
                     head: "1",
                     merge: new Merge("foo", "1", "1"),
+                }),
+            },
+            "cherry-pick": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    cherryPick: new CherryPick("2", "2"),
+                }),
+            },
+            "cherry-pick unmapped": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                m: {},
+                e: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    cherryPick: new CherryPick("1", "1"),
                 }),
             },
         };

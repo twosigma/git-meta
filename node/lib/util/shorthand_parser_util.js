@@ -57,7 +57,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
- *                  <note> | <rebase> | <merge>
+ *                  <note> | <rebase> | <merge> | <cherry-pick>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
@@ -67,7 +67,9 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
  *                  [' '<change>(',\s*'<change>*)]
- * change         = path ['=' <submodule> | "~" | <data>]
+ * change         = path ['=' <submodule> | "~" | <data>] |
+ *                  *path=<conflict item>'*'<conflict item>'*'<conflict item>
+ * conflict item  = <submodule> | <data>
  * path           = (<alpha numeric>|'/')+
  * submodule      = Surl:[<commit>]
  * data           = ('0-9'|'a-z'|'A-Z'|' ')*    basically non-delimiter ascii
@@ -76,6 +78,7 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * note           = N <ref> <commit>=message
  * rebase         = E<head name>,<original commit id>,<onto commit id>
  * merge          = M<message>,<original head>,<merge head>
+ * cherry-pick    = P<original head>,<picked commit>
  * index          = I <change>[,<change>]*
  * workdir        = W <change>[,<change>]*
  * open submodule = 'O'<path>[' '<override>('!'<override>)*]
@@ -141,6 +144,12 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * testing of relative URLs, a relative URL in the form of "../foo" will be
  * translated into "foo" in a open submodule.
  *
+ * In some cases, it's difficult to specify the exact contents of a file.  For
+ * example, a file with a conflict that contains the SHA of a commit.  In such
+ * cases, you can specify a regex for the contents of a file by using "^" as
+ * the first character in the data, e.g. `^ab$` would match a file with a line
+ * ending in `ab`.
+ *
  * Examples:
  *
  * S                          -- same as RepoType.S
@@ -175,6 +184,12 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * S:Mmerging commit,1,2        -- merge in progress started with commit
  *                                 message "merging commit"
  *                                 original head "1", merge head "2"
+ * S:CP1,2                      -- cherry-pick in progress started with
+ *                                 original head "1", picking commit "2"
+ * S:I *foo=a*b*c               -- The file 'foo' is flagged in the index
+ *                                 as conflicted, having a base content of 'a',
+ *                                 "our" content as 'b', and "their" content as
+ *                                 'c'.
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
@@ -247,6 +262,22 @@ function findChar(str, c, begin, end) {
 }
 
 /**
+ * Return the submodule described by the specified `data`.
+ * @param {String} data
+ * @return {Submodule}
+ */
+function parseSubmodule(data) {
+    const end = data.length;
+    const urlEnd = findChar(data, ":", 0, end);
+    assert.isNotNull(urlEnd);
+    const commitIdBegin = urlEnd + 1;
+    const sha = (commitIdBegin === end) ?
+                null :
+                data.substr(commitIdBegin, end - commitIdBegin);
+    return new RepoAST.Submodule(data.substr(0, urlEnd), sha);
+}
+
+/**
  * Return the path change data described by the specified `commitData`.  If
  * `commitData` begins with an `S` it is a submodule description; otherwise, it
  * is just `commitData`; if it is "~" it indicates removal from the override.
@@ -263,20 +294,20 @@ function parseChangeData(commitData) {
     if (0 === end || "S" !== commitData[0]) {
         return commitData;                                            // RETURN
     }
-
-    // Must have room for 'S', ':', and at least one char for the url and
-    // commit id
-
-    const urlBegin = 1;
-    const urlEnd = findChar(commitData, ":", urlBegin, end);
-    assert.isNotNull(urlEnd);
-    const commitIdBegin = urlEnd + 1;
-    const sha = (commitIdBegin === end) ?
-                null :
-                commitData.substr(commitIdBegin, end - commitIdBegin);
-    return new RepoAST.Submodule(commitData.substr(urlBegin,
-                                                   urlEnd - urlBegin),
-                                 sha);
+    assert(1 !== commitData.length);
+    return parseSubmodule(commitData.substr(1));
+}
+/**
+ * Return the path change data described by the specified `data`.  If
+ * `data` begins with an `S` it is a submodule description; if it is empty, it
+ * is null; otherwise, it is just 'data'.
+ * @private
+ * @param {String} data
+ * @return {String|RepoAST.Submodule|null}
+ */
+function parseConflictData(data) {
+    const result = parseChangeData(data);
+    return result === undefined ? null : result;
 }
 
 /**
@@ -325,6 +356,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         openSubmodules: baseAST.openSubmodules,
         rebase: baseAST.rebase,
         merge: baseAST.merge,
+        cherryPick: baseAST.cherryPick,
         bare: baseAST.bare,
     };
 
@@ -443,6 +475,12 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.merge = rawRepo.merge;
     }
 
+    // Override cherry-pick if provided
+
+    if ("cherryPick" in rawRepo) {
+        resultArgs.cherryPick = rawRepo.cherryPick;
+    }
+
     return resultArgs;
 }
 
@@ -521,6 +559,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let openSubmodules = {};
     let rebase;
     let merge;
+    let cherryPick;
 
     /**
      * Parse a set of changes from the specified `begin` character to the
@@ -528,6 +567,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
      *
      * @param {Number} begin
      * @param {Number} end
+     * @param {Bool} allowConflicts
      */
     function parseChanges(begin, end) {
         let changes = {};
@@ -537,16 +577,29 @@ function parseOverrides(shorthand, begin, end, delimiter) {
             const assign = findChar(shorthand, "=", begin, currentEnd.begin);
             assert.notEqual(begin, assign, "no path");
             let change = null;
-            let pathEnd = currentEnd.begin;
+            const pathEnd = assign || currentEnd.begin;
+            let path = shorthand.substr(begin, pathEnd - begin);
             if (null !== assign) {
-                pathEnd = assign;
                 const dataBegin = assign + 1;
-                const rawChange =
-                           shorthand.substr(dataBegin,
-                                            currentEnd.begin - dataBegin);
-                change = parseChangeData(rawChange);
+                const rawChange = shorthand.substr(
+                                                 dataBegin,
+                                                 currentEnd.begin - dataBegin);
+
+                if (path.startsWith("*")) {
+                    // Handle 'Conflict'.
+
+                    assert.notEqual(path.length, 1, "empty conflict path");
+                    path = path.substr(1);
+                    const changes = rawChange.split("*");
+                    assert.equal(changes.length, 3, "missing conflict parts");
+                    const parts = changes.map(parseConflictData);
+                    change = new RepoAST.Conflict(parts[0],
+                                                  parts[1],
+                                                  parts[2]);
+                } else {
+                    change = parseChangeData(rawChange);
+                }
             }
-            const path = shorthand.substr(begin, pathEnd - begin);
             changes[path] = change;
             begin = currentEnd.end;
         }
@@ -894,6 +947,26 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
+     * Parse the cherry-pick definition beginning at the specified `begin` and
+     * terminating at the specified `end`.
+     *
+     * @param {Number} begin
+     * @param {Number} end
+     */
+    function parseCherryPick(begin, end) {
+        if (begin === end) {
+            cherryPick = null;
+            return;                                                   // RETURN
+        }
+        const cherryPickDef = shorthand.substr(begin, end - begin);
+        const parts = cherryPickDef.split(",");
+        assert.equal(parts.length,
+                     2,
+                     `Wrong number of cherry-pick parts in ${cherryPickDef}`);
+        cherryPick = new RepoAST.CherryPick(parts[0], parts[1]);
+    }
+
+    /**
      * Parse the override beginning at the specified `begin` and finishing at
      * the specified `end`.
      *
@@ -914,6 +987,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "R": return parseRemote;
                 case "I": return parseIndex;
                 case "M": return parseMerge;
+                case "P": return parseCherryPick;
                 case "N": return parseNote;
                 case "W": return parseWorkdir;
                 case "O": return parseOpenSubmodule;
@@ -961,6 +1035,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== merge) {
         result.merge = merge;
+    }
+    if (undefined !== cherryPick) {
+        result.cherryPick = cherryPick;
     }
     return result;
 }
@@ -1221,6 +1298,10 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.merge) {
             includeCommit(resultArgs.merge.originalHead);
             includeCommit(resultArgs.merge.mergeHead);
+        }
+        if (resultArgs.cherryPick) {
+            includeCommit(resultArgs.cherryPick.originalHead);
+            includeCommit(resultArgs.cherryPick.picked);
         }
         for (let remoteName in resultArgs.remotes) {
             const remote = resultArgs.remotes[remoteName];

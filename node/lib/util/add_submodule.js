@@ -33,9 +33,7 @@
 const assert    = require("chai").assert;
 const co        = require("co");
 const colors    = require("colors");
-const fs        = require("fs-promise");
 const NodeGit   = require("nodegit");
-const path      = require("path");
 
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -63,15 +61,10 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
         assert.isString(importArg.url);
         assert.isString(importArg.branch);
     }
-    const modulesPath = path.join(repo.workdir(),
-                                  SubmoduleConfigUtil.modulesFileName);
     const index = yield repo.index();
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
     urls[filename] = url;
-    const newConf = SubmoduleConfigUtil.writeConfigText(urls);
-    yield fs.writeFile(modulesPath, newConf);
-
-    yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
+    yield SubmoduleConfigUtil.writeUrls(repo, index, urls);
     yield index.write();
 
     const metaUrl = yield GitUtil.getOriginUrl(repo);

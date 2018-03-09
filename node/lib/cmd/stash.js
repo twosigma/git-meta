@@ -118,6 +118,7 @@ const doSave = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const status = yield StatusUtil.getRepoStatus(repo);
+    StatusUtil.ensureReady(status);
     const includeUntracked = args.include_untracked || false;
     if (cleanSubs(status, includeUntracked)) {
         console.warn("Nothing to stash.");

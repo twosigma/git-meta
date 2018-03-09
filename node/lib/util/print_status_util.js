@@ -42,6 +42,7 @@ const path    = require("path");
 
 const GitUtil             = require("./git_util");
 const Merge               = require("./merge");
+const CherryPick          = require("./cherry_pick");
 const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
 
@@ -51,9 +52,9 @@ const RepoStatus          = require("./repo_status");
  */
 class StatusDescriptor {
     /**
-     * @param {RepoStatus.FILESTATUS} status
-     * @param {String}                path
-     * @param {String}                detail
+     * @param {RepoStatus.FILESTATUS|RepoStatus.Conflict} status
+     * @param {String}                                    path
+     * @param {String}                                    detail
      */
     constructor(status, path, detail) {
         this.status = status;
@@ -72,25 +73,28 @@ class StatusDescriptor {
     print(color, cwd) {
         let result = "";
         const FILESTATUS = RepoStatus.FILESTATUS;
-        switch(this.status) {
-            case FILESTATUS.ADDED:
-                result += "new file:     ";
-                break;
-            case FILESTATUS.MODIFIED:
-                result += "modified:     ";
-                break;
-            case FILESTATUS.REMOVED:
-                result += "deleted:      ";
-                break;
-            case FILESTATUS.CONFLICTED:
-                result += "conflicted:   ";
-                break;
-            case FILESTATUS.RENAMED:
-                result += "renamed:      ";
-                break;
-            case FILESTATUS.TYPECHANGED:
-                result += "type changed: ";
-                break;
+        if (this.status instanceof RepoStatus.Conflict) {
+            // TODO: more detail, e.g., "we added"
+            result += "conflicted:   ";
+        }
+        else {
+            switch(this.status) {
+                case FILESTATUS.ADDED:
+                    result += "new file:     ";
+                    break;
+                case FILESTATUS.MODIFIED:
+                    result += "modified:     ";
+                    break;
+                case FILESTATUS.REMOVED:
+                    result += "deleted:      ";
+                    break;
+                case FILESTATUS.RENAMED:
+                    result += "renamed:      ";
+                    break;
+                case FILESTATUS.TYPECHANGED:
+                    result += "type changed: ";
+                    break;
+            }
         }
         let filename = path.relative(cwd, this.path);
         if ("" === filename) {
@@ -355,7 +359,8 @@ exports.printRebase = function (rebase) {
     const shortSha = GitUtil.shortSha(rebase.onto);
     return `${colors.red("rebase in progress; onto ", shortSha)}
 You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
-  (fix conflicts and then run "git meta rebase --continue")
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta rebase --continue")
   (use "git meta rebase --abort" to check out the original branch)
 `;
 };
@@ -370,8 +375,25 @@ function printMerge(merge) {
     assert.instanceOf(merge, Merge);
     return `\
 A merge is in progress.
-  (fix conflicts and run "git meta merge --continue")
-  (use "git meta merge --abort" to abort the merge)
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta merge --continue")
+  (use "git meta merge --abort" to check out the original branch)
+`;
+}
+
+/**
+ * Return a message describing the specified `cherryPick`.
+ *
+ * @param {CherryPick}
+ * @return {String}
+ */
+function printCherryPick(cherryPick) {
+    assert.instanceOf(cherryPick, CherryPick);
+    return `\
+A cherry-pick is in progress.
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta cherry-pick --continue")
+  (use "git meta cherry-pick --abort" to check out the original branch)
 `;
 }
 
@@ -412,6 +434,10 @@ exports.printRepoStatus = function (status, cwd) {
 
     if (null !== status.merge) {
         result += printMerge(status.merge);
+    }
+
+    if (null !== status.cherryPick) {
+        result += printCherryPick(status.cherryPick);
     }
 
     let changes = "";

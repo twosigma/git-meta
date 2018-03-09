@@ -32,13 +32,17 @@
 
 const assert  = require("chai").assert;
 const colors  = require("colors");
+const NodeGit = require("nodegit");
 
 const Rebase              = require("../../lib/util/rebase");
 const Merge               = require("../../lib/util/merge");
+const CherryPick          = require("../../lib/util/cherry_pick");
 const RepoStatus          = require("../../lib/util/repo_status");
 const PrintStatusUtil     = require("../../lib/util/print_status_util");
 
 describe("PrintStatusUtil", function () {
+    const FILEMODE         = NodeGit.TreeEntry.FILEMODE;
+    const BLOB             = FILEMODE.BLOB;
     const FILESTATUS       = RepoStatus.FILESTATUS;
     const RELATION         = RepoStatus.Submodule.COMMIT_RELATION;
     const StatusDescriptor = PrintStatusUtil.StatusDescriptor;
@@ -77,7 +81,10 @@ describe("PrintStatusUtil", function () {
                     check: /^deleted/,
                 },
                 "conflicted": {
-                    des: new StatusDescriptor(FILESTATUS.CONFLICTED, "x", "y"),
+                    des: new StatusDescriptor(
+                                     new RepoStatus.Conflict(BLOB, BLOB, BLOB),
+                                     "x",
+                                     "y"),
                     check: /^conflicted/,
                 },
                 "renamed": {
@@ -706,8 +713,23 @@ nothing to commit, working tree clean
                 exact: `\
 On branch ${colors.green("master")}.
 A merge is in progress.
-  (fix conflicts and run "git meta merge --continue")
-  (use "git meta merge --abort" to abort the merge)
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta merge --continue")
+  (use "git meta merge --abort" to check out the original branch)
+nothing to commit, working tree clean
+`,
+            },
+            "cherry-pick": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    cherryPick: new CherryPick("1", "1"),
+                }),
+                exact: `\
+On branch ${colors.green("master")}.
+A cherry-pick is in progress.
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta cherry-pick --continue")
+  (use "git meta cherry-pick --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
             },

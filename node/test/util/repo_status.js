@@ -33,6 +33,7 @@
 const assert = require("chai").assert;
 
 const Merge      = require("../../lib/util/merge");
+const CherryPick = require("../../lib/util/cherry_pick");
 const Rebase     = require("../../lib/util/rebase");
 const RepoStatus = require("../../lib/util/repo_status");
 
@@ -477,6 +478,7 @@ describe("RepoStatus", function () {
                 submodules: {},
                 rebase: null,
                 merge: null,
+                cherryPick: null,
             };
             return Object.assign(result, args);
         }
@@ -503,6 +505,7 @@ describe("RepoStatus", function () {
                     },
                     rebase: new Rebase("foo", "1", "2"),
                     merge: new Merge("baz", "2", "1"),
+                    cherryPick: new CherryPick("2", "1"),
                 },
                 e: m({
                     currentBranchName: "foo",
@@ -517,6 +520,7 @@ describe("RepoStatus", function () {
                     },
                     rebase: new Rebase("foo", "1", "2"),
                     merge: new Merge("baz", "2", "1"),
+                    cherryPick: new CherryPick("2", "1"),
                 }),
             }
         };
@@ -533,6 +537,7 @@ describe("RepoStatus", function () {
             assert.deepEqual(result.submodules, c.e.submodules);
             assert.deepEqual(result.rebase, c.e.rebase);
             assert.deepEqual(result.merge, c.e.merge);
+            assert.deepEqual(result.cherryPick, c.e.cherryPick);
         });
     });
 
@@ -858,6 +863,79 @@ describe("RepoStatus", function () {
         });
     });
 
+    describe("isConflicted", function () {
+        const cases = {
+            "trivial": {
+                input: new RepoStatus(),
+                expected: false,
+            },
+            "with files and submodules": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    staged: { bar: FILESTATUS.MODIFIED },
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            staged: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: false,
+            },
+            "conflict in meta": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    staged: { bar: new RepoStatus.Conflict(null, null, null) },
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            staged: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+            "conflict in sub": {
+                input: new RepoStatus({
+                    currentBranchName: "foo",
+                    headCommit: "1",
+                    staged: { bar: FILESTATUS.MODIFIED },
+                    workdir: { foo: FILESTATUS.ADDED },
+                    submodules: {
+                        "a": new Submodule({
+                            commit: new Commit("1", "a"),
+                            staged: new Index("1", "a", RELATION.SAME),
+                            workdir: new Workdir(new RepoStatus({
+                                staged: {
+                                    meh: new RepoStatus.Conflict(1, 1, 1),
+                                },
+                                headCommit: "1",
+                            }), RELATION.SAME),
+                        }),
+                    },
+                }),
+                expected: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = c.input.isConflicted();
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
     describe("isDeepClean", function () {
         const cases = {
             "trivial": {
@@ -963,6 +1041,7 @@ describe("RepoStatus", function () {
             workdir: { x: FILESTATUS.MODIFIED },
             rebase: new Rebase("2", "4", "b"),
             merge: new Merge("hah", "1", "1"),
+            cherryPick: new CherryPick("1", "1"),
         });
         const anotherStat = new RepoStatus({
             currentBranchName: "fo",
@@ -974,6 +1053,7 @@ describe("RepoStatus", function () {
             workdir: { x: FILESTATUS.ADDED },
             rebase: new Rebase("a", "4", "b"),
             merge: new Merge("a", "2", "2"),
+            cherryPick: new CherryPick("a", "2"),
         });
         it("simple, no args", function () {
             const newStat = stat.copy();
@@ -992,6 +1072,7 @@ describe("RepoStatus", function () {
                 workdir: anotherStat.workdir,
                 rebase: anotherStat.rebase,
                 merge: anotherStat.merge,
+                cherryPick: anotherStat.cherryPick,
             });
             assert.deepEqual(newStat, anotherStat);
         });

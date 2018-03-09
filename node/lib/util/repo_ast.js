@@ -39,6 +39,7 @@ const deepCopy = require("deepcopy");
 
 const Rebase = require("./rebase");
 const Merge  = require("./merge");
+const CherryPick  = require("./cherry_pick");
 
 /**
  * @class {Branch}
@@ -115,12 +116,98 @@ class Submodule {
     get sha() {
         return this.d_sha;
     }
+
+    /**
+     * Return true if the specified `rhs` represents the same value as this
+     * `Submodule` object and false otherwise.  Two `Submodule` objects
+     * represent the same value if they have the same `url` and `sha`.
+     *
+     * @param {Submodule} rhs
+     * @return {Bool}
+     */
+    equal(rhs) {
+        assert.instanceOf(rhs, Submodule);
+        return this.d_url === rhs.d_url && this.d_sha === rhs.d_sha;
+    }
 }
 
 Submodule.prototype.toString = function () {
     return `Submodule(url=${this.d_url}, sha=${this.d_sha || ""})`;
 };
 
+/**
+ * @class Conflict
+ *
+ * This class is used to represent a file that is conflicted in the index.
+ */
+class Conflict {
+
+    /**
+     * Create a new `Conflict` having the specified `ancestor`, `our`, and
+     * `their` file content.  Null content indicates a deletion.
+     *
+     * @constructor
+     * @param {String|Submodule|null} ancestor
+     * @param {String|Submodule|null} our
+     * @param {String||Submodule|null} their
+     */
+    constructor(ancestor, our, their) {
+        assert(null === ancestor ||
+               "string" === typeof ancestor ||
+               ancestor instanceof Submodule, ancestor);
+        assert(null === our ||
+               "string" === typeof our ||
+               our instanceof Submodule, our);
+        assert(null === their ||
+               "string" === typeof their ||
+               their instanceof Submodule, their);
+        this.d_ancestor = ancestor;
+        this.d_our = our;
+        this.d_their = their;
+    }
+
+    /**
+     * @property {String|Submodule|null} ancestor
+     * the content of the file in the common ancestor commit
+     */
+    get ancestor() {
+        return this.d_ancestor;
+    }
+
+    /**
+     * @property {String|Submodule|null} our
+     * the content of the file in the "current" commit being integrated into
+     */
+    get our() {
+        return this.d_our;
+    }
+
+    /**
+     * @property {String|Submodule|null} their
+     * the content of the file in the commit being integrated
+     */
+    get their() {
+        return this.d_their;
+    }
+
+    /**
+     * Return true if the specified `rhs` represents the same value as this
+     * `Conflict` and false otherwise.  Two `Conflict` objects represent the
+     * same value if the have the same `ancestor`, `our`, and `their`.
+     *
+     * @param {Conflict} rhs
+     * @return {Bool}
+     */
+    equal(rhs) {
+        assert.instanceOf(rhs, Conflict);
+        return deeper(this, rhs);
+   }
+}
+
+Conflict.prototype.toString = function () {
+    return `Conflict(ancestor=${this.d_ancestor}, our=${this.d_our} \
+their=${this.d_their})`;
+};
 
 /**
  * This module provides the RepoAST class and associated classes.  Supported
@@ -291,6 +378,7 @@ class AST {
      * - If provided, the `onto` and `originalHead` commits in `rebase` exist
      *   in `commits`.
      * - if 'bare', `index` and `workdir` are empty, and `rebase` is null
+     * - any conflicted path in the index has a value specified in the workdir
      *
      * @param {Object}      args
      * @param {Object}      [args.commits]
@@ -306,6 +394,7 @@ class AST {
      * @param {Object}      [args.openSubmodules]
      * @param {Rebase}      [args.rebase]
      * @param {Merge}       [args.merge]
+     * @param {CherryPick}  [args.cherryPick]
      */
     constructor(args) {
         if (undefined === args) {
@@ -483,26 +572,23 @@ in commit ${id}.`);
             }
         }
 
+        this.d_cherryPick = null;
+        if ("cherryPick" in args) {
+            const cherryPick = args.cherryPick;
+            if (null !== cherryPick) {
+                assert.instanceOf(cherryPick, CherryPick);
+                assert.isFalse(this.d_bare);
+                checkAndTraverse(cherryPick.originalHead,
+                                 "original head of cherry-pick");
+                checkAndTraverse(cherryPick.picked, "picked commit");
+                this.d_cherryPick = cherryPick;
+            }
+        }
+
         // Validate that all commits have been reached.
 
         for (let key in commits) {
             assert(seen.has(key), `Commit '${key}' is not reachable.`);
-        }
-
-        // Copy and validate index changes.
-
-        this.d_index = {};
-        if ("index" in args) {
-            const index = args.index;
-            assert.isObject(index);
-            for (let path in index) {
-                assert.isFalse(this.d_bare);
-                const change = index[path];
-                if (!(change instanceof Submodule) && null !== change) {
-                    assert.isString(change);
-                }
-                this.d_index[path] = change;
-            }
         }
 
         // Copy and validate notes changes.
@@ -538,6 +624,25 @@ in commit ${id}.`);
                 this.d_workdir[path] = change;
             }
         }
+
+        // Copy and validate index changes.
+
+        this.d_index = {};
+        if ("index" in args) {
+            const index = args.index;
+            assert.isObject(index);
+            for (let path in index) {
+                assert.isFalse(this.d_bare);
+                const change = index[path];
+                assert(null === change ||
+                       "string" === typeof change ||
+                       change instanceof Submodule ||
+                       change instanceof Conflict,
+                       `Invalid value in index for ${path} -- ${change}`);
+                this.d_index[path] = change;
+            }
+        }
+
 
         // Copy and validate open submodules.  Each open submodule must be an
         // instance of `AST` and there must be a `Submodule` defined in the
@@ -660,6 +765,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {CherryPick} null unless a cherry-pick is in progress
+     */
+    get cherryPick() {
+        return this.d_cherryPick;
+    }
+
+    /**
      * Accumulate the specified `changes` into the specified `dest` map.  A
      * non-null value in `changes` overrides any existing value in `dest`; a
      * `null value causes the path mapped to `null` to be removed.  The
@@ -719,6 +831,8 @@ in commit ${id}.`);
                 args.openSubmodules : this.d_openSubmodules,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
             merge: ("merge" in args) ? args.merge : this.d_merge,
+            cherryPick: ("cherryPick" in args) ?
+                       args.cherryPick : this.cherryPick,
             bare: ("bare" in args) ? args.bare : this.d_bare,
         });
     }
@@ -784,17 +898,26 @@ in commit ${id}.`);
         assert.isObject(commitMap);
         assert.isString(commitId);
         assert.isObject(indexChanges);
-        let cache = {};
-        let fromCommit = AST.renderCommit(cache, commitMap, commitId);
-        AST.accumulateDirChanges(fromCommit, indexChanges);
+        const cache = {};
+        const fromCommit = AST.renderCommit(cache, commitMap, commitId);
+        const filteredIndex = {};
+        for (let key in indexChanges) {
+            const value = indexChanges[key];
+            if (!(value instanceof Conflict)) {
+                filteredIndex[key] = value;
+            }
+        }
+        AST.accumulateDirChanges(fromCommit, filteredIndex);
         return fromCommit;
     }
 }
 
 AST.Branch = Branch;
 AST.Commit = Commit;
+AST.Conflict = Conflict;
 AST.Rebase = Rebase;
 AST.Merge  = Merge;
+AST.CherryPick  = CherryPick;
 AST.Remote = Remote;
 AST.Submodule = Submodule;
 module.exports = AST;

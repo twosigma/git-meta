@@ -110,6 +110,7 @@ describe("ShorthandParserUtil", function () {
     });
     describe("parseRepoShorthandRaw", function () {
         const Commit = RepoAST.Commit;
+        const Conflict = RepoAST.Conflict;
         const Submodule = RepoAST.Submodule;
         function m(args) {
             let result = {
@@ -425,6 +426,26 @@ describe("ShorthandParserUtil", function () {
                     index: { x: new Submodule("/x", "1") },
                 }),
             },
+            "index with conflict": {
+                i: "S:I *a=x*y*S/x:2,b=q",
+                e: m({
+                    type: "S",
+                     index: {
+                         a: new Conflict("x", "y", new Submodule("/x", "2")),
+                         b: "q",
+                     }
+                }),
+            },
+            "index with conflict and nulls": {
+                i: "S:I *a=*~*,b=q",
+                e: m({
+                    type: "S",
+                     index: {
+                         a: new Conflict("", null, ""),
+                         b: "q",
+                     }
+                }),
+            },
             "workdir change": {
                 i: "S:W x=y",
                 e: m({
@@ -613,6 +634,20 @@ describe("ShorthandParserUtil", function () {
                     merge: null,
                 }),
             },
+            "cherry-pick": {
+                i: "S:P1,2",
+                e: m({
+                    type: "S",
+                    cherryPick: new RepoAST.CherryPick("1", "2"),
+                }),
+            },
+            "cherry-pick null": {
+                i: "S:P",
+                e: m({
+                    type: "S",
+                    cherryPick: null,
+                }),
+            },
             "new submodule": {
                 i: "S:I x=Sfoo:;Ox",
                 e: m({
@@ -650,6 +685,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.openSubmodules, e.openSubmodules);
                 assert.deepEqual(r.rebase, e.rebase);
                 assert.deepEqual(r.merge, e.merge);
+                assert.deepEqual(r.cherryPick, e.cherryPick);
             });
         });
     });
@@ -825,6 +861,12 @@ describe("ShorthandParserUtil", function () {
                 i: "S:Mfoo,1,1",
                 e: S.copy({
                     merge: new RepoAST.Merge("foo", "1", "1"),
+                }),
+            },
+            "cherry-pick": {
+                i: "S:P1,1",
+                e: S.copy({
+                    cherryPick: new RepoAST.CherryPick("1", "1"),
                 }),
             },
         };
@@ -1346,6 +1388,59 @@ x=S:Mfoo,8,9`,
                             }),
                         },
                         merge: new RepoAST.Merge("foo", "8", "9"),
+                    }),
+                }
+            },
+            "missing commits in cherry-pick": {
+                i: `
+a=B:C8-1;C9-1;Bmaster=8;Bfoo=9|
+x=S:P8,9`,
+                e: {
+                    a: B.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message\n",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message\n",
+                            }),
+                        },
+                        branches: {
+                            master: new RepoAST.Branch("8", null),
+                            foo: new RepoAST.Branch("9", null),
+                        },
+                        head: "8",
+                    }),
+                    x: S.copy({
+                        commits: {
+                            "1": new Commit({
+                                changes: {
+                                    "README.md": "hello world"
+                                },
+                                message: "the first commit",
+                            }),
+                            "8": new Commit({
+                                parents: ["1"],
+                                changes: { "8": "8" },
+                                message: "message\n",
+                            }),
+                            "9": new Commit({
+                                parents: ["1"],
+                                changes: { "9": "9" },
+                                message: "message\n",
+                            }),
+                        },
+                        cherryPick: new RepoAST.CherryPick("8", "9"),
                     }),
                 }
             },

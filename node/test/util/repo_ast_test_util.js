@@ -353,4 +353,55 @@ Bmaster=1 origin/master`,
             }));
         });
     });
+    describe("mapCommits", function () {
+        const cases = {
+            "nothing to do": {
+                commits: {},
+                commitMap: {},
+                suffix: "foo",
+                expected: {},
+            },
+            "map one": {
+                commits: { "2": "1" },
+                commitMap: { "1": "foo" },
+                suffix: "bar",
+                expected: { "2": "foobar" },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = {};
+                RepoASTTestUtil.mapCommits(result,
+                                           c.commits,
+                                           c.commitMap,
+                                           c.suffix);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
+    describe("mapSubCommits", function () {
+        const cases = {
+            "nothing to do": {
+                subCommits: {},
+                commitMap: {},
+                expected: {},
+            },
+            "map one": {
+                subCommits: { "x": { "2": "1" } },
+                commitMap: { "1": "fo" },
+                expected: { "2": "fox" },
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = {};
+                RepoASTTestUtil.mapSubCommits(result,
+                                              c.subCommits,
+                                              c.commitMap);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
 });

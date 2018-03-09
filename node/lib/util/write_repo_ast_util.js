@@ -45,6 +45,8 @@ const mkdirp   = require("mkdirp");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
+const CherryPickFileUtil  = require("./cherry_pick_file_util");
+const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const MergeFileUtil       = require("./merge_file_util");
 const RebaseFileUtil      = require("./rebase_file_util");
@@ -53,6 +55,8 @@ const RepoASTUtil         = require("./repo_ast_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const TestUtil            = require("./test_util");
 const TreeUtil            = require("./tree_util");
+
+const FILEMODE = NodeGit.TreeEntry.FILEMODE;
 
                          // Begin module-local methods
 
@@ -69,7 +73,7 @@ const TreeUtil            = require("./tree_util");
 const hashObject = co.wrap(function *(db, data) {
     const BLOB = 3;
     const res = yield db.write(data, data.length, BLOB);
-    return res.tostrS();
+    return res;
 });
 
 /**
@@ -117,13 +121,17 @@ const writeTree = co.wrap(function *(repo,
         Object.assign(submodules, parent.submodules);
     }
 
-    const FILEMODE = NodeGit.TreeEntry.FILEMODE;
     const wereSubs = 0 !== Object.keys(submodules).length;
 
     const pathToChange = {}; // name to `TreeUtil.Change`
 
     for (let filename in changes) {
         const entry = changes[filename];
+
+        if (entry instanceof RepoAST.Conflict) {
+            // Skip conflicts
+            continue;                                               // CONTINUE
+        }
 
         let isSubmodule = false;
 
@@ -135,7 +143,7 @@ const writeTree = co.wrap(function *(repo,
         else if ("string" === typeof entry) {
             // A string is just plain data.
 
-            const id = yield hashObject(db, entry);
+            const id = (yield hashObject(db, entry)).tostrS();
             pathToChange[filename] = new TreeUtil.Change(id, FILEMODE.BLOB);
         }
         else if (entry instanceof RepoAST.Submodule) {
@@ -173,7 +181,7 @@ const writeTree = co.wrap(function *(repo,
 \turl = ${url}
 `;
         }
-        const dataId = yield hashObject(db, data);
+        const dataId = (yield hashObject(db, data)).tostrS();
         pathToChange[SubmoduleConfigUtil.modulesFileName] =
                                     new TreeUtil.Change(dataId, FILEMODE.BLOB);
     }
@@ -325,6 +333,26 @@ const writeAllCommits = co.wrap(function *(repo, commits, treeCache) {
  * @param {Object}             treeCache  map of tree entries
  */
 const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
+
+    const makeConflictEntry = co.wrap(function *(data) {
+        assert.instanceOf(repo, NodeGit.Repository);
+        if (null === data) {
+            return null;
+        }
+        if (data instanceof RepoAST.Submodule) {
+            //TODO: some day support putting conflicts in the .gitmodules file.
+            assert.equal("",
+                         data.url,
+                         "submodule conflicts must have empty URL");
+            const sha = commitMap[data.sha];
+            return new ConflictUtil.ConflictEntry(FILEMODE.COMMIT, sha);
+        }
+        const db = yield repo.odb();
+        const id = yield hashObject(db, data);
+        const BLOB = FILEMODE.BLOB;
+        return new ConflictUtil.ConflictEntry(BLOB, id.tostrS());
+    });
+
     const makeRef = co.wrap(function *(name, commit) {
         const newSha = commitMap[commit];
         const newId = NodeGit.Oid.fromString(newSha);
@@ -451,6 +479,18 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             yield MergeFileUtil.writeMerge(repo.path(), merge);
         }
 
+        // Write out the cherry-pick info, if it exists.
+
+        if (null !== ast.cherryPick) {
+            // Map commits
+
+            const originalSha = commitMap[ast.cherryPick.originalHead];
+            const pickSha = commitMap[ast.cherryPick.picked];
+            const cherryPick = new RepoAST.CherryPick(originalSha,
+                                                      pickSha);
+            yield CherryPickFileUtil.writeCherryPick(repo.path(), cherryPick);
+        }
+
         // Set up the index.  We render the current commit and apply the index
         // on top of it.
 
@@ -467,6 +507,18 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
         const index = yield repo.index();
         const treeObj = trees.tree;
         yield index.readTree(treeObj);
+        for (let filename in ast.index) {
+            const data = ast.index[filename];
+            if (data instanceof RepoAST.Conflict) {
+                const ancestor = yield makeConflictEntry(data.ancestor);
+                const our = yield makeConflictEntry(data.our);
+                const their = yield makeConflictEntry(data.their);
+                const conflict = new ConflictUtil.Conflict(ancestor,
+                                                           our,
+                                                           their);
+                yield ConflictUtil.addConflict(index, filename, conflict);
+            }
+        }
         yield index.write();
 
         // TODO: Firgure out if this can be done with NodeGit; extend if

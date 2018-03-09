@@ -131,12 +131,26 @@ function diffChanges(actual, expected) {
     function compare(path) {
         const actualChange = actual[path];
         const expectedChange = expected[path];
-        let different = actualChange !== expectedChange;
+        let different;
+        if ("string" === typeof actualChange &&
+            "string" === typeof expectedChange &&
+            expectedChange.startsWith("^")) {
+            const exp = expectedChange.substr(1);
+            const matcher = new RegExp(exp);
+            const match = matcher.exec(actualChange);
+            different = null === match;
+        } else {
+            different = actualChange !== expectedChange;
+        }
         if (different &&
             actualChange instanceof RepoAST.Submodule &&
             expectedChange instanceof RepoAST.Submodule) {
-            different = actualChange.url !== expectedChange.url ||
-                actualChange.sha !== expectedChange.sha;
+            different = !actualChange.equal(expectedChange);
+        }
+        else if (different &&
+            actualChange instanceof RepoAST.Conflict &&
+            expectedChange instanceof RepoAST.Conflict) {
+            different = !actualChange.equal(expectedChange);
         }
         if (different) {
             result.push(`\
@@ -498,6 +512,21 @@ ${colorAct(actual.merge.mergeHead)}.`);
         }
     }
 
+    // Check cherry-pick
+
+    if (null === actual.cherryPick && null !== expected.cherryPick) {
+        result.push("Missing cherry-pick.");
+    }
+    else if (null !== actual.cherryPick && null === expected.cherryPick) {
+        result.push("Unexpected cherry-pick.");
+    }
+    else if (null !== actual.cherryPick &&
+                               !actual.cherryPick.equal(expected.cherryPick)) {
+       result.push(`\
+Expected cherry pick to be ${actual.cherryPick} but got \
+${expected.cherryPick}`);
+    }
+
     return result;
 }
 
@@ -632,12 +661,23 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         return new RepoAST.Submodule(url, sha);
     }
 
+    function mapData(data) {
+        if (data instanceof RepoAST.Submodule) {
+            return mapSubmodule(data);
+        }
+        return data;
+    }
+
     function mapChanges(input) {
         let changes = {};
         for (let path in input) {
             let change = input[path];
-            if (change instanceof RepoAST.Submodule) {
-                change = mapSubmodule(change);
+            if (change instanceof RepoAST.Conflict) {
+                change = new RepoAST.Conflict(mapData(change.ancestor),
+                                              mapData(change.our),
+                                              mapData(change.their));
+            } else {
+                change = mapData(change);
             }
             changes[path] = change;
         }
@@ -730,6 +770,13 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
                                   mapCommitId(merge.mergeHead));
     }
 
+    let cherryPick = ast.cherryPick;
+    if (null !== cherryPick) {
+        cherryPick = new RepoAST.CherryPick(
+                                          mapCommitId(cherryPick.originalHead),
+                                          mapCommitId(cherryPick.picked));
+    }
+
     return ast.copy({
         commits: commits,
         branches: branches,
@@ -743,6 +790,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         openSubmodules: openSubmodules,
         rebase: rebase,
         merge: merge,
+        cherryPick: cherryPick,
     });
 };
 

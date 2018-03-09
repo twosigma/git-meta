@@ -36,6 +36,9 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
+const CherryPick          = require("../../lib/util/cherry_pick");
+const CherryPickFileUtil  = require("../../lib/util/cherry_pick_file_util");
+const ConflictUtil        = require("../../lib/util/conflict_util");
 const DeinitUtil          = require("../../lib/util/deinit_util");
 const Merge               = require("../../lib/util/merge");
 const MergeFileUtil       = require("../../lib/util/merge_file_util");
@@ -73,6 +76,11 @@ const astFromSimpleRepo = co.wrap(function *(repo) {
     });
 });
 
+const hashObject = co.wrap(function *(repo, data) {
+    const db = yield repo.odb();
+    const BLOB = 3;
+    return yield db.write(data, data.length, BLOB);
+});
 
 /**
  * Create a repository with a branch and two commits and a `RepoAST` object
@@ -1490,6 +1498,54 @@ describe("readRAST", function () {
         assert.deepEqual(actualMerge, merge);
     }));
 
+    it("cherry-pick", co.wrap(function *() {
+        // Start out with a base repo having two branches, "master", and "foo",
+        // foo having one commit on top of master.
+
+        const start = yield repoWithCommit();
+        const r = start.repo;
+
+        // Switch to master
+
+        yield r.checkoutBranch("master");
+
+        const head = yield r.getHeadCommit();
+        const sha = head.id().tostrS();
+
+        const cherryPick = new CherryPick(sha, sha);
+
+        const original = yield ReadRepoASTUtil.readRAST(r);
+        const expected = original.copy({
+            cherryPick: cherryPick,
+        });
+
+        yield CherryPickFileUtil.writeCherryPick(r.path(), cherryPick);
+
+        const actual = yield ReadRepoASTUtil.readRAST(r);
+
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
+
+    it("cherry-pick - unreachable", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        r.detachHead();
+        const secondCommit = yield TestUtil.generateCommit(r);
+        const thirdCommit = yield TestUtil.generateCommit(r);
+
+        // Then begin a cherry-pick.
+
+        const cherryPick = new CherryPick(secondCommit.id().tostrS(),
+                                          thirdCommit.id().tostrS());
+        yield CherryPickFileUtil.writeCherryPick(r.path(), cherryPick);
+
+        // Remove the branches, making the commits reachable only from the
+        // rebase.
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const actualCherryPick = ast.cherryPick;
+        assert.deepEqual(actualCherryPick, cherryPick);
+    }));
+
     it("add subs again", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         let expected = yield astFromSimpleRepo(repo);
@@ -1675,5 +1731,144 @@ describe("readRAST", function () {
                                  NodeGit.Stash.FLAGS.INCLUDE_UNTRACKED);
         yield ReadRepoASTUtil.readRAST(repo);
     }));
+    describe("conflicts", function () {
+        const FILEMODE = NodeGit.TreeEntry.FILEMODE;
+        const ConflictEntry = ConflictUtil.ConflictEntry;
+        it("three versions", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const makeEntry = co.wrap(function *(data) {
+                const id = yield hashObject(repo, data);
+                return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
+            });
+            const ancestor = yield makeEntry("xxx");
+            const our = yield makeEntry("yyy");
+            const their = yield makeEntry("zzz");
+            const index = yield repo.index();
+            const filename = "README.md";
+            const conflict = new ConflictUtil.Conflict(ancestor, our, their);
+            yield ConflictUtil.addConflict(index, filename, conflict);
+            yield index.write();
+            yield fs.writeFile(path.join(repo.workdir(), filename),
+                               "conflicted");
+            const result = yield ReadRepoASTUtil.readRAST(repo);
+            const simple = yield astFromSimpleRepo(repo);
+            const expected = simple.copy({
+                index: {
+                    "README.md": new RepoAST.Conflict("xxx", "yyy", "zzz"),
+                },
+                workdir: {
+                    "README.md": "conflicted",
+                },
+            });
+            RepoASTUtil.assertEqualASTs(result, expected);
+        }));
+        it("with a deletion", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const makeEntry = co.wrap(function *(data) {
+                const id = yield hashObject(repo, data);
+                return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
+            });
+            const ancestor = yield makeEntry("xxx");
+            const their = yield makeEntry("zzz");
+            const conflict = new ConflictUtil.Conflict(ancestor, null, their);
+            const index = yield repo.index();
+            const filename = "README.md";
+            yield ConflictUtil.addConflict(index, filename, conflict);
+            yield index.write();
+            yield fs.writeFile(path.join(repo.workdir(), filename),
+                               "conflicted");
+            const result = yield ReadRepoASTUtil.readRAST(repo);
+            const simple = yield astFromSimpleRepo(repo);
+            const expected = simple.copy({
+                index: {
+                    "README.md": new RepoAST.Conflict("xxx", null, "zzz"),
+                },
+                workdir: {
+                    "README.md": "conflicted",
+                },
+            });
+            RepoASTUtil.assertEqualASTs(result, expected);
+        }));
+        it("with submodule", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const head = yield repo.getHeadCommit();
+            const sha = head.id().tostrS();
+            const entry = new ConflictEntry(FILEMODE.COMMIT, sha);
+            const index = yield repo.index();
+            const conflict = new ConflictUtil.Conflict(null, entry, null);
+            yield ConflictUtil.addConflict(index, "s", conflict);
+            yield index.write();
+            const result = yield ReadRepoASTUtil.readRAST(repo);
+            const simple = yield astFromSimpleRepo(repo);
+            const expected = simple.copy({
+                index: {
+                    "s": new RepoAST.Conflict(null,
+                                              new RepoAST.Submodule("", sha),
+                                              null),
+                },
+            });
+            RepoASTUtil.assertEqualASTs(result, expected);
+        }));
+        it("with submodule and open", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const head = yield repo.getHeadCommit();
+            const sha = head.id().tostrS();
+            const baseSub = yield TestUtil.createSimpleRepository();
+            const subHead = yield baseSub.getHeadCommit();
+            const baseHead = yield baseSub.getHeadCommit();
+            const baseSha = baseHead.id().tostrS();
+            const subAST = yield astFromSimpleRepo(baseSub);
+            yield addSubmodule(repo, baseSub.workdir(), "foo", baseSha);
+            const commit = yield TestUtil.makeCommit(repo,
+                                                     ["foo", ".gitmodules"]);
+
+            const entry = new ConflictEntry(FILEMODE.COMMIT, sha);
+            const index = yield repo.index();
+            const conflict = new ConflictUtil.Conflict(null, entry, null);
+            yield ConflictUtil.addConflict(index, "foo", conflict);
+            yield index.write();
+            let commits = {};
+            commits[sha] = new Commit({
+                changes: {"README.md":""},
+                message: "first commit",
+            });
+            commits[commit.id().tostrS()] = new Commit({
+                parents: [sha],
+                changes: {
+                    "foo": new RepoAST.Submodule(baseSub.workdir(),
+                                                 subHead.id().tostrS()),
+                },
+                message: "message\n",
+            });
+            const expected = new RepoAST({
+                commits: commits,
+                branches: {
+                    master: new RepoAST.Branch(commit.id().tostrS(), null),
+                },
+                currentBranchName: "master",
+                head: commit.id().tostrS(),
+                index: {
+                    "foo": new RepoAST.Conflict(null,
+                                                new RepoAST.Submodule("", sha),
+                                                null),
+                },
+                openSubmodules: {
+                    "foo": subAST.copy({
+                        branches: {},
+                        currentBranchName: null,
+                        remotes: {
+                            origin: new RepoAST.Remote(baseSub.workdir(), {
+                                branches: {
+                                    master: baseSha,
+                                }
+                            }),
+                        },
+                    }),
+                },
+            });
+            const actual = yield ReadRepoASTUtil.readRAST(repo);
+            RepoASTUtil.assertEqualASTs(actual, expected);
+        }));
+    });
 });
 

@@ -33,11 +33,61 @@ const assert  = require("chai").assert;
 
 const Rebase = require("./rebase");
 const Merge  = require("./merge");
+const CherryPick  = require("./cherry_pick");
 
 /**
  * This modules defines the type `RepoStatus`, used to describe modifications
  * to a repo.
  */
+
+/**
+ * @class Conflict
+ * describes a conflict in a file or submodule
+ */
+class Conflict {
+    /**
+     * Create a new `Conflict` object having the specified `ancestorMode`,
+     * `ourMode`, and `theirMode` modes.
+     *
+     * @param {Number|null} ancestorMode
+     * @param {Number|null} ourMode
+     * @param {Number|null} theirMode
+     */
+    constructor(ancestorMode, ourMode, theirMode) {
+        if (null !== ancestorMode) {
+            assert.isNumber(ancestorMode);
+        }
+        if (null !== ourMode) {
+            assert.isNumber(ourMode);
+        }
+        if (null !== theirMode) {
+            assert.isNumber(theirMode);
+        }
+
+        this.d_ancestorMode = ancestorMode;
+        this.d_ourMode = ourMode;
+        this.d_theirMode = theirMode;
+        Object.freeze(this);
+    }
+
+    /**
+     * @property {Number} ancestorMode   file mode of the ancestor part
+     */
+    get ancestorMode() {
+        return this.d_ancestorMode;
+    }
+
+    /**
+     * @property {Number} ourMode  file mode of our part of conflict
+     */
+    get ourMode() {
+        return this.d_ourMode;
+    }
+
+    get theirMode() {
+        return this.d_theirMode;
+    }
+}
 
 /**
  * @enum {RepoStatus.STAGE}
@@ -47,6 +97,7 @@ const Merge  = require("./merge");
 // the nodegit or libgit2 documentation.
 const STAGE = {
     NORMAL: 0,  // normally staged file
+    ANCESTOR: 1,
     OURS  : 2,  // our side of a stage
     THEIRS: 3,  // their side of a stage
 };
@@ -60,7 +111,6 @@ const FILESTATUS = {
     MODIFIED: 0,
     ADDED: 1,
     REMOVED: 2,
-    CONFLICTED: 3,
     RENAMED: 4,
     TYPECHANGED: 5
 };
@@ -386,29 +436,18 @@ class Submodule {
 class RepoStatus {
 
     /**
-     * Return the `STAGE` for the specified `flags`.
-     *
-     * @static
-     * @param {Number} flags
-     * @return {STAGE}
-     */
-    static getStage(flags) {
-        const GIT_IDXENTRY_STAGESHIFT = 12;
-        return flags >> GIT_IDXENTRY_STAGESHIFT;
-    }
-
-    /**
      * Create a new status object having the specified properties.
      * @constructor
      *
-     * @param {Object}   [args]
-     * @param {String}   [args.currentBranchName]
-     * @param {String}   [args.headCommit]
-     * @param {Object}   [args.staged] map from name to `FILESTATUS`
-     * @param {Object}   [args.submodules] map from name to `Submodule`
-     * @param {Object}   [args.workdir] map from name to `FILESTATUS`
-     * @param {Rebase}   [args.rebase] rebase, if one is in progress
-     * @param {Merge}    [args.merge] merge, if one is in progress
+     * @param {Object}     [args]
+     * @param {String}     [args.currentBranchName]
+     * @param {String}     [args.headCommit]
+     * @param {Object}     [args.staged] map from name to `FILESTATUS`
+     * @param {Object}     [args.submodules] map from name to `Submodule`
+     * @param {Object}     [args.workdir] map from name to `FILESTATUS`
+     * @param {Rebase}     [args.rebase] rebase, if one is in progress
+     * @param {Merge}      [args.merge] merge, if one is in progress
+     * @param {CherryPick} [args.cherryPick] cherry-pick, if one is in progress
      */
     constructor(args) {
         if (undefined === args) {
@@ -424,6 +463,7 @@ class RepoStatus {
         this.d_submodules = {};
         this.d_rebase = null;
         this.d_merge = null;
+        this.d_cherryPick = null;
 
         if ("currentBranchName" in args) {
             if (null !== args.currentBranchName) {
@@ -442,7 +482,9 @@ class RepoStatus {
             assert.isObject(staged);
             for (let name in staged) {
                 const value = staged[name];
-                assert.isNumber(value);
+                if ("number" !== typeof(value)) {
+                    assert.instanceOf(value, Conflict);
+                }
                 this.d_staged[name] = value;
             }
         }
@@ -473,6 +515,14 @@ class RepoStatus {
                 assert.instanceOf(merge, Merge);
             }
             this.d_merge = merge;
+        }
+
+        if ("cherryPick" in args) {
+            const cherryPick = args.cherryPick;
+            if (null !== cherryPick) {
+                assert.instanceOf(cherryPick, CherryPick);
+            }
+            this.d_cherryPick = cherryPick;
         }
         Object.freeze(this);
     }
@@ -577,6 +627,27 @@ class RepoStatus {
         });
     }
 
+    /**
+     * Return true if there are any conflicts in the repository represented by
+     * this object and false otherwise.
+     *
+     * @return {Bool}
+     */
+    isConflicted() {
+        for (let name in this.d_staged) {
+            if (this.staged[name] instanceof Conflict) {
+                return true;                                          // RETURN
+            }
+        }
+        for (let name in this.d_submodules) {
+            const sub = this.d_submodules[name];
+            if (null !== sub.workdir && sub.workdir.status.isConflicted()) {
+                return true;                                          // RETURN
+            }
+        }
+        return false;
+    }
+
     // PROPERTIES
 
     /**
@@ -632,6 +703,13 @@ class RepoStatus {
     }
 
     /**
+     * @property {CherryPick} cherryPick if~null, state of cherryPick
+     */
+    get cherryPick() {
+        return this.d_cherryPick;
+    }
+
+    /**
      * Return a new `RepoStatus` object having the same value as this one, but
      * with replacing properties defined in the specified `args`.
      *
@@ -656,11 +734,14 @@ class RepoStatus {
             workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
             merge: ("merge" in args) ? args.merge : this.d_merge,
+            cherryPick: ("cherryPick" in args) ?
+                              args.cherryPick : this.d_cherryPick,
         });
     }
 }
 
 module.exports = RepoStatus;
+RepoStatus.Conflict = Conflict;
 RepoStatus.STAGE = STAGE;
 RepoStatus.FILESTATUS = FILESTATUS;
 RepoStatus.Submodule = Submodule;

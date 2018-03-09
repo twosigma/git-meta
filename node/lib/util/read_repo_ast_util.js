@@ -42,6 +42,7 @@ const fs       = require("fs-promise");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
+const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const RepoAST             = require("./repo_ast");
 const RebaseFileUtil      = require("./rebase_file_util");
 const MergeFileUtil       = require("./merge_file_util");
@@ -82,16 +83,41 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
     const workdir = {};
 
     const submodules =
-         yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, repoIndex);
-
+             yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, repoIndex);
     const referencedSubmodules = new Set();  // set of changed submodules
 
     const STATUS = NodeGit.Status.STATUS;
 
+    const readWorkdir = co.wrap(function *(filePath) {
+        const absPath = path.join(repo.workdir(), filePath);
+        let data;
+        try {
+            data = yield fs.readFile(absPath, { encoding: "utf8" });
+        } catch (e) {
+            // no file
+        }
+        if (undefined !== data) {
+            workdir[filePath] = data;
+        }
+    });
+
+    const readEntryFile = co.wrap(function *(entry) {
+        if (undefined === entry) {
+            return null;                                              // RETURN
+        }
+        const oid = entry.id;
+        if (NodeGit.TreeEntry.FILEMODE.COMMIT === entry.mode) {
+            return new RepoAST.Submodule("", oid.tostrS());
+        }
+        const blob = yield repo.getBlob(oid);
+        return blob.toString();
+    });
+
     const stats = yield repo.getStatusExt();
     for (let i = 0; i < stats.length; ++i) {
-        const stat = stats[i].statusBit();
-        let filePath = stats[i].path();
+        const statusFile = stats[i];
+        const stat = statusFile.statusBit();
+        let filePath = statusFile.path();
 
         // If the path ends with a slash, knock it off so we'll be able to
         // match it to submodules.
@@ -107,6 +133,23 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
         }
 
         // Check index.
+
+        if (statusFile.isConflicted()) {
+            // If the file is conflicted, read the contents for each stage, and
+            // the contents of the file in the workdir.
+
+            const ancestorEntry = repoIndex.getByPath(filePath, 1);
+            const ourEntry = repoIndex.getByPath(filePath, 2);
+            const theirEntry = repoIndex.getByPath(filePath, 3);
+            const ancestorData = yield readEntryFile(ancestorEntry);
+            const ourData = yield readEntryFile(ourEntry);
+            const theirData = yield readEntryFile(theirEntry);
+            index[filePath] = new RepoAST.Conflict(ancestorData,
+                                                   ourData,
+                                                   theirData);
+            yield readWorkdir(filePath);
+            continue;                                               // CONTINUE
+        }
 
         if (stat & STATUS.INDEX_DELETED) {
             index[filePath] = null;
@@ -126,12 +169,8 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
             else {
 
                 // Otherwise, read the blob for the file from the index.
-
                 const entry = repoIndex.getByPath(filePath, 0);
-                const oid = entry.id;
-                const blob = yield repo.getBlob(oid);
-                const data = blob.toString();
-                index[filePath] = data;
+                index[filePath] = yield readEntryFile(entry);
             }
         }
 
@@ -142,11 +181,7 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
         }
         else if (stat & STATUS.WT_NEW || stat & STATUS.WT_MODIFIED) {
             if (!(filePath in submodules)) {
-                const absPath = path.join(repo.workdir(), filePath);
-                const data = yield fs.readFile(absPath, {
-                    encoding: "utf8"
-                });
-                workdir[filePath] = data;
+                yield readWorkdir(filePath);
             }
         }
     }
@@ -441,7 +476,10 @@ exports.readRAST = co.wrap(function *(repo) {
     let openSubmodules = {};
 
     if (!bare) {
-        const subNames = yield repo.getSubmoduleNames();
+        const index = yield repo.index();
+        const subs = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo,
+                                                                      index);
+        const subNames = Object.keys(subs);
         for (let i = 0; i < subNames.length; ++i) {
             const subName = subNames[i];
             const status = yield NodeGit.Submodule.status(repo, subName, 0);
@@ -511,6 +549,13 @@ exports.readRAST = co.wrap(function *(repo) {
         yield loadCommit(NodeGit.Oid.fromString(merge.mergeHead));
     }
 
+    const cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
+
+    if (null !== cherryPick) {
+        yield loadCommit(NodeGit.Oid.fromString(cherryPick.originalHead));
+        yield loadCommit(NodeGit.Oid.fromString(cherryPick.picked));
+    }
+
     return new RepoAST({
         commits: commits,
         branches: branchTargets,
@@ -524,6 +569,7 @@ exports.readRAST = co.wrap(function *(repo) {
         openSubmodules: openSubmodules,
         rebase: rebase,
         merge: merge,
+        cherryPick: cherryPick,
         bare: bare,
     });
 });

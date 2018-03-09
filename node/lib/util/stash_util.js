@@ -290,8 +290,12 @@ exports.apply = co.wrap(function *(repo, id) {
 
     const parentId = (yield commit.parent(0)).id();
     const parent = yield repo.getCommit(parentId);
-    const baseSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo, parent);
-    const newSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo, commit);
+    const baseSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo,
+                                                                parent,
+                                                                null);
+    const newSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo,
+                                                               commit,
+                                                               null);
     const opener = new Open.Opener(repo, null);
     let result = {};
     yield Object.keys(newSubs).map(co.wrap(function *(name) {

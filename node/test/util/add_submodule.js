@@ -37,42 +37,47 @@ const AddSubmodule    = require("../../lib/util/add_submodule");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 
 describe("AddSubmodule", function () {
-    const cases = {
-        "simple": {
-            input: "a=B|x=Ca",
-            name: "s",
-            url: "/foo",
-            expected: "x=E:I s=S/foo:;Os",
-        },
-        "nested": {
-            input: "a=B|x=Ca",
-            name: "s/t/u",
-            url: "/foo/bar",
-            expected: "x=E:I s/t/u=S/foo/bar:;Os/t/u",
-        },
-        "import": {
-            input: "a=B|h=B:Cy-1;Bmaster=y|x=Ca",
-            name: "s",
-            url: "/foo/bar",
-            import: { url: "h", branch: "master" },
-            expected: "x=E:I s=S/foo/bar:;Os Rupstream=h master=y!H=y",
-        },
-    };
-    Object.keys(cases).forEach(caseName => {
-        const c = cases[caseName];
-        it(caseName, co.wrap(function *() {
-            const doNew = co.wrap(function *(repos) {
-                let imp = c.import || null;
-                if (null !== imp) {
-                    const url = yield fs.realpath(repos[imp.url].path());
-                    imp = { url: url, branch: imp.branch};
-                }
-                yield AddSubmodule.addSubmodule(repos.x, c.url, c.name, imp);
-            });
-            yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
-                                                           c.expected,
-                                                           doNew,
-                                                           c.fails);
-        }));
+    describe("addSubmodule", function () {
+        const cases = {
+            "simple": {
+                input: "a=B|x=Ca",
+                name: "s",
+                url: "/foo",
+                expected: "x=E:I s=S/foo:;Os",
+            },
+            "nested": {
+                input: "a=B|x=Ca",
+                name: "s/t/u",
+                url: "/foo/bar",
+                expected: "x=E:I s/t/u=S/foo/bar:;Os/t/u",
+            },
+            "import": {
+                input: "a=B|h=B:Cy-1;Bmaster=y|x=Ca",
+                name: "s",
+                url: "/foo/bar",
+                import: { url: "h", branch: "master" },
+                expected: "x=E:I s=S/foo/bar:;Os Rupstream=h master=y!H=y",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const doNew = co.wrap(function *(repos) {
+                    let imp = c.import || null;
+                    if (null !== imp) {
+                        const url = yield fs.realpath(repos[imp.url].path());
+                        imp = { url: url, branch: imp.branch};
+                    }
+                    yield AddSubmodule.addSubmodule(repos.x,
+                                                    c.url,
+                                                    c.name,
+                                                    imp);
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               doNew,
+                                                               c.fails);
+            }));
+        });
     });
 });
