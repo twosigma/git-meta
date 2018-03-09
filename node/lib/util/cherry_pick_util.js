@@ -382,7 +382,6 @@ const finish = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    repo.stateCleanup();
     const defaultSig = repo.defaultSignature();
     const metaCommit = yield repo.createCommitOnHead([],
                                                      defaultSig,
