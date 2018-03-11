@@ -146,6 +146,11 @@ a=B|x=S:C2-1 a/b=Sa:1;Oa/b W x/y/z=a,x/r/z=b;Bmaster=2`,
                 expected: "x=U:Os I README.md",
                 paths: [""],
             },
+            "sub with conflict": {
+                initial: "a=B|x=U:Os I *README.md=a*b*c!W README.md=foo",
+                paths: ["s"],
+                expected: "x=E:Os I README.md=foo",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
