@@ -32,6 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const DoWorkQueue         = require("../util/do_work_queue");
@@ -46,6 +47,7 @@ const TYPE = {
     SOFT: "soft",
     MIXED: "mixed",
     HARD: "hard",
+    MERGE: "merge",
 };
 Object.freeze(TYPE);
 exports.TYPE = TYPE;
@@ -60,9 +62,58 @@ function getType(type) {
         case TYPE.SOFT : return NodeGit.Reset.TYPE.SOFT;
         case TYPE.MIXED: return NodeGit.Reset.TYPE.MIXED;
         case TYPE.HARD : return NodeGit.Reset.TYPE.HARD;
+
+        // TODO: real implementation of `reset --merge`.  For now, this behaves
+        // just like `HARD` except that we ignore the check for modified open
+        // submodules.
+
+        case TYPE.MERGE: return NodeGit.Reset.TYPE.HARD;
     }
     assert(false, `Bad type: ${type}`);
 }
+
+/**
+ * Throw a `UserError` if any open submodule as listed by the specified
+ * `opener` has unstaged changes and does not exist in the specified `shas`.
+ *
+ * @param {Open.Opener} opener
+ * @param {Object}      shas      map from submodule path to SHA
+ */
+exports.validateClean = co.wrap(function *(opener, shas) {
+    assert.instanceOf(opener, Open.Opener);
+    assert.isObject(shas);
+
+    const openSubs = Array.from(yield opener.getOpenSubs());
+    const badSubs = [];
+    const checkSub = co.wrap(function *(name) {
+        if (name in shas) {
+            // If it exists in `shas` we don't need to check it
+            return;                                                   // RETURN
+        }
+        const repo = yield opener.getSubrepo(name);
+        const status = yield StatusUtil.getRepoStatus(repo, {
+            showMetaChanges: true,
+        });
+        if (!status.isWorkdirClean(true)) {
+            badSubs.push(name);
+        }
+    });
+    yield DoWorkQueue.doInParallel(openSubs, checkSub);
+    if (0 !== badSubs.length) {
+        badSubs.sort();
+        let errorMessage = `\
+The following submodules with unstaged will be deleted by this reset:
+
+`;
+        for (let name of badSubs) {
+            errorMessage += `        ${colors.red(name)}\n`;
+        }
+        errorMessage += `
+Please stage these changes or close the submodules before proceeding.
+`;
+        throw new UserError(errorMessage);
+    }
+});
 
 /**
  * Change the `HEAD` commit to the specified `commit` in the specified `repo`,
@@ -99,12 +150,6 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
     const resetType = getType(type);
 
-    // First, reset the meta-repo.
-
-    yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return NodeGit.Reset.reset(repo, commit, resetType);
-    });
-
     // Make a list of submodules to reset, including all that have been changed
     // between HEAD and 'commit', and all that are open.
 
@@ -115,6 +160,19 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
                                                                pathsToReset,
                                                                commit);
+
+    // If doing a HARD reset, work around the problem where libgit2 may throw
+    // away unstaged changes in open submodules.  See
+    // https://github.com/twosigma/git-meta/issues/509
+
+    if (TYPE.HARD === type) {
+        yield exports.validateClean(opener, shas);
+    }
+
+    yield SubmoduleUtil.cacheSubmodules(repo, () => {
+        return NodeGit.Reset.reset(repo, commit, resetType);
+    });
+
     const index = yield repo.index();
     const resetSubmodule = co.wrap(function *(name) {
         const change = changedSubs[name];

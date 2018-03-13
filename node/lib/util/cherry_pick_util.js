@@ -569,7 +569,7 @@ exports.abort = co.wrap(function *(repo) {
         throw new UserError("No cherry-pick in progress.");
     }
     const commit = yield repo.getCommit(cherry.originalHead);
-    yield Reset.reset(repo, commit, Reset.TYPE.HARD);
+    yield Reset.reset(repo, commit, Reset.TYPE.MERGE);
     yield CherryPickFileUtil.cleanCherryPick(repo.path());
     console.log("Cherry-pick aborted.");
 });

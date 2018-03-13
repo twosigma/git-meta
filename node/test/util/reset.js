@@ -30,13 +30,61 @@
  */
 "use strict";
 
-const co   = require("co");
-const path = require("path");
+const assert = require("chai").assert;
+const co     = require("co");
+const path   = require("path");
 
+const Open            = require("../../lib/util/open");
 const Reset           = require("../../lib/util/reset");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const UserError       = require("../../lib/util/user_error");
 
 describe("reset", function () {
+    describe("validateClean", function () {
+        const cases = {
+            "trivial": {
+                state: "x=S",
+                shas: {},
+                fails: false,
+            },
+            "open and clean": {
+                state: "a=B|x=U:Os",
+                shas: {},
+                fails: false,
+            },
+            "open, dirty, but existent": {
+                state: "a=B|x=U:Os W README.md=8888",
+                shas: { s: "3" },
+                fails: false,
+            },
+            "open, dirty, and gone": {
+                state: "a=B|x=U:Os W README.md=8888",
+                shas: { t: "3" },
+                fails: true,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
+                const repo = w.repos.x;
+                const opener = new Open.Opener(repo, null);
+                let exception;
+                try {
+                    yield Reset.validateClean(opener, c.shas);
+                } catch (e) {
+                    exception = e;
+                }
+                if (undefined === exception) {
+                    assert.equal(false, c.fails);
+                } else {
+                    if (!(exception instanceof UserError) || !c.fails) {
+                        throw exception;
+                    }
+                }
+            }));
+        });
+    });
     describe("reset", function () {
 
         // We are deferring the actual reset logic to NodeGit, so we are not
@@ -122,6 +170,24 @@ a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Bf=3;Os`,
                 to: "2",
                 type: TYPE.SOFT,
                 expected: "x=E:Os H=1!I a=a;Bmaster=2",
+            },
+            "hard, submodule with changes should refuse": {
+                initial: `a=B|x=U:Os W README.md=888`,
+                to: "1",
+                type: TYPE.HARD,
+                fails: true,
+            },
+            "merge should do as HARD but not refuse": {
+                initial: `a=B|x=U:Os W README.md=888`,
+                to: "1",
+                type: TYPE.MERGE,
+                expected: "x=S",
+            },
+            "soft, submodule with changes should not refuse": {
+                initial: `a=B|x=U:Os W README.md=888;Bfoo=2`,
+                to: "1",
+                expected: "x=E:Bmaster=1;I s=Sa:1",
+                type: TYPE.SOFT,
             },
         };
         Object.keys(cases).forEach(caseName => {
