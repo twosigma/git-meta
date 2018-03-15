@@ -37,9 +37,10 @@ const assert   = require("chai").assert;
 const deeper   = require("deeper");
 const deepCopy = require("deepcopy");
 
-const Rebase = require("./rebase");
-const Merge  = require("./merge");
-const CherryPick  = require("./cherry_pick");
+const Rebase         = require("./rebase");
+const Merge          = require("./merge");
+const CherryPick     = require("./cherry_pick");
+const SequencerState = require("./sequencer_state");
 
 /**
  * @class {Branch}
@@ -380,21 +381,22 @@ class AST {
      * - if 'bare', `index` and `workdir` are empty, and `rebase` is null
      * - any conflicted path in the index has a value specified in the workdir
      *
-     * @param {Object}      args
-     * @param {Object}      [args.commits]
-     * @param {Object}      [args.branches]
-     * @param {Object}      [args.refs]
-     * @param {String|null} [args.head]
-     * @param {Boolean}     [args.bare]
-     * @param {String|null} [args.currentBranchName]
-     * @param {Object}      [args.remotes]
-     * @param {Object}      [args.index]
-     * @param {Object}      [args.workdir]
-     * @param {Object}      [args.notes]
-     * @param {Object}      [args.openSubmodules]
-     * @param {Rebase}      [args.rebase]
-     * @param {Merge}       [args.merge]
-     * @param {CherryPick}  [args.cherryPick]
+     * @param {Object}         args
+     * @param {Object}         [args.commits]
+     * @param {Object}         [args.branches]
+     * @param {Object}         [args.refs]
+     * @param {String|null}    [args.head]
+     * @param {Boolean}        [args.bare]
+     * @param {String|null}    [args.currentBranchName]
+     * @param {Object}         [args.remotes]
+     * @param {Object}         [args.index]
+     * @param {Object}         [args.workdir]
+     * @param {Object}         [args.notes]
+     * @param {Object}         [args.openSubmodules]
+     * @param {Rebase}         [args.rebase]
+     * @param {Merge}          [args.merge]
+     * @param {CherryPick}     [args.cherryPick]
+     * @param {SequencerState} [args.sequencerState]
      */
     constructor(args) {
         if (undefined === args) {
@@ -585,6 +587,22 @@ in commit ${id}.`);
             }
         }
 
+        this.d_sequencerState = null;
+        if ("sequencerState" in args) {
+            const sequencerState = args.sequencerState;
+            if (null !== sequencerState) {
+                assert.instanceOf(sequencerState, SequencerState);
+                assert.isFalse(this.d_bare);
+                checkAndTraverse(sequencerState.originalHead.sha,
+                                 "original head of sequencer");
+                checkAndTraverse(sequencerState.target.sha,
+                                 "target commit of sequencer");
+                sequencerState.commits.forEach(
+                    sha => checkAndTraverse(sha, "sequencer commit"));
+                this.d_sequencerState = sequencerState;
+            }
+        }
+
         // Validate that all commits have been reached.
 
         for (let key in commits) {
@@ -772,6 +790,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {SequencerState} null unless a sequence operation is ongoing
+     */
+    get sequencerState() {
+        return this.d_sequencerState;
+    }
+
+    /**
      * Accumulate the specified `changes` into the specified `dest` map.  A
      * non-null value in `changes` overrides any existing value in `dest`; a
      * `null value causes the path mapped to `null` to be removed.  The
@@ -832,7 +857,9 @@ in commit ${id}.`);
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
             merge: ("merge" in args) ? args.merge : this.d_merge,
             cherryPick: ("cherryPick" in args) ?
-                       args.cherryPick : this.cherryPick,
+                       args.cherryPick : this.d_cherryPick,
+            sequencerState: ("sequencerState" in args) ?
+                       args.sequencerState: this.d_sequencerState,
             bare: ("bare" in args) ? args.bare : this.d_bare,
         });
     }
@@ -919,5 +946,6 @@ AST.Rebase = Rebase;
 AST.Merge  = Merge;
 AST.CherryPick  = CherryPick;
 AST.Remote = Remote;
+AST.SequencerState = SequencerState;
 AST.Submodule = Submodule;
 module.exports = AST;

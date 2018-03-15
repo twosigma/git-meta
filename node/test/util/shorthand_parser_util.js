@@ -37,6 +37,28 @@ const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 
 describe("ShorthandParserUtil", function () {
+    const SequencerState = RepoAST.SequencerState;
+    const CommitAndRef = SequencerState.CommitAndRef;
+    describe("parseCommitAndRef", function () {
+        const cases = {
+            "without ref": {
+                input: "foo:",
+                expected: new CommitAndRef("foo", null),
+            },
+            "with ref": {
+                input: "bar:baz",
+                expected: new CommitAndRef("bar", "baz"),
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            it(caseName, function () {
+                const c = cases[caseName];
+                const result = ShorthandParserUtil.parseCommitAndRef(c.input);
+                assert.instanceOf(result, CommitAndRef);
+                assert.deepEqual(result, c.expected);
+            });
+        });
+    });
     describe("findSeparator", function () {
         const cases = {
             missing: {
@@ -648,6 +670,52 @@ describe("ShorthandParserUtil", function () {
                     cherryPick: null,
                 }),
             },
+            "sequencer null": {
+                i: "S:Q",
+                e: m({
+                     type: "S",
+                     sequencerState: null,
+                }),
+            },
+            "sequencer with cherry": {
+                i: "S:QC 1:foo 3: 2 a,b,c",
+                e: m({
+                     type: "S",
+                     sequencerState: new SequencerState({
+                        type: SequencerState.TYPE.CHERRY_PICK,
+                        originalHead: new CommitAndRef("1", "foo"),
+                        target: new CommitAndRef("3", null),
+                        currentCommit: 2,
+                        commits: ["a", "b", "c"],
+                     }),
+                }),
+            },
+            "sequencer with merge": {
+                i: "S:QM 1:foo 3: 2 a,b,c",
+                e: m({
+                     type: "S",
+                     sequencerState: new SequencerState({
+                        type: SequencerState.TYPE.MERGE,
+                        originalHead: new CommitAndRef("1", "foo"),
+                        target: new CommitAndRef("3", null),
+                        currentCommit: 2,
+                        commits: ["a", "b", "c"],
+                     }),
+                }),
+            },
+            "sequencer with rebase": {
+                i: "S:QR 1:foo 3: 2 a,b,c",
+                e: m({
+                     type: "S",
+                     sequencerState: new SequencerState({
+                        type: SequencerState.TYPE.REBASE,
+                        originalHead: new CommitAndRef("1", "foo"),
+                        target: new CommitAndRef("3", null),
+                        currentCommit: 2,
+                        commits: ["a", "b", "c"],
+                     }),
+                }),
+            },
             "new submodule": {
                 i: "S:I x=Sfoo:;Ox",
                 e: m({
@@ -686,6 +754,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.rebase, e.rebase);
                 assert.deepEqual(r.merge, e.merge);
                 assert.deepEqual(r.cherryPick, e.cherryPick);
+                assert.deepEqual(r.sequencerState, e.sequencerState);
             });
         });
     });
@@ -867,6 +936,18 @@ describe("ShorthandParserUtil", function () {
                 i: "S:P1,1",
                 e: S.copy({
                     cherryPick: new RepoAST.CherryPick("1", "1"),
+                }),
+            },
+            "sequencer": {
+                i: "S:QM 1:foo 1: 0 1",
+                e: S.copy({
+                     sequencerState: new SequencerState({
+                        type: SequencerState.TYPE.MERGE,
+                        originalHead: new CommitAndRef("1", "foo"),
+                        target: new CommitAndRef("1", null),
+                        currentCommit: 0,
+                        commits: ["1"],
+                     }),
                 }),
             },
         };

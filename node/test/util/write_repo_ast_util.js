@@ -344,6 +344,7 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
             },
             "with in-progress merge": "S:Mhello,1,1",
             "with in-progress cherry-pick": "S:P1,1",
+            "with in-progress sequencer": "S:QR 1:foo 1:bar 0 1",
             "headless": {
                 input: new RepoAST(),
                 expected: new RepoAST(),

@@ -41,6 +41,9 @@ const deeper   = require("deeper");
 
 const RepoAST  = require("../util/repo_ast");
 
+const Sequencer = RepoAST.SequencerState;
+const CommitAndRef = Sequencer.CommitAndRef;
+
                          // Begin module-local methods
 
 /**
@@ -527,6 +530,23 @@ Expected cherry pick to be ${actual.cherryPick} but got \
 ${expected.cherryPick}`);
     }
 
+    // Check sequencer
+
+    if (null === actual.sequencerState && null !== expected.sequencerState) {
+        result.push("Missing sequencer.");
+    }
+    else if (null !== actual.sequencerState &&
+                                            null === expected.sequencerState) {
+        result.push("Unexpected sequencer.");
+    }
+    else if (null !== actual.sequencerState &&
+                       !actual.sequencerState.equal(expected.sequencerState)) {
+       result.push(`\
+Expected sequencer to be ${actual.sequencerState} but got \
+${expected.sequencerState}`);
+    }
+
+
     return result;
 }
 
@@ -694,6 +714,10 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         });
     }
 
+    function mapCommitAndRef(car) {
+        return new CommitAndRef(mapCommitId(car.sha), car.ref);
+    }
+
     // Copy and transform commit map.  Have to transform the key (commit id)
     // and the commits themselves which also contain commit ids.
 
@@ -777,6 +801,20 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
                                           mapCommitId(cherryPick.picked));
     }
 
+    let sequencer = ast.sequencerState;
+    if (null !== sequencer) {
+        const original = mapCommitAndRef(sequencer.originalHead);
+        const target = mapCommitAndRef(sequencer.target);
+        const commits = sequencer.commits.map(mapCommitId);
+        sequencer = new Sequencer({
+            type: sequencer.type,
+            originalHead: original,
+            target: target,
+            commits: commits,
+            currentCommit: sequencer.currentCommit,
+        });
+    }
+
     return ast.copy({
         commits: commits,
         branches: branches,
@@ -791,6 +829,7 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         rebase: rebase,
         merge: merge,
         cherryPick: cherryPick,
+        sequencerState: sequencer,
     });
 };
 

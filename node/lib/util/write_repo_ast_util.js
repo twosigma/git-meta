@@ -52,6 +52,7 @@ const MergeFileUtil       = require("./merge_file_util");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
+const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const TestUtil            = require("./test_util");
 const TreeUtil            = require("./tree_util");
@@ -489,6 +490,13 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             const cherryPick = new RepoAST.CherryPick(originalSha,
                                                       pickSha);
             yield CherryPickFileUtil.writeCherryPick(repo.path(), cherryPick);
+        }
+
+        // Write out sequencer state if there is one.
+        const sequencer = ast.sequencerState;
+        if (null !== sequencer) {
+            const mapped = SequencerStateUtil.mapCommits(sequencer, commitMap);
+            yield SequencerStateUtil.writeSequencerState(repo.path(), mapped);
         }
 
         // Set up the index.  We render the current commit and apply the index
