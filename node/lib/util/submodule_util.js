@@ -41,6 +41,7 @@ const NodeGit = require("nodegit");
 const fs      = require("fs-promise");
 const path    = require("path");
 
+const DoWorkQueue         = require("../util/do_work_queue");
 const GitUtil             = require("./git_util");
 const Submodule           = require("./submodule");
 const SubmoduleChange     = require("./submodule_change");
@@ -130,7 +131,7 @@ exports.getSubmoduleShasForCommit =
     // believes is the proper commit for that submodule.
 
     const tree = yield commit.getTree();
-    const shaGetters = submoduleNames.map(co.wrap(function *(name) {
+    const shaGetter = co.wrap(function *(name) {
         try {
             const entry = yield tree.entryByPath(name);
             return entry.sha();
@@ -138,8 +139,8 @@ exports.getSubmoduleShasForCommit =
         catch (e) {
             return null;
         }
-    }));
-    const shas = yield shaGetters;
+    });
+    const shas = yield DoWorkQueue.doInParallel(submoduleNames, shaGetter);
     let result = {};
     for (let i = 0; i < submoduleNames.length; ++i) {
         const sha = shas[i];
@@ -298,7 +299,7 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
     const openSet = new Set(openArray);
 
     const submoduleNames = yield exports.getSubmoduleNames(repo);
-    const openers = submoduleNames.map(co.wrap(function *(name) {
+    const opener = co.wrap(function *(name) {
         const isVisible = openSet.has(name);
         if (!isVisible) {
             return null;
@@ -308,8 +309,8 @@ exports.getSubmoduleRepos = co.wrap(function *(repo) {
             name: name,
             repo: subRepo,
         };
-    }));
-    const repos = yield openers;
+    });
+    const repos = yield DoWorkQueue.doInParallel(submoduleNames, opener);
     return repos.filter(x => x !== null);
 });
 

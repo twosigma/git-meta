@@ -42,7 +42,8 @@ const fs           = require("fs-promise");
 const NodeGit      = require("nodegit");
 const path         = require("path");
 
-const UserError = require("../util/user_error");
+const DoWorkQueue  = require("../util/do_work_queue");
+const UserError    = require("../util/user_error");
 
 /**
  * If the directory identified by the specified `dir` contains a ".git"
@@ -636,9 +637,7 @@ exports.listUnpushedCommits = co.wrap(function *(repo, remote, commit) {
         }
     });
 
-    const refCheckers = refs.map(checkRef);
-
-    yield refCheckers;
+    yield DoWorkQueue.doInParallel(refs, checkRef);
 
     // If we found no results (no branches for 'remote', return a list
     // containing 'commit' and all its history.
