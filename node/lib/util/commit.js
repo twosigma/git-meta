@@ -510,8 +510,7 @@ exports.commit = co.wrap(function *(metaRepo,
         }
     });
 
-    const subCommitters = Object.keys(submodules).map(commitSubmodule);
-    yield subCommitters;
+    yield DoWorkQueue.doInParallel(Object.keys(submodules), commitSubmodule);
 
     const result = {
         metaCommit: null,

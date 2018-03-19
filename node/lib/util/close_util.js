@@ -36,6 +36,7 @@ const co      = require("co");
 const colors  = require("colors");
 
 const DeinitUtil      = require("../util/deinit_util");
+const DoWorkQueue     = require("../util/do_work_queue");
 const Hook            = require("../util/hook");
 const StatusUtil      = require("../util/status_util");
 const SubmoduleUtil   = require("../util/submodule_util");
@@ -74,7 +75,7 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
     let errorMessage = "";
     let subsClosedSuccessfully = [];
 
-    const closers = subsToClose.map(co.wrap(function *(name) {
+    const closer = co.wrap(function *(name) {
         const sub = subStats[name];
         if (undefined === sub || null === sub.workdir) {
             return;                                                   // RETURN
@@ -97,8 +98,8 @@ Pass ${colors.magenta("--force")} to close it anyway.
         }
         yield DeinitUtil.deinit(repo, name);
         subsClosedSuccessfully.push(name);
-    }));
-    yield closers;
+    });
+    yield DoWorkQueue.doInParallel(subsToClose, closer);
 
     // Run post-close-submodule hook with submodules which closed successfully.
     yield Hook.execHook("post-close-submodule", subsClosedSuccessfully);
