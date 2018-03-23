@@ -35,6 +35,7 @@ const ChildProcess = require("child-process-promise");
 const co        = require("co");
 const path      = require("path");
 const GitUtil   = require("../util/git_util");
+const process   = require("process");
 
 /**
  * Run git-meta hook with given hook name.
@@ -46,10 +47,12 @@ const GitUtil   = require("../util/git_util");
 exports.execHook = co.wrap(function *(name, args=[]) {
     assert.isString(name);
 
-    const hookPath = path.join(GitUtil.getRootGitDirectory(), ".git/hooks");
+    const rootDirectory = GitUtil.getRootGitDirectory();
+    const hookPath = path.join(rootDirectory, ".git/hooks");
     const absPath = path.resolve(hookPath, name);
 
     try {
+        process.chdir(rootDirectory);
         const result = yield ChildProcess.execFile(absPath, args);
         return result.stdout;
     } catch (e) {
