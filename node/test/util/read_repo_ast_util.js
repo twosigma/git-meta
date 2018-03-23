@@ -36,8 +36,6 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
-const CherryPick          = require("../../lib/util/cherry_pick");
-const CherryPickFileUtil  = require("../../lib/util/cherry_pick_file_util");
 const ConflictUtil        = require("../../lib/util/conflict_util");
 const DeinitUtil          = require("../../lib/util/deinit_util");
 const Rebase              = require("../../lib/util/rebase");
@@ -1449,54 +1447,6 @@ describe("readRAST", function () {
         const rebase = ast.rebase;
         assert.equal(rebase.originalHead, thirdCommit.id().tostrS());
         assert.equal(rebase.onto, secondCommit.id().tostrS());
-    }));
-
-    it("cherry-pick", co.wrap(function *() {
-        // Start out with a base repo having two branches, "master", and "foo",
-        // foo having one commit on top of master.
-
-        const start = yield repoWithCommit();
-        const r = start.repo;
-
-        // Switch to master
-
-        yield r.checkoutBranch("master");
-
-        const head = yield r.getHeadCommit();
-        const sha = head.id().tostrS();
-
-        const cherryPick = new CherryPick(sha, sha);
-
-        const original = yield ReadRepoASTUtil.readRAST(r);
-        const expected = original.copy({
-            cherryPick: cherryPick,
-        });
-
-        yield CherryPickFileUtil.writeCherryPick(r.path(), cherryPick);
-
-        const actual = yield ReadRepoASTUtil.readRAST(r);
-
-        RepoASTUtil.assertEqualASTs(actual, expected);
-    }));
-
-    it("cherry-pick - unreachable", co.wrap(function *() {
-        const r = yield TestUtil.createSimpleRepository();
-        r.detachHead();
-        const secondCommit = yield TestUtil.generateCommit(r);
-        const thirdCommit = yield TestUtil.generateCommit(r);
-
-        // Then begin a cherry-pick.
-
-        const cherryPick = new CherryPick(secondCommit.id().tostrS(),
-                                          thirdCommit.id().tostrS());
-        yield CherryPickFileUtil.writeCherryPick(r.path(), cherryPick);
-
-        // Remove the branches, making the commits reachable only from the
-        // rebase.
-
-        const ast = yield ReadRepoASTUtil.readRAST(r);
-        const actualCherryPick = ast.cherryPick;
-        assert.deepEqual(actualCherryPick, cherryPick);
     }));
 
     it("sequencer", co.wrap(function *() {

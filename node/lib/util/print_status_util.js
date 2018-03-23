@@ -41,7 +41,6 @@ const colors  = require("colors/safe");
 const path    = require("path");
 
 const GitUtil             = require("./git_util");
-const CherryPick          = require("./cherry_pick");
 const SequencerState      = require("./sequencer_state");
 const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
@@ -366,22 +365,6 @@ You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
 };
 
 /**
- * Return a message describing the specified `cherryPick`.
- *
- * @param {CherryPick}
- * @return {String}
- */
-function printCherryPick(cherryPick) {
-    assert.instanceOf(cherryPick, CherryPick);
-    return `\
-A cherry-pick is in progress.
-  (after resolving conflicts mark the corrected paths
-   with 'git meta add', then run "git meta cherry-pick --continue")
-  (use "git meta cherry-pick --abort" to check out the original branch)
-`;
-}
-
-/**
  * Return the command to which the specified sequencer `type` corresponds.
  *
  * @param {SequencerState.TYPE} type
@@ -448,10 +431,6 @@ exports.printRepoStatus = function (status, cwd) {
     }
 
     result += exports.printCurrentBranch(status);
-
-    if (null !== status.cherryPick) {
-        result += printCherryPick(status.cherryPick);
-    }
 
     if (null !== status.sequencerState) {
         result += exports.printSequencer(status.sequencerState);

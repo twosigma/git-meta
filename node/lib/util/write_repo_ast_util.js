@@ -45,7 +45,6 @@ const mkdirp   = require("mkdirp");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
-const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
@@ -464,18 +463,6 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             // we render against the new head, `onto`.
 
             indexHead = rebase.onto;
-        }
-
-        // Write out the cherry-pick info, if it exists.
-
-        if (null !== ast.cherryPick) {
-            // Map commits
-
-            const originalSha = commitMap[ast.cherryPick.originalHead];
-            const pickSha = commitMap[ast.cherryPick.picked];
-            const cherryPick = new RepoAST.CherryPick(originalSha,
-                                                      pickSha);
-            yield CherryPickFileUtil.writeCherryPick(repo.path(), cherryPick);
         }
 
         // Write out sequencer state if there is one.

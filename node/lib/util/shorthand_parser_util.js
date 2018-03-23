@@ -60,8 +60,7 @@ const SequencerState = RepoAST.SequencerState;
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
- *                  <note> | <rebase> | <cherry-pick> |
- *                  <sequencer>
+ *                  <note> | <rebase> | <sequencer>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
@@ -81,7 +80,6 @@ const SequencerState = RepoAST.SequencerState;
  *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
  * note           = N <ref> <commit>=message
  * rebase         = E<head name>,<original commit id>,<onto commit id>
- * cherry-pick    = P<original head>,<picked commit>
  * sequencer      = Q[message'#']<sequencer type>' '<commit and ref>' '
  *                  <commit and ref>' '<number>' '<commit>(','<commit>)*
  * sequencer type = C | M | R
@@ -188,8 +186,6 @@ const SequencerState = RepoAST.SequencerState;
  *                              -- file `x` to be `y`.
  * S:Emaster,1,2                -- rebase in progress started on "master",
  *                                 original head "1", onto commit "2"
- * S:CP1,2                      -- cherry-pick in progress started with
- *                                 original head "1", picking commit "2"
  * S:I *foo=a*b*c               -- The file 'foo' is flagged in the index
  *                                 as conflicted, having a base content of 'a',
  *                                 "our" content as 'b', and "their" content as
@@ -389,7 +385,6 @@ function prepareASTArguments(baseAST, rawRepo) {
         workdir: baseAST.workdir,
         openSubmodules: baseAST.openSubmodules,
         rebase: baseAST.rebase,
-        cherryPick: baseAST.cherryPick,
         sequencerState: baseAST.sequencerState,
         bare: baseAST.bare,
     };
@@ -503,12 +498,6 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.rebase = rawRepo.rebase;
     }
 
-    // Override cherry-pick if provided
-
-    if ("cherryPick" in rawRepo) {
-        resultArgs.cherryPick = rawRepo.cherryPick;
-    }
-
     if ("sequencerState" in rawRepo) {
         resultArgs.sequencerState = rawRepo.sequencerState;
     }
@@ -590,7 +579,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let notes = {};
     let openSubmodules = {};
     let rebase;
-    let cherryPick;
     let sequencer;
 
     /**
@@ -959,26 +947,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
-     * Parse the cherry-pick definition beginning at the specified `begin` and
-     * terminating at the specified `end`.
-     *
-     * @param {Number} begin
-     * @param {Number} end
-     */
-    function parseCherryPick(begin, end) {
-        if (begin === end) {
-            cherryPick = null;
-            return;                                                   // RETURN
-        }
-        const cherryPickDef = shorthand.substr(begin, end - begin);
-        const parts = cherryPickDef.split(",");
-        assert.equal(parts.length,
-                     2,
-                     `Wrong number of cherry-pick parts in ${cherryPickDef}`);
-        cherryPick = new RepoAST.CherryPick(parts[0], parts[1]);
-    }
-
-    /**
      * Parse the sequencer definition beginning at the specified `begin` and
      * terminating at the specified `end`.
      *
@@ -1045,7 +1013,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "H": return parseHeadOverride;
                 case "R": return parseRemote;
                 case "I": return parseIndex;
-                case "P": return parseCherryPick;
                 case "N": return parseNote;
                 case "W": return parseWorkdir;
                 case "O": return parseOpenSubmodule;
@@ -1091,9 +1058,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== rebase) {
         result.rebase = rebase;
-    }
-    if (undefined !== cherryPick) {
-        result.cherryPick = cherryPick;
     }
     if (undefined !== sequencer) {
         result.sequencerState = sequencer;
@@ -1353,10 +1317,6 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.rebase) {
             includeCommit(resultArgs.rebase.originalHead);
             includeCommit(resultArgs.rebase.onto);
-        }
-        if (resultArgs.cherryPick) {
-            includeCommit(resultArgs.cherryPick.originalHead);
-            includeCommit(resultArgs.cherryPick.picked);
         }
         if (resultArgs.sequencerState) {
             includeCommit(resultArgs.sequencerState.originalHead.sha);

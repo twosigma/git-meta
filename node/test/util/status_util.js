@@ -35,7 +35,6 @@ const co      = require("co");
 const path    = require("path");
 const NodeGit = require("nodegit");
 
-const CherryPick          = require("../../lib/util/cherry_pick");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
@@ -113,7 +112,6 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "1", "1"),
-                    cherryPick: new CherryPick("1", "1"),
                     sequencerState: new SequencerState({
                         type: TYPE.MERGE,
                         originalHead: new CommitAndRef("1", null),
@@ -130,7 +128,6 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "3", "3"),
-                    cherryPick: new CherryPick("3", "3"),
                     sequencerState: new SequencerState({
                         type: TYPE.MERGE,
                         originalHead: new CommitAndRef("3", null),
@@ -582,14 +579,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     rebase: new Rebase("master", "2", "3"),
                 }),
             },
-            "cherry-pick": {
-                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;P2,3",
-                expected: new RepoStatus({
-                    headCommit: "2",
-                    currentBranchName: "master",
-                    cherryPick: new CherryPick("2", "3"),
-                }),
-            },
             "sequencer": {
                 state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;QM 1: 2:foo 1 2,3",
                 expected: new RepoStatus({
@@ -905,12 +894,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
             "rebase": {
                 input: new RepoStatus({
                     rebase: new Rebase("foo", "bart", "baz"),
-                }),
-                fails: true,
-            },
-            "cherry-pick": {
-                input: new RepoStatus({
-                    cherryPick: new CherryPick("foo", "bart"),
                 }),
                 fails: true,
             },

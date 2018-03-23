@@ -42,7 +42,6 @@ const fs       = require("fs-promise");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
-const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const RepoAST             = require("./repo_ast");
 const RebaseFileUtil      = require("./rebase_file_util");
 const SequencerStateUtil  = require("./sequencer_state_util");
@@ -542,13 +541,6 @@ exports.readRAST = co.wrap(function *(repo) {
         yield loadCommit(NodeGit.Oid.fromString(rebase.onto));
     }
 
-    const cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
-
-    if (null !== cherryPick) {
-        yield loadCommit(NodeGit.Oid.fromString(cherryPick.originalHead));
-        yield loadCommit(NodeGit.Oid.fromString(cherryPick.picked));
-    }
-
     const sequencer = yield SequencerStateUtil.readSequencerState(repo.path());
 
     if (null !== sequencer) {
@@ -570,7 +562,6 @@ exports.readRAST = co.wrap(function *(repo) {
         workdir: workdir,
         openSubmodules: openSubmodules,
         rebase: rebase,
-        cherryPick: cherryPick,
         sequencerState: sequencer,
         bare: bare,
     });

@@ -40,8 +40,6 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
-const CherryPick          = require("./cherry_pick");
-const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
 const PrintStatusUtil     = require("./print_status_util");
@@ -120,30 +118,6 @@ function remapRebase(rebase, commitMap) {
 }
 
 /**
- * Return a new `CherryPick` object having the same value as the specified
- * `cherryPick` but with commit shas being replaced by commits in the specified
- * `commitMap`.
- *
- * @param {CherryPick} cherryPick
- * @param {Object} commitMap from sha to sha
- * @return {CherryPick}
- */
-function remapCherryPick(cherryPick, commitMap) {
-    assert.instanceOf(cherryPick, CherryPick);
-    assert.isObject(commitMap);
-
-    let originalHead = cherryPick.originalHead;
-    let picked = cherryPick.picked;
-    if (originalHead in commitMap) {
-        originalHead = commitMap[originalHead];
-    }
-    if (picked in commitMap) {
-        picked = commitMap[picked];
-    }
-    return new CherryPick(originalHead, picked);
-}
-
-/**
  * Return a new `RepoStatus` object having the same value as the specified
  * `status` but with all commit shas replaced by commits in the specified
  * `comitMap` and all urls replaced by the values in the specified `urlMap`.
@@ -178,9 +152,6 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
         workdir: status.workdir,
         rebase: status.rebase === null ? null : remapRebase(status.rebase,
                                                             commitMap),
-        cherryPick: status.cherryPick === null ?
-                          null :
-                          remapCherryPick(status.cherryPick, commitMap),
         sequencerState: status.sequencerState === null ?
                           null :
                           SequencerStateUtil.mapCommits(status.sequencerState,
@@ -472,7 +443,6 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         args.rebase = rebase;
     }
 
-    args.cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
     args.sequencerState =
                       yield SequencerStateUtil.readSequencerState(repo.path());
 
@@ -611,8 +581,8 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 /**
  * Throw a `UserError` unless the specified `status` reflects a repository in a
  * normal, ready state, that is, it does not have any conflicts or in-progress
- * operations such as a rebase or cherry-pick.  Adjust output paths to
- * be relative to the specified `cwd`.
+ * operations from the sequencer.  Adjust output paths to be relative to the
+ * specified `cwd`.
  *
  * @param {RepoStatus} status
  */
@@ -624,12 +594,6 @@ exports.ensureReady = function (status) {
 Before proceeding, you must complete the rebase in progress (by running
 'git meta rebase --continue') or abort it (by running
 'git meta rebase --abort').`);
-    }
-    if (null !== status.cherryPick) {
-        throw new UserError(`\
-Before proceeding, you must complete the cherry-pick in progress (by running
-'git meta cherry-pick --continue') or abort it (by running
-'git meta cherry-pick --abort').`);
     }
     if (status.isConflicted()) {
         throw new UserError(`\

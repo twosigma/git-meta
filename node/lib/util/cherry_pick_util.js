@@ -38,8 +38,6 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const CherryPick          = require("./cherry_pick");
-const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const ConflictUtil        = require("./conflict_util");
 const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("./do_work_queue");
@@ -47,12 +45,32 @@ const GitUtil             = require("./git_util");
 const Open                = require("./open");
 const RebaseUtil          = require("./rebase_util");
 const Reset               = require("./reset");
+const SequencerState      = require("./sequencer_state");
+const SequencerStateUtil  = require("./sequencer_state_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
+
+const CommitAndRef = SequencerState.CommitAndRef;
+const CHERRY_PICK = SequencerState.TYPE.CHERRY_PICK;
+
+/**
+ * Throw a `UserError` if the specfied `seq` is null or does not indicate a
+ * cherry-pick.
+ *
+ * @param {SequencerState|null} seq
+ */
+function ensureCherryInProgress(seq) {
+    if (null !== seq) {
+        assert.instanceOf(seq, SequencerState);
+    }
+    if (null === seq || CHERRY_PICK !== seq.type) {
+        throw new UserError("No cherry-pick in progress.");
+    }
+}
 
 /**
  * Change the specified `submodules` in the specified index.  If a name maps to
@@ -387,7 +405,7 @@ const finish = co.wrap(function *(repo, commit) {
                                                      defaultSig,
                                                      commit.committer(),
                                                      commit.message());
-    yield CherryPickFileUtil.cleanCherryPick(repo.path());
+    yield SequencerStateUtil.cleanSequencerState(repo.path());
     console.log("Cherry-pick complete.");
     return metaCommit.tostrS();
 });
@@ -452,10 +470,14 @@ Please try with normal 'git cherry-pick'.`);
     // cherry-pick file.
 
     const head = yield metaRepo.getHeadCommit();
-    const cherryPick = new CherryPick(head.id().tostrS(),
-                                      commit.id().tostrS());
-    yield CherryPickFileUtil.writeCherryPick(metaRepo.path(), cherryPick);
-
+    const seq = new SequencerState({
+        type: CHERRY_PICK,
+        originalHead: new CommitAndRef(head.id().tostrS(), null),
+        target: new CommitAndRef(commit.id().tostrS(), null),
+        currentCommit: 0,
+        commits: [commit.id().tostrS()],
+    });
+    yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
 
     const opener = new Open.Opener(metaRepo, null);
 
@@ -493,7 +515,7 @@ Please try with normal 'git cherry-pick'.`);
     if ("" === errorMessage) {
         if (0 === Object.keys(changes.simpleChanges).length &&
             0 === Object.keys(picks.commits).length) {
-            yield CherryPickFileUtil.cleanCherryPick(metaRepo.path());
+            yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
             throw new UserError("Nothing to commit.");
         }
         result.newMetaCommit = yield finish(metaRepo, commit);
@@ -519,16 +541,13 @@ exports.continue = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
     const status = yield StatusUtil.getRepoStatus(repo);
-    const cherryPick = status.cherryPick;
-    if (null === cherryPick) {
-        throw new UserError("No cherry-pick in progress.");
-    }
+    const seq = status.sequencerState;
+    ensureCherryInProgress(seq);
     if (status.isConflicted()) {
         throw new UserError("Resolve conflicts then continue cherry-pick.");
     }
     const index = yield repo.index();
-    const commit = yield repo.getCommit(cherryPick.picked);
-
+    const commit = yield repo.getCommit(seq.target.sha);
     const subResult = yield RebaseUtil.continueSubmodules(repo,
                                                           index,
                                                           status,
@@ -545,7 +564,7 @@ exports.continue = co.wrap(function *(repo) {
         if (status.isIndexDeepClean() &&
             0 === Object.keys(subResult.commits).length &&
             0 === Object.keys(subResult.newCommits).length) {
-            yield CherryPickFileUtil.cleanCherryPick(repo.path());
+            yield SequencerStateUtil.cleanSequencerState(repo.path());
             throw new UserError("Nothing to commit.");
         }
 
@@ -564,12 +583,10 @@ exports.continue = co.wrap(function *(repo) {
 exports.abort = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const cherry = yield CherryPickFileUtil.readCherryPick(repo.path());
-    if (null === cherry) {
-        throw new UserError("No cherry-pick in progress.");
-    }
-    const commit = yield repo.getCommit(cherry.originalHead);
+    const seq = yield SequencerStateUtil.readSequencerState(repo.path());
+    ensureCherryInProgress(seq);
+    const commit = yield repo.getCommit(seq.originalHead.sha);
     yield Reset.reset(repo, commit, Reset.TYPE.MERGE);
-    yield CherryPickFileUtil.cleanCherryPick(repo.path());
+    yield SequencerStateUtil.cleanSequencerState(repo.path());
     console.log("Cherry-pick aborted.");
 });
