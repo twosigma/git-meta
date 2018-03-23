@@ -43,6 +43,7 @@ const path    = require("path");
 const GitUtil             = require("./git_util");
 const Merge               = require("./merge");
 const CherryPick          = require("./cherry_pick");
+const SequencerState      = require("./sequencer_state");
 const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
 
@@ -398,6 +399,39 @@ A cherry-pick is in progress.
 }
 
 /**
+ * Return the command to which the specified sequencer `type` corresponds.
+ *
+ * @param {SequencerState.TYPE} type
+ * @return {String}
+ */
+exports.getSequencerCommand = function (type) {
+    const TYPE = SequencerState.TYPE;
+    switch (type) {
+    case TYPE.CHERRY_PICK: return "cherry-pick";
+    case TYPE.MERGE: return "merge";
+    case TYPE.REBASE: return "rebase";
+    default: assert(false, "shouldn't get here"); break;
+    }
+};
+
+/**
+ * Return a message describing the specified `sequencer`.
+ *
+ * @param {SequencerState} sequencer
+ * @return {String}
+ */
+exports.printSequencer = function (sequencer) {
+    assert.instanceOf(sequencer, SequencerState);
+    const command = exports.getSequencerCommand(sequencer.type);
+    return `\
+A ${command} is in progress.
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta ${command} --continue")
+  (use "git meta ${command} --abort" to check out the original branch)
+`;
+};
+
+/**
  * Return a message describing the state of the current branch in the specified
  * `status`.
  *
@@ -438,6 +472,10 @@ exports.printRepoStatus = function (status, cwd) {
 
     if (null !== status.cherryPick) {
         result += printCherryPick(status.cherryPick);
+    }
+
+    if (null !== status.sequencerState) {
+        result += exports.printSequencer(status.sequencerState);
     }
 
     let changes = "";
