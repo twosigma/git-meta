@@ -258,3 +258,38 @@ exports.writeSequencerState = co.wrap(function *(gitDir, state) {
     yield fs.writeFile(path.join(root, CURRENT_COMMIT_FILE),
                        "" + state.currentCommit);
 });
+
+/**
+ * Return a new `SequencerState` object having the same value as the specified
+ * `sequencer`, but with each commit sha it contains replaced with the value it
+ * mapts to in the specified `commitMap`.  The behavior is undefined unless
+ * every commit sha is mapped.
+ *
+ * @param {SequencerState} sequencer
+ * @param {Object}         commitMap     sha to sha
+ * @return {Sequencer}
+ */
+exports.mapCommits = function (sequencer, commitMap) {
+    assert.instanceOf(sequencer, SequencerState);
+    assert.isObject(commitMap);
+
+    function map(sha) {
+        assert.property(commitMap, sha);
+        return commitMap[sha];
+    }
+
+    function mapCommitAndRef(old) {
+        return new CommitAndRef(map(old.sha), old.ref);
+    }
+
+    const newOriginal = mapCommitAndRef(sequencer.originalHead);
+    const newTarget = mapCommitAndRef(sequencer.target);
+    const newCommits = sequencer.commits.map(map);
+    return new SequencerState({
+        type: sequencer.type,
+        originalHead: newOriginal,
+        target: newTarget,
+        currentCommit: sequencer.currentCommit,
+        commits: newCommits,
+    });
+};

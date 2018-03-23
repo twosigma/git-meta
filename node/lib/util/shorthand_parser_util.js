@@ -31,8 +31,11 @@
 "use strict";
 
 const assert      = require("chai").assert;
+
 const RepoAST     = require("../util/repo_ast");
 const RepoASTUtil  = require("../util/repo_ast_util");
+
+const SequencerState = RepoAST.SequencerState;
 
 /**
  * @module {ShorthandParserUtil}
@@ -57,7 +60,8 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
- *                  <note> | <rebase> | <merge> | <cherry-pick>
+ *                  <note> | <rebase> | <merge> | <cherry-pick> |
+ *                  <sequencer>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
  * commit         = <alphanumeric>+
@@ -79,6 +83,10 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  * rebase         = E<head name>,<original commit id>,<onto commit id>
  * merge          = M<message>,<original head>,<merge head>
  * cherry-pick    = P<original head>,<picked commit>
+ * sequencer      = Q<sequencer type>' '<commit and ref>' '<commit and ref>' '
+ *                  <number>' '<commit>(','<commit>)*
+ * sequencer type = C | M | R
+ * commit and ref = commit':'[<name>]
  * index          = I <change>[,<change>]*
  * workdir        = W <change>[,<change>]*
  * open submodule = 'O'<path>[' '<override>('!'<override>)*]
@@ -190,6 +198,10 @@ const RepoASTUtil  = require("../util/repo_ast_util");
  *                                 as conflicted, having a base content of 'a',
  *                                 "our" content as 'b', and "their" content as
  *                                 'c'.
+ * QR 1:refs/heads/master 8: 1 3,5,1
+ *                              -- A sequencer is in progress that is a 
+ *                              -- rebase.  When the rebase started, HEAD
+ *                              -- was on `master`.  
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
@@ -331,6 +343,24 @@ function copyOverrides(dest, source) {
 }
 
 /**
+ * Return the `CommitAndRef` object encoded in the specified `str`.
+ * @param {String} str
+ * @return {CommitAndRef}
+ */
+exports.parseCommitAndRef = function (str) {
+    const parts = str.split(":");
+    assert.equal(2, parts.length, `malformed commit and ref: ${str}`);
+    const ref = "" === parts[1] ? null : parts[1];
+    return new SequencerState.CommitAndRef(parts[0], ref);
+};
+
+const sequencerTypes = {
+    C: SequencerState.TYPE.CHERRY_PICK,
+    M: SequencerState.TYPE.MERGE,
+    R: SequencerState.TYPE.REBASE,
+};
+
+/**
  * Return the result of merging the data in the specified `baseAST` with data
  * returned from `parseRepoShorthandRaw` into an object suitable for passing to
  * the constructor of `RepoAST`.
@@ -357,6 +387,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         rebase: baseAST.rebase,
         merge: baseAST.merge,
         cherryPick: baseAST.cherryPick,
+        sequencerState: baseAST.sequencerState,
         bare: baseAST.bare,
     };
 
@@ -481,6 +512,10 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.cherryPick = rawRepo.cherryPick;
     }
 
+    if ("sequencerState" in rawRepo) {
+        resultArgs.sequencerState = rawRepo.sequencerState;
+    }
+
     return resultArgs;
 }
 
@@ -560,6 +595,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let rebase;
     let merge;
     let cherryPick;
+    let sequencer;
 
     /**
      * Parse a set of changes from the specified `begin` character to the
@@ -967,6 +1003,40 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
+     * Parse the sequencer definition beginning at the specified `begin` and
+     * terminating at the specified `end`.
+     *
+     * @param {Number} begin
+     * @param {Number} end
+     */
+    function parseSequencer(begin, end) {
+        if (begin === end) {
+            sequencer = null;
+            return;                                                   // RETURN
+        }
+        const sequencerDef = shorthand.substr(begin, end - begin);
+        const parts = sequencerDef.split(" ");
+        assert.equal(parts.length,
+                     5,
+                     `Wrong number of sequencer parts in ${sequencerDef}`);
+        assert.property(sequencerTypes, parts[0], "sequencer type");
+        const type = sequencerTypes[parts[0]];
+        const originalHead = exports.parseCommitAndRef(parts[1]);
+        const target = exports.parseCommitAndRef(parts[2]);
+        const currentCommit = Number.parseInt(parts[3]);
+        assert(!Number.isNaN(currentCommit),
+               `bad current commit: ${currentCommit}`);
+        const commits = parts[4].split(",");
+        assert.notEqual(0, commits.length, `Bad commits: ${parts[4]}`);
+        sequencer = new SequencerState({
+            type: type,
+            originalHead: originalHead,
+            target: target,
+            currentCommit: currentCommit,
+            commits: commits,
+        });
+    }
+    /**
      * Parse the override beginning at the specified `begin` and finishing at
      * the specified `end`.
      *
@@ -992,6 +1062,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "W": return parseWorkdir;
                 case "O": return parseOpenSubmodule;
                 case "E": return parseRebase;
+                case "Q": return parseSequencer;
                 default:
                     assert.isNull(`Invalid override ${override}.`);
                 break;
@@ -1038,6 +1109,9 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== cherryPick) {
         result.cherryPick = cherryPick;
+    }
+    if (undefined !== sequencer) {
+        result.sequencerState = sequencer;
     }
     return result;
 }
@@ -1302,6 +1376,11 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.cherryPick) {
             includeCommit(resultArgs.cherryPick.originalHead);
             includeCommit(resultArgs.cherryPick.picked);
+        }
+        if (resultArgs.sequencerState) {
+            includeCommit(resultArgs.sequencerState.originalHead.sha);
+            includeCommit(resultArgs.sequencerState.target.sha);
+            resultArgs.sequencerState.commits.forEach(includeCommit);
         }
         for (let remoteName in resultArgs.remotes) {
             const remote = resultArgs.remotes[remoteName];

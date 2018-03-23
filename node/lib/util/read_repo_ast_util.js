@@ -46,6 +46,7 @@ const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const RepoAST             = require("./repo_ast");
 const RebaseFileUtil      = require("./rebase_file_util");
 const MergeFileUtil       = require("./merge_file_util");
+const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
 /**
@@ -556,6 +557,15 @@ exports.readRAST = co.wrap(function *(repo) {
         yield loadCommit(NodeGit.Oid.fromString(cherryPick.picked));
     }
 
+    const sequencer = yield SequencerStateUtil.readSequencerState(repo.path());
+
+    if (null !== sequencer) {
+        yield loadCommit(NodeGit.Oid.fromString(sequencer.originalHead.sha));
+        yield loadCommit(NodeGit.Oid.fromString(sequencer.target.sha));
+        yield sequencer.commits.map(
+                               sha => loadCommit(NodeGit.Oid.fromString(sha)));
+    }
+
     return new RepoAST({
         commits: commits,
         branches: branchTargets,
@@ -570,6 +580,7 @@ exports.readRAST = co.wrap(function *(repo) {
         rebase: rebase,
         merge: merge,
         cherryPick: cherryPick,
+        sequencerState: sequencer,
         bare: bare,
     });
 });

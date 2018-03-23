@@ -37,6 +37,9 @@ const RepoASTUtil = require("../../lib/util/repo_ast_util");
 
 describe("RepoAstUtil", function () {
     const Conflict = RepoAST.Conflict;
+    const Sequencer = RepoAST.SequencerState;
+    const CommitAndRef = Sequencer.CommitAndRef;
+    const MERGE = Sequencer.TYPE.MERGE;
     const Submodule = RepoAST.Submodule;
     describe("assertEqualCommits", function () {
         const Commit = RepoAST.Commit;
@@ -171,6 +174,13 @@ describe("RepoAstUtil", function () {
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                     bare: false,
                 }),
                 expected: new AST({
@@ -186,6 +196,13 @@ describe("RepoAstUtil", function () {
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                     bare: false,
                 }),
             },
@@ -635,6 +652,69 @@ describe("RepoAstUtil", function () {
                     head: "1",
                     branches: { master: new RepoAST.Branch("2", null), },
                     cherryPick: new CherryPick("1", "1"),
+                }),
+                fails: true,
+            },
+            "missing sequencer": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                fails: true,
+            },
+            "unexpected sequencer": {
+                actual: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit},
+                    head: "1",
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
+                }),
+                fails: true,
+            },
+            "wrong sequencer": {
+                actual: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
+                }),
+                expected: new AST({
+                    commits: { "1": aCommit, "2": aCommit},
+                    head: "1",
+                    branches: { master: new RepoAST.Branch("2", null), },
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/baz"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                 }),
                 fails: true,
             },
@@ -1124,6 +1204,31 @@ describe("RepoAstUtil", function () {
                     commits: { "1": c1 },
                     head: "1",
                     cherryPick: new CherryPick("1", "1"),
+                }),
+            },
+            "sequencer": {
+                i: new RepoAST({
+                    commits: { "1": c1 },
+                    head: "1",
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "foo/bar"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
+                }),
+                m: { "1": "2"},
+                e: new RepoAST({
+                    commits: { "2": c1 },
+                    head: "2",
+                    sequencerState: new Sequencer({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("2", null),
+                        target: new CommitAndRef("2", "foo/bar"),
+                        commits: ["2"],
+                        currentCommit: 0,
+                    }),
                 }),
             },
         };

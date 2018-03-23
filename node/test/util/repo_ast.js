@@ -35,6 +35,9 @@ const assert = require("chai").assert;
 const RepoAST = require("../../lib/util/repo_ast");
 
 describe("RepoAST", function () {
+const SequencerState = RepoAST.SequencerState;
+const CommitAndRef = SequencerState.CommitAndRef;
+const REBASE = SequencerState.TYPE.REBASE;
 
     describe("Branch", function () {
         it("breath", function () {
@@ -275,6 +278,8 @@ describe("RepoAST", function () {
                     emerge: ("merge" in expected) ? expected.merge : null,
                     echerryPick: ("cherryPick" in expected) ?
                         expected.cherryPick : null,
+                    esequencerState: ("sequencerState" in expected) ?
+                        expected.sequencerState : null,
                     fails   : fails,
                 };
             }
@@ -290,6 +295,7 @@ describe("RepoAST", function () {
                         rebase: null,
                         merge: null,
                         cherryPick: null,
+                        sequencerState: null,
                         bare: false,
                     },
                     undefined,
@@ -322,6 +328,18 @@ describe("RepoAST", function () {
                 "bad bare with cherry": m({
                     bare: true,
                     cherryPick: new CherryPick("1", "1"),
+                    commits: {"1": c1 },
+                    head: "1",
+                }, undefined, true),
+                "bad bare with sequencer": m({
+                    bare: true,
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", null),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -607,6 +625,35 @@ describe("RepoAST", function () {
                     head: "1",
                     cherryPick: new CherryPick("1", "1"),
                 }),
+                "with sequencer state": m({
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                        "3": new Commit(),
+                    },
+                    head: "1",
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("3", null),
+                        target: new CommitAndRef("3", null),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                        "3": new Commit(),
+                    },
+                    head: "1",
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("3", null),
+                        target: new CommitAndRef("3", null),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
+                }),
                 "with merge specific commits": m({
                     commits: {
                         "1": new Commit(),
@@ -637,8 +684,46 @@ describe("RepoAST", function () {
                     head: "1",
                     cherryPick: new CherryPick("2", "2"),
                 }),
+                "with sequencer specific commits": m({
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                        "3": new Commit(),
+                    },
+                    head: "1",
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("3", null),
+                        target: new CommitAndRef("3", null),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
+                }, {
+                    commits: {
+                        "1": new Commit(),
+                        "2": new Commit(),
+                        "3": new Commit(),
+                    },
+                    head: "1",
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("3", null),
+                        target: new CommitAndRef("3", null),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
+                }),
                 "bad cherry-pick": m({
                     cherryPick: new CherryPick("1", "1"),
+                }, undefined, true),
+                "bad sequencer": m({
+                    sequencerState: new SequencerState({
+                        type: REBASE,
+                        originalHead: new CommitAndRef("foo", null),
+                        target: new CommitAndRef("bar", null),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
                 }, undefined, true),
             };
             Object.keys(cases).forEach(caseName => {
@@ -664,6 +749,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.rebase, c.erebase);
                     assert.deepEqual(obj.merge, c.emerge);
                     assert.deepEqual(obj.cherryPick, c.echerryPick);
+                    assert.deepEqual(obj.sequencerState, c.esequencerState);
                     assert.equal(obj.bare, c.ebare);
 
                     if (c.input) {
@@ -815,6 +901,13 @@ describe("RepoAST", function () {
                 rebase: new Rebase("hello", "1", "1"),
                 merge: new Merge("hello", "1", "1"),
                 cherryPick: new CherryPick("1", "1"),
+                sequencerState: new SequencerState({
+                    type: REBASE,
+                    originalHead: new CommitAndRef("1", null),
+                    target: new CommitAndRef("1", null),
+                    commits: ["1"],
+                    currentCommit: 0,
+                }),
                 bare: false,
             });
             const newArgs = {
@@ -829,6 +922,13 @@ describe("RepoAST", function () {
                 rebase: new Rebase("hello world", "2", "2"),
                 merge: new Merge("hello world", "2", "2"),
                 cherryPick: new CherryPick("2", "2"),
+                sequencerState: new SequencerState({
+                    type: REBASE,
+                    originalHead: new CommitAndRef("2", "refs/heads/master"),
+                    target: new CommitAndRef("2", null),
+                    commits: ["2"],
+                    currentCommit: 0,
+                }),
                 bare: false,
             };
             const cases = {
@@ -848,6 +948,7 @@ describe("RepoAST", function () {
                         rebase: null,
                         merge: null,
                         cherryPick: null,
+                        sequencerState: null,
                     },
                     e: new RepoAST({
                         commits: { "1": new RepoAST.Commit()},
@@ -875,6 +976,7 @@ describe("RepoAST", function () {
                     assert.deepEqual(obj.rebase, c.e.rebase);
                     assert.deepEqual(obj.merge, c.e.merge);
                     assert.deepEqual(obj.cherryPick, c.e.cherryPick);
+                    assert.deepEqual(obj.sequencerState, c.e.sequencerState);
                     assert.equal(obj.bare, c.e.bare);
                 });
             });

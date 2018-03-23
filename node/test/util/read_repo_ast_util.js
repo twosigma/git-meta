@@ -46,8 +46,12 @@ const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
+const SequencerState      = require("../../lib/util/sequencer_state");
+const SequencerStateUtil  = require("../../lib/util/sequencer_state_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
+
+const CommitAndRef = SequencerState.CommitAndRef;
 
                                // Test utilities
 
@@ -1544,6 +1548,67 @@ describe("readRAST", function () {
         const ast = yield ReadRepoASTUtil.readRAST(r);
         const actualCherryPick = ast.cherryPick;
         assert.deepEqual(actualCherryPick, cherryPick);
+    }));
+
+    it("sequencer", co.wrap(function *() {
+        // Start out with a base repo having two branches, "master", and "foo",
+        // foo having one commit on top of master.
+
+        const start = yield repoWithCommit();
+        const r = start.repo;
+
+        // Switch to master
+
+        yield r.checkoutBranch("master");
+
+        const head = yield r.getHeadCommit();
+        const sha = head.id().tostrS();
+
+        const sequencer = new SequencerState({
+            type: SequencerState.TYPE.REBASE,
+            originalHead: new CommitAndRef(sha, "foo"),
+            target: new CommitAndRef(sha, "bar"),
+            currentCommit: 0,
+            commits: [sha],
+        });
+
+        const original = yield ReadRepoASTUtil.readRAST(r);
+        const expected = original.copy({
+            sequencerState: sequencer,
+        });
+
+        yield SequencerStateUtil.writeSequencerState(r.path(), sequencer);
+
+        const actual = yield ReadRepoASTUtil.readRAST(r);
+
+        RepoASTUtil.assertEqualASTs(actual, expected);
+    }));
+
+    it("sequencer - unreachable", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+        r.detachHead();
+        const second = yield TestUtil.generateCommit(r);
+        const third = yield TestUtil.generateCommit(r);
+        const fourth = yield TestUtil.generateCommit(r);
+
+        // Then begin a cherry-pick.
+
+        const sequencer = new SequencerState({
+            type: SequencerState.TYPE.REBASE,
+            originalHead: new CommitAndRef(second.id().tostrS(), "foo"),
+            target: new CommitAndRef(third.id().tostrS(), "bar"),
+            currentCommit: 0,
+            commits: [fourth.id().tostrS()],
+        });
+
+        yield SequencerStateUtil.writeSequencerState(r.path(), sequencer);
+
+        // Remove the branches, making the commits reachable only from the
+        // rebase.
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const actualSequencer = ast.sequencerState;
+        assert.deepEqual(actualSequencer, sequencer);
     }));
 
     it("add subs again", co.wrap(function *() {
