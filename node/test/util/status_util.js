@@ -41,6 +41,7 @@ const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const RepoStatus          = require("../../lib/util/repo_status");
+const SequencerState      = require("../../lib/util/sequencer_state");
 const StatusUtil          = require("../../lib/util/status_util");
 const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
@@ -49,6 +50,8 @@ const UserError           = require("../../lib/util/user_error");
 // test utilities
 
 describe("StatusUtil", function () {
+    const CommitAndRef     = SequencerState.CommitAndRef;
+    const TYPE             = SequencerState.TYPE;
     const FILEMODE         = NodeGit.TreeEntry.FILEMODE;
     const BLOB             = FILEMODE.BLOB;
     const FILESTATUS       = RepoStatus.FILESTATUS;
@@ -113,6 +116,13 @@ describe("StatusUtil", function () {
                     rebase: new Rebase("foo", "1", "1"),
                     merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
+                    sequencerState: new SequencerState({
+                        type: TYPE.MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "baz"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                 }),
                 commitMap: { "1": "3"},
                 urlMap: {},
@@ -124,6 +134,13 @@ describe("StatusUtil", function () {
                     rebase: new Rebase("foo", "3", "3"),
                     merge: new Merge("foo", "3", "3"),
                     cherryPick: new CherryPick("3", "3"),
+                    sequencerState: new SequencerState({
+                        type: TYPE.MERGE,
+                        originalHead: new CommitAndRef("3", null),
+                        target: new CommitAndRef("3", "baz"),
+                        commits: ["3"],
+                        currentCommit: 0,
+                    }),
                 }),
             },
             "with a sub": {
@@ -584,6 +601,20 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     cherryPick: new CherryPick("2", "3"),
                 }),
             },
+            "sequencer": {
+                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;QM 1: 2:foo 1 2,3",
+                expected: new RepoStatus({
+                    headCommit: "2",
+                    currentBranchName: "master",
+                    sequencerState: new SequencerState({
+                        type: TYPE.MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("2", "foo"),
+                        commits: ["2", "3"],
+                        currentCommit: 1,
+                    }),
+                }),
+            },
             "staged change": {
                 state: "x=S:I README.md=whoohoo",
                 options: {
@@ -897,6 +928,18 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
             "cherry-pick": {
                 input: new RepoStatus({
                     cherryPick: new CherryPick("foo", "bart"),
+                }),
+                fails: true,
+            },
+            "sequencer": {
+                input: new RepoStatus({
+                    sequencerState: new SequencerState({
+                        type: TYPE.MERGE,
+                        originalHead: new CommitAndRef("1", null),
+                        target: new CommitAndRef("1", "baz"),
+                        commits: ["1"],
+                        currentCommit: 0,
+                    }),
                 }),
                 fails: true,
             },

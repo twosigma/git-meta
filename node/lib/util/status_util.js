@@ -50,6 +50,7 @@ const PrintStatusUtil     = require("./print_status_util");
 const Rebase              = require("./rebase");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
+const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
@@ -207,6 +208,10 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
         cherryPick: status.cherryPick === null ?
                           null :
                           remapCherryPick(status.cherryPick, commitMap),
+        sequencerState: status.sequencerState === null ?
+                          null :
+                          SequencerStateUtil.mapCommits(status.sequencerState,
+                                                        commitMap),
     });
 };
 
@@ -496,6 +501,8 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 
     args.merge = yield MergeFileUtil.readMerge(repo.path());
     args.cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
+    args.sequencerState =
+                      yield SequencerStateUtil.readSequencerState(repo.path());
 
     if (options.showMetaChanges && !repo.isBare()) {
         const head = yield repo.getHeadCommit();
@@ -662,5 +669,13 @@ Before proceeding, you must complete the cherry-pick in progress (by running
         throw new UserError(`\
 Please resolve outstanding conflicts before proceeding:
 ${PrintStatusUtil.printRepoStatus(status, "")}`);
+    }
+    if (null !== status.sequencerState) {
+        const command =
+               PrintStatusUtil.getSequencerCommand(status.sequencerState.type);
+        throw new UserError(`\
+Before proceeding, you must complete the ${command} in progress (by running
+'git meta ${command} --continue') or abort it (by running
+'git meta ${command} --abort').`);
     }
 };

@@ -39,8 +39,11 @@ const Merge               = require("../../lib/util/merge");
 const CherryPick          = require("../../lib/util/cherry_pick");
 const RepoStatus          = require("../../lib/util/repo_status");
 const PrintStatusUtil     = require("../../lib/util/print_status_util");
+const SequencerState      = require("../../lib/util/sequencer_state");
 
 describe("PrintStatusUtil", function () {
+    const CommitAndRef     = SequencerState.CommitAndRef;
+    const TYPE             = SequencerState.TYPE;
     const FILEMODE         = NodeGit.TreeEntry.FILEMODE;
     const BLOB             = FILEMODE.BLOB;
     const FILESTATUS       = RepoStatus.FILESTATUS;
@@ -661,6 +664,48 @@ describe("PrintStatusUtil", function () {
         });
     });
 
+    describe("getSequencerCommand", function () {
+        const cases = {
+            "merge": {
+                input: TYPE.MERGE,
+                expected: "merge",
+            },
+            "rebase": {
+                input: TYPE.REBASE,
+                expected: "rebase",
+            },
+            "cherry-pick": {
+                input: TYPE.CHERRY_PICK,
+                expected: "cherry-pick",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, function () {
+                const result = PrintStatusUtil.getSequencerCommand(c.input);
+                assert.equal(result, c.expected);
+            });
+        });
+    });
+
+    it("printSequencer", function () {
+        const state = new SequencerState({
+            type: TYPE.MERGE,
+            originalHead: new CommitAndRef("foo", null),
+            target: new CommitAndRef("bar", "baz"),
+            commits: ["2", "1"],
+            currentCommit: 1,
+        });
+        const expected = `\
+A merge is in progress.
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta merge --continue")
+  (use "git meta merge --abort" to check out the original branch)
+`;
+        const result = PrintStatusUtil.printSequencer(state);
+        assert.deepEqual(result.split("\n"), expected.split("\n"));
+    });
+
     describe("printCurrentBranch", function () {
         const cases = {
             "normal": {
@@ -730,6 +775,26 @@ A cherry-pick is in progress.
   (after resolving conflicts mark the corrected paths
    with 'git meta add', then run "git meta cherry-pick --continue")
   (use "git meta cherry-pick --abort" to check out the original branch)
+nothing to commit, working tree clean
+`,
+            },
+            "sequencer": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    sequencerState: new SequencerState({
+                        type: TYPE.REBASE,
+                        originalHead: new CommitAndRef("foo", null),
+                        target: new CommitAndRef("bar", "baz"),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
+                }),
+                exact: `\
+On branch ${colors.green("master")}.
+A rebase is in progress.
+  (after resolving conflicts mark the corrected paths
+   with 'git meta add', then run "git meta rebase --continue")
+  (use "git meta rebase --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
             },
