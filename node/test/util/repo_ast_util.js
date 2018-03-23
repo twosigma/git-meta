@@ -38,8 +38,8 @@ const RepoASTUtil = require("../../lib/util/repo_ast_util");
 describe("RepoAstUtil", function () {
     const Conflict = RepoAST.Conflict;
     const Sequencer = RepoAST.SequencerState;
-    const CommitAndRef = Sequencer.CommitAndRef;
     const MERGE = Sequencer.TYPE.MERGE;
+    const CommitAndRef = Sequencer.CommitAndRef;
     const Submodule = RepoAST.Submodule;
     describe("assertEqualCommits", function () {
         const Commit = RepoAST.Commit;
@@ -138,7 +138,6 @@ describe("RepoAstUtil", function () {
         const Conflict = RepoAST.Conflict;
         const Commit = AST.Commit;
         const Rebase = AST.Rebase;
-        const Merge = AST.Merge;
         const CherryPick = AST.CherryPick;
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
@@ -172,7 +171,6 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
-                    merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
                     sequencerState: new Sequencer({
                         type: MERGE,
@@ -194,7 +192,6 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
-                    merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
                     sequencerState: new Sequencer({
                         type: MERGE,
@@ -549,73 +546,6 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
-            "missing merge": {
-                actual: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                }),
-                fails: true,
-            },
-            "unexpected merge": {
-                actual: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                fails: true,
-            },
-            "wrong merge message": {
-                actual: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    merge: new Merge("foo bar", "1", "1"),
-                }),
-                fails: true,
-            },
-            "wrong merge original commit": {
-                actual: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    merge: new Merge("foo", "2", "1"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                fails: true,
-            },
-            "wrong merge head": {
-                actual: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    merge: new Merge("foo", "1", "2"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                fails: true,
-            },
             "missing cherry": {
                 actual: new AST({
                     commits: { "1": aCommit},
@@ -774,7 +704,6 @@ describe("RepoAstUtil", function () {
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
         const Rebase = RepoAST.Rebase;
-        const Merge = RepoAST.Merge;
         const CherryPick = RepoAST.CherryPick;
         const c1 = new Commit({ message: "foo" });
         const cases = {
@@ -1154,32 +1083,6 @@ describe("RepoAstUtil", function () {
                     rebase: new Rebase("foo", "1", "1"),
                 }),
             },
-            "merge": {
-                i: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                m: { "1": "2"},
-                e: new RepoAST({
-                    commits: { "2": c1 },
-                    head: "2",
-                    merge: new Merge("foo", "2", "2"),
-                }),
-            },
-            "merge unmapped": {
-                i: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-                m: {},
-                e: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    merge: new Merge("foo", "1", "1"),
-                }),
-            },
             "cherry-pick": {
                 i: new RepoAST({
                     commits: { "1": c1 },
@@ -1216,6 +1119,7 @@ describe("RepoAstUtil", function () {
                         target: new CommitAndRef("1", "foo/bar"),
                         commits: ["1"],
                         currentCommit: 0,
+                        message: "meh",
                     }),
                 }),
                 m: { "1": "2"},
@@ -1228,6 +1132,7 @@ describe("RepoAstUtil", function () {
                         target: new CommitAndRef("2", "foo/bar"),
                         commits: ["2"],
                         currentCommit: 0,
+                        message: "meh",
                     }),
                 }),
             },
@@ -1396,21 +1301,6 @@ describe("RepoAstUtil", function () {
                     commits: { "1": c1},
                     head: "1",
                     rebase: new RepoAST.Rebase("foo", "1", "1"),
-                }),
-                url: "foo",
-                expected: new AST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    remotes: {
-                        origin: new Remote("foo", {}),
-                    },
-                }),
-            },
-            "no clone merge": {
-                original: new AST({
-                    commits: { "1": c1},
-                    head: "1",
-                    merge: new RepoAST.Merge("foo", "1", "1"),
                 }),
                 url: "foo",
                 expected: new AST({

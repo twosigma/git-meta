@@ -41,7 +41,6 @@ const colors  = require("colors/safe");
 const path    = require("path");
 
 const GitUtil             = require("./git_util");
-const Merge               = require("./merge");
 const CherryPick          = require("./cherry_pick");
 const SequencerState      = require("./sequencer_state");
 const Rebase              = require("./rebase");
@@ -367,22 +366,6 @@ You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
 };
 
 /**
- * Return a message describing the specified `merge`.
- *
- * @param {Merge}
- * @return {String}
- */
-function printMerge(merge) {
-    assert.instanceOf(merge, Merge);
-    return `\
-A merge is in progress.
-  (after resolving conflicts mark the corrected paths
-   with 'git meta add', then run "git meta merge --continue")
-  (use "git meta merge --abort" to check out the original branch)
-`;
-}
-
-/**
  * Return a message describing the specified `cherryPick`.
  *
  * @param {CherryPick}
@@ -465,10 +448,6 @@ exports.printRepoStatus = function (status, cwd) {
     }
 
     result += exports.printCurrentBranch(status);
-
-    if (null !== status.merge) {
-        result += printMerge(status.merge);
-    }
 
     if (null !== status.cherryPick) {
         result += printCherryPick(status.cherryPick);

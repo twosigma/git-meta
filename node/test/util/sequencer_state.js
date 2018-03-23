@@ -96,7 +96,8 @@ const CommitAndRef = SequencerState.CommitAndRef;
             originalHead: original,
             target: target,
             commits: ["3"],
-            currentCommit: 0
+            currentCommit: 0,
+            message: "meh",
         });
         assert.isFrozen(seq);
         assert.equal(seq.type, TYPE.MERGE);
@@ -104,6 +105,7 @@ const CommitAndRef = SequencerState.CommitAndRef;
         assert.deepEqual(seq.target, target);
         assert.deepEqual(seq.commits, ["3"]);
         assert.equal(seq.currentCommit, 0);
+        assert.equal(seq.message, "meh");
     });
     describe("equal", function () {
         const cnr0 = new CommitAndRef("a", "foo");
@@ -116,6 +118,7 @@ const CommitAndRef = SequencerState.CommitAndRef;
                     target: cnr1,
                     commits: ["1", "2", "3"],
                     currentCommit: 1,
+                    message: "moo",
                 }),
                 rhs: new SequencerState({
                     type: TYPE.MERGE,
@@ -123,6 +126,7 @@ const CommitAndRef = SequencerState.CommitAndRef;
                     target: cnr1,
                     commits: ["1", "2", "3"],
                     currentCommit: 1,
+                    message: "moo",
                 }),
                 expected: true,
             },
@@ -211,6 +215,25 @@ const CommitAndRef = SequencerState.CommitAndRef;
                 }),
                 expected: false,
             },
+            "different message": {
+                lhs: new SequencerState({
+                    type: TYPE.MERGE,
+                    originalHead: cnr0,
+                    target: cnr1,
+                    commits: ["1", "2", "3"],
+                    currentCommit: 1,
+                    message: "ooo",
+                }),
+                rhs: new SequencerState({
+                    type: TYPE.MERGE,
+                    originalHead: cnr0,
+                    target: cnr1,
+                    commits: ["1", "2", "3"],
+                    currentCommit: 1,
+                    message: "moo",
+                }),
+                expected: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -227,11 +250,12 @@ const CommitAndRef = SequencerState.CommitAndRef;
             target: new CommitAndRef("b", null),
             commits: ["1"],
             currentCommit: 0,
+            message: "meh",
         });
         const result = "" + input;
         assert.equal(result,
                      `\
 SequencerState(type=REBASE, originalHead=CommitAndRef(sha=a), \
-target=CommitAndRef(sha=b), commits=["1"], currentCommit=0)`);
+target=CommitAndRef(sha=b), commits=["1"], currentCommit=0, msg=meh)`);
     });
 });

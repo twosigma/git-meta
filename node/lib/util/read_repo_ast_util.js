@@ -45,7 +45,6 @@ const path     = require("path");
 const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const RepoAST             = require("./repo_ast");
 const RebaseFileUtil      = require("./rebase_file_util");
-const MergeFileUtil       = require("./merge_file_util");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
@@ -543,13 +542,6 @@ exports.readRAST = co.wrap(function *(repo) {
         yield loadCommit(NodeGit.Oid.fromString(rebase.onto));
     }
 
-    const merge = yield MergeFileUtil.readMerge(repo.path());
-
-    if (null !== merge) {
-        yield loadCommit(NodeGit.Oid.fromString(merge.originalHead));
-        yield loadCommit(NodeGit.Oid.fromString(merge.mergeHead));
-    }
-
     const cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
 
     if (null !== cherryPick) {
@@ -578,7 +570,6 @@ exports.readRAST = co.wrap(function *(repo) {
         workdir: workdir,
         openSubmodules: openSubmodules,
         rebase: rebase,
-        merge: merge,
         cherryPick: cherryPick,
         sequencerState: sequencer,
         bare: bare,

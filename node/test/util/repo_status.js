@@ -32,7 +32,6 @@
 
 const assert = require("chai").assert;
 
-const Merge          = require("../../lib/util/merge");
 const CherryPick     = require("../../lib/util/cherry_pick");
 const Rebase         = require("../../lib/util/rebase");
 const RepoStatus     = require("../../lib/util/repo_status");
@@ -481,7 +480,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                 workdir: {},
                 submodules: {},
                 rebase: null,
-                merge: null,
                 cherryPick: null,
                 sequencerState: null,
             };
@@ -509,7 +507,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
-                    merge: new Merge("baz", "2", "1"),
                     cherryPick: new CherryPick("2", "1"),
                     sequencerState: new SequencerState({
                         type: MERGE,
@@ -531,7 +528,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
-                    merge: new Merge("baz", "2", "1"),
                     cherryPick: new CherryPick("2", "1"),
                     sequencerState: new SequencerState({
                         type: MERGE,
@@ -555,7 +551,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             assert.deepEqual(result.workdir, c.e.workdir);
             assert.deepEqual(result.submodules, c.e.submodules);
             assert.deepEqual(result.rebase, c.e.rebase);
-            assert.deepEqual(result.merge, c.e.merge);
             assert.deepEqual(result.cherryPick, c.e.cherryPick);
             assert.deepEqual(result.sequencerState, c.e.sequencerState);
         });
@@ -1060,7 +1055,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             },
             workdir: { x: FILESTATUS.MODIFIED },
             rebase: new Rebase("2", "4", "b"),
-            merge: new Merge("hah", "1", "1"),
             cherryPick: new CherryPick("1", "1"),
             sequencerState: new SequencerState({
                 type: MERGE,
@@ -1079,7 +1073,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             },
             workdir: { x: FILESTATUS.ADDED },
             rebase: new Rebase("a", "4", "b"),
-            merge: new Merge("a", "2", "2"),
             cherryPick: new CherryPick("a", "2"),
             sequencerState: new SequencerState({
                 type: MERGE,
@@ -1105,7 +1098,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                 submodules: anotherStat.submodules,
                 workdir: anotherStat.workdir,
                 rebase: anotherStat.rebase,
-                merge: anotherStat.merge,
                 cherryPick: anotherStat.cherryPick,
                 sequencerState: anotherStat.sequencerState,
             });

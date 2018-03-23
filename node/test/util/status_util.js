@@ -36,7 +36,6 @@ const path    = require("path");
 const NodeGit = require("nodegit");
 
 const CherryPick          = require("../../lib/util/cherry_pick");
-const Merge               = require("../../lib/util/merge");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
@@ -114,7 +113,6 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "1", "1"),
-                    merge: new Merge("foo", "1", "1"),
                     cherryPick: new CherryPick("1", "1"),
                     sequencerState: new SequencerState({
                         type: TYPE.MERGE,
@@ -132,7 +130,6 @@ describe("StatusUtil", function () {
                     staged: { x: RepoStatus.FILESTATUS.ADDED },
                     workdir: { y: RepoStatus.FILESTATUS.ADDED },
                     rebase: new Rebase("foo", "3", "3"),
-                    merge: new Merge("foo", "3", "3"),
                     cherryPick: new CherryPick("3", "3"),
                     sequencerState: new SequencerState({
                         type: TYPE.MERGE,
@@ -585,14 +582,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                     rebase: new Rebase("master", "2", "3"),
                 }),
             },
-            "merge": {
-                state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;Mhi\n,2,3",
-                expected: new RepoStatus({
-                    headCommit: "2",
-                    currentBranchName: "master",
-                    merge: new Merge("hi\n", "2", "3"),
-                }),
-            },
             "cherry-pick": {
                 state: "x=S:C2-1;C3-1;Bfoo=3;Bmaster=2;P2,3",
                 expected: new RepoStatus({
@@ -916,12 +905,6 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
             "rebase": {
                 input: new RepoStatus({
                     rebase: new Rebase("foo", "bart", "baz"),
-                }),
-                fails: true,
-            },
-            "merge": {
-                input: new RepoStatus({
-                    merge: new Merge("foo", "bart", "baz"),
                 }),
                 fails: true,
             },

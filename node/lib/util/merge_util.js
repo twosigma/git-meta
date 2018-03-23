@@ -41,14 +41,47 @@ const Commit              = require("./commit");
 const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
-const Merge               = require("./merge");
-const MergeFileUtil       = require("./merge_file_util");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
+const SequencerState      = require("./sequencer_state");
+const SequencerStateUtil  = require("./sequencer_state_util");
 const StatusUtil          = require("./status_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
+
+const CommitAndRef = SequencerState.CommitAndRef;
+const MERGE = SequencerState.TYPE.MERGE;
+
+/**
+ * If there is a sequencer with a merge in the specified `path` return it,
+ * otherwise, return null.
+ *
+ * @param {String} path
+ * @return {String|null}
+ */
+const getSequencerIfMerge = co.wrap(function *(path) {
+    const seq = yield SequencerStateUtil.readSequencerState(path);
+    if (null !== seq && MERGE === seq.type) {
+        return seq;
+    }
+    return null;
+});
+
+/**
+ * If there is a sequencer with a merge in the specified `path` return it,
+ * otherwise, throw a `UserError` indicating that there is no merge.
+ *
+ * @param {String} path
+ * @return {String}
+ */
+const checkForMerge = co.wrap(function *(path) {
+    const seq = yield getSequencerIfMerge(path);
+    if (null === seq) {
+        throw new UserError("No merge in progress.");
+    }
+    return seq;
+});
 
 /**
  * @enum {MODE}
@@ -377,11 +410,15 @@ ${colors.green(subSha)}.`);
         // Abort if conflicted.
 
         if (subIndex.hasConflicts()) {
-            const merge = new Merge(message,
-                                    subHead.id().tostrS(),
-                                    subCommit.id().tostrS());
-            yield MergeFileUtil.writeMerge(subRepo.path(), merge);
-
+            const seq = new SequencerState({
+                type: MERGE,
+                originalHead: new CommitAndRef(subHead.id().tostrS(), null),
+                target: new CommitAndRef(subCommit.id().tostrS(), null),
+                currentCommit: 0,
+                commits: [subCommit.id().tostrS()],
+                message: message,
+            });
+            yield SequencerStateUtil.writeSequencerState(subRepo.path(), seq);
             errorMessage += `Submodule ${colors.red(path)} is conflicted:\n`;
             const entries = subIndex.entries();
             for (let i = 0; i < entries.length; ++i) {
@@ -433,11 +470,17 @@ ${colors.green(subSha)}.`);
     if ("" !== errorMessage) {
         // We're about to fail due to conflict.  First, record that there is a
         // merge in progress so that we can continue or abort it later.
+        // TODO: some day when we make use of it, write the ref name for HEAD
 
-        const merge = new Merge(message,
-                                head.id().tostrS(),
-                                commit.id().tostrS());
-        yield MergeFileUtil.writeMerge(repo.path(), merge);
+        const seq = new SequencerState({
+            type: MERGE,
+            originalHead: new CommitAndRef(head.id().tostrS(), null),
+            target: new CommitAndRef(commit.id().tostrS(), null),
+            currentCommit: 0,
+            commits: [commit.id().tostrS()],
+            message: message,
+        });
+        yield SequencerStateUtil.writeSequencerState(repo.path(), seq);
         throw new UserError(errorMessage);
     }
 
@@ -500,16 +543,11 @@ const checkForConflicts = function (index) {
  */
 exports.continue = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
-
     const result = {
         metaCommit: null,
         submoduleCommits: {},
     };
-    const merge = yield MergeFileUtil.readMerge(repo.path());
-    if (null === merge) {
-        throw new UserError("No merge in progress.");
-    }
-
+    const seq = yield checkForMerge(repo.path());
     const index = yield repo.index();
 
     checkForConflicts(index);
@@ -518,7 +556,7 @@ exports.continue = co.wrap(function *(repo) {
     // conflicts.  We validated in `checkForConflicts` that there are no "real"
     // conflicts.
 
-    console.log(`Continuing with merge of ${colors.green(merge.mergeHead)}.`);
+    console.log(`Continuing with merge of ${colors.green(seq.target.sha)}.`);
 
     let errorMessage = "";
 
@@ -531,8 +569,8 @@ exports.continue = co.wrap(function *(repo) {
             return;                                                   // RETURN
         }
         const sig = subRepo.defaultSignature();
-        const subMerge = yield MergeFileUtil.readMerge(subRepo.path());
-        if (null === subMerge) {
+        const subSeq = yield getSequencerIfMerge(subRepo.path());
+        if (null === subSeq) {
             // There is no merge in this submodule, but if there are staged
             // changes we need to make a commit.
 
@@ -543,7 +581,7 @@ exports.continue = co.wrap(function *(repo) {
                 const id = yield subRepo.createCommitOnHead([],
                                                             sig,
                                                             sig,
-                                                            merge.message);
+                                                            seq.message);
                 result.submoduleCommits[subPath] = id.tostrS();
             }
         }
@@ -552,15 +590,15 @@ exports.continue = co.wrap(function *(repo) {
             // Continue it and then clean up the merge.
 
             const head = yield subRepo.getHeadCommit();
-            const mergeHead = yield subRepo.getCommit(subMerge.mergeHead);
+            const mergeHead = yield subRepo.getCommit(subSeq.target.sha);
             const treeId = yield subIndex.writeTreeTo(subRepo);
             const id = yield subRepo.createCommit("HEAD",
                                                   sig,
                                                   sig,
-                                                  subMerge.message,
+                                                  subSeq.message,
                                                   treeId,
                                                   [head, mergeHead]);
-            yield MergeFileUtil.cleanMerge(subRepo.path());
+            yield SequencerStateUtil.cleanSequencerState(subRepo.path());
             result.submoduleCommits[subPath] = id.tostrS();
         }
         yield index.addByPath(subPath);
@@ -568,7 +606,6 @@ exports.continue = co.wrap(function *(repo) {
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
     yield DoWorkQueue.doInParallel(openSubs, continueSub);
-
     yield index.write();
 
     if ("" !== errorMessage) {
@@ -578,16 +615,16 @@ exports.continue = co.wrap(function *(repo) {
 
     const sig = repo.defaultSignature();
     const head = yield repo.getHeadCommit();
-    const mergeHead = yield repo.getCommit(merge.mergeHead);
+    const mergeHead = yield repo.getCommit(seq.target.sha);
     const metaCommit = yield repo.createCommit("HEAD",
                                                sig,
                                                sig,
-                                               merge.message,
+                                               seq.message,
                                                treeId,
                                                [head, mergeHead]);
     console.log(
             `Finished with merge commit ${colors.green(metaCommit.tostrS())}`);
-    yield MergeFileUtil.cleanMerge(repo.path());
+    yield SequencerStateUtil.cleanSequencerState(repo.path());
     result.metaCommit = metaCommit.tostrS();
     return result;
 });
@@ -607,10 +644,7 @@ const resetMerge = co.wrap(function *(repo) {
 exports.abort = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const merge = yield MergeFileUtil.readMerge(repo.path());
-    if (null === merge) {
-        throw new UserError("No merge in progress.");
-    }
+    yield checkForMerge(repo.path());
 
     const head = yield repo.getHeadCommit(repo);
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
@@ -636,12 +670,12 @@ exports.abort = co.wrap(function *(repo) {
                                       NodeGit.Reset.TYPE.SOFT);
             yield resetMerge(subRepo);
         }
-        yield MergeFileUtil.cleanMerge(subRepo.path());
+        yield SequencerStateUtil.cleanSequencerState(subRepo.path());
         yield index.addByPath(subName);
     });
     yield DoWorkQueue.doInParallel(openSubs, abortSub);
     yield index.conflictCleanup();
     yield index.write();
     yield resetMerge(repo);
-    yield MergeFileUtil.cleanMerge(repo.path());
+    yield SequencerStateUtil.cleanSequencerState(repo.path());
 });
