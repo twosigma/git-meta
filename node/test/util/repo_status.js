@@ -32,12 +32,16 @@
 
 const assert = require("chai").assert;
 
-const Merge      = require("../../lib/util/merge");
-const CherryPick = require("../../lib/util/cherry_pick");
-const Rebase     = require("../../lib/util/rebase");
-const RepoStatus = require("../../lib/util/repo_status");
+const Merge          = require("../../lib/util/merge");
+const CherryPick     = require("../../lib/util/cherry_pick");
+const Rebase         = require("../../lib/util/rebase");
+const RepoStatus     = require("../../lib/util/repo_status");
+const SequencerState = require("../../lib/util/sequencer_state");
 
 describe("RepoStatus", function () {
+const CommitAndRef = SequencerState.CommitAndRef;
+const MERGE = SequencerState.TYPE.MERGE;
+
     const FILESTATUS = RepoStatus.FILESTATUS;
     const Submodule = RepoStatus.Submodule;
     const Commit = Submodule.Commit;
@@ -479,6 +483,7 @@ describe("RepoStatus", function () {
                 rebase: null,
                 merge: null,
                 cherryPick: null,
+                sequencerState: null,
             };
             return Object.assign(result, args);
         }
@@ -506,6 +511,13 @@ describe("RepoStatus", function () {
                     rebase: new Rebase("foo", "1", "2"),
                     merge: new Merge("baz", "2", "1"),
                     cherryPick: new CherryPick("2", "1"),
+                    sequencerState: new SequencerState({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("foo", null),
+                        target: new CommitAndRef("bar", "baz"),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
                 },
                 e: m({
                     currentBranchName: "foo",
@@ -521,6 +533,13 @@ describe("RepoStatus", function () {
                     rebase: new Rebase("foo", "1", "2"),
                     merge: new Merge("baz", "2", "1"),
                     cherryPick: new CherryPick("2", "1"),
+                    sequencerState: new SequencerState({
+                        type: MERGE,
+                        originalHead: new CommitAndRef("foo", null),
+                        target: new CommitAndRef("bar", "baz"),
+                        commits: ["2", "1"],
+                        currentCommit: 1,
+                    }),
                 }),
             }
         };
@@ -538,6 +557,7 @@ describe("RepoStatus", function () {
             assert.deepEqual(result.rebase, c.e.rebase);
             assert.deepEqual(result.merge, c.e.merge);
             assert.deepEqual(result.cherryPick, c.e.cherryPick);
+            assert.deepEqual(result.sequencerState, c.e.sequencerState);
         });
     });
 
@@ -1042,6 +1062,13 @@ describe("RepoStatus", function () {
             rebase: new Rebase("2", "4", "b"),
             merge: new Merge("hah", "1", "1"),
             cherryPick: new CherryPick("1", "1"),
+            sequencerState: new SequencerState({
+                type: MERGE,
+                originalHead: new CommitAndRef("foo", null),
+                target: new CommitAndRef("bar", "baz"),
+                commits: ["2", "1"],
+                currentCommit: 1,
+            }),
         });
         const anotherStat = new RepoStatus({
             currentBranchName: "fo",
@@ -1054,6 +1081,13 @@ describe("RepoStatus", function () {
             rebase: new Rebase("a", "4", "b"),
             merge: new Merge("a", "2", "2"),
             cherryPick: new CherryPick("a", "2"),
+            sequencerState: new SequencerState({
+                type: MERGE,
+                originalHead: new CommitAndRef("foo", null),
+                target: new CommitAndRef("flim", "flam"),
+                commits: ["3", "4"],
+                currentCommit: 1,
+            }),
         });
         it("simple, no args", function () {
             const newStat = stat.copy();
@@ -1073,6 +1107,7 @@ describe("RepoStatus", function () {
                 rebase: anotherStat.rebase,
                 merge: anotherStat.merge,
                 cherryPick: anotherStat.cherryPick,
+                sequencerState: anotherStat.sequencerState,
             });
             assert.deepEqual(newStat, anotherStat);
         });

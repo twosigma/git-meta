@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const Rebase = require("./rebase");
 const Merge  = require("./merge");
 const CherryPick  = require("./cherry_pick");
+const SequencerState = require("./sequencer_state");
 
 /**
  * This modules defines the type `RepoStatus`, used to describe modifications
@@ -448,6 +449,8 @@ class RepoStatus {
      * @param {Rebase}     [args.rebase] rebase, if one is in progress
      * @param {Merge}      [args.merge] merge, if one is in progress
      * @param {CherryPick} [args.cherryPick] cherry-pick, if one is in progress
+     * @param {SequencerState}
+     *                     [args.sequencerState] state of sequencer
      */
     constructor(args) {
         if (undefined === args) {
@@ -464,6 +467,7 @@ class RepoStatus {
         this.d_rebase = null;
         this.d_merge = null;
         this.d_cherryPick = null;
+        this.d_sequencerState = null;
 
         if ("currentBranchName" in args) {
             if (null !== args.currentBranchName) {
@@ -516,13 +520,19 @@ class RepoStatus {
             }
             this.d_merge = merge;
         }
-
         if ("cherryPick" in args) {
             const cherryPick = args.cherryPick;
             if (null !== cherryPick) {
                 assert.instanceOf(cherryPick, CherryPick);
             }
             this.d_cherryPick = cherryPick;
+        }
+        if ("sequencerState" in args) {
+            const sequencerState = args.sequencerState;
+            if (null !== sequencerState) {
+                assert.instanceOf(sequencerState, SequencerState);
+            }
+            this.d_sequencerState = sequencerState;
         }
         Object.freeze(this);
     }
@@ -703,12 +713,18 @@ class RepoStatus {
     }
 
     /**
-     * @property {CherryPick} cherryPick if~null, state of cherryPick
+     * @property {CherryPick} cherryPick if ~null, state of cherryPick
      */
     get cherryPick() {
         return this.d_cherryPick;
     }
 
+    /**
+     * @property {SequencerState} sequencerState if ~null, state of sequencer
+     */
+    get sequencerState() {
+        return this.d_sequencerState;
+    }
     /**
      * Return a new `RepoStatus` object having the same value as this one, but
      * with replacing properties defined in the specified `args`.
@@ -736,6 +752,8 @@ class RepoStatus {
             merge: ("merge" in args) ? args.merge : this.d_merge,
             cherryPick: ("cherryPick" in args) ?
                               args.cherryPick : this.d_cherryPick,
+            sequencerState: ("sequencerState" in args) ?
+                              args.sequencerState : this.d_sequencerState,
         });
     }
 }
