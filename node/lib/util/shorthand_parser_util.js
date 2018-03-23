@@ -198,10 +198,15 @@ const SequencerState = RepoAST.SequencerState;
  *                                 as conflicted, having a base content of 'a',
  *                                 "our" content as 'b', and "their" content as
  *                                 'c'.
- * QR 1:refs/heads/master 8: 1 3,5,1
+ * QR a:refs/heads/master q: 1 c,d,a
  *                              -- A sequencer is in progress that is a 
  *                              -- rebase.  When the rebase started, HEAD
- *                              -- was on `master`.  
+ *                              -- was on `master` pointing to commit "a".  The
+ *                              -- commit being rebased to is "q", and it was
+ *                              -- not referenced through a ref name.  The
+ *                              -- list of commits to be rebased are "c", "d",
+ *                              -- and "a", and we're currently on the
+ *                              -- second commit, at index 1: "d".
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
