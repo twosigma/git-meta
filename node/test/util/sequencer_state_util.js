@@ -309,4 +309,57 @@ describe("writeSequencerState", function () {
         assert.deepEqual(read, initial);
     }));
 });
+describe("mapCommits", function () {
+    const cases = {
+        "just one to map": {
+            sequencer: new SequencerState({
+                type: SequencerState.TYPE.REBASE,
+                originalHead: new CommitAndRef("1", null),
+                target: new CommitAndRef("1", "foo"),
+                currentCommit: 0,
+                commits: ["1"],
+            }),
+            commitMap: {
+                "1": "2",
+            },
+            expected: new SequencerState({
+                type: SequencerState.TYPE.REBASE,
+                originalHead: new CommitAndRef("2", null),
+                target: new CommitAndRef("2", "foo"),
+                currentCommit: 0,
+                commits: ["2"],
+            }),
+        },
+        "multiple": {
+            sequencer: new SequencerState({
+                type: SequencerState.TYPE.REBASE,
+                originalHead: new CommitAndRef("1", null),
+                target: new CommitAndRef("2", "foo"),
+                currentCommit: 0,
+                commits: ["1", "3"],
+            }),
+            commitMap: {
+                "1": "2",
+                "2": "4",
+                "3": "8",
+            },
+            expected: new SequencerState({
+                type: SequencerState.TYPE.REBASE,
+                originalHead: new CommitAndRef("2", null),
+                target: new CommitAndRef("4", "foo"),
+                currentCommit: 0,
+                commits: ["2", "8"],
+            }),
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, function () {
+            const result = SequencerStateUtil.mapCommits(c.sequencer,
+                                                         c.commitMap);
+            assert.instanceOf(result, SequencerState);
+            assert.deepEqual(result, c.expected);
+        });
+    });
+});
 });
