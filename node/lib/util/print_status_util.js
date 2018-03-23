@@ -410,7 +410,7 @@ exports.getSequencerCommand = function (type) {
     case TYPE.CHERRY_PICK: return "cherry-pick";
     case TYPE.MERGE: return "merge";
     case TYPE.REBASE: return "rebase";
-    default: assert(false, "shouldn't get here"); break;
+    default: assert(false, `unhandled sequencer type: ${type}`);
     }
 };
 
