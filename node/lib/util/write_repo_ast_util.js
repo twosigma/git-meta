@@ -48,7 +48,6 @@ const path     = require("path");
 const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
-const MergeFileUtil       = require("./merge_file_util");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
@@ -465,19 +464,6 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             // we render against the new head, `onto`.
 
             indexHead = rebase.onto;
-        }
-
-        // Write out the merge info, if it exists.
-
-        if (null !== ast.merge) {
-            // Map commits
-
-            const originalSha = commitMap[ast.merge.originalHead];
-            const mergeSha = commitMap[ast.merge.mergeHead];
-            const merge = new RepoAST.Merge(ast.merge.message,
-                                            originalSha,
-                                            mergeSha);
-            yield MergeFileUtil.writeMerge(repo.path(), merge);
         }
 
         // Write out the cherry-pick info, if it exists.

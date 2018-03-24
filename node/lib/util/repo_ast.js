@@ -38,7 +38,6 @@ const deeper   = require("deeper");
 const deepCopy = require("deepcopy");
 
 const Rebase         = require("./rebase");
-const Merge          = require("./merge");
 const CherryPick     = require("./cherry_pick");
 const SequencerState = require("./sequencer_state");
 
@@ -394,7 +393,6 @@ class AST {
      * @param {Object}         [args.notes]
      * @param {Object}         [args.openSubmodules]
      * @param {Rebase}         [args.rebase]
-     * @param {Merge}          [args.merge]
      * @param {CherryPick}     [args.cherryPick]
      * @param {SequencerState} [args.sequencerState]
      */
@@ -559,18 +557,6 @@ in commit ${id}.`);
                 checkAndTraverse(rebase.onto,
                                  "onto of rebase");
                 this.d_rebase = rebase;
-            }
-        }
-
-        this.d_merge = null;
-        if ("merge" in args) {
-            const merge = args.merge;
-            if (null !== merge) {
-                assert.instanceOf(merge, Merge);
-                assert.isFalse(this.d_bare);
-                checkAndTraverse(merge.originalHead, "original head of merge");
-                checkAndTraverse(merge.mergeHead, "merge head");
-                this.d_merge = merge;
             }
         }
 
@@ -776,13 +762,6 @@ in commit ${id}.`);
     }
 
     /**
-     * @property {Merge} null unless a merge is in progress
-     */
-    get merge() {
-        return this.d_merge;
-    }
-
-    /**
      * @property {CherryPick} null unless a cherry-pick is in progress
      */
     get cherryPick() {
@@ -855,7 +834,6 @@ in commit ${id}.`);
             openSubmodules: ("openSubmodules" in args) ?
                 args.openSubmodules : this.d_openSubmodules,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
-            merge: ("merge" in args) ? args.merge : this.d_merge,
             cherryPick: ("cherryPick" in args) ?
                        args.cherryPick : this.d_cherryPick,
             sequencerState: ("sequencerState" in args) ?
@@ -943,7 +921,6 @@ AST.Branch = Branch;
 AST.Commit = Commit;
 AST.Conflict = Conflict;
 AST.Rebase = Rebase;
-AST.Merge  = Merge;
 AST.CherryPick  = CherryPick;
 AST.Remote = Remote;
 AST.SequencerState = SequencerState;

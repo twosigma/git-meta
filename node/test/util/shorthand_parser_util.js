@@ -642,20 +642,6 @@ describe("ShorthandParserUtil", function () {
                     rebase: null,
                 }),
             },
-            "merge": {
-                i: "S:Mhi,1,2",
-                e: m({
-                    type: "S",
-                    merge: new RepoAST.Merge("hi", "1", "2"),
-                }),
-            },
-            "merge null": {
-                i: "S:M",
-                e: m({
-                    type: "S",
-                    merge: null,
-                }),
-            },
             "cherry-pick": {
                 i: "S:P1,2",
                 e: m({
@@ -716,6 +702,20 @@ describe("ShorthandParserUtil", function () {
                      }),
                 }),
             },
+            "sequencer with message": {
+                i: "S:Qhello world#R 1:foo 3: 2 a,b,c",
+                e: m({
+                     type: "S",
+                     sequencerState: new SequencerState({
+                        type: SequencerState.TYPE.REBASE,
+                        originalHead: new CommitAndRef("1", "foo"),
+                        target: new CommitAndRef("3", null),
+                        currentCommit: 2,
+                        commits: ["a", "b", "c"],
+                        message: "hello world",
+                     }),
+                }),
+            },
             "new submodule": {
                 i: "S:I x=Sfoo:;Ox",
                 e: m({
@@ -752,7 +752,6 @@ describe("ShorthandParserUtil", function () {
                 assert.equal(r.currentBranchName, e.currentBranchName);
                 assert.deepEqual(r.openSubmodules, e.openSubmodules);
                 assert.deepEqual(r.rebase, e.rebase);
-                assert.deepEqual(r.merge, e.merge);
                 assert.deepEqual(r.cherryPick, e.cherryPick);
                 assert.deepEqual(r.sequencerState, e.sequencerState);
             });
@@ -924,12 +923,6 @@ describe("ShorthandParserUtil", function () {
                 i: "S:Efoo,1,1",
                 e: S.copy({
                     rebase: new RepoAST.Rebase("foo", "1", "1"),
-                }),
-            },
-            "merge": {
-                i: "S:Mfoo,1,1",
-                e: S.copy({
-                    merge: new RepoAST.Merge("foo", "1", "1"),
                 }),
             },
             "cherry-pick": {
@@ -1416,59 +1409,6 @@ x=S:Efoo,8,9`,
                             }),
                         },
                         rebase: new RepoAST.Rebase("foo", "8", "9"),
-                    }),
-                }
-            },
-            "missing commits in merge": {
-                i: `
-a=B:C8-1;C9-1;Bmaster=8;Bfoo=9|
-x=S:Mfoo,8,9`,
-                e: {
-                    a: B.copy({
-                        commits: {
-                            "1": new Commit({
-                                changes: {
-                                    "README.md": "hello world"
-                                },
-                                message: "the first commit",
-                            }),
-                            "8": new Commit({
-                                parents: ["1"],
-                                changes: { "8": "8" },
-                                message: "message\n",
-                            }),
-                            "9": new Commit({
-                                parents: ["1"],
-                                changes: { "9": "9" },
-                                message: "message\n",
-                            }),
-                        },
-                        branches: {
-                            master: new RepoAST.Branch("8", null),
-                            foo: new RepoAST.Branch("9", null),
-                        },
-                        head: "8",
-                    }),
-                    x: S.copy({
-                        commits: {
-                            "1": new Commit({
-                                changes: {
-                                    "README.md": "hello world"
-                                },
-                                message: "the first commit",
-                            }),
-                            "8": new Commit({
-                                parents: ["1"],
-                                changes: { "8": "8" },
-                                message: "message\n",
-                            }),
-                            "9": new Commit({
-                                parents: ["1"],
-                                changes: { "9": "9" },
-                                message: "message\n",
-                            }),
-                        },
-                        merge: new RepoAST.Merge("foo", "8", "9"),
                     }),
                 }
             },

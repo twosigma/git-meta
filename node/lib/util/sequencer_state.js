@@ -121,6 +121,7 @@ class SequencerState {
      * @param {CommitAndRef} properties.target
      * @param {[String]}     properties.commits
      * @param {Number}       properties.currentCommit
+     * @param {String|null}  [properties.message]
      */
     constructor(properties) {
         assert.isString(properties.type);
@@ -131,6 +132,14 @@ class SequencerState {
         assert.isNumber(properties.currentCommit);
         assert(0 <= properties.currentCommit);
         assert(properties.commits.length > properties.currentCommit);
+
+        this.d_message = null;
+        if ("message" in properties) {
+            if (null !== properties.message) {
+                assert.isString(properties.message);
+                this.d_message = properties.message;
+            }
+        }
 
         this.d_type = properties.type;
         this.d_originalHead = properties.originalHead;
@@ -179,6 +188,13 @@ class SequencerState {
     }
 
     /**
+     * @property {String|null} message   commit message to be used
+     */
+    get message() {
+        return this.d_message;
+    }
+
+    /**
      * Return true if the specified `rhs` represents the same value as this
      * `SequencerState` object and false otherwise.  Two `SequencerState`
      * objects represent the same value if they have the same `type`,
@@ -193,7 +209,8 @@ class SequencerState {
             this.d_originalHead.equal(rhs.d_originalHead) &&
             this.d_target.equal(rhs.d_target) &&
             deeper(this.d_commits, rhs.d_commits) &&
-            this.d_currentCommit === rhs.d_currentCommit;
+            this.d_currentCommit === rhs.d_currentCommit &&
+            this.d_message === rhs.d_message;
     }
 }
 
@@ -201,7 +218,7 @@ SequencerState.prototype.toString = function () {
     return `\
 SequencerState(type=${this.d_type}, originalHead=${this.d_originalHead}, \
 target=${this.d_target}, commits=${JSON.stringify(this.d_commits)}, \
-currentCommit=${this.d_currentCommit})`;
+currentCommit=${this.d_currentCommit}, msg=${this.d_message})`;
 };
 
 SequencerState.TYPE = TYPE;

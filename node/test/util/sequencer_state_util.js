@@ -188,6 +188,29 @@ describe("readSequencerState", function () {
         assert.equal(result.target.ref, "34");
         assert.deepEqual(result.commits, ["1", "2", "3"]);
         assert.equal(result.currentCommit, 1);
+        assert.isNull(result.message);
+    }));
+    it("good state with message", co.wrap(function *() {
+        const gitDir = yield TestUtil.makeTempDir();
+        const fileDir = path.join(gitDir, "meta_sequencer");
+        mkdirp.sync(fileDir);
+        yield fs.writeFile(path.join(fileDir, "TYPE"),
+                           SequencerState.TYPE.MERGE + "\n");
+        yield fs.writeFile(path.join(fileDir, "ORIGINAL_HEAD"), "24\n");
+        yield fs.writeFile(path.join(fileDir, "TARGET"), "12\n34\n");
+        yield fs.writeFile(path.join(fileDir, "COMMITS"), "1\n2\n3\n");
+        yield fs.writeFile(path.join(fileDir, "CURRENT_COMMIT"), "1\n");
+        yield fs.writeFile(path.join(fileDir, "MESSAGE"), "foo\n");
+        const result = yield SequencerStateUtil.readSequencerState(gitDir);
+        assert.instanceOf(result, SequencerState);
+        assert.equal(result.type, SequencerState.TYPE.MERGE);
+        assert.equal(result.originalHead.sha, "24");
+        assert.isNull(result.originalHead.ref);
+        assert.equal(result.target.sha, "12");
+        assert.equal(result.target.ref, "34");
+        assert.deepEqual(result.commits, ["1", "2", "3"]);
+        assert.equal(result.currentCommit, 1);
+        assert.equal(result.message, "foo\n");
     }));
     it("bad type", co.wrap(function *() {
         const gitDir = yield TestUtil.makeTempDir();
@@ -308,6 +331,22 @@ describe("writeSequencerState", function () {
         const read = yield SequencerStateUtil.readSequencerState(gitDir);
         assert.deepEqual(read, initial);
     }));
+    it("with message", co.wrap(function *() {
+        const gitDir = yield TestUtil.makeTempDir();
+        const original = new CommitAndRef("a", null);
+        const target = new CommitAndRef("b", "c");
+        const initial = new SequencerState({
+            type: SequencerState.TYPE.REBASE,
+            originalHead: original,
+            target: target,
+            commits: ["1", "2"],
+            currentCommit: 0,
+            message: "mahaha",
+        });
+        yield SequencerStateUtil.writeSequencerState(gitDir, initial);
+        const read = yield SequencerStateUtil.readSequencerState(gitDir);
+        assert.deepEqual(read, initial);
+    }));
 });
 describe("mapCommits", function () {
     const cases = {
@@ -318,6 +357,7 @@ describe("mapCommits", function () {
                 target: new CommitAndRef("1", "foo"),
                 currentCommit: 0,
                 commits: ["1"],
+                message: "foo",
             }),
             commitMap: {
                 "1": "2",
@@ -328,6 +368,7 @@ describe("mapCommits", function () {
                 target: new CommitAndRef("2", "foo"),
                 currentCommit: 0,
                 commits: ["2"],
+                message: "foo",
             }),
         },
         "multiple": {

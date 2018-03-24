@@ -60,7 +60,7 @@ const SequencerState = RepoAST.SequencerState;
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
- *                  <note> | <rebase> | <merge> | <cherry-pick> |
+ *                  <note> | <rebase> | <cherry-pick> |
  *                  <sequencer>
  * head           = 'H='<commit>|<nothing>             nothing means detached
  * nothing        =
@@ -81,10 +81,9 @@ const SequencerState = RepoAST.SequencerState;
  *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
  * note           = N <ref> <commit>=message
  * rebase         = E<head name>,<original commit id>,<onto commit id>
- * merge          = M<message>,<original head>,<merge head>
  * cherry-pick    = P<original head>,<picked commit>
- * sequencer      = Q<sequencer type>' '<commit and ref>' '<commit and ref>' '
- *                  <number>' '<commit>(','<commit>)*
+ * sequencer      = Q[message'#']<sequencer type>' '<commit and ref>' '
+ *                  <commit and ref>' '<number>' '<commit>(','<commit>)*
  * sequencer type = C | M | R
  * commit and ref = commit':'[<name>]
  * index          = I <change>[,<change>]*
@@ -189,9 +188,6 @@ const SequencerState = RepoAST.SequencerState;
  *                              -- file `x` to be `y`.
  * S:Emaster,1,2                -- rebase in progress started on "master",
  *                                 original head "1", onto commit "2"
- * S:Mmerging commit,1,2        -- merge in progress started with commit
- *                                 message "merging commit"
- *                                 original head "1", merge head "2"
  * S:CP1,2                      -- cherry-pick in progress started with
  *                                 original head "1", picking commit "2"
  * S:I *foo=a*b*c               -- The file 'foo' is flagged in the index
@@ -207,6 +203,9 @@ const SequencerState = RepoAST.SequencerState;
  *                              -- list of commits to be rebased are "c", "d",
  *                              -- and "a", and we're currently on the
  *                              -- second commit, at index 1: "d".
+ * Qmerge of 'foo'#M a:refs/heads/master q: 1 c,d,a
+ *                              -- similar to above but a merge with a saved
+ *                              -- commit message: "merge of 'foo'"
  *
  * Note that the "clone' type may not be used with single-repo ASTs, and the
  * url must map to the name of another repo.  A cloned repository has the
@@ -390,7 +389,6 @@ function prepareASTArguments(baseAST, rawRepo) {
         workdir: baseAST.workdir,
         openSubmodules: baseAST.openSubmodules,
         rebase: baseAST.rebase,
-        merge: baseAST.merge,
         cherryPick: baseAST.cherryPick,
         sequencerState: baseAST.sequencerState,
         bare: baseAST.bare,
@@ -505,12 +503,6 @@ function prepareASTArguments(baseAST, rawRepo) {
         resultArgs.rebase = rawRepo.rebase;
     }
 
-    // Override merge if provided
-
-    if ("merge" in rawRepo) {
-        resultArgs.merge = rawRepo.merge;
-    }
-
     // Override cherry-pick if provided
 
     if ("cherryPick" in rawRepo) {
@@ -598,7 +590,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     let notes = {};
     let openSubmodules = {};
     let rebase;
-    let merge;
     let cherryPick;
     let sequencer;
 
@@ -968,26 +959,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
 
     /**
-     * Parse the merge definition beginning at the specified `begin` and
-     * terminating at the specified `end`.
-     *
-     * @param {Number} begin
-     * @param {Number} end
-     */
-    function parseMerge(begin, end) {
-        if (begin === end) {
-            merge = null;
-            return;                                                   // RETURN
-        }
-        const mergeDef = shorthand.substr(begin, end - begin);
-        const parts = mergeDef.split(",");
-        assert.equal(parts.length,
-                     3,
-                     `Wrong number of merge parts in ${mergeDef}`);
-        merge = new RepoAST.Merge(parts[0], parts[1], parts[2]);
-    }
-
-    /**
      * Parse the cherry-pick definition beginning at the specified `begin` and
      * terminating at the specified `end`.
      *
@@ -1020,7 +991,19 @@ function parseOverrides(shorthand, begin, end, delimiter) {
             return;                                                   // RETURN
         }
         const sequencerDef = shorthand.substr(begin, end - begin);
-        const parts = sequencerDef.split(" ");
+        const allParts = sequencerDef.split("#");
+        let message = null;
+        let mainPart;
+        if (1 === allParts.length) {
+            mainPart = allParts[0];
+        } else {
+            assert.equal(2,
+                         allParts.length,
+                         `Malformed sequencer ${sequencerDef}`);
+            message = allParts[0];
+            mainPart = allParts[1];
+        }
+        const parts = mainPart.split(" ");
         assert.equal(parts.length,
                      5,
                      `Wrong number of sequencer parts in ${sequencerDef}`);
@@ -1039,6 +1022,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
             target: target,
             currentCommit: currentCommit,
             commits: commits,
+            message: message,
         });
     }
     /**
@@ -1061,7 +1045,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
                 case "H": return parseHeadOverride;
                 case "R": return parseRemote;
                 case "I": return parseIndex;
-                case "M": return parseMerge;
                 case "P": return parseCherryPick;
                 case "N": return parseNote;
                 case "W": return parseWorkdir;
@@ -1108,9 +1091,6 @@ function parseOverrides(shorthand, begin, end, delimiter) {
     }
     if (undefined !== rebase) {
         result.rebase = rebase;
-    }
-    if (undefined !== merge) {
-        result.merge = merge;
     }
     if (undefined !== cherryPick) {
         result.cherryPick = cherryPick;
@@ -1373,10 +1353,6 @@ exports.parseMultiRepoShorthand = function (shorthand, existingRepos) {
         if (resultArgs.rebase) {
             includeCommit(resultArgs.rebase.originalHead);
             includeCommit(resultArgs.rebase.onto);
-        }
-        if (resultArgs.merge) {
-            includeCommit(resultArgs.merge.originalHead);
-            includeCommit(resultArgs.merge.mergeHead);
         }
         if (resultArgs.cherryPick) {
             includeCommit(resultArgs.cherryPick.originalHead);

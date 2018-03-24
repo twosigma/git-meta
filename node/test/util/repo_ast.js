@@ -245,7 +245,6 @@ const REBASE = SequencerState.TYPE.REBASE;
 
             const Commit = RepoAST.Commit;
             const Rebase = RepoAST.Rebase;
-            const Merge  = RepoAST.Merge;
             const CherryPick  = RepoAST.CherryPick;
             const Remote = RepoAST.Remote;
 
@@ -275,7 +274,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     eopenSubmodules: ("openSubmodules" in expected) ?
                                                   expected.openSubmodules : {},
                     erebase: ("rebase" in expected) ?  expected.rebase : null,
-                    emerge: ("merge" in expected) ? expected.merge : null,
                     echerryPick: ("cherryPick" in expected) ?
                         expected.cherryPick : null,
                     esequencerState: ("sequencerState" in expected) ?
@@ -293,7 +291,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         head: null,
                         currentBranchName: null,
                         rebase: null,
-                        merge: null,
                         cherryPick: null,
                         sequencerState: null,
                         bare: false,
@@ -316,12 +313,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "bad bare with rebase": m({
                     bare: true,
                     rebase: new Rebase("foo", "1", "1"),
-                    commits: {"1": c1 },
-                    head: "1",
-                }, undefined, true),
-                "bad bare with merge": m({
-                    bare: true,
-                    merge: new Merge("foo", "1", "1"),
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -654,21 +645,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         currentCommit: 1,
                     }),
                 }),
-                "with merge specific commits": m({
-                    commits: {
-                        "1": new Commit(),
-                        "2": new Commit(),
-                    },
-                    head: "1",
-                    merge: new Merge("fff", "2", "2"),
-                }, {
-                    commits: {
-                        "1": new Commit(),
-                        "2": new Commit(),
-                    },
-                    head: "1",
-                    merge: new Merge("fff", "2", "2"),
-                }),
                 "with cherry-pick specific commits": m({
                     commits: {
                         "1": new Commit(),
@@ -747,7 +723,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.workdir, c.eworkdir);
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
                     assert.deepEqual(obj.rebase, c.erebase);
-                    assert.deepEqual(obj.merge, c.emerge);
                     assert.deepEqual(obj.cherryPick, c.echerryPick);
                     assert.deepEqual(obj.sequencerState, c.esequencerState);
                     assert.equal(obj.bare, c.ebare);
@@ -800,15 +775,6 @@ const REBASE = SequencerState.TYPE.REBASE;
         describe("renderCommit", function () {
             const Commit = RepoAST.Commit;
             const c1 = new Commit({ changes: { foo: "bar" }});
-            const c2 = new Commit({ changes: { foo: "baz" }});
-            const mergeChild = new Commit({
-                parents: ["3"],
-                changes: { bam: "blast" },
-            });
-            const merge = new Commit({
-                parents: ["1", "2"],
-                changes: {}
-            });
             const deleter = new Commit({
                 parents: ["1"],
                 changes: { foo: null }
@@ -825,25 +791,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     expected: { foo: "bar" },
                     ecache: {
                         "1": { foo: "bar" },
-                    },
-                },
-                "merge": {
-                    commits: { "1": c1, "2": c2, "3": merge},
-                    from: "3",
-                    expected: { foo: "bar" },
-                    ecache: {
-                        "1": c1.changes,
-                        "3": { foo: "bar" },
-                    },
-                },
-                "merge child": {
-                    commits: { "1": c1, "2": c2, "3": merge, "4": mergeChild},
-                    from: "4",
-                    expected: { foo: "bar", bam: "blast" },
-                    ecache: {
-                        "1": c1.changes,
-                        "3": { foo: "bar" },
-                        "4": { foo: "bar", bam: "blast" },
                     },
                 },
                 "deletion": {
@@ -888,7 +835,6 @@ const REBASE = SequencerState.TYPE.REBASE;
 
         describe("AST.copy", function () {
             const Rebase = RepoAST.Rebase;
-            const Merge  = RepoAST.Merge;
             const CherryPick  = RepoAST.CherryPick;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
@@ -899,7 +845,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello", "1", "1"),
-                merge: new Merge("hello", "1", "1"),
                 cherryPick: new CherryPick("1", "1"),
                 sequencerState: new SequencerState({
                     type: REBASE,
@@ -920,7 +865,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello world", "2", "2"),
-                merge: new Merge("hello world", "2", "2"),
                 cherryPick: new CherryPick("2", "2"),
                 sequencerState: new SequencerState({
                     type: REBASE,
@@ -946,7 +890,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         index: {},
                         workdir: {},
                         rebase: null,
-                        merge: null,
                         cherryPick: null,
                         sequencerState: null,
                     },
@@ -974,7 +917,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.workdir, c.e.workdir);
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                     assert.deepEqual(obj.rebase, c.e.rebase);
-                    assert.deepEqual(obj.merge, c.e.merge);
                     assert.deepEqual(obj.cherryPick, c.e.cherryPick);
                     assert.deepEqual(obj.sequencerState, c.e.sequencerState);
                     assert.equal(obj.bare, c.e.bare);

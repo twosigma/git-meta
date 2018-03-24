@@ -44,8 +44,6 @@ const CherryPick          = require("./cherry_pick");
 const CherryPickFileUtil  = require("./cherry_pick_file_util");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
-const Merge               = require("./merge");
-const MergeFileUtil       = require("./merge_file_util");
 const PrintStatusUtil     = require("./print_status_util");
 const Rebase              = require("./rebase");
 const RebaseFileUtil      = require("./rebase_file_util");
@@ -122,29 +120,6 @@ function remapRebase(rebase, commitMap) {
 }
 
 /**
- * Return a new `Merge` object having the same value as the specified `merge`
- * but with commit shas being replaced by commits in the specified `commitMap`.
- *
- * @param {Merge} merge
- * @param {Object} commitMap from sha to sha
- * @return {Merge}
- */
-function remapMerge(merge, commitMap) {
-    assert.instanceOf(merge, Merge);
-    assert.isObject(commitMap);
-
-    let originalHead = merge.originalHead;
-    let mergeHead = merge.mergeHead;
-    if (originalHead in commitMap) {
-        originalHead = commitMap[originalHead];
-    }
-    if (mergeHead in commitMap) {
-        mergeHead = commitMap[mergeHead];
-    }
-    return new Merge(merge.message, originalHead, mergeHead);
-}
-
-/**
  * Return a new `CherryPick` object having the same value as the specified
  * `cherryPick` but with commit shas being replaced by commits in the specified
  * `commitMap`.
@@ -203,8 +178,6 @@ exports.remapRepoStatus = function (status, commitMap, urlMap) {
         workdir: status.workdir,
         rebase: status.rebase === null ? null : remapRebase(status.rebase,
                                                             commitMap),
-        merge: status.merge === null ? null : remapMerge(status.merge,
-                                                         commitMap),
         cherryPick: status.cherryPick === null ?
                           null :
                           remapCherryPick(status.cherryPick, commitMap),
@@ -499,7 +472,6 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         args.rebase = rebase;
     }
 
-    args.merge = yield MergeFileUtil.readMerge(repo.path());
     args.cherryPick = yield CherryPickFileUtil.readCherryPick(repo.path());
     args.sequencerState =
                       yield SequencerStateUtil.readSequencerState(repo.path());
@@ -639,7 +611,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 /**
  * Throw a `UserError` unless the specified `status` reflects a repository in a
  * normal, ready state, that is, it does not have any conflicts or in-progress
- * operations such as a rebase, merge, or cherry-pick.  Adjust output paths to
+ * operations such as a rebase or cherry-pick.  Adjust output paths to
  * be relative to the specified `cwd`.
  *
  * @param {RepoStatus} status
@@ -652,12 +624,6 @@ exports.ensureReady = function (status) {
 Before proceeding, you must complete the rebase in progress (by running
 'git meta rebase --continue') or abort it (by running
 'git meta rebase --abort').`);
-    }
-    if (null !== status.merge) {
-        throw new UserError(`\
-Before proceeding, you must complete the merge in progress (by running
-'git meta merge --continue') or abort it (by running
-'git meta merge --abort').`);
     }
     if (null !== status.cherryPick) {
         throw new UserError(`\

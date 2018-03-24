@@ -60,6 +60,7 @@ const CommitAndRef = SequencerState.CommitAndRef;
  *                    /CURRENT_COMMIT  -- Single line containing the index of
  *                                        current commit in COMMITS to operate
  *                                        on. 
+ *                   /MESSAGE          -- commit message file, if any
  */
 
 const SEQUENCER_DIR = "meta_sequencer";
@@ -68,6 +69,7 @@ const ORIGINAL_HEAD_FILE = "ORIGINAL_HEAD";
 const TARGET_FILE = "TARGET";
 const COMMITS_FILE = "COMMITS";
 const CURRENT_COMMIT_FILE = "CURRENT_COMMIT";
+const MESSAGE_FILE = "MESSAGE";
 
 /**
  * Return the contents of the file in the sequencer directory from the
@@ -203,12 +205,14 @@ exports.readSequencerState = co.wrap(function *(gitDir) {
     if (null === currentCommit) {
         return null;                                                  // RETURN
     }
+    const message = yield exports.readFile(gitDir, MESSAGE_FILE);
     return new SequencerState({
         type: type,
         originalHead: original,
         target: target,
         commits: commits,
-        currentCommit: currentCommit
+        currentCommit: currentCommit,
+        message: message,
     });
 });
 
@@ -257,6 +261,9 @@ exports.writeSequencerState = co.wrap(function *(gitDir, state) {
     yield fs.writeFile(path.join(root, COMMITS_FILE), commitsContent);
     yield fs.writeFile(path.join(root, CURRENT_COMMIT_FILE),
                        "" + state.currentCommit);
+    if (null !== state.message) {
+        yield fs.writeFile(path.join(root, MESSAGE_FILE), state.message);
+    }
 });
 
 /**
@@ -291,5 +298,6 @@ exports.mapCommits = function (sequencer, commitMap) {
         target: newTarget,
         currentCommit: sequencer.currentCommit,
         commits: newCommits,
+        message: sequencer.message,
     });
 };

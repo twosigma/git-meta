@@ -202,7 +202,7 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 fails: true,
             },
             "already a merge in progress": {
-                initial: "x=S:Mhia,1,1",
+                initial: "x=S:Qhia#M 1: 1: 0 1",
                 fromCommit: "1",
                 fails: true,
             },
@@ -306,14 +306,14 @@ x=S:C2-1 s=Sa:1;C3-1 t=Sa:1;Bmaster=2;Bfoo=3`,
 a=B|b=B|
 x=S:C2-1 s=Sa:1;C3-1 s=Sb:1;Bmaster=2;Bfoo=3`,
                 fromCommit: "3",
-                expected: "x=E:Mmessage\n,2,3",
+                expected: "x=E:Qmessage\n#M 2: 3: 0 3",
                 fails: true,
             },
             "conflict in meta": {
                 initial: "x=S:C2-1 foo=bar;C3-1 foo=baz;Bmaster=2;Bfoo=3",
                 fromCommit: "3",
                 expected: `
-x=E:Mmessage\n,2,3;I *foo=~*bar*baz;W foo=<<<<<<< ours
+x=E:Qmessage\n#M 2: 3: 0 3;I *foo=~*bar*baz;W foo=<<<<<<< ours
 bar
 =======
 baz
@@ -328,8 +328,8 @@ a=B:Ca-1 README.md=8;Cb-1 README.md=9;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
                 expected: `
-x=E:Mmessage\n,3,4;I *s=S:1*S:a*S:b;
-Os Mmessage\n,a,b!I *README.md=hello world*8*9!W README.md=\
+x=E:Qmessage\n#M 3: 4: 0 4;I *s=S:1*S:a*S:b;
+Os Qmessage\n#M a: b: 0 b!I *README.md=hello world*8*9!W README.md=\
 <<<<<<< ours
 8
 =======
@@ -404,26 +404,27 @@ x=E:Cx-4,5 t=Sa:b;Bmaster=x`
                 fails: true,
             },
             "continue in meta": {
-                initial: "x=S:C2-1;C3-1;Bmaster=2;I baz=bam;Mhi\n,2,3;Bfoo=3",
-                expected: "x=E:Chi\n#x-2,3 baz=bam;Bmaster=x;M;I baz=~",
+                initial: `
+x=S:C2-1;C3-1;Bmaster=2;I baz=bam;Qhi\n#M 2: 3: 0 3;Bfoo=3`,
+                expected: "x=E:Chi\n#x-2,3 baz=bam;Bmaster=x;Q;I baz=~",
             },
             "cheap continue in meta": {
-                initial: "x=S:C2;Mhi\n,1,2;B2=2",
-                expected: "x=E:Chi\n#x-1,2 ;Bmaster=x;M",
+                initial: "x=S:C2;Qhi\n#M 1: 2: 0 2;B2=2",
+                expected: "x=E:Chi\n#x-1,2 ;Bmaster=x;Q",
             },
             "continue with extra in non-continue sub": {
                 initial: `
 a=B|
-x=U:C3-1;Mhi\n,2,3;B3=3;Os I README.md=8`,
+x=U:C3-1;Qhi\n#M 2: 3: 0 3;B3=3;Os I README.md=8`,
                 expected: `
-x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;M;Os Chi\n#s-1 README.md=8!H=s`,
+x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;Q;Os Chi\n#s-1 README.md=8!H=s`,
             },
             "continue in a sub": {
                 initial: `
 a=B:Ca;Ba=a|
-x=U:C3-1;Mhi\n,2,3;B3=3;Os I README.md=8!Myo\n,1,a!Ba=a`,
+x=U:C3-1;Qhi\n#M 2: 3: 0 3;B3=3;Os I README.md=8!Qyo\n#M 1: a: 0 a!Ba=a`,
                 expected: `
-x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;M;Os Cyo\n#s-1,a README.md=8!H=s!Ba=a`,
+x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;Q;Os Cyo\n#s-1,a README.md=8!H=s!Ba=a`,
             },
             "continue in one sub, done in another": {
                 initial: `
@@ -432,11 +433,11 @@ x=S:C2-1 s=Sa:1,t=Sa:1;
     C3-2 s=Sa:a,t=Sa:a;
     C4-2 s=Sa:ac,t=Sa:b;
     Bmaster=3;Bfoo=4;
-    Mhi\n,3,4;
-    Os I a=foo!Myou\n,a,ac!Bac=ac;
+    Qhi\n#M 3: 4: 0 4;
+    Os I a=foo!Qyou\n#M a: ac: 0 ac!Bac=ac;
     Ot H=mab`,
                 expected: `
-x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;M;
+x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;Q;
   Os Cyou\n#s-a,ac a=foo!H=s!Bac=ac;
   Ot`,
             },
@@ -463,18 +464,18 @@ x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;M;
                 fails: true,
             },
             "noop": {
-                initial: "x=S:Mfoo,1,1",
-                expected: "x=E:M",
+                initial: "x=S:Qfoo#M 1: 1: 0 1",
+                expected: "x=E:Q",
             },
             "noop with sub": {
-                initial: "a=B|x=U:Mfoo,1,1;Os Mfoo,1,1",
-                expected: "x=E:M;Os M",
+                initial: "a=B|x=U:Qfoo#M 1: 1: 0 1;Os Qfoo#M 1: 1: 0 1",
+                expected: "x=E:Q;Os Q",
             },
             "moved back a sub": {
                 initial: `
 a=B|
-x=U:Mx,1,1;Os Cs-1!H=s!Bs=s`,
-                expected: `x=E:M;Os H=1!Cs-1!Bs=s`,
+x=U:Qx#M 1: 1: 0 1;Os Cs-1!H=s!Bs=s`,
+                expected: `x=E:Q;Os H=1!Cs-1!Bs=s`,
             },
         };
         Object.keys(cases).forEach(caseName => {

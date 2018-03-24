@@ -32,7 +32,6 @@
 const assert  = require("chai").assert;
 
 const Rebase = require("./rebase");
-const Merge  = require("./merge");
 const CherryPick  = require("./cherry_pick");
 const SequencerState = require("./sequencer_state");
 
@@ -447,7 +446,6 @@ class RepoStatus {
      * @param {Object}     [args.submodules] map from name to `Submodule`
      * @param {Object}     [args.workdir] map from name to `FILESTATUS`
      * @param {Rebase}     [args.rebase] rebase, if one is in progress
-     * @param {Merge}      [args.merge] merge, if one is in progress
      * @param {CherryPick} [args.cherryPick] cherry-pick, if one is in progress
      * @param {SequencerState}
      *                     [args.sequencerState] state of sequencer
@@ -465,7 +463,6 @@ class RepoStatus {
         this.d_workdir = {};
         this.d_submodules = {};
         this.d_rebase = null;
-        this.d_merge = null;
         this.d_cherryPick = null;
         this.d_sequencerState = null;
 
@@ -513,13 +510,6 @@ class RepoStatus {
             this.d_rebase = rebase;
         }
 
-        if ("merge" in args) {
-            const merge = args.merge;
-            if (null !== merge) {
-                assert.instanceOf(merge, Merge);
-            }
-            this.d_merge = merge;
-        }
         if ("cherryPick" in args) {
             const cherryPick = args.cherryPick;
             if (null !== cherryPick) {
@@ -706,13 +696,6 @@ class RepoStatus {
     }
 
     /**
-     * @property {merge} merge if non-null, state of in-progress merge
-     */
-    get merge() {
-        return this.d_merge;
-    }
-
-    /**
      * @property {CherryPick} cherryPick if ~null, state of cherryPick
      */
     get cherryPick() {
@@ -749,7 +732,6 @@ class RepoStatus {
                 args.submodules: this.d_submodules,
             workdir: ("workdir" in args) ? args.workdir : this.d_workdir,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
-            merge: ("merge" in args) ? args.merge : this.d_merge,
             cherryPick: ("cherryPick" in args) ?
                               args.cherryPick : this.d_cherryPick,
             sequencerState: ("sequencerState" in args) ?
