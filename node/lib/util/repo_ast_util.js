@@ -489,21 +489,6 @@ ${colorExp(expected.rebase.onto)} but got ${colorAct(actual.rebase.onto)}.`);
         }
     }
 
-    // Check cherry-pick
-
-    if (null === actual.cherryPick && null !== expected.cherryPick) {
-        result.push("Missing cherry-pick.");
-    }
-    else if (null !== actual.cherryPick && null === expected.cherryPick) {
-        result.push("Unexpected cherry-pick.");
-    }
-    else if (null !== actual.cherryPick &&
-                               !actual.cherryPick.equal(expected.cherryPick)) {
-       result.push(`\
-Expected cherry pick to be ${actual.cherryPick} but got \
-${expected.cherryPick}`);
-    }
-
     // Check sequencer
 
     if (null === actual.sequencerState && null !== expected.sequencerState) {
@@ -761,13 +746,6 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
                                     mapCommitId(rebase.onto));
     }
 
-    let cherryPick = ast.cherryPick;
-    if (null !== cherryPick) {
-        cherryPick = new RepoAST.CherryPick(
-                                          mapCommitId(cherryPick.originalHead),
-                                          mapCommitId(cherryPick.picked));
-    }
-
     let sequencer = ast.sequencerState;
     if (null !== sequencer) {
         const original = mapCommitAndRef(sequencer.originalHead);
@@ -795,7 +773,6 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
         workdir: mapChanges(ast.workdir),
         openSubmodules: openSubmodules,
         rebase: rebase,
-        cherryPick: cherryPick,
         sequencerState: sequencer,
     });
 };

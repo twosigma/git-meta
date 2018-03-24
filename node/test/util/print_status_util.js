@@ -35,7 +35,6 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const Rebase              = require("../../lib/util/rebase");
-const CherryPick          = require("../../lib/util/cherry_pick");
 const RepoStatus          = require("../../lib/util/repo_status");
 const PrintStatusUtil     = require("../../lib/util/print_status_util");
 const SequencerState      = require("../../lib/util/sequencer_state");
@@ -746,20 +745,6 @@ A merge is in progress.
                 }),
                 exact: `\
 On branch ${colors.green("master")}.
-nothing to commit, working tree clean
-`,
-            },
-            "cherry-pick": {
-                input: new RepoStatus({
-                    currentBranchName: "master",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                exact: `\
-On branch ${colors.green("master")}.
-A cherry-pick is in progress.
-  (after resolving conflicts mark the corrected paths
-   with 'git meta add', then run "git meta cherry-pick --continue")
-  (use "git meta cherry-pick --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
             },

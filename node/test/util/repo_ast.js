@@ -245,7 +245,6 @@ const REBASE = SequencerState.TYPE.REBASE;
 
             const Commit = RepoAST.Commit;
             const Rebase = RepoAST.Rebase;
-            const CherryPick  = RepoAST.CherryPick;
             const Remote = RepoAST.Remote;
 
             const c1       = new Commit();
@@ -274,8 +273,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     eopenSubmodules: ("openSubmodules" in expected) ?
                                                   expected.openSubmodules : {},
                     erebase: ("rebase" in expected) ?  expected.rebase : null,
-                    echerryPick: ("cherryPick" in expected) ?
-                        expected.cherryPick : null,
                     esequencerState: ("sequencerState" in expected) ?
                         expected.sequencerState : null,
                     fails   : fails,
@@ -291,7 +288,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         head: null,
                         currentBranchName: null,
                         rebase: null,
-                        cherryPick: null,
                         sequencerState: null,
                         bare: false,
                     },
@@ -313,12 +309,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "bad bare with rebase": m({
                     bare: true,
                     rebase: new Rebase("foo", "1", "1"),
-                    commits: {"1": c1 },
-                    head: "1",
-                }, undefined, true),
-                "bad bare with cherry": m({
-                    bare: true,
-                    cherryPick: new CherryPick("1", "1"),
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -603,19 +593,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "bad rebase": m({
                     rebase: new Rebase("fff", "1", "1"),
                 }, undefined, true),
-                "with cherry": m({
-                    commits: {
-                        "1": new Commit(),
-                    },
-                    head: "1",
-                    cherryPick: new CherryPick( "1", "1"),
-                }, {
-                    commits: {
-                        "1": new Commit(),
-                    },
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
                 "with sequencer state": m({
                     commits: {
                         "1": new Commit(),
@@ -644,21 +621,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         commits: ["2", "1"],
                         currentCommit: 1,
                     }),
-                }),
-                "with cherry-pick specific commits": m({
-                    commits: {
-                        "1": new Commit(),
-                        "2": new Commit(),
-                    },
-                    head: "1",
-                    cherryPick: new CherryPick("2", "2"),
-                }, {
-                    commits: {
-                        "1": new Commit(),
-                        "2": new Commit(),
-                    },
-                    head: "1",
-                    cherryPick: new CherryPick("2", "2"),
                 }),
                 "with sequencer specific commits": m({
                     commits: {
@@ -689,9 +651,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         currentCommit: 1,
                     }),
                 }),
-                "bad cherry-pick": m({
-                    cherryPick: new CherryPick("1", "1"),
-                }, undefined, true),
                 "bad sequencer": m({
                     sequencerState: new SequencerState({
                         type: REBASE,
@@ -723,7 +682,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.workdir, c.eworkdir);
                     assert.deepEqual(obj.openSubmodules, c.eopenSubmodules);
                     assert.deepEqual(obj.rebase, c.erebase);
-                    assert.deepEqual(obj.cherryPick, c.echerryPick);
                     assert.deepEqual(obj.sequencerState, c.esequencerState);
                     assert.equal(obj.bare, c.ebare);
 
@@ -835,7 +793,6 @@ const REBASE = SequencerState.TYPE.REBASE;
 
         describe("AST.copy", function () {
             const Rebase = RepoAST.Rebase;
-            const CherryPick  = RepoAST.CherryPick;
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": new RepoAST.Branch("1", null) },
@@ -845,7 +802,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello", "1", "1"),
-                cherryPick: new CherryPick("1", "1"),
                 sequencerState: new SequencerState({
                     type: REBASE,
                     originalHead: new CommitAndRef("1", null),
@@ -865,7 +821,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                 index: { foo: "bar" },
                 workdir: { foo: "bar" },
                 rebase: new Rebase("hello world", "2", "2"),
-                cherryPick: new CherryPick("2", "2"),
                 sequencerState: new SequencerState({
                     type: REBASE,
                     originalHead: new CommitAndRef("2", "refs/heads/master"),
@@ -890,7 +845,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                         index: {},
                         workdir: {},
                         rebase: null,
-                        cherryPick: null,
                         sequencerState: null,
                     },
                     e: new RepoAST({
@@ -917,7 +871,6 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.workdir, c.e.workdir);
                     assert.deepEqual(obj.openSubmodules, c.e.openSubmodules);
                     assert.deepEqual(obj.rebase, c.e.rebase);
-                    assert.deepEqual(obj.cherryPick, c.e.cherryPick);
                     assert.deepEqual(obj.sequencerState, c.e.sequencerState);
                     assert.equal(obj.bare, c.e.bare);
                 });

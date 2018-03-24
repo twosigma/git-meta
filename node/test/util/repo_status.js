@@ -32,7 +32,6 @@
 
 const assert = require("chai").assert;
 
-const CherryPick     = require("../../lib/util/cherry_pick");
 const Rebase         = require("../../lib/util/rebase");
 const RepoStatus     = require("../../lib/util/repo_status");
 const SequencerState = require("../../lib/util/sequencer_state");
@@ -480,7 +479,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                 workdir: {},
                 submodules: {},
                 rebase: null,
-                cherryPick: null,
                 sequencerState: null,
             };
             return Object.assign(result, args);
@@ -507,7 +505,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
-                    cherryPick: new CherryPick("2", "1"),
                     sequencerState: new SequencerState({
                         type: MERGE,
                         originalHead: new CommitAndRef("foo", null),
@@ -528,7 +525,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                         }),
                     },
                     rebase: new Rebase("foo", "1", "2"),
-                    cherryPick: new CherryPick("2", "1"),
                     sequencerState: new SequencerState({
                         type: MERGE,
                         originalHead: new CommitAndRef("foo", null),
@@ -551,7 +547,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             assert.deepEqual(result.workdir, c.e.workdir);
             assert.deepEqual(result.submodules, c.e.submodules);
             assert.deepEqual(result.rebase, c.e.rebase);
-            assert.deepEqual(result.cherryPick, c.e.cherryPick);
             assert.deepEqual(result.sequencerState, c.e.sequencerState);
         });
     });
@@ -1055,7 +1050,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             },
             workdir: { x: FILESTATUS.MODIFIED },
             rebase: new Rebase("2", "4", "b"),
-            cherryPick: new CherryPick("1", "1"),
             sequencerState: new SequencerState({
                 type: MERGE,
                 originalHead: new CommitAndRef("foo", null),
@@ -1073,7 +1067,6 @@ const MERGE = SequencerState.TYPE.MERGE;
             },
             workdir: { x: FILESTATUS.ADDED },
             rebase: new Rebase("a", "4", "b"),
-            cherryPick: new CherryPick("a", "2"),
             sequencerState: new SequencerState({
                 type: MERGE,
                 originalHead: new CommitAndRef("foo", null),
@@ -1098,7 +1091,6 @@ const MERGE = SequencerState.TYPE.MERGE;
                 submodules: anotherStat.submodules,
                 workdir: anotherStat.workdir,
                 rebase: anotherStat.rebase,
-                cherryPick: anotherStat.cherryPick,
                 sequencerState: anotherStat.sequencerState,
             });
             assert.deepEqual(newStat, anotherStat);

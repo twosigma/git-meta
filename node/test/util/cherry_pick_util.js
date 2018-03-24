@@ -550,7 +550,7 @@ x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os H=x`,
         "in-progress will fail": {
             input: `
 a=Ax:Cz-y;Cy-x;Bfoo=z|
-x=S:P2,1;C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2`,
+x=S:QC 2: 1: 0 2;C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2`,
             fails: true,
         },
         "dirty will fail": {
@@ -630,7 +630,7 @@ x=E:C9-2 t=Sa:qt;Bmaster=9;Ot Cqt-1 q=q!H=qt`,
 a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C8-2 s=Sa:b;Bmaster=3;Bfoo=8`,
             expected: `
-x=E:P3,8;Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
+x=E:QC 3: 8: 0 8;Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
 <<<<<<< HEAD
 a
 =======
@@ -647,7 +647,7 @@ Submodule ${colors.red("s")} is conflicted.
 a=B:Ca-1;Cb-1 a=8;Cc-1;Ba=a;Bb=b;Bc=c|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:a,t=Sa:a;C8-2 s=Sa:b,t=Sa:c;Bmaster=3;Bfoo=8`,
             expected: `
-x=E:P3,8;I t=Sa:ct;Ot Cct-a c=c!H=ct;
+x=E:QC 3: 8: 0 8;I t=Sa:ct;Ot Cct-a c=c!H=ct;
 Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
 <<<<<<< HEAD
 a
@@ -664,7 +664,7 @@ Submodule ${colors.red("s")} is conflicted.
             input: `
 a=B:Ca-1;Ba=a|
 x=U:C3-2 s=foo;C8-2 s=Sa:a;Bmaster=3;Bfoo=8`,
-            expected: `x=E:P3,8;I *s=S:1*foo*S:a;W s=foo`,
+            expected: `x=E:QC 3: 8: 0 8;I *s=S:1*foo*S:a;W s=foo`,
             errorMessage: `\
 Conflicting entries for submodule ${colors.red("s")}
 `,
@@ -725,29 +725,29 @@ describe("continue", function () {
             fails: true,
         },
         "conflicted": {
-            input: "a=B|x=U:Os I foo=bar,*x=a*b*c;Cfoo#g;Bg=g;P2,g",
+            input: "a=B|x=U:Os I foo=bar,*x=a*b*c;Cfoo#g;Bg=g;QC 2: g: 0 g",
             fails: true,
         },
         "continue with a staged submodule commit": {
-            input: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a;Cmoo#g;Bg=g;P2,g",
-            expected: "x=E:Cmoo#CP-2 s=Sa:a;Bmaster=CP;P;I s=~",
+            input: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a;Cmoo#g;Bg=g;QC 2: g: 0 g",
+            expected: "x=E:Cmoo#CP-2 s=Sa:a;Bmaster=CP;Q;I s=~",
         },
         "regular continue": {
             input: `
 a=B:Ca-1;Cb-1;Ba=a;Bb=b|
-x=U:C3-2 s=Sa:b;Cfoo#g-2;Bg=g;P1,g;Bmaster=3;Os EHEAD,b,a!I b=b`,
+x=U:C3-2 s=Sa:b;Cfoo#g-2;Bg=g;QC 1: g: 0 g;Bmaster=3;Os EHEAD,b,a!I b=b`,
             expected: `
-x=E:P;Cfoo#CP-3 s=Sa:bs;Bmaster=CP;Os Cbs-a b=b!E`,
+x=E:Q;Cfoo#CP-3 s=Sa:bs;Bmaster=CP;Os Cbs-a b=b!E`,
         },
         "nothing to do": {
-            input: "a=B|x=U:Os;Cfoo#g;Bg=g;P2,g",
-            expected: "x=E:P",
+            input: "a=B|x=U:Os;Cfoo#g;Bg=g;QC 2: g: 0 g",
+            expected: "x=E:Q",
             fails: true,
         },
         "continue with staged files": {
-            input: "a=B|x=U:Os I foo=bar;Cfoo#g;Bg=g;P2,g",
+            input: "a=B|x=U:Os I foo=bar;Cfoo#g;Bg=g;QC 2: g: 0 g",
             expected: `
-x=E:Cfoo#CP-2 s=Sa:Ns;Bmaster=CP;Os Cfoo#Ns-1 foo=bar;P`,
+x=E:Cfoo#CP-2 s=Sa:Ns;Bmaster=CP;Os Cfoo#Ns-1 foo=bar;Q`,
         },
     };
     Object.keys(cases).forEach(caseName => {
@@ -787,19 +787,19 @@ describe("abort", function () {
             fails: true,
         },
         "some changes in meta": {
-            input: "x=S:C2-1;Bmaster=2;P1,2",
+            input: "x=S:C2-1;Bmaster=2;QC 1: 2: 0 2",
             expected: "x=S",
         },
         "some conflicted changes in meta": {
             input: `
-x=S:C2-1;Bmaster=2;P1,2;I *README.md=b*c*d;W README.md=8`,
+x=S:C2-1;Bmaster=2;QC 1: 2: 0 2;I *README.md=b*c*d;W README.md=8`,
             expected: "x=S",
         },
 
         "sub with a conflict": {
             input: `
 a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|
-x=U:P3,8;C3-2 s=Sa:a;C8-2 s=Sa:b;Bmaster=3;Bfoo=8;
+x=U:QC 3: 8: 0 8;C3-2 s=Sa:a;C8-2 s=Sa:b;Bmaster=3;Bfoo=8;
   Os Ba=a!Bb=b!Edetached HEAD,b,a!I *a=~*a*8!W a=\
 <<<<<<< HEAD
 a
@@ -808,7 +808,7 @@ a
 >>>>>>> message
 ;
 `,
-            expected: `x=E:P;Os E!I a=~!W a=~!Ba=a!Bb=b`,
+            expected: `x=E:Q;Os E!I a=~!W a=~!Ba=a!Bb=b`,
         }
     };
     Object.keys(cases).forEach(caseName => {

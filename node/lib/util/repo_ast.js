@@ -38,7 +38,6 @@ const deeper   = require("deeper");
 const deepCopy = require("deepcopy");
 
 const Rebase         = require("./rebase");
-const CherryPick     = require("./cherry_pick");
 const SequencerState = require("./sequencer_state");
 
 /**
@@ -393,7 +392,6 @@ class AST {
      * @param {Object}         [args.notes]
      * @param {Object}         [args.openSubmodules]
      * @param {Rebase}         [args.rebase]
-     * @param {CherryPick}     [args.cherryPick]
      * @param {SequencerState} [args.sequencerState]
      */
     constructor(args) {
@@ -557,19 +555,6 @@ in commit ${id}.`);
                 checkAndTraverse(rebase.onto,
                                  "onto of rebase");
                 this.d_rebase = rebase;
-            }
-        }
-
-        this.d_cherryPick = null;
-        if ("cherryPick" in args) {
-            const cherryPick = args.cherryPick;
-            if (null !== cherryPick) {
-                assert.instanceOf(cherryPick, CherryPick);
-                assert.isFalse(this.d_bare);
-                checkAndTraverse(cherryPick.originalHead,
-                                 "original head of cherry-pick");
-                checkAndTraverse(cherryPick.picked, "picked commit");
-                this.d_cherryPick = cherryPick;
             }
         }
 
@@ -762,13 +747,6 @@ in commit ${id}.`);
     }
 
     /**
-     * @property {CherryPick} null unless a cherry-pick is in progress
-     */
-    get cherryPick() {
-        return this.d_cherryPick;
-    }
-
-    /**
      * @property {SequencerState} null unless a sequence operation is ongoing
      */
     get sequencerState() {
@@ -834,8 +812,6 @@ in commit ${id}.`);
             openSubmodules: ("openSubmodules" in args) ?
                 args.openSubmodules : this.d_openSubmodules,
             rebase: ("rebase" in args) ? args.rebase : this.d_rebase,
-            cherryPick: ("cherryPick" in args) ?
-                       args.cherryPick : this.d_cherryPick,
             sequencerState: ("sequencerState" in args) ?
                        args.sequencerState: this.d_sequencerState,
             bare: ("bare" in args) ? args.bare : this.d_bare,
@@ -921,7 +897,6 @@ AST.Branch = Branch;
 AST.Commit = Commit;
 AST.Conflict = Conflict;
 AST.Rebase = Rebase;
-AST.CherryPick  = CherryPick;
 AST.Remote = Remote;
 AST.SequencerState = SequencerState;
 AST.Submodule = Submodule;

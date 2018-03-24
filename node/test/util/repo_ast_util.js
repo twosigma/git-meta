@@ -138,7 +138,6 @@ describe("RepoAstUtil", function () {
         const Conflict = RepoAST.Conflict;
         const Commit = AST.Commit;
         const Rebase = AST.Rebase;
-        const CherryPick = AST.CherryPick;
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
 
@@ -171,7 +170,6 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
-                    cherryPick: new CherryPick("1", "1"),
                     sequencerState: new Sequencer({
                         type: MERGE,
                         originalHead: new CommitAndRef("1", null),
@@ -192,7 +190,6 @@ describe("RepoAstUtil", function () {
                     workdir: { foo: "bar" },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
-                    cherryPick: new CherryPick("1", "1"),
                     sequencerState: new Sequencer({
                         type: MERGE,
                         originalHead: new CommitAndRef("1", null),
@@ -546,45 +543,6 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
-            "missing cherry": {
-                actual: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                }),
-                fails: true,
-            },
-            "unexpected cherry": {
-                actual: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit},
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                fails: true,
-            },
-            "wrong cherry": {
-                actual: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    cherryPick: new CherryPick("2", "1"),
-                }),
-                expected: new AST({
-                    commits: { "1": aCommit, "2": aCommit},
-                    head: "1",
-                    branches: { master: new RepoAST.Branch("2", null), },
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                fails: true,
-            },
             "missing sequencer": {
                 actual: new AST({
                     commits: { "1": aCommit},
@@ -704,7 +662,6 @@ describe("RepoAstUtil", function () {
     describe("mapCommitsAndUrls", function () {
         const Commit = RepoAST.Commit;
         const Rebase = RepoAST.Rebase;
-        const CherryPick = RepoAST.CherryPick;
         const c1 = new Commit({ message: "foo" });
         const cases = {
             "trivial": { i: new RepoAST(), m: {}, e: new RepoAST() },
@@ -1081,32 +1038,6 @@ describe("RepoAstUtil", function () {
                     commits: { "1": c1 },
                     head: "1",
                     rebase: new Rebase("foo", "1", "1"),
-                }),
-            },
-            "cherry-pick": {
-                i: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                m: { "1": "2"},
-                e: new RepoAST({
-                    commits: { "2": c1 },
-                    head: "2",
-                    cherryPick: new CherryPick("2", "2"),
-                }),
-            },
-            "cherry-pick unmapped": {
-                i: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
-                }),
-                m: {},
-                e: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    cherryPick: new CherryPick("1", "1"),
                 }),
             },
             "sequencer": {
