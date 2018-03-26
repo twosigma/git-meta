@@ -34,8 +34,6 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
-const path    = require("path");
-const rimraf  = require("rimraf");
 
 const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("../util/do_work_queue");
@@ -46,18 +44,9 @@ const RepoStatus          = require("./repo_status");
 const RebaseFileUtil      = require("./rebase_file_util");
 const StatusUtil          = require("./status_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
-
-/**
- * Return a conflict description for the submodule having the specified `name`.
- *
- * @param {String} name
- * @return {String}
- */
-function subConflictErrorMessage(name) {
-    return `Conflict in ${colors.red(name)}`;
-}
 
 /**
  * Put the head of the specified `repo` on the specified `commitSha`.
@@ -65,139 +54,6 @@ function subConflictErrorMessage(name) {
 const setHead = co.wrap(function *(repo, commitSha) {
     const commit = yield repo.getCommit(commitSha);
     yield GitUtil.setHeadHard(repo, commit);
-});
-
-/**
- * Call `next` on the specified `rebase`; return the rebase operation for the
- * rebase or null if there is no further operation.
- *
- * TODO: independent test
- *
- * @async
- * @private
- * @param {NodeGit.Rebase} rebase
- * @return {RebaseOperation|null}
- */
-exports.callNext = co.wrap(function *(rebase) {
-    try {
-        return yield rebase.next();
-    }
-    catch (e) {
-        // It's cumbersome, but the way the nodegit library indicates
-        // that you are at the end of the rebase is by throwing an
-        // exception.  At this point we call `finish` on the rebase and
-        // break out of the contaiing while loop.
-
-        if (e.errno === NodeGit.Error.CODE.ITEROVER) {
-            return null;
-        }
-        throw e;
-    }
-});
-
-const cleanupRebaseDir = co.wrap(function *(repo) {
-    const gitDir = repo.path();
-    const rebaseDir = yield RebaseFileUtil.findRebasingDir(gitDir);
-    if (null !== rebaseDir) {
-        const rebasePath = path.join(gitDir, rebaseDir);
-        yield (new Promise(callback => {
-            return rimraf(rebasePath, {}, callback);
-        }));
-    }
-});
-
-/**
- * Finish the specified `rebase` in the specified `repo`.  Note that this
- * method is necessary only as a workaround for:
- * https://github.com/twosigma/git-meta/issues/115.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Rebase} rebase
- */
-const callFinish = co.wrap(function *(repo, rebase) {
-    const result = rebase.finish();
-    const CLEANUP_FAILURE = -15;
-    if (CLEANUP_FAILURE === result) {
-        yield cleanupRebaseDir(repo);
-    }
-});
-
-/**
- * Process the specified `rebase` for the specified `repo`, beginning with the
- * specified `op`.  Return an object describing any encountered error and
- * commits made.  If successful, clean up and finish the rebase.  If
- * `null === op`, finish the rebase and return.
- *
- * @param {NodeGit.Repository}           repo
- * @param {NodeGit.Rebase}               rebase
- * @param {NodeGit.RebaseOperation|null} op
- * @return {Object}
- * @return {Object} return.commits
- * @return {String|null} return.conflictedCommit
- */
-exports.processRebase = co.wrap(function *(repo, rebase, op) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(rebase, NodeGit.Rebase);
-    if (null !== op) {
-        assert.instanceOf(op, NodeGit.RebaseOperation);
-    }
-    const result = {
-        commits: {},
-        conflictedCommit: null,
-    };
-    const signature = repo.defaultSignature();
-    while (null !== op) {
-        const index = yield repo.index();
-        if (index.hasConflicts()) {
-            result.conflictedCommit = op.id().tostrS();
-            return result;                                            // RETURN
-        }
-        const newCommit = rebase.commit(null, signature, null);
-        const originalCommit = op.id().tostrS();
-        result.commits[newCommit.tostrS()] = originalCommit;
-        op = yield exports.callNext(rebase);
-    }
-    yield callFinish(repo, rebase);
-    return result;
-});
-
-/**
- * Rebease the commits from the specified `branch` commit on the HEAD of
- * the specified `repo`.  If the optionally specified `upstream` is provided,
- * rewrite only commits beginning with `upstream`; otherwise, rewrite all
- * reachable commits.  Return an object containing a map that describes any
- * written commits and an error message if some part of the rewrite failed.
- *
- * @param {NodeGit.Repository}  repo
- * @param {NodeGit.Commit}      commit
- * @param {NodeGit.Commit|null} upstream
- * @return {Object}
- * @return {Object}      return.commits           new sha to original sha
- * @return {String|null} return.conflictedCommit  error message if failed
- */
-exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(branch, NodeGit.Commit);
-    if (null !== upstream) {
-        assert.instanceOf(upstream, NodeGit.Commit);
-    }
-
-    const head = yield repo.head();
-    const ontoAnnotated = yield NodeGit.AnnotatedCommit.fromRef(repo, head);
-    const branchAnnotated =
-                       yield NodeGit.AnnotatedCommit.lookup(repo, branch.id());
-    let upstreamAnnotated = null;
-    if (null !== upstream) {
-        upstreamAnnotated =
-                     yield NodeGit.AnnotatedCommit.lookup(repo, upstream.id());
-    }
-    const rebase = yield NodeGit.Rebase.init(repo,
-                                             branchAnnotated,
-                                             upstreamAnnotated,
-                                             ontoAnnotated,
-                                             null);
-    const op = yield exports.callNext(rebase);
-    return yield exports.processRebase(repo, rebase, op);
 });
 
 /**
@@ -232,8 +88,8 @@ const rebaseSubmodule = co.wrap(function *(opener, name, from, onto) {
                                              null);
     console.log(`Submodule ${colors.blue(name)}: starting \
 rebase; rewinding to ${colors.green(ontoCommitId.tostrS())}.`);
-    const op = yield exports.callNext(rebase);
-    return yield exports.processRebase(repo, rebase, op);
+    const op = yield SubmoduleRebaseUtil.callNext(rebase);
+    return yield SubmoduleRebaseUtil.processRebase(repo, rebase, op);
 });
 
 /**
@@ -415,7 +271,8 @@ const processMetaRebaseOp = co.wrap(function *(metaRepo,
         }
 
         if (null !== ret.conflictedCommit) {
-            errorMessage += subConflictErrorMessage(name) + "\n";
+            errorMessage +=
+                      SubmoduleRebaseUtil.subConflictErrorMessage(name) + "\n";
             conflicted.add(name);
         }
     }
@@ -480,7 +337,7 @@ const driveRebase = co.wrap(function *(metaRepo,
     let idx = rebase.operationCurrent();
     const total = rebase.operationEntrycount();
     function makeCallNext() {
-        return exports.callNext(rebase);
+        return SubmoduleRebaseUtil.callNext(rebase);
     }
     while (idx < total) {
         const rebaseOper = rebase.operationByIndex(idx);
@@ -519,7 +376,7 @@ const driveRebase = co.wrap(function *(metaRepo,
         yield DoWorkQueue.doInParallel(openSubs, fetchOpened);
     }
 
-    yield callFinish(metaRepo, rebase);
+    yield SubmoduleRebaseUtil.callFinish(metaRepo, rebase);
     return result;
 });
 
@@ -592,7 +449,7 @@ up-to-date.`);
                                                      null,
                                                      null);
             console.log(`Rewinding to ${colors.green(commitId.tostrS())}.`);
-            yield exports.callNext(rebase);
+            yield SubmoduleRebaseUtil.callNext(rebase);
             return {
                 rebase: rebase,
                 submoduleCommits: {},
@@ -648,97 +505,6 @@ ${colors.green(rebaseInfo.originalHead)}.`);
 });
 
 /**
- * Continue the rebase in the specified `repo` and return an object describing
- * any generated commits and the sha of the conflicted commit if there was one.
- * The behavior is undefined unless `true === repo.isRebasing()`.
- *
- * @param {NodeGit.Repository} repo
- * @return {Object} return
- * @return {Object} return.commits
- * @return {String|null} return.conflictedCommit
- */
-const continueRebase = co.wrap(function *(repo) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert(repo.isRebasing());
-
-    const rebase = yield NodeGit.Rebase.open(repo);
-    const idx = rebase.operationCurrent();
-    const op = rebase.operationByIndex(idx);
-    return yield exports.processRebase(repo, rebase, op);
-});
-
-/**
- * Continue rebases in the submodules in the specifed `repo` having the
- * `index and `status`.  If staged changes are found in submodules that don't
- * have in-progress rebases, commit them using the specified message and
- * signature from the specified original `commit`.  Return an object describing
- * any commits that were generated along with an error message if any continues
- * failed.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Index}      index
- * @param {RepoStatus}         status
- * @param {NodeGit.Commit}     commit
- * @return {Object}
- * @return {Object} return.commits  map from name to sha map
- * @return {Object} return.newCommits  from name to newly-created commits
- * @return {String|null} return.errorMessage
- */
-exports.continueSubmodules = co.wrap(function *(repo, index, status, commit) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(index, NodeGit.Index);
-    assert.instanceOf(status, RepoStatus);
-    assert.instanceOf(commit, NodeGit.Commit);
-
-    const commits = {};
-    const newCommits = {};
-    const subs = status.submodules;
-    let errorMessage = "";
-    const continueSub = co.wrap(function *(name) {
-        const sub = subs[name];
-        const workdir = sub.workdir;
-        if (null === workdir) {
-            // Return early if the submodule is closed.
-            return;                                                   // RETURN
-        }
-        const subStatus = workdir.status;
-        const rebaseInfo = subStatus.rebase;
-        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-        if (null === rebaseInfo) {
-            if (0 !== Object.keys(subStatus.staged).length) {
-                const id = yield subRepo.createCommitOnHead([],
-                                                            commit.author(),
-                                                            commit.committer(),
-                                                            commit.message());
-                newCommits[name] = id.tostrS();
-            }
-            yield index.addByPath(name);
-
-            // Return early if no rebase in this submodule.
-            return;                                                   // RETURN
-        }
-        console.log(`Submodule ${colors.blue(name)} continuing \
-rewrite from ${colors.green(rebaseInfo.originalHead)} onto \
-${colors.green(rebaseInfo.onto)}.`);
-        const result = yield continueRebase(subRepo);
-        commits[name] = result.commits;
-        if (null !== result.conflictedCommit) {
-            errorMessage += subConflictErrorMessage(name) + "\n";
-        }
-        else {
-            yield index.addByPath(name);
-            yield index.conflictRemove(name);
-        }
-    });
-    yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    return {
-        errorMessage: "" === errorMessage ? null : errorMessage,
-        commits: commits,
-        newCommits: newCommits,
-    };
-});
-
-/**
  * Continue the rebase in progress on the specified `repo`.
  *
  * @param {NodeGit.Repository} repo
@@ -771,10 +537,11 @@ ${colors.green(rebaseInfo.onto)}.`);
         const idx = rebase.operationCurrent();
         const op = rebase.operationByIndex(idx);
         const baseCommit = yield repo.getCommit(op.id());
-        const result = yield exports.continueSubmodules(repo,
-                                                        index,
-                                                        status,
-                                                        baseCommit);
+        const result = yield SubmoduleRebaseUtil.continueSubmodules(
+                                                                   repo,
+                                                                   index,
+                                                                   status,
+                                                                   baseCommit);
         if (null !== result.errorMessage) {
             throw new UserError(result.errorMessage);
         }

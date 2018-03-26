@@ -43,13 +43,13 @@ const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
-const RebaseUtil          = require("./rebase_util");
 const Reset               = require("./reset");
 const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
 const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
@@ -351,9 +351,10 @@ ${colors.green(commitText)}.`);
         yield fetcher.fetchSha(repo, name, change.oldSha);
         const newCommit = yield repo.getCommit(change.newSha);
         const oldCommit = yield repo.getCommit(change.oldSha);
-        const rewriteResult = yield RebaseUtil.rewriteCommits(repo,
-                                                              newCommit,
-                                                              oldCommit);
+        const rewriteResult = yield SubmoduleRebaseUtil.rewriteCommits(
+                                                                    repo,
+                                                                    newCommit,
+                                                                    oldCommit);
         result.commits[name] = rewriteResult.commits;
         yield metaIndex.addByPath(name);
         if (null !== rewriteResult.conflictedCommit) {
@@ -548,10 +549,10 @@ exports.continue = co.wrap(function *(repo) {
     }
     const index = yield repo.index();
     const commit = yield repo.getCommit(seq.target.sha);
-    const subResult = yield RebaseUtil.continueSubmodules(repo,
-                                                          index,
-                                                          status,
-                                                          commit);
+    const subResult = yield SubmoduleRebaseUtil.continueSubmodules(repo,
+                                                                   index,
+                                                                   status,
+                                                                   commit);
     yield index.write();
     const result = {
         newMetaCommit: null,
