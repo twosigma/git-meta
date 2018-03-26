@@ -747,4 +747,90 @@ x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;E;Bmaster=3M;
             }));
         });
     });
+
+    describe("listRebaseCommits", function () {
+        const cases = {
+            "same commit": {
+                input: "S",
+                from: "1",
+                onto: "1",
+                expected: [],
+            },
+            "ancestor": {
+                input: "S:C2-1;Bfoo=2",
+                from: "1",
+                onto: "2",
+                expected: [],
+            },
+            "descendant": {
+                input: "S:C2-1;Bfoo=2",
+                from: "2",
+                onto: "1",
+                expected: ["2"],
+            },
+            "descendants": {
+                input: "S:C3-2;C2-1;Bfoo=3",
+                from: "3",
+                onto: "1",
+                expected: ["2", "3"],
+            },
+            "merge of base": {
+                input: "S:C2-1;Bmaster=2;C4-3,1;C3-1;Bfoo=4",
+                from: "4",
+                onto: "2",
+                expected: ["3"],
+            },
+            "non FFWD": {
+                input: "S:Cf-1;Co-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["f"],
+            },
+            "left-to-right": {
+                input: "S:Co-1;Cf-b,a;Ca-1;Cb-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["b", "a"],
+            },
+            "left-to-right and deep first": {
+                input: "S:Co-1;Cf-b,a;Ca-1;Cb-c;Cc-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["c", "b", "a"],
+            },
+            "double deep": {
+                input: "S:Co-1;Cf-b,a;Ca-1;Cb-c,d;Cc-1;Cd-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["c", "d", "a"],
+            },
+            "and deep on the right": {
+                input: "S:Co-1;Cf-b,a;Ca-q,r;Cq-1;Cr-1;Cb-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["b", "q", "r"],
+            },
+            "new commit in history more than once": {
+                input: "S:Co-1;Cf-r,a;Ca-q,r;Cq-1;Cr-1;Bf=f;Bo=o",
+                from: "f",
+                onto: "o",
+                expected: ["r", "q"],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.input);
+                const repo = written.repo;
+                const old = written.oldCommitMap;
+                const from = yield repo.getCommit(old[c.from]);
+                const onto = yield repo.getCommit(old[c.onto]);
+                const result = yield RebaseUtil.listRebaseCommits(repo,
+                                                                  from,
+                                                                  onto);
+                const commits = result.map(sha => written.commitMap[sha]);
+                assert.deepEqual(commits, c.expected);
+            }));
+        });
+    });
 });

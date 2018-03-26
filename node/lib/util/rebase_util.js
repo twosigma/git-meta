@@ -788,3 +788,95 @@ ${colors.green(rebaseInfo.onto)}.`);
     console.log("Finished rebase.");
     return result;
 });
+
+/**
+ * From the specified `repo`, return a list of non-merge commits that are part
+ * of the history of `from` but not of `onto` (inclusive of `from`), in
+ * depth-first order from left-to right.  Note that this will include commits
+ * that could be fast-forwarded; if you need to do something else when `onto`
+ * can be fast-forwarded from `from`, you must check beforehand.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     from
+ * @param {NodeGit.Commit}     onto
+ * @return [String]
+ */
+exports.listRebaseCommits = co.wrap(function *(repo, from, onto) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(from, NodeGit.Commit);
+    assert.instanceOf(onto, NodeGit.Commit);
+
+    const ontoSha = onto.id().tostrS();
+    const seen = new Set([ontoSha]);    // shas that stop traversal
+    const result = [];
+    const todo = [];  // { sha: String | null, parents: [Commit]}
+
+    // We proceed as follows:
+    //
+    // 1. Each item in the `todo` list represents a child commit with
+    //    zero or more parents left to process.
+    // 2. If the list of parents is empty in the last element of `todo`,
+    //    record the sha of the child commit of this element into `result`
+    //    (unless it was null, which would indicate a skipped merge commit).
+    // 3. Otherwise, pop the last parent off and "enqueue" it onto the todo
+    //    list.
+    // 4. The `enqueue` function will skip any commits that have been
+    //    previously seen, or that are in the history of `onto`.
+    // 5. We start things off by enqueuing `from`.
+    //
+    // Note that (2) ensures that all parents of a commit are added to `result`
+    // (where appropriate) before the commit itself, and (3) that a commit and
+    // all of its ancestors are processed before any of its siblings.
+
+    const enqueue = co.wrap(function *(commit) {
+        const sha = commit.id().tostrS();
+
+        // If we've seen a commit already, do not process it or any of its
+        // children.  Otherwise, record that we've seen it.
+
+        if (seen.has(sha)) {
+            return;                                                   // RETURN
+        }
+        seen.add(sha);
+
+        // Skip this commit if it's an ancestor of `onto`.
+
+        const inHistory = yield NodeGit.Graph.descendantOf(repo, ontoSha, sha);
+        if (inHistory) {
+            return;                                                   // RETURN
+        }
+        const parents = yield commit.getParents();
+
+        // Record a null as the `sha` if this was a merge commit so that we
+        // know not to add it to `result` after processing its parents.  We
+        // work from the back, so reverse the parents to get left first.
+
+        todo.push({
+            sha: 1 >= parents.length ? sha : null,
+            parents: parents.reverse(),
+        });
+    });
+
+    yield enqueue(from);  // Kick it off with the first, `from`, commit.
+
+    while (0 !== todo.length) {
+        const back = todo[todo.length - 1];
+        const parents = back.parents;
+        if (0 === parents.length) {
+            // If nothing to do for last item, pop it off, record the child sha
+            // in the result list if non-null (indicating non-merge), and move
+            // on.
+
+            if (null !== back.sha) {
+                result.push(back.sha);
+            }
+            todo.pop();
+        } else {
+            // Otherwise, pop off the last parent and attempt to enqueue it.
+
+            const next = parents.pop();
+            yield enqueue(next);
+        }
+    }
+    return result;
+});
