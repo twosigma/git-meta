@@ -212,6 +212,42 @@ class SequencerState {
             this.d_currentCommit === rhs.d_currentCommit &&
             this.d_message === rhs.d_message;
     }
+
+    /**
+     * Return a new `SequencerState` object having the same value as this
+     * object except where overriden by the fields in the optionally specified
+     * `properties`.
+     *
+     * @param {Object}       [properties]
+     * @param {String}       [type]
+     * @param {CommitAndRef} [originalHead]
+     * @param {CommitAndRef} [target]
+     * @param {Number}       [currentCommit]
+     * @param {[String]}     [commits]
+     * @param {String|null}  [message]
+     * @return {SequencerState}
+     */
+    copy(properties) {
+        if (undefined === properties) {
+            properties = {};
+        } else {
+            assert.isObject(properties);
+        }
+        return new SequencerState({
+            type: ("type" in properties) ? properties.type : this.d_type,
+            originalHead: ("originalHead" in properties) ?
+                               properties.originalHead : this.d_originalHead,
+            target: ("target" in properties) ?
+                                  properties.target : this.d_target,
+            currentCommit: ("currentCommit" in properties) ?
+                               properties.currentCommit : this.d_currentCommit,
+            commits: ("commits" in properties) ?
+                                  properties.commits : this.d_commits,
+            message: ("message" in properties) ?
+                                  properties.message : this.d_message,
+        });
+    }
+
 }
 
 SequencerState.prototype.toString = function () {

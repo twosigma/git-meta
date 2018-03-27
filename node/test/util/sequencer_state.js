@@ -243,6 +243,35 @@ const CommitAndRef = SequencerState.CommitAndRef;
             });
         });
     });
+    it("copy", function () {
+        const s0 = new SequencerState({
+            type: TYPE.CHERRY_PICK,
+            originalHead: new CommitAndRef("1", "2"),
+            target: new CommitAndRef("a", "b"),
+            currentCommit: 0,
+            commits: ["a"],
+            message: "yo",
+        });
+        const s1 = new SequencerState({
+            type: TYPE.MERGE,
+            originalHead: new CommitAndRef("u", "v"),
+            target: new CommitAndRef("8", "8"),
+            currentCommit: 1,
+            commits: ["1", "3"],
+            message: "there",
+        });
+        const defaults = s0.copy();
+        assert.deepEqual(defaults, s0);
+        const overridden = s0.copy({
+            type: s1.type,
+            originalHead: s1.originalHead,
+            target: s1.target,
+            commits: s1.commits,
+            currentCommit: s1.currentCommit,
+            message: s1.message,
+        });
+        assert.deepEqual(overridden, s1);
+    });
     it("toString", function () {
         const input = new SequencerState({
             type: TYPE.REBASE,
