@@ -113,7 +113,9 @@ CommitAndRef.prototype.toString = function () {
 class SequencerState {
     /**
      * Create a new `SequencerState` object.  The behavior is undefined unless
-     * `0 <= currentLength` and `commits.length > currentCommit`.
+     * `0 <= currentCommit` and `commits.length >= currentCommit`.  If
+     * `commits.length === currentCommit`, there are no more commits left on
+     * which to operate.
      *
      * @param {Object} properties
      * @param {TYPE}         properties.type
@@ -131,7 +133,7 @@ class SequencerState {
         assert.isArray(properties.commits);
         assert.isNumber(properties.currentCommit);
         assert(0 <= properties.currentCommit);
-        assert(properties.commits.length > properties.currentCommit);
+        assert(properties.commits.length >= properties.currentCommit);
 
         this.d_message = null;
         if ("message" in properties) {
