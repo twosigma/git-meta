@@ -76,6 +76,29 @@ const cleanupRebaseDir = co.wrap(function *(repo) {
 });
 
 /**
+ * Make a new commit on the head of the specified `repo` having the same
+ * committer and message as the specified original `commit`, and return its
+ * sha.
+ *
+ * TODO: independent test
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @return {String}
+ */
+exports.makeCommit = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    const defaultSig = repo.defaultSignature();
+    const metaCommit = yield repo.createCommitOnHead([],
+                                                     commit.author(),
+                                                     defaultSig,
+                                                     commit.message());
+    return metaCommit.tostrS();
+});
+
+/**
  * Finish the specified `rebase` in the specified `repo`.  Note that this
  * method is necessary only as a workaround for:
  * https://github.com/twosigma/git-meta/issues/115.
@@ -209,12 +232,22 @@ exports.subConflictErrorMessage = function (name) {
     return `Conflict in ${colors.red(name)}`;
 };
 
+/**
+ * Log a message indicating that the specified `commit` is being applied.
+ *
+ * @param {NodeGit.Commit} commit
+ */
+exports.logCommit = function (commit) {
+    assert.instanceOf(commit, NodeGit.Commit);
+    console.log(`Applying '${commit.message().split("\n")[0]}'`);
+};
 
 /**
  * Continue rebases in the submodules in the specifed `repo` having the
  * `index and `status`.  If staged changes are found in submodules that don't
  * have in-progress rebases, commit them using the specified message and
- * signature from the specified original `commit`.  Return an object describing
+ * signature from the specified original `commit`.  If there are any changes to
+ * commit, make a new commit in the meta-repo.   Return an object describing
  * any commits that were generated along with an error message if any continues
  * failed.
  *
@@ -223,6 +256,7 @@ exports.subConflictErrorMessage = function (name) {
  * @param {RepoStatus}         status
  * @param {NodeGit.Commit}     commit
  * @return {Object}
+ * @return {String|null}       metaCommit
  * @return {Object} return.commits  map from name to sha map
  * @return {Object} return.newCommits  from name to newly-created commits
  * @return {String|null} return.errorMessage
@@ -233,6 +267,7 @@ exports.continueSubmodules = co.wrap(function *(repo, index, status, commit) {
     assert.instanceOf(status, RepoStatus);
     assert.instanceOf(commit, NodeGit.Commit);
 
+    exports.logCommit(commit);
     const commits = {};
     const newCommits = {};
     const subs = status.submodules;
@@ -274,9 +309,19 @@ ${colors.green(rebaseInfo.onto)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    return {
+    yield index.write();
+    const result = {
         errorMessage: "" === errorMessage ? null : errorMessage,
         commits: commits,
         newCommits: newCommits,
+        metaCommit: null,
     };
+    if (null === result.errorMessage) {
+        if (!status.isIndexDeepClean()) {
+            result.metaCommit = yield exports.makeCommit(repo, commit);
+        } else {
+            console.log("Nothing to commit.");
+        }
+    }
+    return result;
 });

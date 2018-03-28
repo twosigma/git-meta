@@ -42,6 +42,42 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const Submodule       = require("../../lib/util/submodule");
 const SubmoduleChange = require("../../lib/util/submodule_change");
 
+/**
+ * Return a commit map as expected from  a manipulator for `RepoASTTestUtil`
+ * from a result having the `newMetaCommit` and `submoduleCommits` properties
+ * as returned by `rewriteCommit`.
+ *
+ * @param {Object} maps
+ * @param {Object} result
+ * @return {Object}
+ */
+function mapCommits(maps, result) {
+    const oldMap = maps.commitMap;
+
+    let commitMap = {};
+    if (null !== result.newMetaCommit) {
+        commitMap[result.newMetaCommit] = "9";
+    }
+
+    // For the submodules, we need to first figure out what the old
+    // logical commit (the one from the shorthand) was, then create the
+    // new logical commit id by appending the submodule name.  We map
+    // the new (physical) commit id to this new logical id.
+
+    Object.keys(result.submoduleCommits).forEach(name => {
+        const subCommits = result.submoduleCommits[name];
+        Object.keys(subCommits).forEach(newPhysicalId => {
+            const oldId = subCommits[newPhysicalId];
+            const oldLogicalId = oldMap[oldId];
+            const newLogicalId = oldLogicalId + name;
+            commitMap[newPhysicalId] = newLogicalId;
+        });
+    });
+    return {
+        commitMap: commitMap,
+    };
+}
+
 describe("CherryPickUtil", function () {
 const Conflict = ConflictUtil.Conflict;
 const ConflictEntry = ConflictUtil.ConflictEntry;
@@ -511,7 +547,7 @@ Conflicting entries for submodule ${colors.red("z")}
         }));
     });
 });
-describe("cherryPick", function () {
+describe("rewriteCommit", function () {
     // We will always cherry-pick commit 8 from repo x and will name the
     // meta-repo cherry-picked commit 9.  Cherry-picked commits from
     // submodules will have the submodule name appended to the commit.
@@ -545,19 +581,6 @@ x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os H=x`,
         },
         "nothing to commit": {
             input: "a=B|x=S:C2-1;C8-1 ;Bmaster=2;B8=8",
-            fails: true,
-        },
-        "in-progress will fail": {
-            input: `
-a=Ax:Cz-y;Cy-x;Bfoo=z|
-x=S:QC 2: 1: 0 2;C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2`,
-            fails: true,
-        },
-        "dirty will fail": {
-            input: `
-a=Ax:Cz-y;Cy-x;Bfoo=z|
-x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os W x=9`,
-            fails: true,
         },
         "URL change will fail": {
             input: `
@@ -630,7 +653,7 @@ x=E:C9-2 t=Sa:qt;Bmaster=9;Ot Cqt-1 q=q!H=qt`,
 a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C8-2 s=Sa:b;Bmaster=3;Bfoo=8`,
             expected: `
-x=E:QC 3: 8: 0 8;Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
+x=E:Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
 <<<<<<< HEAD
 a
 =======
@@ -647,7 +670,7 @@ Submodule ${colors.red("s")} is conflicted.
 a=B:Ca-1;Cb-1 a=8;Cc-1;Ba=a;Bb=b;Bc=c|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:a,t=Sa:a;C8-2 s=Sa:b,t=Sa:c;Bmaster=3;Bfoo=8`,
             expected: `
-x=E:QC 3: 8: 0 8;I t=Sa:ct;Ot Cct-a c=c!H=ct;
+x=E:I t=Sa:ct;Ot Cct-a c=c!H=ct;
 Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
 <<<<<<< HEAD
 a
@@ -664,9 +687,79 @@ Submodule ${colors.red("s")} is conflicted.
             input: `
 a=B:Ca-1;Ba=a|
 x=U:C3-2 s=foo;C8-2 s=Sa:a;Bmaster=3;Bfoo=8`,
-            expected: `x=E:QC 3: 8: 0 8;I *s=S:1*foo*S:a;W s=foo`,
+            expected: `x=E:I *s=S:1*foo*S:a;W s=foo`,
             errorMessage: `\
 Conflicting entries for submodule ${colors.red("s")}
+`,
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        const picker = co.wrap(function *(repos, maps) {
+            const x = repos.x;
+            const reverseCommitMap = maps.reverseCommitMap;
+            assert.property(reverseCommitMap, "8");
+            const eightCommitSha = reverseCommitMap["8"];
+            const eightCommit = yield x.getCommit(eightCommitSha);
+            const opener = new Open.Opener(x, null);
+            const result  = yield CherryPickUtil.rewriteCommit(x,
+                                                               eightCommit,
+                                                               opener);
+            assert.equal(result.errorMessage, c.errorMessage || null);
+            return mapCommits(maps, result);
+        });
+
+        it(caseName, co.wrap(function *() {
+            yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                           c.expected,
+                                                           picker,
+                                                           c.fails);
+        }));
+    });
+});
+describe("cherryPick", function () {
+    // Most of the work of cherry-pick is done by `rewriteCommit` and other
+    // methods.  We just need to validate here that we're ensuring the contract
+    // that we're in a good state, that we properly record and cleanup the
+    // sequencer.
+
+    const cases = {
+        "picking one sub": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os H=x`,
+            expected: "x=E:C9-2 s=Sa:zs;Bmaster=9;Os Czs-x z=z!H=zs",
+        },
+        "nothing to commit": {
+            input: "a=B|x=S:C2-1;C8-1 ;Bmaster=2;B8=8",
+        },
+        "in-progress will fail": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:QC 2: 1: 0 2;C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2`,
+            fails: true,
+        },
+        "dirty will fail": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os W x=9`,
+            fails: true,
+        },
+        "conflict in a sub pick": {
+            input: `
+a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C8-2 s=Sa:b;Bmaster=3;Bfoo=8`,
+            expected: `
+x=E:QC 3: 8: 0 8;Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
+<<<<<<< HEAD
+a
+=======
+8
+>>>>>>> message
+;
+`,
+            errorMessage: `\
+Submodule ${colors.red("s")} is conflicted.
 `,
         },
     };
@@ -675,7 +768,6 @@ Conflicting entries for submodule ${colors.red("s")}
         const c = cases[caseName];
         const picker = co.wrap(function *(repos, maps) {
             const x = repos.x;
-            const oldMap = maps.commitMap;
             const reverseCommitMap = maps.reverseCommitMap;
             assert.property(reverseCommitMap, "8");
             const eightCommitSha = reverseCommitMap["8"];
@@ -684,32 +776,8 @@ Conflicting entries for submodule ${colors.red("s")}
 
             assert.equal(result.errorMessage, c.errorMessage || null);
 
-            // Now we need to build a map from new physical commit id to new
-            // logical commit id.  For the meta commit, this is easy: we map
-            // the new id to the hard-coded value of "9".
-
-            let commitMap = {};
-            commitMap[result.newMetaCommit] = "9";
-
-            // For the submodules, we need to first figure out what the old
-            // logical commit (the one from the shorthand) was, then create the
-            // new logical commit id by appending the submodule name.  We map
-            // the new (physical) commit id to this new logical id.
-
-            Object.keys(result.submoduleCommits).forEach(name => {
-                const subCommits = result.submoduleCommits[name];
-                Object.keys(subCommits).forEach(newPhysicalId => {
-                    const oldId = subCommits[newPhysicalId];
-                    const oldLogicalId = oldMap[oldId];
-                    const newLogicalId = oldLogicalId + name;
-                    commitMap[newPhysicalId] = newLogicalId;
-                });
-            });
-            return {
-                commitMap: commitMap,
-            };
+            return mapCommits(maps, result);
         });
-
         it(caseName, co.wrap(function *() {
             yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                            c.expected,
@@ -742,7 +810,6 @@ x=E:Q;Cfoo#CP-3 s=Sa:bs;Bmaster=CP;Os Cbs-a b=b!E`,
         "nothing to do": {
             input: "a=B|x=U:Os;Cfoo#g;Bg=g;QC 2: g: 0 g",
             expected: "x=E:Q",
-            fails: true,
         },
         "continue with staged files": {
             input: "a=B|x=U:Os I foo=bar;Cfoo#g;Bg=g;QC 2: g: 0 g",
