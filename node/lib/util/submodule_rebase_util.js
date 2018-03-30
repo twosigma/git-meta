@@ -37,7 +37,8 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const DoWorkQueue         = require("../util/do_work_queue");
+const GitUtil             = require("./git_util");
+const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
 const SubmoduleUtil       = require("./submodule_util");
@@ -201,8 +202,30 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     if (null !== upstream) {
         assert.instanceOf(upstream, NodeGit.Commit);
     }
-
     const head = yield repo.head();
+    const headSha = head.target().tostrS();
+    const branchSha = branch.id().tostrS();
+
+    // We can do a fast-forward if `branch` and its entire history should be
+    // included.  This requires two things to be true:
+    // 1. `branch` is a descendant of `head` or equal to `head`
+    // 2. `null === upstream` (implying that all ancestors are to be included)
+    //    or `upstream` is an ancestor of or equal to `head`.
+
+    if (null === upstream ||
+        upstream.id().tostrS() === headSha ||
+        (yield NodeGit.Graph.descendantOf(repo,
+                                          headSha,
+                                          upstream.id().tostrS()))) {
+        if (yield NodeGit.Graph.descendantOf(repo, branchSha, headSha)) {
+            yield GitUtil.setHeadHard(repo, branch);
+            return {
+                commits: {},
+                conflictedCommit: null,
+            };
+        }
+    }
+
     const ontoAnnotated = yield NodeGit.AnnotatedCommit.fromRef(repo, head);
     const branchAnnotated =
                        yield NodeGit.AnnotatedCommit.lookup(repo, branch.id());

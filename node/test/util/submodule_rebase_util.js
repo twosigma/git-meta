@@ -157,11 +157,40 @@ describe("rewriteCommits", function () {
             upstream: null,
             conflictedCommit: null,
         },
+        "skip if branch and head same": {
+            initial: "x=S:Cr-1;Bmaster=r",
+            upstream: null,
+            conflictedCommit: null,
+            expected: "x=E:H=r",
+        },
         "skip none": {
             initial: "x=S:C2-1;Cr-1;Bmaster=2;Br=r",
             expected: "x=E:Crr-2 r=r;H=rr",
             upstream: "1",
             conflictedCommit: null,
+        },
+        "ffwd when all included": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=2;Br=r",
+            expected: "x=E:H=r",
+            upstream: null,
+            conflictedCommit: null,
+        },
+        "ffwd when enough included included": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=3;Br=r",
+            expected: "x=E:H=r",
+            upstream: "2",
+            conflictedCommit: null,
+        },
+        "ffwd when enough included included, and equal": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=3;Br=r",
+            expected: "x=E:H=r",
+            upstream: "3",
+            conflictedCommit: null,
+        },
+        "not ffwd when skipped commit": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=2;Br=r",
+            upstream: "3",
+            expected: "x=E:Crr-2 r=r;H=rr",
         },
         "conflict": {
             initial: "x=S:C2-1;Cr-1 2=3;Bmaster=2;Br=r",
