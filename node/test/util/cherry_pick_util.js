@@ -608,6 +608,18 @@ a=Ax:Cz-x;Bfoo=z|
 x=S:C8-2 s=Sa:z;C3-2;C2-1 s=Sa:x;Bfoo=8;Bmaster=3;Os H=x`,
             expected: "x=E:C9-3 s=Sa:z;Bmaster=9;Os",
         },
+        "picking one non-trivial ffwd sub": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:C8-2 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=3;Os`,
+            expected: "x=E:C9-3 s=Sa:z;Bmaster=9;Os H=z",
+        },
+        "picking one non-trivial ffwd sub, closes": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:C8-2 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=3`,
+            expected: "x=E:C9-3 s=Sa:z;Bmaster=9",
+        },
         "picking one sub introducing two commits": {
             input: `
 a=Aw:Cz-y;Cy-x;Cx-w;Bfoo=z|
@@ -709,10 +721,7 @@ Conflicting entries for submodule ${colors.red("s")}
             assert.property(reverseCommitMap, "8");
             const eightCommitSha = reverseCommitMap["8"];
             const eightCommit = yield x.getCommit(eightCommitSha);
-            const opener = new Open.Opener(x, null);
-            const result  = yield CherryPickUtil.rewriteCommit(x,
-                                                               eightCommit,
-                                                               opener);
+            const result  = yield CherryPickUtil.rewriteCommit(x, eightCommit);
             assert.equal(result.errorMessage, c.errorMessage || null);
             return mapCommits(maps, result);
         });
