@@ -77,9 +77,9 @@ function ensureCherryInProgress(seq) {
  * a `Submodule`, update it in the specified `index` in the specified `repo`
  * and if that submodule is open, reset its HEAD, index, and worktree to
  * reflect that commit.  Otherwise, if it maps to `null`, remove it and deinit
- * it if it's open.  Obtain submodule repositories from the specified `opener`.
- *  The behavior is undefined if any referenced submodule is open and has index
- *  or workdir modifications.
+ * it if it's open.  Obtain submodule repositories from the specified `opener`,
+ * but do not open any closed repositories.  The behavior is undefined if any
+ * referenced submodule is open and has index or workdir modifications.
  *
  * @param {NodeGit.Repository} repo
  * @param {Open.Opener}        opener
@@ -318,8 +318,7 @@ exports.computeChanges = co.wrap(function *(repo, commit) {
  * Pick the specified `subs` in the specified `metaRepo` having the specified
  * `metaIndex`.  Stage new submodule commits in `metaRepo`.  Return an object
  * describing any commits that were generated and conflicted commits.  Use the
- * specified `opener` to open submodules.
- *
+ * specified `opener` to acces submodule repos. *
  * @param {NodeGit.Repository} metaRepo
  * @param {Open.Opener}        opener
  * @param {NodeGit.Index}      metaIndex
@@ -347,6 +346,7 @@ exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
 ${colors.green(commitText)}.`);
 
         // Fetch the commit; it may not be present.
+
         yield fetcher.fetchSha(repo, name, change.newSha);
         yield fetcher.fetchSha(repo, name, change.oldSha);
         const newCommit = yield repo.getCommit(change.newSha);
@@ -398,16 +398,14 @@ Conflicting entries for submodule ${colors.red(name)}
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
- * @param {Open.Opener}        opener
  * @return {Object}      return
  * @return {String|null} return.newMetaCommit
  * @return {Object}      returm.submoduleCommits
  * @return {String|null} return.errorMessage
  */
-exports.rewriteCommit = co.wrap(function *(repo, commit, opener) {
+exports.rewriteCommit = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
-    assert.instanceOf(opener, Open.Opener);
 
     const hasUrlChanges = yield exports.containsUrlChanges(repo, commit);
     if (hasUrlChanges) {
@@ -426,6 +424,7 @@ Please try with normal 'git cherry-pick'.`);
     // Perform simple changes that don't require picks -- addition, deletions,
     // and fast-forwards.
 
+    const opener = new Open.Opener(repo, null);
     yield exports.changeSubmodules(repo, opener, index, changes.simpleChanges);
 
     // Render any conflicts
@@ -436,8 +435,22 @@ Please try with normal 'git cherry-pick'.`);
     // Then do the cherry-picks.
 
     const picks = yield exports.pickSubs(repo, opener, index, changes.changes);
-
     const conflicts = picks.conflicts;
+
+    // Close any subs that were unnecessarily opened (i.e., because no commit
+    // was generated).
+
+    const closeSub = co.wrap(function *(path) {
+        const commits = picks.commits[path];
+        if ((undefined === commits || 0 === Object.keys(commits).length) &&
+            !(path in picks.conflicts)) {
+            console.log(`Closing ${colors.green(path)}`);
+            yield DeinitUtil.deinit(repo, path);
+        }
+    });
+    const opened = Array.from(yield opener.getOpenedSubs());
+    DoWorkQueue.doInParallel(opened, closeSub);
+
     Object.keys(conflicts).sort().forEach(name => {
         errorMessage += `Submodule ${colors.red(name)} is conflicted.\n`;
     });
@@ -511,8 +524,7 @@ running cherry-pick.`);
         commits: [commit.id().tostrS()],
     });
     yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
-    const opener = new Open.Opener(metaRepo, null);
-    const result = yield exports.rewriteCommit(metaRepo, commit, opener);
+    const result = yield exports.rewriteCommit(metaRepo, commit);
     if (null === result.errorMessage) {
         yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
     }
