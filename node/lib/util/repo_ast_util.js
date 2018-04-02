@@ -40,6 +40,7 @@ const colors   = require("colors");
 const deeper   = require("deeper");
 
 const RepoAST  = require("../util/repo_ast");
+const TextUtil  = require("../util/text_util");
 
 const Sequencer = RepoAST.SequencerState;
 const CommitAndRef = Sequencer.CommitAndRef;
@@ -244,7 +245,6 @@ ${colorAct(actual.branches[branch])}`
  */
 function diffASTs(actual, expected) {
     let result = [];
-    const indent = "".repeat(4);
 
     // First, check the commits
 
@@ -258,9 +258,7 @@ function diffASTs(actual, expected) {
         const diffs = diffCommits(actual.commits[id], expected.commits[id]);
         if (0 !== diffs.length) {
             result.push(`for commit ${colorBad(id)}`);
-            diffs.forEach(diff => {
-                result.push(indent + diff);
-            });
+            result.push(...diffs.map((d) => TextUtil.indent(d)));
         }
     }
     diffObjects(actual.commits,
@@ -282,9 +280,7 @@ function diffASTs(actual, expected) {
                                   expected.remotes[remote]);
         if (0 !== diffs.length) {
             result.push(`for remote ${colorBad(remote)}`);
-            diffs.forEach(diff => {
-                result.push(indent + diff);
-            });
+            result.push(...diffs.map((d) => TextUtil.indent(d)));
         }
     }
     diffObjects(actual.remotes,
@@ -425,9 +421,7 @@ ${colorExp(expected.currentBranchName)}`
     const indexChanges = diffChanges(actual.index, expected.index);
     if (0 !== indexChanges.length) {
         result.push(`In ${colorBad("index")}`);
-        indexChanges.forEach(diff => {
-            result.push(indent + diff);
-        });
+        result.push(...indexChanges.map((d) => TextUtil.indent(d)));
     }
 
     // Then, check the working directory.
@@ -435,9 +429,7 @@ ${colorExp(expected.currentBranchName)}`
     const workdirChanges = diffChanges(actual.workdir, expected.workdir);
     if (0 !== workdirChanges.length) {
         result.push(`In ${colorBad("workdir")}`);
-        workdirChanges.forEach(diff => {
-            result.push(indent + diff);
-        });
+        result.push(...workdirChanges.map((d) => TextUtil.indent(d)));
     }
 
     // Check open submodules
@@ -453,9 +445,7 @@ ${colorExp(expected.currentBranchName)}`
                                expected.openSubmodules[name]);
         if (0 !== diffs.length) {
             result.push(`for open submodule ${colorBad(name)}`);
-            diffs.forEach(diff => {
-                result.push(indent + diff);
-            });
+            result.push(...diffs.map((d) => TextUtil.indent(d)));
         }
     }
     diffObjects(actual.openSubmodules,
@@ -571,7 +561,6 @@ exports.assertEqualRepoMaps = function (actual, expected, message) {
         assert.isString(message);
     }
     let result = [];
-    const indent = "".repeat(4);
 
     // First, check the commits
 
@@ -587,9 +576,7 @@ exports.assertEqualRepoMaps = function (actual, expected, message) {
         const diffs = diffASTs(actualRepo, expectedRepo);
         if (0 !== diffs.length) {
             result.push(`for repo ${colorBad(name)}`);
-            diffs.forEach(diff => {
-                result.push(indent + diff);
-            });
+            result.push(...diffs.map((d) => TextUtil.indent(d)));
         }
     }
     diffObjects(actual,
