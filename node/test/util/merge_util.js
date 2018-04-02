@@ -49,7 +49,7 @@ function mapReturnedCommits(result, maps) {
     // record a mapping from the new commit to it's logical name: "x".
 
     const commitMap = maps.commitMap;
-    if (!(result.metaCommit in commitMap)) {
+    if (null !== result.metaCommit && !(result.metaCommit in commitMap)) {
         newCommitMap[result.metaCommit] = "x";
     }
 

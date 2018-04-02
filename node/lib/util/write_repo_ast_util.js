@@ -641,6 +641,21 @@ exports.writeRAST = co.wrap(function *(ast, path) {
 });
 
 /**
+ * Return all the `Commit` objects in the specified `repos`.
+ *
+ * @param {Object} name to `RepoAST`
+ * @return {Object} sha to `Commit`
+ */
+function listCommits(repos) {
+    const commits = {};
+    for (let repoName in repos) {
+        const repo = repos[repoName];
+        Object.assign(commits, RepoASTUtil.listCommits(repo));
+    }
+    return commits;
+}
+
+/**
  * Write the repositories described in the specified `repos` map to a the
  * specified `rootDirectory`.  Return a map from repo name to
  * `NodeGit.Repository` objects, a map from the newly-generated commit IDs to
@@ -682,26 +697,28 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
         urlMap[repoPath] = repoName;
     }
 
+    // First, collect all the commits:
+
+    let commits = listCommits(repos);
+
+    // Make an id map so that we can rewrite just URLs
+
+    const map = {};
+    for (let sha in commits) {
+        map[sha] = sha;
+    }
+
     // Now, rewrite all the repo ASTs to have the right urls.
+
     for (let repoName in repos) {
         const repoAST = repos[repoName];
         repos[repoName] =
-                         RepoASTUtil.mapCommitsAndUrls(repoAST, {}, repoPaths);
+                        RepoASTUtil.mapCommitsAndUrls(repoAST, map, repoPaths);
     }
 
-    // First, collect all the commits:
+    // Re-list commits now that URLs are updated.
 
-    let commits = {};
-    for (let repoName in repos) {
-        const repo = repos[repoName];
-        Object.assign(commits, repo.commits);
-
-        // Also, commits from open submodules.
-
-        for (let subName in repo.openSubmodules) {
-            Object.assign(commits, repo.openSubmodules[subName].commits);
-        }
-    }
+    commits = listCommits(repos);
 
     const commitRepoPath = yield TestUtil.makeTempDir();
     const commitRepo = yield NodeGit.Repository.init(commitRepoPath, 0);

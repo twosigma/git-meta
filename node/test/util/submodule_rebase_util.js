@@ -169,6 +169,18 @@ describe("rewriteCommits", function () {
             upstream: "1",
             conflictedCommit: null,
         },
+        "up-to-date": {
+            initial: "x=S:Cr-1; C3-2; C2-r;Bmaster=3;Br=r",
+            expected: "x=E:H=3",
+            upstream: null,
+            conflictedCommit: null,
+        },
+        "up-to-date with upstream": {
+            initial: "x=S:Cr-1; C3-2; C2-r;Bmaster=3;Br=r",
+            expected: "x=E:H=3",
+            upstream: "1",
+            conflictedCommit: null,
+        },
         "ffwd when all included": {
             initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=2;Br=r",
             expected: "x=E:H=r",

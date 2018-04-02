@@ -206,6 +206,20 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     const headSha = head.target().tostrS();
     const branchSha = branch.id().tostrS();
 
+    const result = {
+        commits: {},
+        conflictedCommit: null,
+    };
+
+    // If we're up-to-date with the commit to be rebased onto, return
+    // immediately.  Detach head as this is the normal behavior.
+
+    if (headSha === branchSha ||
+        (yield NodeGit.Graph.descendantOf(repo, headSha, branchSha))) {
+        repo.detachHead();
+        return result;                                                // RETURN
+    }
+
     // We can do a fast-forward if `branch` and its entire history should be
     // included.  This requires two things to be true:
     // 1. `branch` is a descendant of `head` or equal to `head`
@@ -219,10 +233,7 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
                                           upstream.id().tostrS()))) {
         if (yield NodeGit.Graph.descendantOf(repo, branchSha, headSha)) {
             yield GitUtil.setHeadHard(repo, branch);
-            return {
-                commits: {},
-                conflictedCommit: null,
-            };
+            return result;                                            // RETURN
         }
     }
 

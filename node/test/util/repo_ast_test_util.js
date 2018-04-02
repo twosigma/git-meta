@@ -332,7 +332,17 @@ Bmaster=1 origin/master`,
                         };
                     },
                 },
-            }
+            },
+            "bad remap": {
+                i: {},
+                e: {},
+                m: function () {
+                    return Promise.resolve({
+                        commitMap: { "foo": "bar"},
+                    });
+                },
+                fails: true,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

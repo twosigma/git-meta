@@ -41,7 +41,7 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const TestUtil        = require("../../lib/util/test_util");
 
 describe("synthetic-branch", function () {
-    const syntheticBranch = co.wrap(function *(repos, maps) {
+    const syntheticBranch = co.wrap(function *(repos) {
         const x = repos.x;
         const config = yield x.config();
         yield config.setString("gitmeta.subreporootpath", "../../");
@@ -63,9 +63,6 @@ describe("synthetic-branch", function () {
         if (!pass) {
             throw new UserError("fail");
         }
-        return {
-            commitMap: maps,
-        };
     });
 
     const cases = {
