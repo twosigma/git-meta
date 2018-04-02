@@ -262,7 +262,7 @@ exports.listOpenSubmodules = co.wrap(function *(repo) {
     // In at least one situation -- rebase -- Git will add a submodule to
     // the `.git/config` file without actually opening it, meaning that the
     // `.git/config` file cannot be used as the single source of truth and we
-    // must verify with `isVisble`, which looks for a repositories `.git` file.
+    // must verify with `isVisible`, which looks for a repositories `.git` file.
     // Also, we need to make sure that the submodule is included in the
     // `.gitmodules` file.  If a user abandons a submodule while adding it, it
     // may have a lingering reference in `.git/config` even though it's been
