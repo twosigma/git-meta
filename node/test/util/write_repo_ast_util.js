@@ -401,6 +401,7 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
                 "a=B:Bfoo/bar=1|x=Ca:Bfoo/bar=1 origin/foo/bar",
             "open submodule conflict":
                 "a=B|x=U:I *README.md=aa*S:1*cc;W README.md=yyy;Os",
+            "open sub with commit new to sub": "a=B|x=U:Os Cfoo-1!H=foo",
         };
         Object.keys(cases).forEach(caseName => {
             const input = cases[caseName];

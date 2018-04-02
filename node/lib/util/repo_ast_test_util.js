@@ -282,9 +282,11 @@ exports.testMultiRepoManipulator =
 
     // Copy over and verify (that they are not duplicates) remapped commits and
     // urls output by the manipulator.
+    let manipulatorRemap = {};
 
     if (undefined !== manipulated) {
         if ("commitMap" in manipulated) {
+            manipulatorRemap = manipulated.commitMap;
             assert.isObject(manipulated.commitMap,
                             "manipulator must return object");
             for (let commit in manipulated.commitMap) {
@@ -292,7 +294,7 @@ exports.testMultiRepoManipulator =
                               commitMap,
                               commit,
                              `commit already mapped to ${commitMap[commit]}.`);
-                const newVal = manipulated.commitMap[commit];
+                const newVal = manipulatorRemap[commit];
                 commitMap[commit] = newVal;
                 mappings.reverseCommitMap[newVal] = commit;
             }
@@ -325,6 +327,9 @@ exports.testMultiRepoManipulator =
 
     // Read in the states of the repos.
 
+    const seen = new Set();
+    function rememberCommit(sha) { seen.add(sha); }
+
     let actualASTs = {};
     for (let repoName in expectedASTs) {
         let repo;
@@ -340,9 +345,18 @@ exports.testMultiRepoManipulator =
             repo = yield NodeGit.Repository.open(path);
         }
         const newAST = yield ReadRepoASTUtil.readRAST(repo);
+        const commits = RepoASTUtil.listCommits(newAST);
+        Object.keys(commits).forEach(rememberCommit);
         actualASTs[repoName] = RepoASTUtil.mapCommitsAndUrls(newAST,
                                                              commitMap,
                                                              urlMap);
+    }
+
+    // Make sure we didn't get garbage in the remap set.
+
+    for (let sha in manipulatorRemap) {
+        assert(seen.has(sha),
+               `Remap for unseen commit ${sha} to ${manipulatorRemap[sha]}`);
     }
 
     // Allow mapping of actual ASTs.

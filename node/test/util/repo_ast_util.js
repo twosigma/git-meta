@@ -691,6 +691,7 @@ describe("RepoAstUtil", function () {
                     }
                 }),
                 m: {},
+                fails: true,
                 e: new RepoAST({
                     commits: { "1": c1 },
                     head: "1",
@@ -805,6 +806,7 @@ describe("RepoAstUtil", function () {
                     },
                     head: "2",
                 }),
+                m: { "2": "2", "y": "y" },
                 u: { x: "z" },
                 e: new RepoAST({
                     commits: {
@@ -824,7 +826,7 @@ describe("RepoAstUtil", function () {
                     },
                     head: "2",
                 }),
-                m: { "3": "4" },
+                m: { "3": "4", "2": "2" },
                 e: new RepoAST({
                     commits: {
                         "2": new RepoAST.Commit({
@@ -843,7 +845,7 @@ describe("RepoAstUtil", function () {
                     },
                     head: "2",
                 }),
-                m: { "3": "4" },
+                m: { "3": "4", "2": "2" },
                 u: { x: "z" },
                 e: new RepoAST({
                     commits: {
@@ -863,7 +865,7 @@ describe("RepoAstUtil", function () {
                     },
                     head: "2",
                 }),
-                m: { "8": "4" },
+                m: { "2": "2", "3": "3" },
                 u: { r: "z" },
                 e: new RepoAST({
                     commits: {
@@ -905,7 +907,7 @@ describe("RepoAstUtil", function () {
                         baz: new RepoAST.Submodule("x", "y"),
                     },
                 }),
-                m: { "1": "2"},
+                m: { "1": "2", "y": "y" },
                 u: { "q": "z"},
                 e: new RepoAST({
                     commits: { "2": c1 },
@@ -999,7 +1001,7 @@ describe("RepoAstUtil", function () {
                         }
                     })},
                 }),
-                m: { "1": "2" },
+                m: { "1": "2", "y": "y" },
                 u: { "x": "z" },
                 e: new RepoAST({
                     commits: { "2": c1 },
@@ -1025,19 +1027,6 @@ describe("RepoAstUtil", function () {
                     commits: { "2": c1 },
                     head: "2",
                     rebase: new Rebase("foo", "2", "2"),
-                }),
-            },
-            "rebase unmapped": {
-                i: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    rebase: new Rebase("foo", "1", "1"),
-                }),
-                m: {},
-                e: new RepoAST({
-                    commits: { "1": c1 },
-                    head: "1",
-                    rebase: new Rebase("foo", "1", "1"),
                 }),
             },
             "sequencer": {
@@ -1073,9 +1062,26 @@ describe("RepoAstUtil", function () {
                 const c = cases[caseName];
                 const commitMap = c.m || {};
                 const urlMap = c.u || {};
-                const result = RepoASTUtil.mapCommitsAndUrls(c.i,
-                                                             commitMap,
-                                                             urlMap);
+                let exception;
+                let result;
+                const shouldFail = undefined !== c.fails && c.fails;
+                try {
+                    result = RepoASTUtil.mapCommitsAndUrls(c.i,
+                                                           commitMap,
+                                                           urlMap);
+                } catch (e) {
+                    exception = e;
+                }
+
+                if (undefined === exception) {
+                    assert(!shouldFail, "should have failed");
+                } else {
+                    if (!shouldFail) {
+                        throw exception;
+                    } else {
+                        return;
+                    }
+                }
                 RepoASTUtil.assertEqualASTs(result, c.e);
             });
         });
