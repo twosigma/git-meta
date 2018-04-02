@@ -33,6 +33,14 @@
 const assert = require("chai").assert;
 
 /**
+ * Compare two strings for Array.prototype.sort.  This is a useful
+ * building-block for more complex comparison functions.
+ */
+exports.strcmp = function(a, b) {
+   return (a < b) ? -1 : ((a > b) ? 1 : 0);
+};
+
+/**
  * Indent a single string
  * @param {String} str
  * @param {Integer} count number of spaces to indent (default 4)

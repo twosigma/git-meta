@@ -44,6 +44,7 @@ const GitUtil             = require("./git_util");
 const SequencerState      = require("./sequencer_state");
 const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
+const TextUtil            = require("./text_util");
 
 /**
  * This value-semantic class describes a line entry to be printed in a status
@@ -117,11 +118,7 @@ exports.StatusDescriptor = StatusDescriptor;
  * @return {StatusDescriptor []}
  */
 exports.sortDescriptorsByPath = function (descriptors) {
-    return descriptors.sort((l, r) => {
-        const lPath = l.path;
-        const rPath = r.path;
-        return lPath === rPath ? 0 : (lPath < rPath ? -1 : 1);
-    });
+    return descriptors.sort((l, r) => TextUtil.strcmp(l.path, r.path));
 };
 
 /**
