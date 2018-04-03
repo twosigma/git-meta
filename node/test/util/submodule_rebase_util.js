@@ -229,6 +229,12 @@ describe("rewriteCommits", function () {
             upstream: "3",
             conflictedCommit: null,
         },
+        "excessive upstream": {
+            initial: "x=S:C2-1;C3-2;Cr-2;Bmaster=3;Br=r",
+            expected: "x=E:Crr-3 r=r;H=rr",
+            upstream: "1",
+            conflictedCommit: null,
+        },
     };
     Object.keys(cases).forEach(caseName => {
         it(caseName, co.wrap(function *() {

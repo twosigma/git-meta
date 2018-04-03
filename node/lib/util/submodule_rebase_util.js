@@ -205,6 +205,7 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     const head = yield repo.head();
     const headSha = head.target().tostrS();
     const branchSha = branch.id().tostrS();
+    const upstreamSha = (upstream && upstream.id().tostrS()) || null;
 
     const result = {
         commits: {},
@@ -220,17 +221,24 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
         return result;                                                // RETURN
     }
 
+    // If the upstream is non-null, but is an ancestor of HEAD or equal to it,
+    // libgit2 will try to rewrite commits that should not be rewritten and
+    // fail.  In this case, we set upstream to null, indicating at all commits
+    // should be included (as they should).
+
+    if (null !== upstream) {
+        if (upstreamSha === headSha ||
+           (yield NodeGit.Graph.descendantOf(repo, headSha, upstreamSha))) {
+            upstream = null;
+        }
+    }
+
     // We can do a fast-forward if `branch` and its entire history should be
     // included.  This requires two things to be true:
     // 1. `branch` is a descendant of `head` or equal to `head`
     // 2. `null === upstream` (implying that all ancestors are to be included)
-    //    or `upstream` is an ancestor of or equal to `head`.
 
-    if (null === upstream ||
-        upstream.id().tostrS() === headSha ||
-        (yield NodeGit.Graph.descendantOf(repo,
-                                          headSha,
-                                          upstream.id().tostrS()))) {
+    if (null === upstream) {
         if (yield NodeGit.Graph.descendantOf(repo, branchSha, headSha)) {
             yield GitUtil.setHeadHard(repo, branch);
             return result;                                            // RETURN
