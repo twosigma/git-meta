@@ -177,7 +177,7 @@ const SequencerState = RepoAST.SequencerState;
  * C/foo/bar:Bfoo=1  -- a clone of /foo/bar overriding branch foo to 1
  * S:I foo=bar,x=y              -- staged changes to 'foo' and 'x'
  * S:I foo=bar,x=y;W foo,q=z    -- as above but `foo` is deleted in the
- *                                 workding directory and `q` has been added
+ *                                 working directory and `q` has been added
  *                                 with content set to `z`.
  * S:I foo=S/a:1;Ofoo           -- A submodule added to the index at `foo`
  *                              -- that is open but no local changes
