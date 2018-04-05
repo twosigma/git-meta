@@ -96,7 +96,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         yield RebaseUtil.abort(repo);
     }
     else if (args.continue) {
-        yield RebaseUtil.continue(repo);
+        const result = RebaseUtil.continue(repo);
+        if (null !== result.errorMessage) {
+            throw new UserError(result.errorMessage);
+        }
     }
     else {
         if (null === args.commit) {
@@ -108,6 +111,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                   `Could not resolve ${colors.red(args.commit)} to a commit.`);
         }
         const commit = yield repo.getCommit(committish.id());
-        yield RebaseUtil.rebase(repo, commit);
+        const result = yield RebaseUtil.rebase(repo, commit);
+        if (null !== result.errorMessage) {
+            throw new UserError(result.errorMessage);
+        }
     }
 });
