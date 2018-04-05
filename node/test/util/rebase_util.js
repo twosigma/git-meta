@@ -32,15 +32,19 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const colors  = require("colors");
 
-const RebaseUtil      = require("../../lib/util/rebase_util");
-const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const SubmoduleUtil   = require("../../lib/util/submodule_util");
+const RebaseUtil          = require("../../lib/util/rebase_util");
+const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
+const SequencerState      = require("../../lib/util/sequencer_state");
+const SequencerStateUtil  = require("../../lib/util/sequencer_state_util");
+
+const CommitAndRef = SequencerState.CommitAndRef;
+const REBASE = SequencerState.TYPE.REBASE;
 
 function makeRebaser(operation) {
     return co.wrap(function *(repos, maps) {
         const result = yield operation(repos, maps);
-
         // Now build a map from the newly generated commits to the
         // logical names that will be used in the expected case.
 
@@ -52,274 +56,394 @@ function makeRebaser(operation) {
         RepoASTTestUtil.mapSubCommits(commitMap,
                                       result.submoduleCommits,
                                       maps.commitMap);
+        const newCommits = result.newCommits || {};
+        for (let path in newCommits) {
+            commitMap[newCommits[path]] = `N${path}`;
+        }
         return {
             commitMap: commitMap,
         };
     });
 }
 
-describe("rebase", function () {
-describe("rebase", function () {
-
-    // Will append the leter 'M' to any created meta-repo commits, and the
-    // submodule name to commits created in respective submodules.
-
-
-    function rebaser(repoName, commit) {
-        const rebaseOper = co.wrap(function *(repos, maps) {
-            assert.property(repos, repoName);
-            const repo = repos[repoName];
-            const reverseCommitMap = maps.reverseCommitMap;
-            assert.property(reverseCommitMap, commit);
-            const originalActualCommit = reverseCommitMap[commit];
-            const originalCommit =
-                                yield repo.getCommit(originalActualCommit);
-
-            return yield RebaseUtil.rebase(repo, originalCommit);
-        });
-
-        return makeRebaser(rebaseOper);
-    }
+describe("Rebase", function () {
+describe("runRebase", function () {
     const cases = {
+        "end": {
+            state: "x=S",
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("1", null),
+                target: new CommitAndRef("1", null),
+                currentCommit: 0,
+                commits: [],
+            }),
+        },
+        "one, started detached": {
+            state: `
+a=B:Cf-1;Cg-1;Bf=f;Bg=g|x=U:C3-2 s=Sa:f;C4-2 s=Sa:g;H=4;Bfoo=3`,
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("3", null),
+                target: new CommitAndRef("4", null),
+                currentCommit: 0,
+                commits: ["3"],
+            }),
+            expected: "x=E:C3M-4 s=Sa:fs;H=3M;Os Cfs-g f=f!H=fs",
+        },
+        "one, started on a branch": {
+            state: `
+a=B:Cf-1;Cg-1;Bf=f;Bg=g|x=U:C3-2 s=Sa:f;C4-2 s=Sa:g;H=4;Bfoo=3;Bold=3`,
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("3", "refs/heads/foo"),
+                target: new CommitAndRef("4", null),
+                currentCommit: 0,
+                commits: ["3"],
+            }),
+            expected: "x=E:C3M-4 s=Sa:fs;*=foo;Bfoo=3M;Os Cfs-g f=f!H=fs",
+        },
+        "sub can be ffwded": {
+            state: `
+a=B:Cf-1;Bf=f|x=U:C3-2 s=Sa:f;C4-2 t=Sa:f;H=4;Bfoo=3`,
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("3", null),
+                target: new CommitAndRef("4", null),
+                currentCommit: 0,
+                commits: ["3"],
+            }),
+            expected: "x=E:C3M-4 s=Sa:f;H=3M",
+        },
+        "two commits": {
+            state: `
+a=B|x=S:C2-1;Bmaster=2;Cf-1 s=Sa:1;Cg-1 t=Sa:1;Bf=f;Bg=g`,
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("2", "refs/heads/master"),
+                target: new CommitAndRef("g", null),
+                currentCommit: 0,
+                commits: ["f", "g"],
+            }),
+            expected: "x=E:CgM-fM t=Sa:1;CfM-2 s=Sa:1;Bmaster=gM",
+        },
+
+        "conflict": {
+            state: `
+a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|x=U:Cf-2 s=Sa:a;Cg-2 s=Sa:b;H=f;Bg=g`,
+            seq: new SequencerState({
+                type: REBASE,
+                originalHead: new CommitAndRef("f", null),
+                target: new CommitAndRef("g", null),
+                currentCommit: 0,
+                commits: ["g"],
+            }),
+            expected: `
+x=E:QR f: g: 0 g;Os Edetached HEAD,b,a!I *a=~*a*8!W a=\
+<<<<<<< HEAD
+a
+=======
+8
+>>>>>>> message
+;`,
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        const runnerOp = co.wrap(function *(repos, maps) {
+            const repo = repos.x;
+            const seq = SequencerStateUtil.mapCommits(c.seq,
+                                                      maps.reverseCommitMap);
+            return yield RebaseUtil.runRebase(repo, seq);
+        });
+        const runner = makeRebaser(runnerOp);
+        it(caseName, co.wrap(function *() {
+            yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
+                                                           c.expected,
+                                                           runner,
+                                                           c.fails);
+        }));
+    });
+});
+describe("rebase", function () {
+    const cases = {
+        "already a rebase in progress": {
+            initial: "x=S:QM 1: 1: 0 1",
+            onto: "1",
+            fails: true,
+        },
+        "dirty": {
+            initial: "a=B|x=U:Os W README.md=2",
+            onto: "1",
+            fails: true,
+        },
         "trivially nothing to do": {
             initial: "x=S",
-            rebaser: rebaser("x", "1"),
+            onto: "1",
         },
         "nothing to do, in past": {
             initial: "x=S:C2-1;Bmaster=2",
-            rebaser: rebaser("x", "1"),
+            onto: "1",
+        },
+        "nothing to do, detached": {
+            initial: "x=S:C2-1;H=2",
+            onto: "1",
         },
         "ffwd": {
             initial: "x=S:C2-1;Bfoo=2",
-            rebaser: rebaser("x", "2"),
+            onto: "2",
             expected: "x=E:Bmaster=2",
         },
         "simple rebase": {
-            initial: "x=S:C2-1;C3-1;Bmaster=2;Bfoo=3",
-            rebaser: rebaser("x", "3"),
-            expected: "x=S:C2M-3 2=2;C3-1;Bmaster=2M;Bfoo=3",
+            initial: `
+a=B:Cf-1;Cg-1;Bf=f;Bg=g|x=U:C3-2 s=Sa:f;C4-2 s=Sa:g;Bother=4;Bfoo=3;Bmaster=3`,
+            onto: "4",
+            expected: "x=E:C3M-4 s=Sa:fs;Bmaster=3M;Os Cfs-g f=f!H=fs",
         },
-        "rebase two commits": {
-            initial: "x=S:C2-1;C3-2;C4-1;Bmaster=3;Bfoo=4;Bx=3",
-            rebaser: rebaser("x", "4"),
-            expected: "x=E:C3M-2M 3=3;C2M-4 2=2;Bmaster=3M",
-        },
-        "rebase two commits on two": {
-            initial: "x=S:C2-1;C3-2;C4-1;C5-4;Bmaster=3;Bfoo=5;Bx=3",
-            rebaser: rebaser("x", "5"),
-            expected: "x=E:C3M-2M 3=3;C2M-5 2=2;Bmaster=3M",
+        "two commits": {
+            initial: `
+a=B|x=S:C2-1;Bmaster=g;Cf-1 s=Sa:1;Cg-f t=Sa:1;Bonto=2;Bg=g`,
+            onto: "2",
+            expected: "x=E:CgM-fM t=Sa:1;CfM-2 s=Sa:1;Bmaster=gM",
         },
         "up-to-date with sub": {
             initial: "a=Aa:Cb-a;Bfoo=b|x=U:C3-2 s=Sa:b;Bmaster=3;Bfoo=2",
-            rebaser: rebaser("x", "2"),
+            onto: "2",
         },
         "ffwd with sub": {
             initial: "a=Aa:Cb-a;Bfoo=b|x=U:C3-2 s=Sa:b;Bmaster=2;Bfoo=3",
-            rebaser: rebaser("x", "3"),
+            onto: "3",
             expected: "x=E:Bmaster=3",
         },
         "rebase change in closed sub": {
-            initial: "\
-a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
-x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
-            rebaser: rebaser("x", "4"),
+            initial: `
+a=B:Ca-1;Cb-a;Cc-a;Bmaster=b;Bfoo=c|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3`,
+            onto: "4",
             expected: "x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!H=bs",
         },
         "rebase change in sub, sub already open": {
-            initial: "\
-a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
-x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os H=b",
-            rebaser: rebaser("x", "4"),
+            initial: `
+a=B:Ca-1;Cb-a;Cc-a;Bmaster=b;Bfoo=c|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os H=b`,
+            onto: "4",
             expected: "x=E:C3M-4 s=Sa:bs;Bmaster=3M;Os Cbs-c b=b!H=bs",
         },
         "rebase change in sub with two commits": {
-            initial: "\
-a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
-x=U:C4-2;C5-4 s=Sa:b;C3-2 s=Sa:c;Bmaster=5;Bfoo=5;Bother=3;Os H=b",
-            rebaser: rebaser("x", "3"),
+            initial: `
+a=B:Ca-1;Cb-a;Cc-a;Bmaster=b;Bfoo=c|
+x=U:C4-2 s=Sa:b;C3-2 s=Sa:c;Bmaster=4;Bfoo=4;Bother=3;Os H=b`,
+            onto: "3",
             expected: `
-x=E:C5M-4M s=Sa:bs;C4M-3 4=4;Bmaster=5M;Os Cbs-c b=b!H=bs`,
+x=E:C4M-3 s=Sa:bs;Bmaster=4M;Os Cbs-c b=b!H=bs`,
         },
         "rebase change in sub with two intervening commits": {
             initial: `
-a=Aa:Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
-x=U:C4-2;C5-4 s=Sa:c;C6-5;C7-6 s=Sa:d;C3-2 s=Sa:b;Bmaster=7;Bfoo=7;Bother=3`,
-            rebaser: rebaser("x", "3"),
+a=B:Ca-1;Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
+x=U:C4-2 r=Sa:1;C5-4 s=Sa:c;C6-5 q=Sa:1;C7-6 s=Sa:d;C3-2 s=Sa:b;Bmaster=7;
+    Bfoo=7;Bother=3`,
+            onto: "3",
             expected: `
-x=E:C7M-6M s=Sa:ds;C6M-5M 6=6;C5M-4M s=Sa:cs;C4M-3 4=4;Bmaster=7M;
+x=E:C7M-6M s=Sa:ds;C6M-5M q=Sa:1;C5M-4M s=Sa:cs;C4M-3 r=Sa:1;Bmaster=7M;
     Os Cds-cs d=d!Ccs-b c=c!H=ds`,
         },
         "rebase change in sub with two intervening commits, open": {
             initial: `
-a=Aa:Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
-x=U:C4-2;C5-4 s=Sa:c;C6-5;C7-6 s=Sa:d;C3-2 s=Sa:b;Bmaster=7;Bfoo=7;Bother=3;
+a=B:Ca-1;Cb-a;Cc-a;Cd-c;Bmaster=b;Bfoo=d|
+x=U:C4-2 t=Sa:a;C5-4 s=Sa:c;C6-5 u=Sa:1;C7-6 s=Sa:d;C3-2 s=Sa:b;
+    Bmaster=7;Bfoo=7;Bother=3;
     Os H=d`,
-            rebaser: rebaser("x", "3"),
+            onto: "3",
             expected: `
-x=E:C7M-6M s=Sa:ds;C6M-5M 6=6;C5M-4M s=Sa:cs;C4M-3 4=4;Bmaster=7M;
+x=E:C7M-6M s=Sa:ds;C6M-5M u=Sa:1;C5M-4M s=Sa:cs;C4M-3 t=Sa:a;Bmaster=7M;
     Os Cds-cs d=d!Ccs-b c=c!H=ds`,
         },
         "ffwd, but not sub (should ffwd anyway)": {
             initial: "\
 a=Aa:Cb-a;Cc-a;Bmaster=b;Bfoo=c|\
 x=U:C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
-            rebaser: rebaser("x", "4"),
+            onto: "4",
             expected: "x=E:Bmaster=4",
         },
         "no ffwd, but can ffwd sub": {
-            initial: "\
-a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
-x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os",
-            rebaser: rebaser("x", "4"),
-            expected: "x=E:C3M-4 3=3;Bmaster=3M;Os H=c",
+            initial: `
+a=B:Ca-1;Cb-a;Cc-b;Bmaster=b;Bfoo=c|
+x=U:C3-2 u=Sa:a,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os`,
+            onto: "4",
+            expected: "x=E:C3M-4 u=Sa:a;Bmaster=3M;Os H=c",
         },
         "ffwd sub 2X": {
             initial: `
-a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|
+a=B:Ca-1;Cb-a;Cc-b;Bmaster=b;Bfoo=c|
 x=U:Cr-2;C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=4;Bother=r;Os;Bfoo=4`,
-            rebaser: rebaser("x", "r"),
+            onto: "r",
             expected: "x=E:C3M-r s=Sa:b;C4M-3M s=Sa:c;Bmaster=4M;Os H=c",
         },
-        "ffwd-ed sub is closed after rebase": {
-            initial: "\
-a=Aa:Cb-a;Cc-b;Bmaster=b;Bfoo=c|\
-x=U:C3-2 3=3,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3",
-            rebaser: rebaser("x", "4"),
-            expected: "x=E:C3M-4 3=3;Bmaster=3M",
+        "up-to-date sub is closed after rebase": {
+            initial: `
+a=B:Ca-1;Cb-a;Cc-b;Bmaster=b;Bfoo=c|
+x=U:C3-2 u=Sa:1,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3`,
+            onto: "4",
+            expected: "x=E:C3M-4 u=Sa:1;Bmaster=3M",
         },
         "rebase two changes in sub": {
-            initial: "\
-a=Aa:Cb-a;Cc-b;Cd-a;Bmaster=c;Bfoo=d|\
-x=U:C3-2 s=Sa:c;C4-2 s=Sa:d;Bmaster=3;Bfoo=4;Bother=3",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b!H=cs",
+            initial: `
+a=B:Ca-1;Cb-a;Cc-b;Cd-a;Bmaster=c;Bfoo=d|
+x=U:C3-2 s=Sa:c;C4-2 s=Sa:d;Bmaster=3;Bfoo=4;Bother=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b`,
         },
         "rebase with ffwd changes in sub and meta": {
-            initial: "\
-a=B:Bmaster=3;C2-1 s=Sb:q;C3-2 s=Sb:r,rar=wow|\
-b=B:Cq-1;Cr-q;Bmaster=r|\
-x=Ca:Bmaster=2;Os",
-            rebaser: rebaser("x", "3"),
+            initial: `
+a=B:Bmaster=3;C2-1 s=Sb:q;C3-2 s=Sb:r,rar=wow|
+b=B:Cq-1;Cr-q;Bmaster=r|
+x=Ca:Bmaster=2;Os`,
+            onto: "3",
             expected: "x=E:Bmaster=3;Os H=r",
         },
         "make sure unchanged repos stay closed": {
-            initial: "\
-a=B|\
-b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
-x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 t=Sb:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 t=Sb:jt;Bmaster=3M;Ot H=jt!Cjt-k j=j",
+            initial: `
+a=B|
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 t=Sb:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 t=Sb:jt;Bmaster=3M;Ot H=jt!Cjt-k j=j`,
         },
         "make sure unchanged repos stay closed -- onto-only change": {
-            initial: "\
-a=B|\
-b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
-x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 3=3;Bmaster=3M",
+            initial: `
+a=B|
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 q=Sa:k;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 q=Sa:k;Bmaster=3M`,
         },
         "make sure unchanged repos stay closed -- local-only change": {
-            initial: "\
-a=B|\
-b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|\
-x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=4;Bfoo=3;Bold=4",
-            rebaser: rebaser("x", "3"),
-            expected: "\
-x=E:C4M-3 t=Sb:k;Bmaster=4M",
+            initial: `
+a=B|
+b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=4;Bfoo=3;Bold=4`,
+            onto: "3",
+            expected: `
+x=E:C4M-3 t=Sb:k;Bmaster=4M`,
         },
         "unchanged repos stay closed -- different onto and local": {
-            initial: "\
-a=B:Cj-1;Bmaster=j|\
-b=B:Ck-1;Bmaster=k|\
-x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 s=Sa:j;Bmaster=3M",
-        },
-        "maintain submodule branch": {
-            initial: "\
-a=B:Ca-1;Cb-1;Bx=a;By=b|\
-x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3;Os Bmaster=a!*=master",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 s=Sa:as;Bmaster=3M;Os Bmaster=as!Cas-b a=a!*=master",
+            initial: `
+a=B:Cj-1;Bmaster=j|
+b=B:Ck-1;Bmaster=k|
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 s=Sa:j;Bmaster=3M`,
         },
         "adding subs on both": {
-            initial: "\
-q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3",
-            rebaser: rebaser("x", "4"),
-            expected: "\
-x=E:C3M-4 q=Sq:1;Bmaster=3M",
-        },
-        "adding subs then changing": {
-            initial: "\
-q=B|\
-r=B|\
-s=B|\
-x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C31-3 q=Sr:1;C4-2 r=Sr:1;C41-4 r=Ss:1;\
-Bmaster=31;Bfoo=41;Bold=31",
-            rebaser: rebaser("x", "41"),
-            expected: "\
-x=E:C3M-41 q=Sq:1;C31M-3M q=Sr:1;Bmaster=31M",
+            initial: `
+q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 q=Sq:1;Bmaster=3M`,
         },
         "open sub ffwd'd": {
             initial: `
 a=B:CX-1;Bmaster=X|
-x=U:C3-2 a=b;C4-2 s=Sa:X;Bmaster=3;Bfoo=4;Bold=3;Os`,
-            rebaser: rebaser("x", "4"),
+x=U:C3-2 a=Sa:1;C4-2 s=Sa:X;Bmaster=3;Bfoo=4;Bold=3;Os`,
+            onto: "4",
             expected: `
-x=E:C3M-4 a=b;Bmaster=3M;Os H=X`,
+x=E:C3M-4 a=Sa:1;Bmaster=3M;Os H=X`,
         },
+        "conflict": {
+            initial: `
+a=B:Ca-1 t=t;Cb-1 t=u;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:H=4;QR 3:refs/heads/master 4: 0 3;
+    Os Edetached HEAD,a,b!I *t=~*u*t!W t=\
+<<<<<<< HEAD
+u
+=======
+t
+>>>>>>> message
+;`,
+            errorMessage: `\
+Submodule ${colors.red("s")} is conflicted.
+`,
+        },
+// TODO: I could not get libgit2 to remember or restore submodule branches when
+// used in the three-way mode; it stores it in "onto_name", not in "head-name".
+//        "maintain submodule branch": {
+//            initial: `
+//a=B:Ca-1;Cb-1;Bx=a;By=b|
+//x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Bold=3;Os Bmaster=a!*=master`,
+//            onto: "4",
+//            expected: `
+//x=E:C3M-4 s=Sa:as;Bmaster=3M;Os Bmaster=as!Cas-b a=a!*=master`,
+//        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
+        // Will append the leter 'M' to any created meta-repo commits, and the
+        // submodule name to commits created in respective submodules.
+
+        const rebaseOp = co.wrap(function *(repos, maps) {
+            const repo = repos.x;
+            const reverseCommitMap = maps.reverseCommitMap;
+            const onto = yield repo.getCommit(reverseCommitMap[c.onto]);
+            const errorMessage = c.errorMessage || null;
+            const result = yield RebaseUtil.rebase(repo, onto);
+            assert.equal(result.errorMessage, errorMessage);
+            return result;
+        });
+        const rebase = makeRebaser(rebaseOp);
         it(caseName, co.wrap(function *() {
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                            c.expected,
-                                                           c.rebaser,
+                                                           rebase,
                                                            c.fails);
         }));
     });
-    it("conflict stays open", co.wrap(function *() {
-        const input = `
-a=B:Ca-1 t=t;Cb-1 t=u;Ba=a;Bb=b|
-x=U:C31-2 s=Sa:a;C41-2 s=Sa:b;Bmaster=31;Bfoo=41;Bold=31`;
-        const w = yield RepoASTTestUtil.createMultiRepos(input);
-        const repo = w.repos.x;
-        const reverseCommitMap = w.reverseCommitMap;
-        const originalActualCommit = reverseCommitMap["41"];
-        const originalCommit = yield repo.getCommit(originalActualCommit);
-        let threw = false;
-        try {
-            yield RebaseUtil.rebase(repo, originalCommit);
-        }
-        catch (e) {
-            threw = true;
-        }
-        assert(threw, "should have thrown");
-        const open = yield SubmoduleUtil.isVisible(repo, "s");
-        assert(open, "should be open");
-    }));
 });
 
 describe("abort", function () {
     const cases = {
-        "simple, see if workdir is cleaned up": {
-            initial: `
-x=S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;W x=q`,
-            expected: `x=E:E;W x=~`,
+        "no sequencer, fails": {
+            initial: "x=S",
+            fails: true,
         },
-        "with rebase in submodule": {
+        "sequencer not a rebase, fails": {
+            initial: "x=S:QM 1: 1: 0 1",
+            fails: true,
+        },
+        "see if head is reset": {
             initial: `
-a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
-x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
-    Bmaster=3;Bfoo=4;
-    Erefs/heads/master,3,4;
-    Os Erefs/heads/foo,q,r!Bfoo=q!*=foo`,
-            expected: `x=E:E;Os Bfoo=q!*=foo`,
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;H=4;Bmaster=3;Bfoo=4;QR 3: 4: 0 2`,
+            expected: `x=E:H=3;Q`
+        },
+        "check that branch is restored": {
+            initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;H=4;Bmaster=3;Bfoo=4;
+    QR 3:refs/heads/master 4: 0 2`,
+            expected: `x=E:*=master;Q`
+        },
+        "submodule wd cleaned up": {
+            initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;H=4;Bmaster=3;Bfoo=4;
+    QR 3: 4: 0 2;
+    Os W README.md=88`,
+            expected: `x=E:H=3;Q;Os H=a`
+        },
+        "submodule rebase cleaned up": {
+            initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;H=4;Bmaster=3;Bfoo=4;
+    QR 3: 4: 0 2;
+    Os Edetached HEAD,a,b`,
+            expected: `x=E:H=3;Q;Os H=a`
         },
     };
     Object.keys(cases).forEach(caseName => {
@@ -337,95 +461,110 @@ x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
 });
 describe("continue", function () {
     const cases = {
-        "meta-only": {
-            initial: `
-x=S:C2-1 q=r;C3-1 q=s;Bmaster=2;Erefs/heads/master,2,3;I q=z`,
-            expected: `
-x=S:C2M-3 q=z;Bmaster=2M;E`,
+        "no sequencer, fails": {
+            initial: "x=S",
+            fails: true,
         },
-        "two, meta-only": {
-            initial: `
-x=S:C2-1;C3-1;C4-3;Bmaster=4;Erefs/heads/master,4,2;I qq=hh,3=3`,
-            expected: `
-x=S:C4M-3M 4=4;C3M-2 3=3,qq=hh;Bmaster=4M;E`,
+        "sequencer not a rebase, fails": {
+            initial: "x=S:QM 1: 1: 0 1",
+            fails: true,
         },
-        "meta, has to open": {
+        "conflict fails": {
             initial: `
-a=B:Ca-1;Cb-1;Bmaster=a;Bfoo=b|
-x=U:C3-2 s=Sa:a;
-    C4-2;C5-4 s=Sa:b;
-    Bmaster=5;Bfoo=5;
-    I 4=4;
-    Erefs/heads/master,5,3`,
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;H=4;Bmaster=3;Bfoo=4;
+    QR 3: 4: 0 2;
+    Os I *a=1*2*3!W a=2`,
+            fails: true,
+        },
+        "continue finishes with new commit": {
+            initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;H=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
+    Os I foo=bar`,
             expected: `
-x=E:C5M-4M s=Sa:bs;C4M-3 4=4;Bmaster=5M;E;Os Cbs-a b=b!H=bs;I 4=~`,
+x=E:C3M-4 s=Sa:Ns;Bmaster=3M;*=master;Q;Os CNs-b foo=bar!H=Ns;`,
+        },
+        "continue makes a new conflict with current op": {
+            initial: `
+a=B:Ca-1;Cb-a c=d;Cc-1;Bb=b;Bc=c|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;H=4;
+    QR 3: 4: 0 3;
+    Os I foo=bar!Edetached HEAD,b,c!H=c!Bb=b!Bc=c`,
+            errorMessage: `\
+Conflict in ${colors.red("s")}
+`,
+            expected: `
+x=E:Os Cas-c foo=bar!H=as!Edetached HEAD,b,c!Bb=b!Bc=c!I *c=~*c*d!
+    W c=^<<<<<`,
         },
         "with rebase in submodule": {
             initial: `
 a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
 x=U:C3-2 s=Sa:q;C4-2 s=Sa:r;
-    Bmaster=3;Bfoo=4;Bold=3;
-    Erefs/heads/master,3,4;
+    Bmaster=4;Bfoo=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
     Os EHEAD,q,r!I q=q!Bq=q!Br=r`,
             expected: `
-x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r`
+x=E:Q;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r`
         },
         "with rebase in submodule, other open subs": {
             initial: `
 a=B:Cq-1;Cr-1;Bmaster=q;Bfoo=r|
 x=S:C2-1 a=Sa:1,s=Sa:1,z=Sa:1;C3-2 s=Sa:q;C4-2 s=Sa:r;
-    Bmaster=3;Bfoo=4;Bold=3;
-    Erefs/heads/master,3,4;
+    Bmaster=4;Bfoo=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
     Oa;Oz;
     Os EHEAD,q,r!I q=q!Bq=q!Br=r`,
             expected: `
-x=E:E;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;Oa;Oz`
+x=E:Q;C3M-4 s=Sa:qs;Bmaster=3M;Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;Oa;Oz`
         },
         "with rebase in submodule, staged commit in another submodule": {
             initial: `
 a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
-    Bmaster=3;Bfoo=4;Bold=3;
-    Erefs/heads/master,3,4;
+    Bmaster=4;Bfoo=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
     Os EHEAD,q,r!I q=q!Bq=q!Br=r;
     Ot H=s;
     I t=Sa:s`,
             expected: `
-x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
+x=E:Q;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
     Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;I t=~;Ot`
         },
         "with rebase in submodule, workdir commit in another submodule": {
             initial: `
 a=B:Cq-1;Cr-1;Cs-q;Bmaster=q;Bfoo=r;Bbar=s|
 x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:s;C4-2 s=Sa:r,t=Sa:q;
-    Bmaster=3;Bfoo=4;Bold=3;
-    Erefs/heads/master,3,4;
+    Bmaster=4;Bfoo=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
     Os EHEAD,q,r!I q=q!Bq=q!Br=r;
     Ot H=s`,
             expected: `
-x=E:E;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
+x=E:Q;C3M-4 s=Sa:qs,t=Sa:s;Bmaster=3M;
     Os Cqs-r q=q!H=qs!E!Bq=q!Br=r;
     Ot H=s`
         },
         "staged fix in submodule": {
             initial: `
 a=B:Ca-1 q=r;Cb-1 q=s;Bmaster=a;Bfoo=b|
-x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Erefs/heads/master,3,4;Bold=3;
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=4;QR 3:refs/heads/master 4: 0 3;Bold=3;
     Os EHEAD,a,b!I q=z!Ba=a!Bb=b`,
             expected: `
-x=E:C3M-4 s=Sa:as;E;Bmaster=3M;Os Cas-b q=z!H=as!Ba=a!Bb=b`,
+x=E:C3M-4 s=Sa:as;Q;Bmaster=3M;Os Cas-b q=z!H=as!Ba=a!Bb=b`,
         },
         "multiple in subs": {
             initial: `
 a=B:Ca1-1 f=g;Ca2-1 f=h;Bmaster=a1;Bfoo=a2|
 b=B:Cb1-1 q=r;Cb2-1 q=s;Bmaster=b1;Bfoo=b2|
 x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:a1,t=Sb:b1;C4-2 s=Sa:a2,t=Sb:b2;
-    Bmaster=3;Bfoo=4;Bold=3;
-    Erefs/heads/master,3,4;
+    Bmaster=4;Bfoo=4;Bold=3;
+    QR 3:refs/heads/master 4: 0 3;
     Os EHEAD,a1,a2!I f=z!Ba1=a1!Ba2=a2;
     Ot EHEAD,b1,b2!I q=t!Bb1=b1!Bb2=b2`,
             expected: `
-x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;E;Bmaster=3M;
+x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;Q;Bmaster=3M;
     Os Ca1s-a2 f=z!H=a1s!Ba1=a1!Ba2=a2;
     Ot Cb1t-b2 q=t!H=b1t!Bb1=b1!Bb2=b2`
         },
@@ -434,7 +573,10 @@ x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;E;Bmaster=3M;
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
             const continuer = makeRebaser(co.wrap(function *(repos) {
-                return yield RebaseUtil.continue(repos.x);
+                const errorMessage = c.errorMessage || null;
+                const result = yield RebaseUtil.continue(repos.x);
+                assert.equal(result.errorMessage, errorMessage);
+                return result;
             }));
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                            c.expected,
