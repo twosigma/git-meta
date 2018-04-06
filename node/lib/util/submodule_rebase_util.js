@@ -271,7 +271,7 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
  * @return {String}
  */
 exports.subConflictErrorMessage = function (name) {
-    return `Conflict in ${colors.red(name)}`;
+    return `Submodule ${colors.red(name)} is conflicted.\n`;
 };
 
 /**
@@ -343,7 +343,7 @@ ${colors.green(rebaseInfo.onto)}.`);
         const result = yield continueRebase(subRepo);
         commits[name] = result.commits;
         if (null !== result.conflictedCommit) {
-            errorMessage += exports.subConflictErrorMessage(name) + "\n";
+            errorMessage += exports.subConflictErrorMessage(name);
         }
         else {
             yield index.addByPath(name);

@@ -385,35 +385,47 @@ Deletion of meta-repo file ${colors.red(path)} is not supported.`);
 };
 
 /**
- * Return a summary of the submodule SHAs changed by the specified `commitId`
+ * Return a summary of the submodule SHAs changed by the specified `commit`
  * in the specified `repo`, and flag denoting whether or not the `.gitmodules`
  * file was changed.  If 'commit' contains changes to the meta-repo and the
- * specified 'allowMetaChanges' is not true, throw a 'UserError'.
+ * specified 'allowMetaChanges' is not true, throw a 'UserError'.  If the
+ * specified `baseCommit` is provided, calculate changes between it and
+ * `commit`; otherwise, calculate changes between `commit` and its first
+ * parent.
  *
  * @asycn
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
+ * @param {NodeGit.Repository}  repo
+ * @param {NodeGit.Commit}      commit
+ * @param {NodeGit.Commit|null} baseCommit
  * @param {Bool} allowMetaChanges
  * @return {Object} map from name to `SubmoduleChange`
  */
 exports.getSubmoduleChanges = co.wrap(function *(repo,
                                                  commit,
+                                                 baseCommit,
                                                  allowMetaChanges) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    if (null !== baseCommit) {
+        assert.instanceOf(baseCommit, NodeGit.Commit);
+    }
     assert.isBoolean(allowMetaChanges);
 
     // We calculate the changes of a commit against its first parent.  If it
     // has no parents, then the calculation is against an empty tree.
 
-    let parentTree = null;
-    const parents = yield commit.getParents();
-    if (0 !== parents.length) {
-        parentTree = yield parents[0].getTree();
+    let baseTree = null;
+    if (null !== baseCommit) {
+        baseTree = yield baseCommit.getTree();
+    } else {
+        const parents = yield commit.getParents();
+        if (0 !== parents.length) {
+            baseTree = yield parents[0].getTree();
+        }
     }
 
     const tree = yield commit.getTree();
-    const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree, null);
+    const diff = yield NodeGit.Diff.treeToTree(repo, baseTree, tree, null);
     return yield exports.getSubmoduleChangesFromDiff(diff, allowMetaChanges);
 });
 
@@ -720,10 +732,7 @@ exports.mergeModulesFile = co.wrap(function *(repo,
     const getSubs = Conf.getSubmodulesFromCommit;
     const fromNext = yield getSubs(repo, fromCommit);
 
-    const baseId = yield NodeGit.Merge.base(repo,
-                                            fromCommit.id(),
-                                            ontoCommit.id());
-    const mergeBase = yield repo.getCommit(baseId);
+    const mergeBase = yield GitUtil.getMergeBase(repo, fromCommit, ontoCommit);
     const baseSubs =
             yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, mergeBase);
 

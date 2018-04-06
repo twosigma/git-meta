@@ -578,6 +578,9 @@ x=E:C3M-4 s=Sa:a1s,t=Sb:b1t;Q;Bmaster=3M;
             const continuer = makeRebaser(co.wrap(function *(repos) {
                 const errorMessage = c.errorMessage || null;
                 const result = yield RebaseUtil.continue(repos.x);
+                if (null !== result.errorMessage) {
+                    assert.isString(result.errorMessage);
+                }
                 assert.equal(result.errorMessage, errorMessage);
                 return result;
             }));

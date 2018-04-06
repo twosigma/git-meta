@@ -553,21 +553,45 @@ describe("SubmoduleUtil", function () {
                 },
                 allowMetaChanges: false,
             },
+            "added one in ancestor": {
+                state: "S:C3-2 w=Sa:1;C2-1 x=Sa:1;H=3",
+                from: "3",
+                result: {
+                    "w": new SubmoduleChange(null, "1"),
+                },
+                allowMetaChanges: false,
+            },
+            "added one in ancestor, include base": {
+                state: "S:C3-2 w=Sa:1;C2-1 x=Sa:1;H=3",
+                from: "3",
+                base: "1",
+                result: {
+                    "x": new SubmoduleChange(null, "1"),
+                    "w": new SubmoduleChange(null, "1"),
+                },
+                allowMetaChanges: false,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
                 const written = yield RepoASTTestUtil.createRepo(c.state);
                 const repo = written.repo;
-                const fromSha = written.oldCommitMap[c.from];
+                const old = written.oldCommitMap;
+                const fromSha = old[c.from];
                 const fromId = NodeGit.Oid.fromString(fromSha);
                 const commit = yield repo.getCommit(fromId);
                 let changes;
                 let exception;
+                let baseCommit = null;
+                if ("base" in c) {
+                    baseCommit = yield repo.getCommit(old[c.base]);
+                }
                 try {
                     changes = yield SubmoduleUtil.getSubmoduleChanges(
                                                            repo,
                                                            commit,
+                                                           baseCommit,
                                                            c.allowMetaChanges);
                 }
                 catch (e) {
@@ -578,10 +602,9 @@ describe("SubmoduleUtil", function () {
                     assert.equal(false, shouldFail);
                 }
                 else {
-                    if (!(exception instanceof UserError)) {
+                    if (!shouldFail || !(exception instanceof UserError)) {
                         throw exception;
                     }
-                    assert.equal(true, shouldFail);
                     return;                                           // RETURN
                 }
 

@@ -131,7 +131,7 @@ function* checkSubmodules(repo, commit) {
                                                                   commit,
                                                                   null);
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
-    const changes = yield getChanges(repo, commit, true);
+    const changes = yield getChanges(repo, commit, null, true);
     const allChanges = [
         Object.keys(changes).filter(changeName => {
             const change = changes[changeName];
