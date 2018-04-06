@@ -318,7 +318,8 @@ exports.computeChanges = co.wrap(function *(repo, commit) {
  * Pick the specified `subs` in the specified `metaRepo` having the specified
  * `metaIndex`.  Stage new submodule commits in `metaRepo`.  Return an object
  * describing any commits that were generated and conflicted commits.  Use the
- * specified `opener` to acces submodule repos. *
+ * specified `opener` to acces submodule repos.
+ *
  * @param {NodeGit.Repository} metaRepo
  * @param {Open.Opener}        opener
  * @param {NodeGit.Index}      metaIndex
@@ -388,6 +389,32 @@ Conflicting entries for submodule ${colors.red(name)}
 });
 
 /**
+ * Throw a user error if the specified `commit` in the specified `repo`
+ * introduces URL changes.
+ *
+ * TODO: independent test
+ *
+ * TODO: Dealing with these would be a huge hassle and is probably not worth it
+ * at the moment since the recommended policy for monorepo implementations is
+ * to prevent users from making URL changes anyway.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ */
+exports.ensureNoURLChanges = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    const hasUrlChanges = yield exports.containsUrlChanges(repo, commit);
+    if (hasUrlChanges) {
+
+        throw new UserError(`\
+Applying commits with submodule URL changes is not currently supported.
+Please try with normal 'git cherry-pick'.`);
+    }
+});
+
+/**
  * Rewrite the specified `commit` on top of HEAD in the specified `repo` using
  * the specified `opener` to open submodules as needed.  The behavior is
  * undefined unless the repository is clean.  Return an object describing the
@@ -407,16 +434,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const hasUrlChanges = yield exports.containsUrlChanges(repo, commit);
-    if (hasUrlChanges) {
-        // TODO: Dealing with these would be a huge hassle and is probably not
-        // worth it at the moment since the recommended policy for monorepo
-        // implementations is to prevent users from making URL changes anyway.
-
-        throw new UserError(`\
-Applying commits with submodule URL changes is not currently supported.
-Please try with normal 'git cherry-pick'.`);
-    }
+    yield exports.ensureNoURLChanges(repo, commit);
 
     const changes = yield exports.computeChanges(repo, commit);
     const index = yield repo.index();
