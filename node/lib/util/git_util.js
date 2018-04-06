@@ -548,7 +548,8 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
-        return yield ChildProcess.exec(execString);
+        yield ChildProcess.exec(execString);
+        return yield repo.getCommit(sha);
     }
     catch (e) {
         throw new UserError(e.message);

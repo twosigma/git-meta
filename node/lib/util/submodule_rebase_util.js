@@ -149,7 +149,7 @@ exports.processRebase = co.wrap(function *(repo, rebase, op) {
             result.conflictedCommit = op.id().tostrS();
             return result;                                            // RETURN
         }
-        const newCommit = rebase.commit(null, signature, null);
+        const newCommit = yield rebase.commit(null, signature, null);
         const originalCommit = op.id().tostrS();
         result.commits[newCommit.tostrS()] = originalCommit;
         op = yield exports.callNext(rebase);

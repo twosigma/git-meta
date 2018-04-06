@@ -401,7 +401,7 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
 
     if (ast.bare) {
         if (null !== ast.currentBranchName) {
-            repo.setHead("refs/heads/" + ast.currentBranchName);
+            yield repo.setHead("refs/heads/" + ast.currentBranchName);
         }
         else {
             repo.setHeadDetached(newHeadSha);
@@ -783,7 +783,7 @@ git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
 
             if (null === index) {
                 index =
-                   yield RepoAST.renderIndex(ast.commits, ast.head, ast.index);
+                   RepoAST.renderIndex(ast.commits, ast.head, ast.index);
             }
             const sub = index[subName];
             const openSubAST = ast.openSubmodules[subName];

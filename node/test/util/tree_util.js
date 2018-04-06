@@ -244,7 +244,7 @@ describe("TreeUtil", function () {
             const filename = "foo";
             const filepath = path.join(repo.workdir(), filename);
             yield fs.writeFile(filepath, content);
-            const result = TreeUtil.hashFile(repo, filename);
+            const result = yield TreeUtil.hashFile(repo, filename);
             const db = yield repo.odb();
             const BLOB = 3;
             const expected = yield db.write(content, content.length, BLOB);
@@ -354,7 +354,7 @@ describe("TreeUtil", function () {
             // It doesn't matter what's in the file, just that the function
             // includes its contents.
             yield fs.writeFile(modPath, "foo");
-            const modId = TreeUtil.hashFile(
+            const modId = yield TreeUtil.hashFile(
                                           repo,
                                           SubmoduleConfigUtil.modulesFileName);
             const status = new RepoStatus({
@@ -383,7 +383,7 @@ describe("TreeUtil", function () {
             // It doesn't matter what's in the file, just that the function
             // includes its contents.
             yield fs.writeFile(modPath, "foo");
-            const modId = TreeUtil.hashFile(
+            const modId = yield TreeUtil.hashFile(
                                           repo,
                                           SubmoduleConfigUtil.modulesFileName);
 
