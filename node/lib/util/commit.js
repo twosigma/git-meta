@@ -572,7 +572,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
             changes[filename] = null;
         }
         else {
-            const blobId = TreeUtil.hashFile(repo, filename);
+            const blobId = yield TreeUtil.hashFile(repo, filename);
             changes[filename] = new Change(blobId, FILEMODE.BLOB);
 
             yield index.addByPath(filename);
