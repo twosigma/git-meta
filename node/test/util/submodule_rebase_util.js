@@ -345,7 +345,7 @@ x=E:I t=Sa:zt;
   Ot Czt-r z=8!H=zt!E!Bz=z;
 `,
             errorMessage: `\
-Conflict in ${colors.red("s")}
+Submodule ${colors.red("s")} is conflicted.
 `,
         },
         "made a commit in a sub without a rebase": {

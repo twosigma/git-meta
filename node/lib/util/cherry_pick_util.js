@@ -415,6 +415,31 @@ Please try with normal 'git cherry-pick'.`);
 });
 
 /**
+ * Close submodules that have been opened by the specified `opener` but that
+ * have no mapped commits or conflicts in the specified `changes`.
+ *
+ * TODO: independent test
+ *
+ * @param {Open.Opener} opener
+ * @param {Object}      changes
+ * @param {Object}      changes.commits   from sub path to map from sha to sha
+ * @param {Object}      changes.conflicts from sub path to sha causing conflict
+ */
+exports.closeSubs = co.wrap(function *(opener, changes) {
+    const repo = opener.repo;
+    const closeSub = co.wrap(function *(path) {
+        const commits = changes.commits[path];
+        if ((undefined === commits || 0 === Object.keys(commits).length) &&
+            !(path in changes.conflicts)) {
+            console.log(`Closing ${colors.green(path)}`);
+            yield DeinitUtil.deinit(repo, path);
+        }
+    });
+    const opened = Array.from(yield opener.getOpenedSubs());
+    DoWorkQueue.doInParallel(opened, closeSub);
+});
+
+/**
  * Rewrite the specified `commit` on top of HEAD in the specified `repo` using
  * the specified `opener` to open submodules as needed.  The behavior is
  * undefined unless the repository is clean.  Return an object describing the
@@ -455,22 +480,10 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     const picks = yield exports.pickSubs(repo, opener, index, changes.changes);
     const conflicts = picks.conflicts;
 
-    // Close any subs that were unnecessarily opened (i.e., because no commit
-    // was generated).
-
-    const closeSub = co.wrap(function *(path) {
-        const commits = picks.commits[path];
-        if ((undefined === commits || 0 === Object.keys(commits).length) &&
-            !(path in picks.conflicts)) {
-            console.log(`Closing ${colors.green(path)}`);
-            yield DeinitUtil.deinit(repo, path);
-        }
-    });
-    const opened = Array.from(yield opener.getOpenedSubs());
-    DoWorkQueue.doInParallel(opened, closeSub);
+    yield exports.closeSubs(opener, picks);
 
     Object.keys(conflicts).sort().forEach(name => {
-        errorMessage += `Submodule ${colors.red(name)} is conflicted.\n`;
+        errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
     });
 
     const result = {
