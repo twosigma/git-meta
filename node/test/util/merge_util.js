@@ -32,6 +32,7 @@
 
 const assert       = require("chai").assert;
 const co           = require("co");
+const colors       = require("colors");
 
 const MergeUtil       = require("../../lib//util/merge_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
@@ -186,13 +187,46 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
 
         const MODE = MergeUtil.MODE;
         const cases = {
+            "no merge base": {
+                initial: "x=S:Cx s=Sa:1;Bfoo=x",
+                fromCommit: "x",
+                fails: true,
+            },
+            "not ready": {
+                initial: "x=S:QR 1: 1: 0 1",
+                fromCommit: "1",
+                fails: true,
+            },
+            "url changes": {
+                initial: "a=B|b=B|x=U:C3-2 s=Sb:1;Bfoo=3",
+                fromCommit: "3",
+                fails: true,
+            },
+            "ancestor url changes": {
+                initial: "a=B|b=B|x=U:C4-3 q=Sa:1;C3-2 s=Sb:1;Bfoo=4",
+                fromCommit: "4",
+                fails: true,
+            },
+            "dirty": {
+                initial: "a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os W README.md=8",
+                fromCommit: "3",
+                fails: true,
+            },
+            "dirty index": {
+                initial: "a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os I README.md=8",
+                fromCommit: "3",
+                fails: true,
+            },
             "trivial -- nothing to do": {
                 initial: "x=S",
                 fromCommit: "1",
-                expected: null,
+            },
+            "trivial -- nothing to do, has untracked change": {
+                initial: "a=B|x=U:Os W foo=8",
+                fromCommit: "2",
             },
             "staged change": {
-                initial: "x=S:I foo=bar",
+                initial: "a=B|x=U:Os I foo=bar",
                 fromCommit: "1",
                 fails: true,
             },
@@ -206,23 +240,92 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 fromCommit: "1",
                 fails: true,
             },
+            "fast forward": {
+                initial: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
+                fromCommit: "2",
+                expected: "a=B|x=E:Bmaster=2",
+            },
+            "fast forward, but forced commit": {
+                initial: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
+                fromCommit: "2",
+                mode: MergeUtil.MODE.FORCE_COMMIT,
+                expected: "a=B|x=E:Bmaster=x;Cx-1,2 s=Sa:1",
+            },
             "one merge": {
-                initial: "x=S:C2-1;C3-1;Bmaster=2;Bfoo=3",
-                fromCommit: "3",
-                expected: "x=E:Cx-2,3 3=3;Bmaster=x",
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 s=Sa:s;Bmaster=x;Os Cs-a,b b=b",
+            },
+            "one merge, but ff only": {
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                mode: MergeUtil.MODE.FF_ONLY,
+                fails: true,
+            },
+            "one merge with ancestor": {
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C5-4 t=Sa:b;C4-2 s=Sa:b;Bmaster=3;Bfoo=5`,
+                fromCommit: "5",
+                expected: `
+x=E:Cx-3,5 t=Sa:b,s=Sa:s;Bmaster=x;Os Cs-a,b b=b`,
             },
             "one merge with editor": {
-                initial: "x=S:C2-1;C3-1;Bmaster=2;Bfoo=3",
-                fromCommit: "3",
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
                 editMessage: () => Promise.resolve("foo\nbar\n# baz\n"),
-                expected: "x=E:Cfoo\nbar\n#x-2,3 3=3;Bmaster=x",
+                expected: `
+x=E:Cfoo\nbar\n#x-3,4 s=Sa:s;Bmaster=x;Os Cfoo\nbar\n#s-a,b b=b`,
                 message: null,
             },
             "one merge with empty message": {
-                initial: "x=S:C2-1;C3-1;Bmaster=2;Bfoo=3",
-                fromCommit: "3",
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
                 editMessage: () => Promise.resolve(""),
                 message: null,
+            },
+            "non-ffmerge with trivial ffwd submodule change": {
+                initial: `
+a=Aa:Cb-a;Bb=b|
+x=U:C3-2 t=Sa:b;C4-2 s=Sa:b;Bmaster=3;Bfoo=4;Os`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 s=Sa:b;Os H=b;Bmaster=x",
+            },
+            "sub is same": {
+                initial: `
+a=Aa:Cb-a;Bb=b|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:b,t=Sa:b;Bmaster=3;Bfoo=4;Os`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 t=Sa:b;Bmaster=x",
+            },
+            "sub is same, closed": {
+                initial: `
+a=Aa:Cb-a;Bb=b|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:b,t=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 t=Sa:b;Bmaster=x",
+            },
+            "sub is behind": {
+                initial: `
+a=Aa:Cb-a;Bb=b|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:a;Bmaster=3;Bfoo=4;Os`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 ;Bmaster=x",
+            },
+            "sub is behind, closed": {
+                initial: `
+a=Aa:Cb-a;Bb=b|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:a;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                expected: "x=E:Cx-3,4 ;Bmaster=x",
             },
             "non-ffmerge with ffwd submodule change": {
                 initial: `
@@ -231,26 +334,26 @@ x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
                 fromCommit: "4",
                 expected: "x=E:Cx-3,4 s=Sa:c;Os H=c;Bmaster=x",
             },
-            "non-ffmerge with ffwd submodule change on lhs": {
-                initial: `
-a=Aa:Cb-a;Bb=b;Cc-b;Bc=c|
-x=U:C3-2 s=Sa:b;C4-2;Bmaster=3;Bfoo=4`,
-                fromCommit: "4",
-                expected: "x=E:Cx-3,4 4=4;Bmaster=x",
-            },
-            "non-ffmerge with ffwd submodule change, auto-close": {
+            "non-ffmerge with ffwd submodule change, closed": {
                 initial: `
 a=Aa:Cb-a;Bb=b;Cc-b;Bc=c|
 x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
                 expected: "x=E:Cx-3,4 s=Sa:c;Bmaster=x",
             },
-            "non-ffmerge with ffwd submodule change, doesn't auto-close": {
+            "non-ffmerge with deeper ffwd submodule change": {
+                initial: `
+a=Aa:Cb-a;Bb=b;Cc-b;Cd-c;Bd=d|
+x=U:C3-2 s=Sa:b;C5-4 s=Sa:d;C4-2 s=Sa:c;Bmaster=3;Bfoo=5`,
+                fromCommit: "5",
+                expected: "x=E:Cx-3,5 s=Sa:d;Bmaster=x",
+            },
+            "non-ffmerge with ffwd submodule change on lhs": {
                 initial: `
 a=Aa:Cb-a;Bb=b;Cc-b;Bc=c|
-x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
+x=U:C3-2 s=Sa:b;C4-2 q=Sa:a;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 s=Sa:c;Bmaster=x;Os",
+                expected: "x=E:Cx-3,4 q=Sa:a;Bmaster=x",
             },
             "non-ffmerge with non-ffwd submodule change": {
                 initial: `
@@ -269,23 +372,23 @@ x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
             "submodule commit is up-to-date": {
                 initial:`
 a=Aa:Cb-a;Cc-b;Bfoo=b;Bbar=c|
-x=U:C3-2 s=Sa:c;C4-2 s=Sa:b,x=y;Bmaster=3;Bfoo=4;Os`,
+x=U:C3-2 s=Sa:c;C4-2 s=Sa:b,t=Sa:a;Bmaster=3;Bfoo=4;Os`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 x=y;Os H=c;Bmaster=x",
+                expected: "x=E:Cx-3,4 t=Sa:a;Os H=c;Bmaster=x",
             },
             "submodule commit is up-to-date, was not open": {
                 initial:`
 a=Aa:Cb-a;Cc-b;Bfoo=b;Bbar=c|
-x=U:C3-2 s=Sa:c;C4-2 s=Sa:b,x=y;Bmaster=3;Bfoo=4`,
+x=U:C3-2 s=Sa:c;C4-2 s=Sa:b,t=Sa:a;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 x=y;Bmaster=x",
+                expected: "x=E:Cx-3,4 t=Sa:a;Bmaster=x",
             },
             "submodule commit is same": {
                 initial: `
 a=Aa:Cb-a;Cc-b;Bfoo=b;Bbar=c|
-x=U:C3-2 s=Sa:c;C4-2 s=Sa:c,x=y;Bmaster=3;Bfoo=4`,
+x=U:C3-2 s=Sa:c;C4-2 s=Sa:c,q=Sa:a;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 x=y;Bmaster=x",
+                expected: "x=E:Cx-3,4 q=Sa:a;Bmaster=x",
             },
             "added in merge": {
                 initial: `
@@ -303,32 +406,24 @@ x=S:C2-1 s=Sa:1;C3-1 t=Sa:1;Bmaster=2;Bfoo=3`,
             },
             "conflicted add": {
                 initial: `
-a=B|b=B|
-x=S:C2-1 s=Sa:1;C3-1 s=Sb:1;Bmaster=2;Bfoo=3`,
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=S:C2-1 s=Sa:a;C3-1 s=Sa:b;Bmaster=2;Bfoo=3`,
                 fromCommit: "3",
-                expected: "x=E:Qmessage\n#M 2: 3: 0 3",
-                fails: true,
-            },
-            "conflict in meta": {
-                initial: "x=S:C2-1 foo=bar;C3-1 foo=baz;Bmaster=2;Bfoo=3",
-                fromCommit: "3",
-                expected: `
-x=E:Qmessage\n#M 2: 3: 0 3;I *foo=~*bar*baz;W foo=<<<<<<< ours
-bar
-=======
-baz
->>>>>>> theirs
-;
+                expected: `x=E:Qmessage\n#M 2: 3: 0 3;I *s=~*S:a*S:b`,
+                errorMessage: `\
+Conflicting entries for submodule ${colors.red("s")}
 `,
-                fails: true,
             },
             "conflict in submodule": {
                 initial: `
 a=B:Ca-1 README.md=8;Cb-1 README.md=9;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
+                errorMessage: `\
+Submodule ${colors.red("s")} is conflicted.
+`,
                 expected: `
-x=E:Qmessage\n#M 3: 4: 0 4;I *s=S:1*S:a*S:b;
+x=E:Qmessage\n#M 3: 4: 0 4;
 Os Qmessage\n#M a: b: 0 b!I *README.md=hello world*8*9!W README.md=\
 <<<<<<< ours
 8
@@ -337,7 +432,6 @@ Os Qmessage\n#M a: b: 0 b!I *README.md=hello world*8*9!W README.md=\
 >>>>>>> theirs
 ;
 `,
-                fails: true,
             },
             "new commit in sub in target branch but not in HEAD branch": {
                 initial: `
@@ -355,6 +449,20 @@ x=U:C3-2 t=Sa:1;C4-3 s=Sa:a;C5-3 t=Sa:b;Bmaster=4;Bfoo=5`,
                 fromCommit: "5",
                 expected: `
 x=E:Cx-4,5 t=Sa:b;Bmaster=x`
+            },
+            "merge in a branch with a removed sub": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=U:C3-2 t=Sa:1;C4-2 s;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                expected: `x=E:Cx-3,4 s;Bmaster=x`,
+            },
+            "merge to a branch with a removed sub": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=U:C3-2 t=Sa:1;C4-2 s;Bmaster=4;Bfoo=3`,
+                fromCommit: "3",
+                expected: `x=E:Cx-4,3 t=Sa:1;Bmaster=x`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -381,8 +489,10 @@ x=E:Cx-4,5 t=Sa:b;Bmaster=x`
                                                          mode,
                                                          message,
                                                          editMessage);
+                    const errorMessage = c.errorMessage || null;
+                    assert.equal(result.errorMessage, errorMessage);
                     if (upToDate) {
-                        assert.isNull(result);
+                        assert.isNull(result.metaCommit);
                         return;                                       // RETURN
                     }
                     return mapReturnedCommits(result, maps);
@@ -395,9 +505,6 @@ x=E:Cx-4,5 t=Sa:b;Bmaster=x`
         });
     });
     describe("continue", function () {
-        // TODO: test abort from conflicts.  Need conflict support to make this
-        // work.
-
         const cases = {
             "no merge": {
                 initial: "x=S",
@@ -475,6 +582,12 @@ x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;Q;
                 initial: `
 a=B|
 x=U:Qx#M 1: 1: 0 1;Os Cs-1!H=s!Bs=s`,
+                expected: `x=E:Q;Os H=1!Cs-1!Bs=s`,
+            },
+            "from conflicts": {
+                initial: `
+a=B|
+x=U:Qx#M 1: 1: 0 1;Os Cs-1!H=s!Bs=s!I *README.md=a*b*c`,
                 expected: `x=E:Q;Os H=1!Cs-1!Bs=s`,
             },
         };
