@@ -163,7 +163,11 @@ Merge of '${args.commit}'
         return GitUtil.editMessage(repo, message);
     };
     const commit = yield repo.getCommit(commitish.id());
-    yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
+    const result =
+          yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
+    if (null !== result.errorMessage) {
+        throw new UserError(result.errorMessage);
+    }
 
     // Run post-merge hook if merge successfully.
     // Fixme: --squash is not supported yet, once supported, need to parse 0/1

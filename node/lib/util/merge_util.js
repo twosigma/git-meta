@@ -37,8 +37,8 @@ const colors       = require("colors");
 const NodeGit      = require("nodegit");
 
 const Checkout            = require("./checkout");
+const CherryPickUtil      = require("./cherry_pick_util");
 const Commit              = require("./commit");
-const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
@@ -46,7 +46,7 @@ const RepoStatus          = require("./repo_status");
 const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const StatusUtil          = require("./status_util");
-const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
 
@@ -193,215 +193,52 @@ ${colors.green(toSha)}.`);
     yield index.conflictRemove(path);
 });
 
-
 /**
- * Merge the specified `commit` in the specified `repo` having the specified
- * `status`, using the specified `mode` to control whether or not a merge
- * commit will be generated.  Return `null` if the repository is up-to-date, or
- * an object describing generated commits otherwise.  If the optionally
- * specified `commitMessage` is provided, use it as the commit message for any
- * generated merge commit; otherwise, use the specified `editMessage` promise
- * to request a message.  Throw a `UserError` exception if a fast-forward merge
- * is requested and cannot be completed.  Throw a `UserError` if there are
- * conflicts, or if local modifications prevent the merge from happening.
- *
- * @async
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
- * @param {MODE}               mode
- * @param {String|null}        commitMessage
- * @param {() -> Promise(String)} editMessage
- * @return {Object|null}
- * @return {String} return.metaCommit
- * @return {Object} return.submoduleCommits  map from submodule to commit
+ * Merge the specified `subs` in the specified `repo` having the specified
+ * `index`.  Stage submodule commits in `metaRepo`.  Return an object
+ * describing any commits that were generated and conflicted commits.  Use the
+ * specified `opener` to acces submodule repos.  Use the specified `message` to
+ * write commit messages.
+ * @param {NodeGit.Repository} metaRepo
+ * @param {Open.Opener}        opener
+ * @param {NodeGit.Index}      metaIndex
+ * @param {Object}             subs        map from name to SubmoduleChange
+ * @return {Object}
+ * @return {Object} return.commits    map from name to map from new to old ids
+ * @return {Object} return.conflicts  map from name to commit causing conflict
  */
-exports.merge = co.wrap(function *(repo,
-                                   commit,
-                                   mode,
-                                   commitMessage,
-                                   editMessage) {
+const mergeSubmodules = co.wrap(function *(repo,
+                                           opener,
+                                           index,
+                                           subs,
+                                           message) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isNumber(mode);
-    assert.instanceOf(commit, NodeGit.Commit);
-    if (null !== commitMessage) {
-        assert.isString(commitMessage);
-    }
-    assert.isFunction(editMessage);
+    assert.instanceOf(opener, Open.Opener);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.isObject(subs);
+    assert.isString(message);
 
-    const status = yield StatusUtil.getRepoStatus(repo, {
-        showMetaChanges: true,
-    });
+    const fetcher = yield opener.fetcher();
 
-    StatusUtil.ensureReady(status);
+    const mergeSubmodule = co.wrap(function *(name) {
+        const subRepo = yield opener.getRepo(name);
+        const change = subs[name];
 
-    // Cannot merge if any staged changes.
+        const fromSha = change.newSha;
+        yield fetcher.fetchSha(subRepo, name, fromSha);
 
-    if (!status.isIndexDeepClean()) {
-        throw new UserError("Cannot merge due to staged changes.");
-    }
+        const fromCommit = yield subRepo.getCommit(fromSha);
 
-    const result = {
-        metaCommit: null,
-        submoduleCommits: {},
-    };
-
-    const commitSha = commit.id().tostrS();
-
-    const head = yield repo.getHeadCommit();
-
-    if (head.id().tostrS() === commit.id().tostrS()) {
-        console.log("Nothing to do.");
-        return null;                                                  // RETURN
-    }
-
-    const canFF = yield NodeGit.Graph.descendantOf(repo,
-                                                   commitSha,
-                                                   head.id().tostrS());
-
-    let message = "";
-
-    if (!canFF || MODE.FORCE_COMMIT === mode) {
-        if (null === commitMessage) {
-            const raw = yield editMessage();
-            message = GitUtil.stripMessage(raw);
-            if ("" === message) {
-                console.log("Empty commit message.");
-                return result;
-            }
-        }
-        else {
-            message = commitMessage;
-        }
-    }
-
-    if (MODE.FF_ONLY === mode && !canFF) {
-        throw new UserError(`The meta-repository cannot be fast-forwarded to \
-${colors.red(commitSha)}.`);
-    }
-    else if (canFF) {
-        console.log(`Fast-forwarding meta-repo to ${colors.green(commitSha)}.`);
-
-
-        const sha = yield exports.fastForwardMerge(repo,
-                                                   mode,
-                                                   commit,
-                                                   message);
-        result.metaCommit = sha;
-        return result;
-    }
-
-
-    const sig = repo.defaultSignature();
-
-    // Kick off the merge.  It is important to note is that `Merge.commit` does
-    // not directly modify the working directory or index.  The `index`
-    // object it returns is magical, virtual, does not operate on HEAD or
-    // anything, has no effect.
-
-    const mergeIndex = yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return NodeGit.Merge.commits(repo, head, commit, null);
-    });
-
-    const checkoutOpts =  {
-        checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE
-    };
-    yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return NodeGit.Checkout.index(repo, mergeIndex, checkoutOpts);
-    });
-    const index = yield repo.index();
-
-    let errorMessage = "";
-
-    const subCommits = result.submoduleCommits;
-    const subUrls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
-                                                                      head);
-    const headTree = yield head.getTree();
-    const opener = new Open.Opener(repo, null);
-    const subFetcher = yield opener.fetcher();
-
-    let hasModulesFile = false;
-
-    const mergeEntry = co.wrap(function *(entry) {
-        const path = entry.path;
-        const stage = NodeGit.Index.entryStage(entry);
-
-        if (path === SubmoduleConfigUtil.modulesFileName) {
-            hasModulesFile = true;
-            return;                                                   // RETURN
-        }
-        else if (RepoStatus.STAGE.THEIRS === stage && !(path in subUrls)) {
-            errorMessage += `Conflict in ${colors.red(path)}`;
-            return;                                                   // RETURN
-        }
-
-        // We don't need to do anything with an entry unless it is a conflicted
-        // submodule.
-
-        if (!(path in subUrls)) {
-            return;                                                   // RETURN
-        }
-
-        const subSha = entry.id.tostrS();
-        const subCommitId = NodeGit.Oid.fromString(subSha);
-        const subEntry = yield headTree.entryByPath(path);
-        const subHeadSha = subEntry.sha();
-
-        // If the submodule has a "normal" stage, that means it can be
-        // trivially fast-forwarded if there is a change.
-
-        if (RepoStatus.STAGE.NORMAL === stage) {
-            if (subSha !== subHeadSha) {
-                yield doFastForward(opener, index, path, subSha);
-            }
-            return;                                                   // RETURN
-        }
-
-        // Otherwise, if there is a conflict in the submodule, we'll handle it
-        // during the THEIRS entry.
-
-        else if (RepoStatus.STAGE.THEIRS !== stage) {
-            return;                                                   // RETURN
-        }
-
-        const subRepo = yield opener.getSubrepo(path);
-
-        // Fetch commit to merge.
-
-        yield subFetcher.fetchSha(subRepo, path, subSha);
-
-        const subCommit = yield subRepo.getCommit(subCommitId);
-
-        const upToDate = yield NodeGit.Graph.descendantOf(subRepo,
-                                                          subHeadSha,
-                                                          subSha);
-        if (upToDate) {
-            console.log("We're up-to-date with", path);
-            yield index.addByPath(path);
-            yield index.conflictRemove(path);
-            return;                                                   // RETURN
-        }
-
-        const canSubFF = yield NodeGit.Graph.descendantOf(subRepo,
-                                                          subSha,
-                                                          subHeadSha);
-        if (canSubFF) {
-            yield doFastForward(opener, index, path, subSha);
-            return;                                                   // RETURN
-        }
-
-        // If we already have the commit being merged in, we don't need to do
-        // anything.
-
-        console.log(`Submodule ${colors.blue(path)}: merging commit \
-${colors.green(subSha)}.`);
+        console.log(`Submodule ${colors.blue(name)}: merging commit \
+${colors.green(fromSha)}.`);
 
         // Start the merge.
 
-        const subHead = yield subRepo.getCommit(subHeadSha);
-        let subIndex = yield NodeGit.Merge.commits(subRepo,
-                                                   subHead,
-                                                   subCommit,
-                                                   null);
+        const subHead = yield subRepo.getHeadCommit();
+        const subIndex = yield NodeGit.Merge.commits(subRepo,
+                                                     subHead,
+                                                     fromCommit,
+                                                     null);
 
         yield NodeGit.Checkout.index(subRepo, subIndex, {
             checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
@@ -413,13 +250,13 @@ ${colors.green(subSha)}.`);
             const seq = new SequencerState({
                 type: MERGE,
                 originalHead: new CommitAndRef(subHead.id().tostrS(), null),
-                target: new CommitAndRef(subCommit.id().tostrS(), null),
+                target: new CommitAndRef(fromSha, null),
                 currentCommit: 0,
-                commits: [subCommit.id().tostrS()],
+                commits: [fromSha],
                 message: message,
             });
             yield SequencerStateUtil.writeSequencerState(subRepo.path(), seq);
-            errorMessage += `Submodule ${colors.red(path)} is conflicted:\n`;
+            errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
             const entries = subIndex.entries();
             for (let i = 0; i < entries.length; ++i) {
                 const subEntry = entries[i];
@@ -451,17 +288,136 @@ ${colors.green(subSha)}.`);
 
     const entries = index.entries();
     yield DoWorkQueue.doInParallel(entries, mergeEntry);
+});
 
-    if (hasModulesFile) {
-        const good = yield SubmoduleUtil.mergeModulesFile(repo, head, commit);
-        if (!good) {
-            errorMessage += `Conflicting submodule additions/removals.`;
+
+/**
+ * Merge the specified `commit` in the specified `repo` having the specified
+ * `status`, using the specified `mode` to control whether or not a merge
+ * commit will be generated.  Return `null` if the repository is up-to-date, or
+ * an object describing generated commits otherwise.  If the optionally
+ * specified `commitMessage` is provided, use it as the commit message for any
+ * generated merge commit; otherwise, use the specified `editMessage` promise
+ * to request a message.  Throw a `UserError` exception if a fast-forward merge
+ * is requested and cannot be completed.  Throw a `UserError` if there are
+ * conflicts, or if local modifications prevent the merge from happening.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @param {MODE}               mode
+ * @param {String|null}        commitMessage
+ * @param {() -> Promise(String)} editMessage
+ * @return {Object}
+ * @return {String|null} return.metaCommit
+ * @return {Object}      return.submoduleCommits  map from submodule to commit
+ * @return {String|null} return.errorMessage
+ */
+exports.merge = co.wrap(function *(repo,
+                                   commit,
+                                   mode,
+                                   commitMessage,
+                                   editMessage) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isNumber(mode);
+    assert.instanceOf(commit, NodeGit.Commit);
+    if (null !== commitMessage) {
+        assert.isString(commitMessage);
+    }
+    assert.isFunction(editMessage);
+
+    yield CherryPickUtil.ensureNoURLChanges(repo, commit);
+
+    const result = {
+        metaCommit: null,
+        submoduleCommits: {},
+        errorMessage: null,
+    };
+
+    const status = yield StatusUtil.getRepoStatus(repo);
+    StatusUtil.ensureReady(status);
+    if (!status.isDeepClean(false)) {
+        // TODO: Git will refuse to run if there are staged changes, but will
+        // attempt a merge if there are just workdir changes.  We should
+        // support this in the future, but it basically requires us to dry-run
+        // the merges in all the submodules.
+
+        throw new UserError(`\
+The repository has uncommitted changes.  Please stash or commit them before
+running merge.`);
+    }
+
+    const commitSha = commit.id().tostrS();
+    const head = yield repo.getHeadCommit();
+
+    if (head.id().tostrS() === commit.id().tostrS()) {
+        console.log("Nothing to do.");
+        return result;
+    }
+
+    const canFF = yield NodeGit.Graph.descendantOf(repo,
+                                                   commitSha,
+                                                   head.id().tostrS());
+    let message = "";
+    if (!canFF || MODE.FORCE_COMMIT === mode) {
+        if (null === commitMessage) {
+            const raw = yield editMessage();
+            message = GitUtil.stripMessage(raw);
+            if ("" === message) {
+                console.log("Empty commit message.");
+                return result;
+            }
         }
         else {
-            yield index.addByPath(SubmoduleConfigUtil.modulesFileName);
-            yield index.conflictRemove(SubmoduleConfigUtil.modulesFileName);
+            message = commitMessage;
         }
     }
+
+    if (MODE.FF_ONLY === mode && !canFF) {
+        throw new UserError(`The meta-repository cannot be fast-forwarded to \
+${colors.red(commitSha)}.`);
+    }
+    else if (canFF) {
+        console.log(`Fast-forwarding meta-repo to ${colors.green(commitSha)}.`);
+
+
+        const sha = yield exports.fastForwardMerge(repo,
+                                                   mode,
+                                                   commit,
+                                                   message);
+        result.metaCommit = sha;
+        return result;
+    }
+
+    const sig = repo.defaultSignature();
+    const changes = yield CherryPickUtil.computeChanges(repo, commit);
+    const index = yield repo.index();
+    const opener = new Open.Opener(repo, null);
+
+    // Perform simple changes that don't require picks -- addition, deletions,
+    // and fast-forwards.
+
+    yield CherryPickUtil.changeSubmodules(repo,
+                                          opener,
+                                          index,
+                                          changes.simpleChanges);
+
+    // Render any conflicts
+
+    let errorMessage =
+                  yield exports.writeConflicts(repo, index, changes.conflicts);
+
+
+    // Then do the submodule merges
+
+    const merges = yield mergeSubmodules(repo, opener, index, changes.changes);
+    const conflicts = merges.conflicts;
+
+    yield CherryPickUtil.closeSubs(opener, merges);
+
+    Object.keys(conflicts).sort().forEach(name => {
+        errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
+    });
 
     // We must write the index here or the staging we've done erlier will go
     // away.
@@ -481,34 +437,23 @@ ${colors.green(subSha)}.`);
             message: message,
         });
         yield SequencerStateUtil.writeSequencerState(repo.path(), seq);
-        throw new UserError(errorMessage);
+        result.errorMessage = errorMessage;
+    } else {
+
+        console.log(`Merging meta-repo commit ${colors.green(commitSha)}.`);
+
+        const id = yield index.writeTreeTo(repo);
+
+        // And finally, commit it.
+
+        const metaCommit = yield repo.createCommit("HEAD",
+                                                   sig,
+                                                   sig,
+                                                   message,
+                                                   id,
+                                                   [head, commit]);
+        result.metaCommit = metaCommit.tostrS();
     }
-
-    console.log(`Merging meta-repo commit ${colors.green(commitSha)}.`);
-
-    const id = yield index.writeTreeTo(repo);
-
-    // And finally, commit it.
-
-    const metaCommit = yield repo.createCommit("HEAD",
-                                               sig,
-                                               sig,
-                                               message,
-                                               id,
-                                               [head, commit]);
-
-    result.metaCommit = metaCommit.tostrS();
-
-    // Close subs that were opened if no commits were generated to them.
-
-    const closeSub = co.wrap(function *(path) {
-        if (!(path in subCommits)) {
-            console.log(`Closing ${colors.green(path)} -- no commit created.`);
-            yield DeinitUtil.deinit(repo, path);
-        }
-    });
-    const opened = Array.from(yield opener.getOpenedSubs());
-    DoWorkQueue.doInParallel(opened, closeSub);
     return result;
 });
 

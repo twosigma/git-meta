@@ -186,10 +186,33 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
 
         const MODE = MergeUtil.MODE;
         const cases = {
+            "not ready": {
+                initial: "x=S:QR 1: 1: 0 1",
+                fromCommit: "1",
+                fails: true,
+            },
+            "url changes": {
+                initial: "a=B|b=B|x=U:C3-2 s=Sb:1;Bfoo=3",
+                fromCommit: "3",
+                fails: true,
+            },
+            "dirty": {
+                initial: "a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os W README.md=8",
+                fromCommit: "3",
+                fails: true,
+            },
+            "dirty index": {
+                initial: "a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os I README.md=8",
+                fromCommit: "3",
+                fails: true,
+            },
             "trivial -- nothing to do": {
                 initial: "x=S",
                 fromCommit: "1",
-                expected: null,
+            },
+            "trivial -- nothing to do, has untracked change": {
+                initial: "a=B|x=U:Os W foo=8",
+                fromCommit: "2",
             },
             "staged change": {
                 initial: "x=S:I foo=bar",
@@ -356,6 +379,26 @@ x=U:C3-2 t=Sa:1;C4-3 s=Sa:a;C5-3 t=Sa:b;Bmaster=4;Bfoo=5`,
                 expected: `
 x=E:Cx-4,5 t=Sa:b;Bmaster=x`
             },
+            "merge in a branch with a removed sub": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=U:C3-2 t=Sa:1;C4-2 s;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+                expected: `x=E:Cx-3,4 s;Bmaster=x`,
+            },
+            "merge to a branch with a removed sub": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=U:C3-2 t=Sa:1;C4-2 s;Bmaster=4;Bfoo=3`,
+                fromCommit: "3",
+                expected: `x=E:Cx-4,3 t=Sa:1;Bmaster=x`,
+            },
+            "conflict": {
+                initial: `
+a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                fromCommit: "4",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -381,8 +424,10 @@ x=E:Cx-4,5 t=Sa:b;Bmaster=x`
                                                          mode,
                                                          message,
                                                          editMessage);
+                    const errorMessage = c.errorMessage || null;
+                    assert.equal(result.errorMessage, errorMessage);
                     if (upToDate) {
-                        assert.isNull(result);
+                        assert.isNull(result.metaCommit);
                         return;                                       // RETURN
                     }
                     return mapReturnedCommits(result, maps);
