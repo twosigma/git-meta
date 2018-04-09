@@ -54,6 +54,7 @@ exports.execHook = co.wrap(function *(name, args=[]) {
     try {
         process.chdir(rootDirectory);
         const result = yield ChildProcess.execFile(absPath, args);
+        console.log(result.stdout);
         return result.stdout;
     } catch (e) {
         // ignore the exception
