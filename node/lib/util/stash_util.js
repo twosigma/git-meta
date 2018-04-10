@@ -233,7 +233,7 @@ exports.createReflogIfNeeded = co.wrap(function *(repo,
     if (0 === log.entrycount()) {
         const id = NodeGit.Oid.fromString(sha);
         log.append(id, repo.defaultSignature(), message);
-        log.write();
+        yield log.write();
     }
 });
 

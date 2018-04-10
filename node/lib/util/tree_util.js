@@ -159,7 +159,7 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                 builder.remove(filename);
             }
             else if (entry instanceof Change) {
-                yield builder.insert(filename, entry.id, entry.mode);
+                builder.insert(filename, entry.id, entry.mode);
             }
             else {
                 let subtree;
@@ -185,9 +185,9 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                     builder.remove(filename);
                 }
                 else {
-                    yield builder.insert(filename,
-                                         subtree.id(),
-                                         NodeGit.TreeEntry.FILEMODE.TREE);
+                    builder.insert(filename,
+                                   subtree.id(),
+                                   NodeGit.TreeEntry.FILEMODE.TREE);
                 }
             }
         }
@@ -204,20 +204,13 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
  * @param {String}             filename
  * @return {NodeGit.Oid}
  */
-exports.hashFile = function (repo, filename) {
+exports.hashFile = co.wrap(function* (repo, filename) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(filename);
 
-    // 'createFromDisk' is unfinished; instead of returning an id, it takes an
-    // buffer and writes into it, unlike the rest of its brethern on `Blob`.
-    // TODO: patch nodegit with corrected API.
-
-    const placeholder =
-            NodeGit.Oid.fromString("0000000000000000000000000000000000000000");
     const filepath = path.join(repo.workdir(), filename);
-    NodeGit.Blob.createFromDisk(placeholder, repo, filepath);
-    return placeholder;
-};
+    return yield NodeGit.Blob.createFromDisk(repo, filepath);
+});
 
 /**
  * Return a map from path to `Change` for the working directory of the
@@ -255,14 +248,13 @@ exports.listWorkdirChanges = co.wrap(function *(repo, status, includeUnstaged) {
         switch (workdir[subpath]) {
             case FILESTATUS.ADDED:
                 if (includeUnstaged) {
-                    result[subpath] = new Change(
-                                            exports.hashFile(repo, subpath),
-                                            filemode);
+                    const sha = yield exports.hashFile(repo, subpath);
+                    result[subpath] = new Change(sha, filemode);
                 }
                 break;
             case FILESTATUS.MODIFIED:
-                result[subpath] = new Change(exports.hashFile(repo, subpath),
-                                                                    filemode);
+                const sha = yield exports.hashFile(repo, subpath);
+                result[subpath] = new Change(sha,filemode);
                 break;
             case FILESTATUS.REMOVED:
                 result[subpath] = null;
@@ -304,7 +296,7 @@ exports.listWorkdirChanges = co.wrap(function *(repo, status, includeUnstaged) {
 
     if (touchedModules) {
         const modulesName = SubmoduleConfigUtil.modulesFileName;
-        const id = exports.hashFile(repo, modulesName);
+        const id = yield exports.hashFile(repo, modulesName);
         result[modulesName] = new Change(id, FILEMODE.BLOB);
     }
 
