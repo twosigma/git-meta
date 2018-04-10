@@ -96,7 +96,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         yield RebaseUtil.abort(repo);
     }
     else if (args.continue) {
-        const result = RebaseUtil.continue(repo);
+        const result = yield RebaseUtil.continue(repo);
         if (null !== result.errorMessage) {
             throw new UserError(result.errorMessage);
         }
