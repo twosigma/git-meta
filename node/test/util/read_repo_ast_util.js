@@ -37,6 +37,7 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 
 const ConflictUtil        = require("../../lib/util/conflict_util");
+const GitUtil             = require("../../lib/util/git_util");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
@@ -74,12 +75,6 @@ const astFromSimpleRepo = co.wrap(function *(repo) {
         head: commit,
         currentBranchName: "master",
     });
-});
-
-const hashObject = co.wrap(function *(repo, data) {
-    const db = yield repo.odb();
-    const BLOB = 3;
-    return yield db.write(data, data.length, BLOB);
 });
 
 /**
@@ -1701,7 +1696,7 @@ describe("readRAST", function () {
         it("three versions", co.wrap(function *() {
             const repo = yield TestUtil.createSimpleRepository();
             const makeEntry = co.wrap(function *(data) {
-                const id = yield hashObject(repo, data);
+                const id = yield GitUtil.hashObject(repo, data);
                 return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
             });
             const ancestor = yield makeEntry("xxx");
@@ -1729,7 +1724,7 @@ describe("readRAST", function () {
         it("with a deletion", co.wrap(function *() {
             const repo = yield TestUtil.createSimpleRepository();
             const makeEntry = co.wrap(function *(data) {
-                const id = yield hashObject(repo, data);
+                const id = yield GitUtil.hashObject(repo, data);
                 return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
             });
             const ancestor = yield makeEntry("xxx");

@@ -47,6 +47,7 @@ const path     = require("path");
 
 const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
+const GitUtil             = require("./git_util");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
@@ -59,22 +60,6 @@ const TreeUtil            = require("./tree_util");
 const FILEMODE = NodeGit.TreeEntry.FILEMODE;
 
                          // Begin module-local methods
-
-/**
- * Write the specified `data` to the specified `repo` and return its hash
- * value.
- *
- * @async
- * @private
- * @param {NodeGit.Repository} repo
- * @param {String}             data
- * @return {String}
- */
-const hashObject = co.wrap(function *(db, data) {
-    const BLOB = 3;
-    const res = yield db.write(data, data.length, BLOB);
-    return res;
-});
 
 /**
  * Configure the specified `repo` to have settings needed by git-meta tests.
@@ -107,7 +92,6 @@ const configRepo = co.wrap(function *(repo) {
  * @return {NodeGit.Tree} return.tree
  */
 const writeTree = co.wrap(function *(repo,
-                                     db,
                                      shaMap,
                                      changes,
                                      parent) {
@@ -143,7 +127,7 @@ const writeTree = co.wrap(function *(repo,
         else if ("string" === typeof entry) {
             // A string is just plain data.
 
-            const id = (yield hashObject(db, entry)).tostrS();
+            const id = (yield GitUtil.hashObject(repo, entry)).tostrS();
             pathToChange[filename] = new TreeUtil.Change(id, FILEMODE.BLOB);
         }
         else if (entry instanceof RepoAST.Submodule) {
@@ -181,7 +165,7 @@ const writeTree = co.wrap(function *(repo,
 \turl = ${url}
 `;
         }
-        const dataId = (yield hashObject(db, data)).tostrS();
+        const dataId = (yield GitUtil.hashObject(repo, data)).tostrS();
         pathToChange[SubmoduleConfigUtil.modulesFileName] =
                                     new TreeUtil.Change(dataId, FILEMODE.BLOB);
     }
@@ -223,7 +207,6 @@ exports.writeCommits = co.wrap(function *(oldCommitMap,
     assert.isObject(commits);
     assert.isArray(shas);
 
-    const db = yield repo.odb();
     let newCommitMap = {};  // from new to old sha
 
     const sig = repo.defaultSignature();
@@ -252,7 +235,6 @@ exports.writeCommits = co.wrap(function *(oldCommitMap,
         // by the commit at `sha` and has caches for subtrees and submodules.
 
         const trees = yield writeTree(repo,
-                                      db,
                                       oldCommitMap,
                                       commit.changes,
                                       parentTrees);
@@ -346,8 +328,7 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             const sha = commitMap[data.sha];
             return new ConflictUtil.ConflictEntry(FILEMODE.COMMIT, sha);
         }
-        const db = yield repo.odb();
-        const id = yield hashObject(db, data);
+        const id = yield GitUtil.hashObject(repo, data);
         const BLOB = FILEMODE.BLOB;
         return new ConflictUtil.ConflictEntry(BLOB, id.tostrS());
     });
@@ -512,9 +493,7 @@ git -C '${repo.workdir()}' reset --hard ${newHeadSha}
         if (null !== indexHead) {
             indexParent = treeCache[indexHead];
         }
-        const db = yield repo.odb();
         const trees = yield writeTree(repo,
-                                      db,
                                       commitMap,
                                       ast.index,
                                       indexParent);
