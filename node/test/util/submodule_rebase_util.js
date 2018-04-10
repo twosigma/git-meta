@@ -157,11 +157,52 @@ describe("rewriteCommits", function () {
             upstream: null,
             conflictedCommit: null,
         },
+        "skip if branch and head same": {
+            initial: "x=S:Cr-1;Bmaster=r",
+            upstream: null,
+            conflictedCommit: null,
+            expected: "x=E:H=r",
+        },
         "skip none": {
             initial: "x=S:C2-1;Cr-1;Bmaster=2;Br=r",
             expected: "x=E:Crr-2 r=r;H=rr",
             upstream: "1",
             conflictedCommit: null,
+        },
+        "up-to-date": {
+            initial: "x=S:Cr-1; C3-2; C2-r;Bmaster=3;Br=r",
+            expected: "x=E:H=3",
+            upstream: null,
+            conflictedCommit: null,
+        },
+        "up-to-date with upstream": {
+            initial: "x=S:Cr-1; C3-2; C2-r;Bmaster=3;Br=r",
+            expected: "x=E:H=3",
+            upstream: "1",
+            conflictedCommit: null,
+        },
+        "ffwd when all included": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=2;Br=r",
+            expected: "x=E:H=r",
+            upstream: null,
+            conflictedCommit: null,
+        },
+        "ffwd when enough included included": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=3;Br=r",
+            expected: "x=E:H=r",
+            upstream: "2",
+            conflictedCommit: null,
+        },
+        "ffwd when enough included included, and equal": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=3;Br=r",
+            expected: "x=E:H=r",
+            upstream: "3",
+            conflictedCommit: null,
+        },
+        "not ffwd when skipped commit": {
+            initial: "x=S:Cr-3; C3-2; C2-1;Bmaster=2;Br=r",
+            upstream: "3",
+            expected: "x=E:Crr-2 r=r;H=rr",
         },
         "conflict": {
             initial: "x=S:C2-1;Cr-1 2=3;Bmaster=2;Br=r",
@@ -186,6 +227,12 @@ describe("rewriteCommits", function () {
             initial: "x=S:C2-1;C3-1;Cr-3;Bmaster=2;Br=r",
             expected: "x=E:Crr-2 r=r;H=rr",
             upstream: "3",
+            conflictedCommit: null,
+        },
+        "excessive upstream": {
+            initial: "x=S:C2-1;C3-2;Cr-2;Bmaster=3;Br=r",
+            expected: "x=E:Crr-3 r=r;H=rr",
+            upstream: "1",
             conflictedCommit: null,
         },
     };
@@ -244,28 +291,32 @@ describe("continueSubmodules", function () {
         },
         "change in sub is staged": {
             initial: "a=B:Ca-1;Ba=a|x=U:Os H=a",
-            expected: "x=E:I s=Sa:a",
+            expected: "x=E:Cadded 's'#M-2 s=Sa:a;Bmaster=M",
+            baseCommit: "2",
         },
         "rebase in a sub": {
             initial: `
 a=B:Cq-1;Cr-1;Bq=q;Br=r|
 x=U:C3-2 s=Sa:q;Bmaster=3;Os EHEAD,q,r!I q=q`,
             expected: `
-x=E:I s=Sa:qs;Os Cqs-r q=q!H=qs!E`
+x=E:CM-3 s=Sa:qs;Bmaster=M;Os Cqs-r q=q!H=qs!E`,
+            baseCommit: "3",
         },
         "rebase in a sub, was conflicted": {
             initial: `
 a=B:Cq-1;Cr-1;Bq=q;Br=r|
 x=U:C3-2 s=Sa:q;Bmaster=3;I *s=S:1*S:r*S:q;Os EHEAD,q,r!I q=q`,
             expected: `
-x=E:I s=Sa:qs;Os Cqs-r q=q!H=qs!E`
+x=E:CM-3 s=Sa:qs;Bmaster=M;I s=~;Os Cqs-r q=q!H=qs!E`,
+            baseCommit: "3",
         },
         "rebase two in a sub": {
             initial: `
 a=B:Cp-q;Cq-1;Cr-1;Bp=p;Br=r|
 x=U:C3-2 s=Sa:q;Bmaster=3;Os EHEAD,p,r!I q=q!Bp=p`,
+            baseCommit: "3",
             expected: `
-x=E:I s=Sa:ps;Os Cps-qs p=p!Cqs-r q=q!H=ps!E!Bp=p`
+x=E:CM-3 s=Sa:ps;I s=~;Bmaster=M;Os Cps-qs p=p!Cqs-r q=q!H=ps!E!Bp=p`
         },
         "rebase in two subs": {
             initial: `
@@ -274,8 +325,9 @@ x=S:C2-1 s=Sa:1,t=Sa:1;C3-2 s=Sa:q,t=Sa:q;Bmaster=3;
   Os EHEAD,p,r!I q=q!Bp=p;
   Ot EHEAD,z,r!I z=8!Bz=z;
 `,
+            baseCommit: "3",
             expected: `
-x=E:I s=Sa:ps,t=Sa:zt;
+x=E:CM-3 s=Sa:ps,t=Sa:zt;Bmaster=M;
   Os Cps-qs p=p!Cqs-r q=q!H=ps!E!Bp=p;
   Ot Czt-r z=8!H=zt!E!Bz=z;
 `,
@@ -298,7 +350,7 @@ Conflict in ${colors.red("s")}
         },
         "made a commit in a sub without a rebase": {
             initial: `a=B|x=U:Cfoo#9-1;B9=9;Os I a=b`,
-            expected: `x=E:I s=Sa:Ns;Os Cfoo#Ns-1 a=b!H=Ns`,
+            expected: `x=E:Cfoo#M-2 s=Sa:Ns;Bmaster=M;Os Cfoo#Ns-1 a=b!H=Ns`,
             baseCommit: "9",
             message: "foo",
         },
@@ -326,6 +378,9 @@ Conflict in ${colors.red("s")}
                 Object.keys(result.newCommits).forEach(name => {
                     commitMap[result.newCommits[name]] = "N" + name;
                 });
+                if (null !== result.metaCommit) {
+                    commitMap[result.metaCommit] = "M";
+                }
                 return {
                     commitMap: commitMap,
                 };

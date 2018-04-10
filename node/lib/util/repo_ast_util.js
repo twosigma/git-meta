@@ -596,7 +596,8 @@ exports.assertEqualRepoMaps = function (actual, expected, message) {
  * except that each commit ID is replaced with the value that it maps to in the
  * specified `commitMap`.  And each remote url that exists in the specified
  * `urlMap` is replaced by the value in that map.  URLs and commits missing
- * from the maps are kept as-is.
+ * from the maps are kept as-is.  The behavior is undefined if any commits are
+ * unmapped.
  *
  * @param {RepoAST} ast
  * @param {Object}  commitMap string to string
@@ -609,10 +610,8 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
     assert.isObject(urlMap);
 
     function mapCommitId(commitId) {
-        if (commitId in commitMap) {
-            return commitMap[commitId];
-        }
-        return commitId;
+        assert.property(commitMap, commitId);
+        return commitMap[commitId];
     }
 
     function mapSubmodule(submodule) {
@@ -621,8 +620,8 @@ exports.mapCommitsAndUrls = function (ast, commitMap, urlMap) {
             url = urlMap[url];
         }
         let sha = submodule.sha;
-        if (null !== sha && (sha in commitMap)) {
-            sha = commitMap[sha];
+        if (null !== sha) {
+            sha = mapCommitId(sha);
         }
         return new RepoAST.Submodule(url, sha);
     }
@@ -847,4 +846,23 @@ exports.cloneRepo = function (original, url) {
         notes: original.notes,
         currentBranchName: original.currentBranchName,
     });
+};
+
+/**
+ * Return all commits in the specified  `repo`.
+ * TODO: independent test
+ *
+ * @param {RepoAST} repo
+ * @return {Object} sha to `RepoAST.Commit`
+ */
+exports.listCommits = function (repo) {
+    assert.instanceOf(repo, RepoAST);
+    const commits = repo.commits;
+
+    // Also, commits from open submodules.
+
+    for (let subName in repo.openSubmodules) {
+        Object.assign(commits, repo.openSubmodules[subName].commits);
+    }
+    return commits;
 };

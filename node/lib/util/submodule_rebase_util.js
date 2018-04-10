@@ -37,7 +37,8 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const DoWorkQueue         = require("../util/do_work_queue");
+const GitUtil             = require("./git_util");
+const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
 const SubmoduleUtil       = require("./submodule_util");
@@ -73,6 +74,29 @@ const cleanupRebaseDir = co.wrap(function *(repo) {
             return rimraf(rebasePath, {}, callback);
         }));
     }
+});
+
+/**
+ * Make a new commit on the head of the specified `repo` having the same
+ * committer and message as the specified original `commit`, and return its
+ * sha.
+ *
+ * TODO: independent test
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @return {String}
+ */
+exports.makeCommit = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    const defaultSig = repo.defaultSignature();
+    const metaCommit = yield repo.createCommitOnHead([],
+                                                     commit.author(),
+                                                     defaultSig,
+                                                     commit.message());
+    return metaCommit.tostrS();
 });
 
 /**
@@ -178,8 +202,49 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     if (null !== upstream) {
         assert.instanceOf(upstream, NodeGit.Commit);
     }
-
     const head = yield repo.head();
+    const headSha = head.target().tostrS();
+    const branchSha = branch.id().tostrS();
+    const upstreamSha = (upstream && upstream.id().tostrS()) || null;
+
+    const result = {
+        commits: {},
+        conflictedCommit: null,
+    };
+
+    // If we're up-to-date with the commit to be rebased onto, return
+    // immediately.  Detach head as this is the normal behavior.
+
+    if (headSha === branchSha ||
+        (yield NodeGit.Graph.descendantOf(repo, headSha, branchSha))) {
+        repo.detachHead();
+        return result;                                                // RETURN
+    }
+
+    // If the upstream is non-null, but is an ancestor of HEAD or equal to it,
+    // libgit2 will try to rewrite commits that should not be rewritten and
+    // fail.  In this case, we set upstream to null, indicating at all commits
+    // should be included (as they should).
+
+    if (null !== upstream) {
+        if (upstreamSha === headSha ||
+           (yield NodeGit.Graph.descendantOf(repo, headSha, upstreamSha))) {
+            upstream = null;
+        }
+    }
+
+    // We can do a fast-forward if `branch` and its entire history should be
+    // included.  This requires two things to be true:
+    // 1. `branch` is a descendant of `head` or equal to `head`
+    // 2. `null === upstream` (implying that all ancestors are to be included)
+
+    if (null === upstream) {
+        if (yield NodeGit.Graph.descendantOf(repo, branchSha, headSha)) {
+            yield GitUtil.setHeadHard(repo, branch);
+            return result;                                            // RETURN
+        }
+    }
+
     const ontoAnnotated = yield NodeGit.AnnotatedCommit.fromRef(repo, head);
     const branchAnnotated =
                        yield NodeGit.AnnotatedCommit.lookup(repo, branch.id());
@@ -209,12 +274,22 @@ exports.subConflictErrorMessage = function (name) {
     return `Conflict in ${colors.red(name)}`;
 };
 
+/**
+ * Log a message indicating that the specified `commit` is being applied.
+ *
+ * @param {NodeGit.Commit} commit
+ */
+exports.logCommit = function (commit) {
+    assert.instanceOf(commit, NodeGit.Commit);
+    console.log(`Applying '${commit.message().split("\n")[0]}'`);
+};
 
 /**
  * Continue rebases in the submodules in the specifed `repo` having the
  * `index and `status`.  If staged changes are found in submodules that don't
  * have in-progress rebases, commit them using the specified message and
- * signature from the specified original `commit`.  Return an object describing
+ * signature from the specified original `commit`.  If there are any changes to
+ * commit, make a new commit in the meta-repo.   Return an object describing
  * any commits that were generated along with an error message if any continues
  * failed.
  *
@@ -223,6 +298,7 @@ exports.subConflictErrorMessage = function (name) {
  * @param {RepoStatus}         status
  * @param {NodeGit.Commit}     commit
  * @return {Object}
+ * @return {String|null}       metaCommit
  * @return {Object} return.commits  map from name to sha map
  * @return {Object} return.newCommits  from name to newly-created commits
  * @return {String|null} return.errorMessage
@@ -233,6 +309,7 @@ exports.continueSubmodules = co.wrap(function *(repo, index, status, commit) {
     assert.instanceOf(status, RepoStatus);
     assert.instanceOf(commit, NodeGit.Commit);
 
+    exports.logCommit(commit);
     const commits = {};
     const newCommits = {};
     const subs = status.submodules;
@@ -274,9 +351,19 @@ ${colors.green(rebaseInfo.onto)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    return {
+    yield index.write();
+    const result = {
         errorMessage: "" === errorMessage ? null : errorMessage,
         commits: commits,
         newCommits: newCommits,
+        metaCommit: null,
     };
+    if (null === result.errorMessage) {
+        if (status.isIndexDeepClean()) {
+            console.log("Nothing to commit.");
+        } else {
+            result.metaCommit = yield exports.makeCommit(repo, commit);
+        }
+    }
+    return result;
 });

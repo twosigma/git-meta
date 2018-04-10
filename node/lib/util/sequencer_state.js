@@ -113,7 +113,9 @@ CommitAndRef.prototype.toString = function () {
 class SequencerState {
     /**
      * Create a new `SequencerState` object.  The behavior is undefined unless
-     * `0 <= currentLength` and `commits.length > currentCommit`.
+     * `0 <= currentCommit` and `commits.length >= currentCommit`.  If
+     * `commits.length === currentCommit`, there are no more commits left on
+     * which to operate.
      *
      * @param {Object} properties
      * @param {TYPE}         properties.type
@@ -131,7 +133,7 @@ class SequencerState {
         assert.isArray(properties.commits);
         assert.isNumber(properties.currentCommit);
         assert(0 <= properties.currentCommit);
-        assert(properties.commits.length > properties.currentCommit);
+        assert(properties.commits.length >= properties.currentCommit);
 
         this.d_message = null;
         if ("message" in properties) {
@@ -212,6 +214,42 @@ class SequencerState {
             this.d_currentCommit === rhs.d_currentCommit &&
             this.d_message === rhs.d_message;
     }
+
+    /**
+     * Return a new `SequencerState` object having the same value as this
+     * object except where overriden by the fields in the optionally specified
+     * `properties`.
+     *
+     * @param {Object}       [properties]
+     * @param {String}       [type]
+     * @param {CommitAndRef} [originalHead]
+     * @param {CommitAndRef} [target]
+     * @param {Number}       [currentCommit]
+     * @param {[String]}     [commits]
+     * @param {String|null}  [message]
+     * @return {SequencerState}
+     */
+    copy(properties) {
+        if (undefined === properties) {
+            properties = {};
+        } else {
+            assert.isObject(properties);
+        }
+        return new SequencerState({
+            type: ("type" in properties) ? properties.type : this.d_type,
+            originalHead: ("originalHead" in properties) ?
+                               properties.originalHead : this.d_originalHead,
+            target: ("target" in properties) ?
+                                  properties.target : this.d_target,
+            currentCommit: ("currentCommit" in properties) ?
+                               properties.currentCommit : this.d_currentCommit,
+            commits: ("commits" in properties) ?
+                                  properties.commits : this.d_commits,
+            message: ("message" in properties) ?
+                                  properties.message : this.d_message,
+        });
+    }
+
 }
 
 SequencerState.prototype.toString = function () {

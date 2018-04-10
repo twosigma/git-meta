@@ -77,9 +77,9 @@ function ensureCherryInProgress(seq) {
  * a `Submodule`, update it in the specified `index` in the specified `repo`
  * and if that submodule is open, reset its HEAD, index, and worktree to
  * reflect that commit.  Otherwise, if it maps to `null`, remove it and deinit
- * it if it's open.  Obtain submodule repositories from the specified `opener`.
- *  The behavior is undefined if any referenced submodule is open and has index
- *  or workdir modifications.
+ * it if it's open.  Obtain submodule repositories from the specified `opener`,
+ * but do not open any closed repositories.  The behavior is undefined if any
+ * referenced submodule is open and has index or workdir modifications.
  *
  * @param {NodeGit.Repository} repo
  * @param {Open.Opener}        opener
@@ -318,8 +318,7 @@ exports.computeChanges = co.wrap(function *(repo, commit) {
  * Pick the specified `subs` in the specified `metaRepo` having the specified
  * `metaIndex`.  Stage new submodule commits in `metaRepo`.  Return an object
  * describing any commits that were generated and conflicted commits.  Use the
- * specified `opener` to open submodules.
- *
+ * specified `opener` to acces submodule repos. *
  * @param {NodeGit.Repository} metaRepo
  * @param {Open.Opener}        opener
  * @param {NodeGit.Index}      metaIndex
@@ -343,10 +342,11 @@ exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
         const change = subs[name];
         const commitText = "(" + GitUtil.shortSha(change.oldSha) + ".." +
             GitUtil.shortSha(change.newSha) + "]";
-        console.log(`Sub-repo ${colors.blue(name)}: cherry-picking commits \
+        console.log(`Sub-repo ${colors.blue(name)}: applying commits \
 ${colors.green(commitText)}.`);
 
         // Fetch the commit; it may not be present.
+
         yield fetcher.fetchSha(repo, name, change.newSha);
         yield fetcher.fetchSha(repo, name, change.oldSha);
         const newCommit = yield repo.getCommit(change.newSha);
@@ -388,27 +388,86 @@ Conflicting entries for submodule ${colors.red(name)}
 });
 
 /**
- * Finish the cherry-pick in progress in the specified `repo` having the
- * specified `index`.  Use the message and signature from the specified
- * original `commit`.  Return the sha of the newly-created commit.
+ * Rewrite the specified `commit` on top of HEAD in the specified `repo` using
+ * the specified `opener` to open submodules as needed.  The behavior is
+ * undefined unless the repository is clean.  Return an object describing the
+ * commits that were made and any error message; if no commit was made (because
+ * there were no changes to commit), `newMetaCommit` will be null.  Throw a
+ * `UserError` if URL changes or direct meta-repo changes are present in
+ * `commit`.
  *
  * @param {NodeGit.Repository} repo
- * @param {NodeGit.Index}      index
  * @param {NodeGit.Commit}     commit
- * @return {String}
+ * @return {Object}      return
+ * @return {String|null} return.newMetaCommit
+ * @return {Object}      returm.submoduleCommits
+ * @return {String|null} return.errorMessage
  */
-const finish = co.wrap(function *(repo, commit) {
+exports.rewriteCommit = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const defaultSig = repo.defaultSignature();
-    const metaCommit = yield repo.createCommitOnHead([],
-                                                     defaultSig,
-                                                     commit.committer(),
-                                                     commit.message());
-    yield SequencerStateUtil.cleanSequencerState(repo.path());
-    console.log("Cherry-pick complete.");
-    return metaCommit.tostrS();
+    const hasUrlChanges = yield exports.containsUrlChanges(repo, commit);
+    if (hasUrlChanges) {
+        // TODO: Dealing with these would be a huge hassle and is probably not
+        // worth it at the moment since the recommended policy for monorepo
+        // implementations is to prevent users from making URL changes anyway.
+
+        throw new UserError(`\
+Applying commits with submodule URL changes is not currently supported.
+Please try with normal 'git cherry-pick'.`);
+    }
+
+    const changes = yield exports.computeChanges(repo, commit);
+    const index = yield repo.index();
+
+    // Perform simple changes that don't require picks -- addition, deletions,
+    // and fast-forwards.
+
+    const opener = new Open.Opener(repo, null);
+    yield exports.changeSubmodules(repo, opener, index, changes.simpleChanges);
+
+    // Render any conflicts
+
+    let errorMessage =
+                  yield exports.writeConflicts(repo, index, changes.conflicts);
+
+    // Then do the cherry-picks.
+
+    const picks = yield exports.pickSubs(repo, opener, index, changes.changes);
+    const conflicts = picks.conflicts;
+
+    // Close any subs that were unnecessarily opened (i.e., because no commit
+    // was generated).
+
+    const closeSub = co.wrap(function *(path) {
+        const commits = picks.commits[path];
+        if ((undefined === commits || 0 === Object.keys(commits).length) &&
+            !(path in picks.conflicts)) {
+            console.log(`Closing ${colors.green(path)}`);
+            yield DeinitUtil.deinit(repo, path);
+        }
+    });
+    const opened = Array.from(yield opener.getOpenedSubs());
+    DoWorkQueue.doInParallel(opened, closeSub);
+
+    Object.keys(conflicts).sort().forEach(name => {
+        errorMessage += `Submodule ${colors.red(name)} is conflicted.\n`;
+    });
+
+    const result = {
+        submoduleCommits: picks.commits,
+        errorMessage: errorMessage === "" ? null : errorMessage,
+        newMetaCommit: null,
+    };
+    yield index.write();
+    if ("" === errorMessage &&
+        (0 !== Object.keys(changes.simpleChanges).length ||
+                                    0 !== Object.keys(picks.commits).length)) {
+        result.newMetaCommit =
+                            yield SubmoduleRebaseUtil.makeCommit(repo, commit);
+    }
+    return result;
 });
 
 /**
@@ -453,20 +512,6 @@ The repository has uncommitted changes.  Please stash or commit them before
 running cherry-pick.`);
     }
 
-    const hasUrlChanges = yield exports.containsUrlChanges(metaRepo, commit);
-    if (hasUrlChanges) {
-        // TODO: Dealing with these would be a huge hassle and is probably not
-        // worth it at the moment since the recommended policy for monorepo
-        // implementations is to prevent users from making URL changes anyway.
-
-        throw new UserError(`\
-Cherry-picking commits with submodule URL changes is not currently supported.
-Please try with normal 'git cherry-pick'.`);
-    }
-
-    const changes = yield exports.computeChanges(metaRepo, commit);
-    const metaIndex = yield metaRepo.index();
-
     // We're going to attempt a cherry-pick if we've made it this far, record a
     // cherry-pick file.
 
@@ -479,47 +524,12 @@ Please try with normal 'git cherry-pick'.`);
         commits: [commit.id().tostrS()],
     });
     yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
-
-    const opener = new Open.Opener(metaRepo, null);
-
-    // Perform simple changes that don't require picks -- addition, deletions,
-    // and fast-forwards.
-
-    yield exports.changeSubmodules(metaRepo,
-                                   opener,
-                                   metaIndex,
-                                   changes.simpleChanges);
-
-    // Render any conflicts
-
-    let errorMessage =
-          yield exports.writeConflicts(metaRepo, metaIndex, changes.conflicts);
-
-    // Then do the cherry-picks.
-
-    const picks = yield exports.pickSubs(metaRepo,
-                                         opener,
-                                         metaIndex,
-                                         changes.changes);
-
-    const conflicts = picks.conflicts;
-    Object.keys(conflicts).sort().forEach(name => {
-        errorMessage += `Submodule ${colors.red(name)} is conflicted.\n`;
-    });
-
-    const result = {
-        submoduleCommits: picks.commits,
-        errorMessage: errorMessage === "" ? null : errorMessage,
-        newMetaCommit: null,
-    };
-    yield metaIndex.write();
-    if ("" === errorMessage) {
-        if (0 === Object.keys(changes.simpleChanges).length &&
-            0 === Object.keys(picks.commits).length) {
-            yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
-            throw new UserError("Nothing to commit.");
-        }
-        result.newMetaCommit = yield finish(metaRepo, commit);
+    const result = yield exports.rewriteCommit(metaRepo, commit);
+    if (null === result.errorMessage) {
+        yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
+    }
+    if (null === result.newMetaCommit) {
+        console.log("Nothing to commit.");
     }
     return result;
 });
@@ -553,23 +563,14 @@ exports.continue = co.wrap(function *(repo) {
                                                                    index,
                                                                    status,
                                                                    commit);
-    yield index.write();
     const result = {
-        newMetaCommit: null,
+        newMetaCommit: subResult.metaCommit,
         submoduleCommits: subResult.commits,
         newSubmoduleCommits: subResult.newCommits,
         errorMessage: subResult.errorMessage,
     };
-    yield index.write();
     if (null === subResult.errorMessage) {
-        if (status.isIndexDeepClean() &&
-            0 === Object.keys(subResult.commits).length &&
-            0 === Object.keys(subResult.newCommits).length) {
-            yield SequencerStateUtil.cleanSequencerState(repo.path());
-            throw new UserError("Nothing to commit.");
-        }
-
-        result.newMetaCommit = yield finish(repo, commit);
+        yield SequencerStateUtil.cleanSequencerState(repo.path());
     }
     return result;
 });
