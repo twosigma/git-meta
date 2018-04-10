@@ -393,6 +393,9 @@ Submodule ${colors.red("s")} is conflicted.
             const onto = yield repo.getCommit(reverseCommitMap[c.onto]);
             const errorMessage = c.errorMessage || null;
             const result = yield RebaseUtil.rebase(repo, onto);
+            if (null !== result.errorMessage) {
+                assert.isString(result.errorMessage);
+            }
             assert.equal(result.errorMessage, errorMessage);
             return result;
         });

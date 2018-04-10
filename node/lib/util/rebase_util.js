@@ -184,6 +184,7 @@ running rebase.`);
     const result = {
         metaCommits: {},
         submoduleCommits: {},
+        errorMessage: null,
     };
 
     const headCommit = yield repo.getHeadCommit();
