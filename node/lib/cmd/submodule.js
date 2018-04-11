@@ -84,12 +84,13 @@ that submodule, followed by its name. `
         help: "create references in sub-repos matching refs in the meta-repo",
         description: `\
 Create references in sub-repos pointing to the commits indicated by the \
-reference having that name in the meta-repo.  The default behavior is to \
-map every reference in the meta-repo into every open sub-repo.`,
+reference having that name in the meta-repo.`,
     });
 
     addRefsParser.addArgument(["path"], {
-        help: "if provided, open only submodules in selected paths",
+        help: `
+if provided, apply to submodules in selected paths only, otherwise apply to \
+all`,
         nargs: "*",
     });
 
