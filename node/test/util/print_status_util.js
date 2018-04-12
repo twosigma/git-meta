@@ -34,7 +34,6 @@ const assert  = require("chai").assert;
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const Rebase              = require("../../lib/util/rebase");
 const RepoStatus          = require("../../lib/util/repo_status");
 const PrintStatusUtil     = require("../../lib/util/print_status_util");
 const SequencerState      = require("../../lib/util/sequencer_state");
@@ -638,30 +637,6 @@ describe("PrintStatusUtil", function () {
         });
     });
 
-    describe("printRebase", function () {
-        const cases = {
-            "basic": {
-                input: new Rebase("master", "xxx", "ffffffffffffffff"),
-                check: /rebase in progress/
-            },
-            "branch": {
-                input: new Rebase("master", "xxx", "ffffffffffffffff"),
-                check: /master/
-            },
-            "sha": {
-                input: new Rebase("master", "xxx", "ffffffffffffffff"),
-                check: /ffff/,
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, function () {
-                const result = PrintStatusUtil.printRebase(c.input);
-                assert.match(result, c.check);
-            });
-        });
-    });
-
     describe("getSequencerCommand", function () {
         const cases = {
             "merge": {
@@ -767,13 +742,6 @@ A rebase is in progress.
   (use "git meta rebase --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
-            },
-            "rebase": {
-                input: new RepoStatus({
-                    currentBranchName: "master",
-                    rebase: new Rebase("x", "y", "z"),
-                }),
-                regex: /rebas/,
             },
             "detached": {
                 input: new RepoStatus({
