@@ -482,8 +482,8 @@ exports.readRAST = co.wrap(function *(repo) {
         for (let i = 0; i < subNames.length; ++i) {
             const subName = subNames[i];
             const status = yield NodeGit.Submodule.status(repo, subName, 0);
-            const WD_UNINITIALIZED = (1 << 7);  // means "closed"
-            if (!(status & WD_UNINITIALIZED)) {
+            const IN_WD = NodeGit.Submodule.STATUS.IN_WD;
+            if (status & IN_WD) {
                 const sub = yield NodeGit.Submodule.lookup(repo, subName);
                 const subRepo = yield sub.open();
                 const subAST = yield exports.readRAST(subRepo);
