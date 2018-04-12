@@ -42,7 +42,6 @@ const path    = require("path");
 
 const GitUtil             = require("./git_util");
 const SequencerState      = require("./sequencer_state");
-const Rebase              = require("./rebase");
 const RepoStatus          = require("./repo_status");
 const TextUtil            = require("./text_util");
 
@@ -345,23 +344,6 @@ exports.accumulateStatus = function (status) {
 };
 
 /**
- * Return a message describing the specified `rebase`.
- *
- * @param {Rebase}
- * @return {String}
- */
-exports.printRebase = function (rebase) {
-    assert.instanceOf(rebase, Rebase);
-    const shortSha = GitUtil.shortSha(rebase.onto);
-    return `${colors.red("rebase in progress; onto ", shortSha)}
-You are currently rebasing branch '${rebase.headName}' on '${shortSha}'.
-  (after resolving conflicts mark the corrected paths
-   with 'git meta add', then run "git meta rebase --continue")
-  (use "git meta rebase --abort" to check out the original branch)
-`;
-};
-
-/**
  * Return the command to which the specified sequencer `type` corresponds.
  *
  * @param {SequencerState.TYPE} type
@@ -422,10 +404,6 @@ exports.printRepoStatus = function (status, cwd) {
     assert.isString(cwd);
 
     let result = "";
-
-    if (null !== status.rebase) {
-        result += exports.printRebase(status.rebase);
-    }
 
     result += exports.printCurrentBranch(status);
 
