@@ -32,10 +32,13 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
+const path    = require("path");
 const NodeGit = require("nodegit");
 
-const DeinitUtil = require("../../lib/util/deinit_util");
-const TestUtil   = require("../../lib/util/test_util");
+const DeinitUtil         = require("../../lib/util/deinit_util");
+const SparseCheckoutUtil = require("../../lib/util/sparse_checkout_util");
+const TestUtil           = require("../../lib/util/test_util");
 
 describe("deinit_util", function () {
 
@@ -83,5 +86,46 @@ describe("deinit_util", function () {
         yield DeinitUtil.deinit(repo, "x/y");
         const closedStatus = yield NodeGit.Submodule.status(repo, "x/y", 0);
         assert(closedStatus & WD_UNINITIALIZED);
+    }));
+    it("sparse mode", co.wrap(function *() {
+
+        // Create and set up repos.
+
+        const repo = yield TestUtil.createSimpleRepository();
+        const baseSubRepo = yield TestUtil.createSimpleRepository();
+        const baseSubPath = baseSubRepo.workdir();
+        const subHead = yield baseSubRepo.getHeadCommit();
+
+        // Set up the submodule.
+
+        const sub = yield NodeGit.Submodule.addSetup(repo,
+                                                     baseSubPath,
+                                                     "x/y",
+                                                     1);
+        const subRepo = yield sub.open();
+        const origin = yield subRepo.getRemote("origin");
+        yield origin.connect(NodeGit.Enums.DIRECTION.FETCH,
+                             new NodeGit.RemoteCallbacks(),
+                             function () {});
+                             yield subRepo.fetch("origin", {});
+        subRepo.setHeadDetached(subHead.id().tostrS());
+        yield sub.addFinalize();
+
+        // Commit the submodule it.
+
+        yield TestUtil.makeCommit(repo, ["x/y", ".gitmodules"]);
+
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        yield DeinitUtil.deinit(repo, "x/y");
+
+        // Verify that directory is gone
+        const subPath = path.join(repo.workdir(), "x", "y");
+        let failed = false;
+        try {
+            yield fs.readdir(subPath);
+        } catch (e) {
+            failed = true;
+        }
+        assert(failed);
     }));
 });

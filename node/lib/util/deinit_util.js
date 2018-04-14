@@ -39,6 +39,14 @@ const rimraf  = require("rimraf");
 const path    = require("path");
 const fs      = require("fs-promise");
 
+const SparseCheckoutUtil = require("./sparse_checkout_util");
+
+function doRimRaf(fileName) {
+    return new Promise(callback => {
+        return rimraf(fileName, {}, callback);
+    });
+}
+
 /**
  * De-initialize the repository having the specified `submoduleName` in the
  * specified `repo`.
@@ -69,15 +77,14 @@ exports.deinit = co.wrap(function *(repo, submoduleName) {
     const submodulePath = path.join(rootDir, submoduleName);
     const files = yield fs.readdir(submodulePath);
 
-    // Use 'rimraf' on each top level entry in the submodule'.
-
-    const removeFiles = files.map(filename => {
-        return new Promise(callback => {
-            return rimraf(path.join(submodulePath, filename), {}, callback);
-        });
-    });
-
-    yield removeFiles;
+    const sparse = yield SparseCheckoutUtil.inSparseMode(repo);
+    if (sparse) {
+        yield doRimRaf(submodulePath);
+    } else {
+        yield files.map(co.wrap(function *(filename) {
+            yield doRimRaf(path.join(submodulePath, filename));
+        }));
+    }
 
     // Using a very stupid algorithm here to find and remove the submodule
     // entry.  This logic could be smarter (maybe use regexes) and more
