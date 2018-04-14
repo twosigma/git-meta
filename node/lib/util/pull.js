@@ -35,10 +35,11 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil       = require("../util/git_util");
-const RebaseUtil    = require("../util/rebase_util");
-const StatusUtil    = require("../util/status_util");
-const UserError     = require("../util/user_error");
+const ConfigUtil    = require("./config_util");
+const GitUtil       = require("./git_util");
+const RebaseUtil    = require("./rebase_util");
+const StatusUtil    = require("./status_util");
+const UserError     = require("./user_error");
 
 /**
  * Pull the specified `source` branch from the remote having the specified
@@ -86,8 +87,7 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
 
 
 /**
- * Return true if the user has requested a rebase (explicitly or
- * via config).
+ * Return true if the user has requested a rebase (explicitly or via config).
  *
  * @param {Object} args
  * @param {Boolean} args.rebase
@@ -101,17 +101,10 @@ exports.userWantsRebase = co.wrap(function*(args, repo, branch) {
         return args.rebase;
     }
 
-    try {
-        const configVar = `branch.${branch.shorthand()}.rebase`;
-        return yield GitUtil.configIsTrue(repo, configVar);
-    } catch (e) {
-        // no branch config, try global config
+    const branchVar = `branch.${branch.shorthand()}.rebase`;
+    const branchVal = yield ConfigUtil.configIsTrue(repo, branchVar);
+    if (null !== branchVal) {
+        return branchVal;
     }
-
-    try {
-        return yield GitUtil.configIsTrue(repo, "pull.rebase");
-    } catch (e) {
-        // no config, default is false
-        return false;
-    }
+    return (yield ConfigUtil.configIsTrue(repo, "pull.rebase")) || false;
 });
