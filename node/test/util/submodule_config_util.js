@@ -37,12 +37,132 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
-const DeinitUtil          = require("../../lib/util/deinit_util");
+const SparseCheckoutUtil  = require("../../lib/util/sparse_checkout_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 const UserError           = require("../../lib/util/user_error");
 
 describe("SubmoduleConfigUtil", function () {
+
+    describe("clearSubmoduleConfigEntry", function () {
+        function configPath(repo) {
+            return path.join(repo.path(), "config");
+        }
+        function getConfigContent(repo) {
+            return fs.readFileSync(configPath(repo), "utf8");
+        }
+        it("noop", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const content = getConfigContent(repo);
+            yield SubmoduleConfigUtil.clearSubmoduleConfigEntry(repo.path(),
+                                                                "foo");
+            const result = getConfigContent(repo);
+            assert.equal(content, result);
+        }));
+        it("remove breathing", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const baseSubRepo = yield TestUtil.createSimpleRepository();
+            const baseSubPath = baseSubRepo.workdir();
+            const content = getConfigContent(repo);
+            yield NodeGit.Submodule.addSetup(repo, baseSubPath, "x/y", 1);
+            yield SubmoduleConfigUtil.clearSubmoduleConfigEntry(repo.path(),
+                                                                "x/y");
+            const result = getConfigContent(repo);
+            assert.equal(content, result);
+        }));
+    });
+
+    describe("deinit", function () {
+
+        // Going to do a simple test here to verify that after closing a
+        // submodule:
+        //
+        // - the submodule dir contains only the `.git` line file.
+        // - the git repo is in a clean state
+
+        it("breathing", co.wrap(function *() {
+
+            // Create and set up repos.
+
+            const repo = yield TestUtil.createSimpleRepository();
+            const baseSubRepo = yield TestUtil.createSimpleRepository();
+            const baseSubPath = baseSubRepo.workdir();
+            const subHead = yield baseSubRepo.getHeadCommit();
+
+            // Set up the submodule.
+
+            const sub = yield NodeGit.Submodule.addSetup(repo,
+                                                         baseSubPath,
+                                                         "x/y",
+                                                         1);
+            const subRepo = yield sub.open();
+            const origin = yield subRepo.getRemote("origin");
+            yield origin.connect(NodeGit.Enums.DIRECTION.FETCH,
+                                 new NodeGit.RemoteCallbacks(),
+                                 function () {});
+                                 yield subRepo.fetch("origin", {});
+            subRepo.setHeadDetached(subHead.id().tostrS());
+            yield sub.addFinalize();
+
+            // Commit the submodule it.
+
+            yield TestUtil.makeCommit(repo, ["x/y", ".gitmodules"]);
+
+            // Verify that the status currently indicates a visible submodule.
+
+            const addedStatus = yield NodeGit.Submodule.status(repo, "x/y", 0);
+            const WD_UNINITIALIZED = (1 << 7);  // means "closed"
+            assert(!(addedStatus & WD_UNINITIALIZED));
+
+            // Then close it and recheck status.
+
+            yield SubmoduleConfigUtil.deinit(repo, "x/y");
+            const closedStatus =
+                                yield NodeGit.Submodule.status(repo, "x/y", 0);
+            assert(closedStatus & WD_UNINITIALIZED);
+        }));
+        it("sparse mode", co.wrap(function *() {
+
+            // Create and set up repos.
+
+            const repo = yield TestUtil.createSimpleRepository();
+            const baseSubRepo = yield TestUtil.createSimpleRepository();
+            const baseSubPath = baseSubRepo.workdir();
+            const subHead = yield baseSubRepo.getHeadCommit();
+
+            // Set up the submodule.
+
+            const sub = yield NodeGit.Submodule.addSetup(repo,
+                                                         baseSubPath,
+                                                         "x/y",
+                                                         1);
+            const subRepo = yield sub.open();
+            const origin = yield subRepo.getRemote("origin");
+            yield origin.connect(NodeGit.Enums.DIRECTION.FETCH,
+                                 new NodeGit.RemoteCallbacks(),
+                                 function () {});
+                                 yield subRepo.fetch("origin", {});
+            subRepo.setHeadDetached(subHead.id().tostrS());
+            yield sub.addFinalize();
+
+            // Commit the submodule it.
+
+            yield TestUtil.makeCommit(repo, ["x/y", ".gitmodules"]);
+
+            yield SparseCheckoutUtil.setSparseMode(repo);
+            yield SubmoduleConfigUtil.deinit(repo, "x/y");
+
+            // Verify that directory is gone
+            const subPath = path.join(repo.workdir(), "x", "y");
+            let failed = false;
+            try {
+                yield fs.readdir(subPath);
+            } catch (e) {
+                failed = true;
+            }
+            assert(failed);
+        }));
+    });
 
     describe("computeRelativeGitDir", function () {
         const cases = {
@@ -459,9 +579,24 @@ describe("SubmoduleConfigUtil", function () {
     describe("initSubmodule", function () {
         it("breathing", co.wrap(function *() {
             const repoPath = yield TestUtil.makeTempDir();
-            yield fs.mkdir(path.join(repoPath, ".git"));
-            const configPath = path.join(repoPath, ".git",  "config");
+            const configPath = path.join(repoPath, "config");
             yield fs.writeFile(configPath, "foo\n");
+            yield SubmoduleConfigUtil.initSubmodule(repoPath, "xxx", "yyy");
+            const data = yield fs.readFile(configPath, {
+                encoding: "utf8"
+            });
+            const expected =`\
+foo
+[submodule "xxx"]
+\turl = yyy
+`;
+            assert.equal(data, expected);
+        }));
+        it("already there", co.wrap(function *() {
+            const repoPath = yield TestUtil.makeTempDir();
+            const configPath = path.join(repoPath, "config");
+            yield fs.writeFile(configPath, "foo\n");
+            yield SubmoduleConfigUtil.initSubmodule(repoPath, "xxx", "zzz");
             yield SubmoduleConfigUtil.initSubmodule(repoPath, "xxx", "yyy");
             const data = yield fs.readFile(configPath, {
                 encoding: "utf8"
@@ -518,7 +653,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield DeinitUtil.deinit(repo, subName);
+            yield SubmoduleConfigUtil.deinit(repo, subName);
             const repoPath = repo.workdir();
             const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                      originUrl,
@@ -561,7 +696,7 @@ foo
             const sub = yield NodeGit.Submodule.lookup(repo, "foo");
             const subRepo = yield sub.open();
             NodeGit.Remote.setUrl(subRepo, "origin", "/bar");
-            yield DeinitUtil.deinit(repo, "foo");
+            yield SubmoduleConfigUtil.deinit(repo, "foo");
             const newSub =
                 yield SubmoduleConfigUtil.initSubmoduleAndRepo("",
                                                                repo,
@@ -629,7 +764,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield DeinitUtil.deinit(repo, "foo");
+            yield SubmoduleConfigUtil.deinit(repo, "foo");
 
             // Remove `foo` dir, otherwise, we will not need to re-init the
             // repo and the template will not be executed.

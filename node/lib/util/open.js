@@ -38,7 +38,6 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
-const DeinitUtil          = require("./deinit_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
@@ -88,7 +87,7 @@ exports.openOnCommit = co.wrap(function *(fetcher,
         yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
     }
     catch (e) {
-        yield DeinitUtil.deinit(metaRepo, submoduleName);
+        yield SubmoduleConfigUtil.deinit(metaRepo, submoduleName);
         throw e;
     }
 

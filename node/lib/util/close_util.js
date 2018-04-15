@@ -35,12 +35,12 @@ const NodeGit = require("nodegit");
 const co      = require("co");
 const colors  = require("colors");
 
-const DeinitUtil      = require("../util/deinit_util");
-const DoWorkQueue     = require("../util/do_work_queue");
-const Hook            = require("../util/hook");
-const StatusUtil      = require("../util/status_util");
-const SubmoduleUtil   = require("../util/submodule_util");
-const UserError       = require("../util/user_error");
+const DoWorkQueue         = require("../util/do_work_queue");
+const Hook                = require("../util/hook");
+const StatusUtil          = require("../util/status_util");
+const SubmoduleConfigUtil = require("../util/submodule_config_util");
+const SubmoduleUtil       = require("../util/submodule_util");
+const UserError           = require("../util/user_error");
 
 
 /**
@@ -96,7 +96,11 @@ Pass ${colors.magenta("--force")} to close it anyway.
                 return;                                               // RETURN
             }
         }
-        yield DeinitUtil.deinit(repo, name);
+        // TODO: something smarter so that we're not doing an O(N^2) operation
+        // here.  Probably not going to matter for now as few users will every
+        // have enough submodules open that it will cause a problem.
+
+        yield SubmoduleConfigUtil.deinit(repo, name);
         subsClosedSuccessfully.push(name);
     });
     yield DoWorkQueue.doInParallel(subsToClose, closer);

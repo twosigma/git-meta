@@ -39,8 +39,8 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 describe("close_util", function () {
     describe("close", function () {
         // Don't need to test that deinitialization works, that's tested in
-        // deinit_util; just need to see that we handle paths and dirty
-        // sumobulde situations.
+        // submodule_config_util; just need to see that we handle paths and
+        // dirty submodule situations.
 
         const cases = {
             "trivial": {
