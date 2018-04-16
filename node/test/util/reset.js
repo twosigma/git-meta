@@ -30,61 +30,119 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
-const path   = require("path");
+const assert  = require("chai").assert;
+const co      = require("co");
+const fs      = require("fs-promise");
+const NodeGit = require("nodegit");
+const path    = require("path");
 
-const Open            = require("../../lib/util/open");
-const Reset           = require("../../lib/util/reset");
-const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const UserError       = require("../../lib/util/user_error");
+const Reset               = require("../../lib/util/reset");
+const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
+const SparseCheckoutUtil  = require("../../lib/util/sparse_checkout_util");
+const SubmoduleChange     = require("../../lib/util/submodule_change");
+const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
+const SubmoduleUtil       = require("../../lib/util/submodule_util");
 
 describe("reset", function () {
-    describe("validateClean", function () {
+    describe("resetMetaRepo", function () {
         const cases = {
-            "trivial": {
-                state: "x=S",
-                shas: {},
-                fails: false,
+            "noop": {
+                input: "x=S",
+                to: "1",
             },
-            "open and clean": {
-                state: "a=B|x=U:Os",
-                shas: {},
-                fails: false,
+            "another": {
+                input: "x=S:C2-1;Bfoo=2",
+                to: "2",
+                expected: "x=E:I 2=2;W 2",
             },
-            "open, dirty, but existent": {
-                state: "a=B|x=U:Os W README.md=8888",
-                shas: { s: "3" },
-                fails: false,
+            "a sub": {
+                input: "a=B:Ca-1;Ba=a|x=U:C3 s=Sa:a;Bfoo=3",
+                to: "3",
+                expected: "x=E:I s=Sa:a,README.md;W README.md=hello world",
             },
-            "open, dirty, and gone": {
-                state: "a=B|x=U:Os W README.md=8888",
-                shas: { t: "3" },
-                fails: true,
+            "a new sub": {
+                input: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
+                to: "2",
+                expected: "x=E:I s=Sa:1",
+            },
+            "removed a sub": {
+                input: "a=B|x=U:C3-2 s;Bfoo=3",
+                to: "3",
+                expected: "x=E:I s",
             },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
+            const updateHead = co.wrap(function *(repos, maps) {
+                const repo = repos.x;
+                const rev = maps.reverseCommitMap;
+                const index = yield repo.index();
+                const commit = yield repo.getCommit(rev[c.to]);
+                const head = yield repo.getHeadCommit();
+                const headTree = yield head.getTree();
+                const commitTree = yield commit.getTree();
+                const diff = yield NodeGit.Diff.treeToTree(repo,
+                                                           headTree,
+                                                           commitTree,
+                                                           null);
+                const changes =
+                   yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff, true);
+
+                yield Reset.resetMetaRepo(repo, index, commit, changes);
+                yield index.write();
+                const fromWorkdir =
+                      yield SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+                const fromIndex =
+                 yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+                assert.deepEqual(fromIndex, fromWorkdir);
+            });
             it(caseName, co.wrap(function *() {
-                const w = yield RepoASTTestUtil.createMultiRepos(c.state);
-                const repo = w.repos.x;
-                const opener = new Open.Opener(repo, null);
-                let exception;
-                try {
-                    yield Reset.validateClean(opener, c.shas);
-                } catch (e) {
-                    exception = e;
-                }
-                if (undefined === exception) {
-                    assert.equal(false, c.fails);
-                } else {
-                    if (!(exception instanceof UserError) || !c.fails) {
-                        throw exception;
-                    }
-                }
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               updateHead);
+
             }));
         });
-    });
+        it("submodule directory is cleaned up", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo(
+                                                            "U:C3-2 s;Bfoo=3");
+            const repo = written.repo;
+            const rev = written.oldCommitMap;
+            const index = yield repo.index();
+            const commit = yield repo.getCommit(rev["3"]);
+            const changes = {
+                s: new SubmoduleChange(rev["1"], null),
+            };
+            yield Reset.resetMetaRepo(repo, index, commit, changes);
+            let exists = true;
+            try {
+                yield fs.stat(path.join(repo.workdir(), "s"));
+            } catch (e) {
+                exists = false;
+            }
+            assert.equal(false, exists);
+        }));
+        it("no directory creatd in sparse mode", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo(
+                                                      "S:C2-1 s=S/a:1;Bfoo=2");
+            const repo = written.repo;
+            yield SparseCheckoutUtil.setSparseMode(repo);
+            const rev = written.oldCommitMap;
+            const index = yield repo.index();
+            const commit = yield repo.getCommit(rev["2"]);
+            const changes = {
+                s: new SubmoduleChange(null, rev["1"]),
+            };
+            yield Reset.resetMetaRepo(repo, index, commit, changes);
+            let exists = true;
+            try {
+                yield fs.stat(path.join(repo.workdir(), "s"));
+            } catch (e) {
+                exists = false;
+            }
+            assert.equal(false, exists);
+        }));
+   });
     describe("reset", function () {
 
         // We are deferring the actual reset logic to NodeGit, so we are not
@@ -109,26 +167,8 @@ describe("reset", function () {
                 to: "1",
                 type: TYPE.HARD,
             },
-            "meta soft": {
-                initial: "x=S:C2-1 README.md=aaa;Bfoo=2",
-                to: "2",
-                type: TYPE.SOFT,
-                expected: "x=E:Bmaster=2;I README.md=hello world",
-            },
-            "meta mixed": {
-                initial: "x=S:C2-1 README.md=aaa;Bfoo=2",
-                to: "2",
-                type: TYPE.MIXED,
-                expected: "x=E:Bmaster=2;W README.md=hello world",
-            },
-            "meta hard": {
-                initial: "x=S:C2-1 README.md=aaa;Bfoo=2",
-                to: "2",
-                type: TYPE.HARD,
-                expected: "x=E:Bmaster=2",
-            },
             "unchanged sub-repo not open": {
-                initial: "a=B|x=U:C4-2 x=y;Bfoo=4",
+                initial: "a=B|x=U:C4-2 t=Sa:1;Bfoo=4",
                 to: "4",
                 type: TYPE.HARD,
                 expected: "x=E:Bmaster=4"
@@ -171,12 +211,6 @@ a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Bf=3;Os`,
                 type: TYPE.SOFT,
                 expected: "x=E:Os H=1!I a=a;Bmaster=2",
             },
-            "hard, submodule with changes should refuse": {
-                initial: `a=B|x=U:Os W README.md=888`,
-                to: "1",
-                type: TYPE.HARD,
-                fails: true,
-            },
             "merge should do as HARD but not refuse": {
                 initial: `a=B|x=U:Os W README.md=888`,
                 to: "1",
@@ -188,6 +222,12 @@ a=B:Ca-1;Bmaster=a|x=U:C3-2 s=Sa:a;Bmaster=3;Bf=3;Os`,
                 to: "1",
                 expected: "x=E:Bmaster=1;I s=Sa:1",
                 type: TYPE.SOFT,
+            },
+            "submodule with unchanged head but changes": {
+                initial: "a=B|x=U:Os W README.md=888",
+                to: "2",
+                type: TYPE.HARD,
+                expected: "x=E:Os",
             },
         };
         Object.keys(cases).forEach(caseName => {

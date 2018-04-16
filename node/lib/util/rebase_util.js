@@ -37,7 +37,6 @@ const NodeGit = require("nodegit");
 
 const Checkout            = require("./checkout");
 const CherryPickUtil      = require("./cherry_pick_util");
-const DoWorkQueue         = require("./do_work_queue");
 const Reset               = require("./reset");
 const GitUtil             = require("./git_util");
 const Hook                = require("./hook");
@@ -45,7 +44,6 @@ const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const StatusUtil          = require("./status_util");
 const SubmoduleRebaseUtil = require("./submodule_rebase_util");
-const SubmoduleUtil       = require("./submodule_util");
 const UserError           = require("./user_error");
 
 const CommitAndRef = SequencerState.CommitAndRef;
@@ -237,26 +235,8 @@ exports.abort = co.wrap(function *(repo) {
 
     const seq = yield SequencerStateUtil.readSequencerState(repo.path());
     ensureRebaseInProgress(seq);
-
-    // This is a little "heavy-handed'.  TODO: abort active rebases in only
-    // those open submodueles whose rebases are associated with the one in the
-    // meta-repo.  It's possible (though unlikely) that the user could have an
-    // independent rebase going in an open submodules.
-
-    const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
-    const abortSub = co.wrap(function *(name) {
-        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-        if (!subRepo.isRebasing()) {
-            return;                                                   // RETURN
-        }
-        const subRebase = yield NodeGit.Rebase.open(subRepo);
-        subRebase.abort();
-    });
-
-    yield DoWorkQueue.doInParallel(openSubs, abortSub);
-
     const commit = yield repo.getCommit(seq.originalHead.sha);
-    yield Reset.reset(repo, commit, Reset.TYPE.HARD);
+    yield Reset.reset(repo, commit, Reset.TYPE.MERGE);
     yield restoreHeadBranch(repo, seq);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
 });

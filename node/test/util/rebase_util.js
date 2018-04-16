@@ -190,7 +190,7 @@ describe("rebase", function () {
             onto: "1",
         },
         "ffwd": {
-            initial: "x=S:C2-1;Bfoo=2",
+            initial: "x=S:C2-1 s=S/a:1;Bfoo=2",
             onto: "2",
             expected: "x=E:Bmaster=2",
         },
@@ -296,7 +296,7 @@ x=E:C3M-4 s=Sa:cs;Bmaster=3M;Os Ccs-bs c=c!Cbs-d b=b`,
         },
         "rebase with ffwd changes in sub and meta": {
             initial: `
-a=B:Bmaster=3;C2-1 s=Sb:q;C3-2 s=Sb:r,rar=wow|
+a=B:Bmaster=3;C2-1 s=Sb:q;C3-2 s=Sb:r|
 b=B:Cq-1;Cr-q;Bmaster=r|
 x=Ca:Bmaster=2;Os`,
             onto: "3",
@@ -496,7 +496,7 @@ x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;H=4;
     QR 3: 4: 0 3;
     Os I foo=bar!Edetached HEAD,b,c!H=c!Bb=b!Bc=c`,
             errorMessage: `\
-Conflict in ${colors.red("s")}
+Submodule ${colors.red("s")} is conflicted.
 `,
             expected: `
 x=E:Os Cas-c foo=bar!H=as!Edetached HEAD,b,c!Bb=b!Bc=c!I *c=~*c*d!
