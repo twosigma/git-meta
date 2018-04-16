@@ -35,6 +35,7 @@
  the meta-repo should use this hook.
  */
 
+const ConfigUtil = require("./config_util");
 const NodeGit = require("nodegit");
 const GitUtil = require("./git_util");
 const SubmoduleUtil = require("./submodule_util");
@@ -73,11 +74,11 @@ exports.urlToLocalPath = function *(repo, url) {
 
     const config = yield repo.config();
     const subrepoUrlBase =
-       (yield GitUtil.getConfigString(config, "gitmeta.subrepourlbase")) || "";
+    (yield ConfigUtil.getConfigString(config, "gitmeta.subrepourlbase")) || "";
     const subrepoRootPath =
         yield config.getStringBuf("gitmeta.subreporootpath");
     let subrepoSuffix =
-        (yield GitUtil.getConfigString(config, "gitmeta.subreposuffix")) || "";
+     (yield ConfigUtil.getConfigString(config, "gitmeta.subreposuffix")) || "";
     if (!url.startsWith(subrepoUrlBase)) {
         throw "Your git configuration gitmeta.subrepoUrlBase, '" +
             subrepoUrlBase + "', must be a prefix of all submodule " +

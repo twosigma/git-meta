@@ -47,23 +47,6 @@ const UserError           = require("../../lib/util/user_error");
 const WriteRepoASTUtil    = require("../../lib/util/write_repo_ast_util");
 
 describe("GitUtil", function () {
-    describe("getConfigString", function () {
-        it("exists", co.wrap(function *() {
-            const written = yield RepoASTTestUtil.createRepo("S");
-            const repo = written.repo;
-            const configPath = path.join(repo.path(), "config");
-            yield fs.appendFile(configPath, `\
-[foo]
-        bar = baz
-`);
-            const config = yield repo.config();
-            const goodResult =
-                              yield GitUtil.getConfigString(config, "foo.bar");
-            assert.equal(goodResult, "baz");
-            const badResult = yield GitUtil.getConfigString(config, "yyy.zzz");
-            assert.isNull(badResult);
-        }));
-    });
     describe("getTrackingInfo", function () {
         const cases = {
             "no tracking": {

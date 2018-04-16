@@ -42,8 +42,9 @@ const fs           = require("fs-promise");
 const NodeGit      = require("nodegit");
 const path         = require("path");
 
-const DoWorkQueue  = require("../util/do_work_queue");
-const UserError    = require("../util/user_error");
+const ConfigUtil   = require("./config_util");
+const DoWorkQueue  = require("./do_work_queue");
+const UserError    = require("./user_error");
 
 /**
  * If the directory identified by the specified `dir` contains a ".git"
@@ -112,24 +113,6 @@ exports.findBranch = co.wrap(function *(repo, branchName) {
 });
 
 /**
- * Return the string in the specified `config` for the specified `key`, or null
- * if `key` does not exist in `config`.
- *
- * @param {NodeGit.Config} config
- * @param {String}         key
- * @return {String|null}
- */
-exports.getConfigString = co.wrap(function *(config, key) {
-    try {
-        return yield config.getStringBuf(key);
-    }
-    catch (e) {
-        // Unfortunately, no other way to handle a missing config entry
-    }
-    return null;
-});
-
-/**
  * Return the tracking information for the specified `branch`, or null if it
  * has none.
  *
@@ -157,15 +140,15 @@ exports.getTrackingInfo = co.wrap(function *(repo, branch) {
 
     // Try to read a 'pushRemote' for the branch.
 
-    let pushRemote = yield exports.getConfigString(
+    let pushRemote = yield ConfigUtil.getConfigString(
                                      config,
                                     `branch.${branch.shorthand()}.pushRemote`);
 
     // If no 'pushRemote', try to read a 'pushDefault' for the repo.
 
     if (null === pushRemote) {
-        pushRemote = yield exports.getConfigString(config,
-                                                   "remote.pushDefault");
+        pushRemote = yield ConfigUtil.getConfigString(config,
+                                                      "remote.pushDefault");
     }
 
     if (1 === parts.length) {
@@ -931,22 +914,6 @@ exports.getParentCommit = co.wrap(function *(repo, commit) {
     }
     const parentId = commit.parentId(0);
     return  yield repo.getCommit(parentId);
-});
-
-/**
- * Returns whether a config variable is, according to git's reckoning,
- * true.  That is, it's set to 'true', 'yes', or 'on'.
- * @async
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit} configVar
- * @return boolean
- * @throws if the configuration variable doesn't exist
-*/
-exports.configIsTrue = co.wrap(function*(repo, configVar) {
-    const config = yield repo.config();
-    const configured = yield config.getStringBuf(configVar);
-    return (configured === "true" || configured === "yes" ||
-            configured === "on");
 });
 
 /**
