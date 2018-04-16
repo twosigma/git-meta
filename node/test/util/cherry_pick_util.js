@@ -211,14 +211,26 @@ describe("containsUrlChanges", function () {
             input: "S:C2-1 s=Sa:1;C3-2 s=Sb:1;H=3",
             expected: true,
         },
+        "with ancestor": {
+            input: "S:C2-1 s=Sa:1;C3-2 s=Sb:1;C4-3;H=4",
+            expected: true,
+            base: "2",
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
         it(caseName, co.wrap(function *() {
             const written = yield RepoASTTestUtil.createRepo(c.input);
             const repo = written.repo;
+            const oldCommitMap = written.oldCommitMap;
+            let base;
+            if ("base" in c) {
+                assert.property(oldCommitMap, c.base);
+                base = yield repo.getCommit(oldCommitMap[c.base]);
+            }
             const head = yield repo.getHeadCommit();
-            const result = yield CherryPickUtil.containsUrlChanges(repo, head);
+            const result =
+                     yield CherryPickUtil.containsUrlChanges(repo, head, base);
             assert.equal(result, c.expected);
         }));
     });
@@ -247,6 +259,20 @@ x=U:C3-2 s=Sa:a;Ct-2 s=Sa:b;Bt=t;Bmaster=3`,
             simpleChanges: {
                 "s": new Submodule("a", "1"),
             },
+        },
+        "addition in ancestor": {
+            input: "a=B|x=S:Ct-2 s=Sa:1;C2-1 t=Sa:1;Bt=t",
+            simpleChanges: {
+                "s": new Submodule("a", "1"),
+            },
+        },
+        "addition in ancestor, but from base": {
+            input: "a=B|x=S:Ct-2 s=Sa:1;C2-1 t=Sa:1;Bt=t",
+            simpleChanges: {
+                "s": new Submodule("a", "1"),
+                "t": new Submodule("a", "1"),
+            },
+            fromBase: true,
         },
         "double addition": {
             input: `
@@ -306,14 +332,6 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
                                   null),
             },
         },
-        "change, but gone on HEAD and no ancestor": {
-            input: "a=B:Ca-1;Ba=a|x=S:C2 s=Sa:1;Ct-2 s=Sa:a;Bt=t",
-            conflicts: {
-                "s": new Conflict(null,
-                                  null,
-                                  new ConflictEntry(FILEMODE.COMMIT, "a")),
-            },
-        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
@@ -325,8 +343,10 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
             const reverseCommitMap = w.reverseCommitMap;
             const urlMap = w.urlMap;
             const target = yield repo.getCommit(reverseCommitMap.t);
-            const result = yield CherryPickUtil.computeChanges(repo, target);
-
+            const fromBase = c.fromBase || false;
+            const result = yield CherryPickUtil.computeChanges(repo,
+                                                               target,
+                                                               fromBase);
             const changes = {};
             for (let name in result.changes) {
                 const change = result.changes[name];

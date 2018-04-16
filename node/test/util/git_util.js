@@ -1171,4 +1171,35 @@ describe("GitUtil", function () {
             assert.equal(result.id().tostrS(), head.id().tostrS());
         }));
     });
+
+    describe("getMergeBase", function () {
+        const cases = {
+            "base": {
+                input: "S:Cx-1;Cy-1;Bfoo=x;Bmaster=y",
+                expected: "1",
+            },
+            "no base": {
+                input: "S:Cx-1;Cy;Bfoo=x;Bmaster=y",
+                expected: null,
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.input);
+                const repo = written.repo;
+                const oldMap = written.oldCommitMap;
+                const x = yield repo.getCommit(oldMap.x);
+                const y = yield repo.getCommit(oldMap.y);
+                const result = yield GitUtil.getMergeBase(repo, x, y);
+                if (null === c.expected) {
+                    assert.isNull(result);
+                } else {
+                    assert.isNotNull(result);
+                    const sha = written.commitMap[result.id().tostrS()];
+                    assert.equal(c.expected, sha);
+                }
+            }));
+        });
+    });
 });

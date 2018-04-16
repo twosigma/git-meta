@@ -136,31 +136,40 @@ exports.changeSubmodules = co.wrap(function *(repo,
 });
 
 /**
- * Return true if the specified `commit` in the specified `repo` contains any
- * URL changes and false otherwise.  A URL change is an alteration to a
- * submodule's URL in the `.gitmodules` file that is not an addition or
- * removal.
+ * Return true if there are URL changes between the  specified `commit` and
+ * `baseCommit` in the specified `repo` and false otherwise.  A URL change is
+ * an alteration to a submodule's URL in the `.gitmodules` file that is not an
+ * addition or removal.  If `undefined === baseCommit`, then use the first
+ * parent of `commit` as the base.
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {NodeGit.Commit}     [baseCommit]
  * @return {Bool}
  */
-exports.containsUrlChanges = co.wrap(function *(repo, commit) {
+exports.containsUrlChanges = co.wrap(function *(repo, commit, baseCommit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    if (undefined !== baseCommit) {
+        assert.instanceOf(baseCommit, NodeGit.Commit);
+    } else {
+        const parents = yield commit.getParents();
+        if (0 !== parents.length) {
+            baseCommit = parents[0];
+        }
+    }
 
-    let parentUrls = {};
-    const parents = yield commit.getParents();
-    if (0 !== parents.length) {
-        parentUrls =
-           yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, parents[0]);
+    let baseUrls = {};
+    if (undefined !== baseCommit) {
+         baseUrls =
+           yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, baseCommit);
     }
     const commitUrls =
                yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, commit);
-    for (let name in parentUrls) {
-        const parentUrl = parentUrls[name];
+    for (let name in baseUrls) {
+        const baseUrl = baseUrls[name];
         const commitUrl = commitUrls[name];
-        if (undefined !== commitUrl && parentUrl !== commitUrl) {
+        if (undefined !== commitUrl && baseUrl !== commitUrl) {
             return true;                                              // RETURN
         }
     }
@@ -188,50 +197,38 @@ const getTreeEntry = co.wrap(function *(tree, path) {
 });
 
 /**
- * Return the tree corresponding to the merge-base for the specified `lhs` and
- * `rhs` commits in the specified `repo`, or null if there is no ancestor
- * commit in common between `lhs` and `rhs`.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit} lhs
- * @param {NodeGit.Commit} rhs
- * @return {NodeGit.Tree|null}
- */
-const getMergeBaseTree = co.wrap(function *(repo, lhs, rhs) {
-    let baseId;
-    try {
-        baseId = yield NodeGit.Merge.base(repo, lhs.id(), rhs.id());
-    } catch (e) {
-        // only way to detect lack of base
-        return null;
-    }
-    const mergeBase = yield repo.getCommit(baseId);
-    return yield mergeBase.getTree();
-});
-
-/**
  * Determine how to apply the submodule changes introduced in the
  * specified `commit` to the commit on the head of the specified `repo`.
  * Return an object describing what changes to make, including which submodules
  * cannot be updated at all due to a conflicts, such as a change being
- * introduced to a submodule that does not exist in HEAD.  Throw a `UserError`
- * if non-submodule changes are detected.
+ * introduced to a submodule that does not exist in HEAD.  If the specified
+ * `fromBase` is true, comput the changes from the merge base between `commit`
+ * and HEAD; otherwise, compute them between `commit` and its first parent.
+ * Throw a `UserError` if non-submodule changes are detected.  The behavior is
+ * undefined if there is no merge base between HEAD and `commit`.
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {Bool}               fromBase
  * @return {Object} return
  * @return {Object} return.changes        from sub name to `SubmoduleChange`
  * @return {Object} return.simpleChanges  from sub name to `Submodule` or null
  * @return {Object} return.conflicts map  from sub name to `Conflict`
  */
-exports.computeChanges = co.wrap(function *(repo, commit) {
+exports.computeChanges = co.wrap(function *(repo, commit, fromBase) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    assert.isBoolean(fromBase);
+
     const head = yield repo.getHeadCommit();
     const headTree = yield head.getTree();
-    const baseTree = yield getMergeBaseTree(repo, head, commit);
+    const mergeBase = yield GitUtil.getMergeBase(repo, head, commit);
+    assert.isNotNull(mergeBase);
+    const baseTree = yield mergeBase.getTree();
+    const changeBase = fromBase ? mergeBase : null;
     const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
                                                             commit,
+                                                            changeBase,
                                                             false);
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
                                                                    commit);
@@ -318,7 +315,8 @@ exports.computeChanges = co.wrap(function *(repo, commit) {
  * Pick the specified `subs` in the specified `metaRepo` having the specified
  * `metaIndex`.  Stage new submodule commits in `metaRepo`.  Return an object
  * describing any commits that were generated and conflicted commits.  Use the
- * specified `opener` to acces submodule repos. *
+ * specified `opener` to access submodule repos.
+ *
  * @param {NodeGit.Repository} metaRepo
  * @param {Open.Opener}        opener
  * @param {NodeGit.Index}      metaIndex
@@ -388,6 +386,63 @@ Conflicting entries for submodule ${colors.red(name)}
 });
 
 /**
+ * Throw a user error if there are URL-only changes between the  specified
+ * `commit` and `baseCommit`  in the specified `repo`.  If
+ * `undefined === baseCommit`, compare against the first parent of `commit`.
+ *
+ * TODO: independent test
+ *
+ * TODO: Dealing with these would be a huge hassle and is probably not worth it
+ * at the moment since the recommended policy for monorepo implementations is
+ * to prevent users from making URL changes anyway.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @param {NodeGit.Commit}     [baseCommit]
+ */
+exports.ensureNoURLChanges = co.wrap(function *(repo, commit, baseCommit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    if (undefined !== baseCommit) {
+        assert.instanceOf(baseCommit, NodeGit.Commit);
+    }
+
+    const hasUrlChanges =
+                    yield exports.containsUrlChanges(repo, commit, baseCommit);
+    if (hasUrlChanges) {
+
+        throw new UserError(`\
+Applying commits with submodule URL changes is not currently supported.
+Please try with normal git commands.`);
+    }
+});
+
+/**
+ * Close submodules that have been opened by the specified `opener` but that
+ * have no mapped commits or conflicts in the specified `changes`.
+ *
+ * TODO: independent test
+ *
+ * @param {Open.Opener} opener
+ * @param {Object}      changes
+ * @param {Object}      changes.commits   from sub path to map from sha to sha
+ * @param {Object}      changes.conflicts from sub path to sha causing conflict
+ */
+exports.closeSubs = co.wrap(function *(opener, changes) {
+    const repo = opener.repo;
+    const closeSub = co.wrap(function *(path) {
+        const commits = changes.commits[path];
+        if ((undefined === commits || 0 === Object.keys(commits).length) &&
+            !(path in changes.conflicts)) {
+            console.log(`Closing ${colors.green(path)}`);
+            yield DeinitUtil.deinit(repo, path);
+        }
+    });
+    const opened = Array.from(yield opener.getOpenedSubs());
+    DoWorkQueue.doInParallel(opened, closeSub);
+});
+
+/**
  * Rewrite the specified `commit` on top of HEAD in the specified `repo` using
  * the specified `opener` to open submodules as needed.  The behavior is
  * undefined unless the repository is clean.  Return an object describing the
@@ -407,18 +462,9 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const hasUrlChanges = yield exports.containsUrlChanges(repo, commit);
-    if (hasUrlChanges) {
-        // TODO: Dealing with these would be a huge hassle and is probably not
-        // worth it at the moment since the recommended policy for monorepo
-        // implementations is to prevent users from making URL changes anyway.
+    yield exports.ensureNoURLChanges(repo, commit);
 
-        throw new UserError(`\
-Applying commits with submodule URL changes is not currently supported.
-Please try with normal 'git cherry-pick'.`);
-    }
-
-    const changes = yield exports.computeChanges(repo, commit);
+    const changes = yield exports.computeChanges(repo, commit, false);
     const index = yield repo.index();
 
     // Perform simple changes that don't require picks -- addition, deletions,
@@ -437,22 +483,10 @@ Please try with normal 'git cherry-pick'.`);
     const picks = yield exports.pickSubs(repo, opener, index, changes.changes);
     const conflicts = picks.conflicts;
 
-    // Close any subs that were unnecessarily opened (i.e., because no commit
-    // was generated).
-
-    const closeSub = co.wrap(function *(path) {
-        const commits = picks.commits[path];
-        if ((undefined === commits || 0 === Object.keys(commits).length) &&
-            !(path in picks.conflicts)) {
-            console.log(`Closing ${colors.green(path)}`);
-            yield DeinitUtil.deinit(repo, path);
-        }
-    });
-    const opened = Array.from(yield opener.getOpenedSubs());
-    DoWorkQueue.doInParallel(opened, closeSub);
+    yield exports.closeSubs(opener, picks);
 
     Object.keys(conflicts).sort().forEach(name => {
-        errorMessage += `Submodule ${colors.red(name)} is conflicted.\n`;
+        errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
     });
 
     const result = {
