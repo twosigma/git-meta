@@ -81,7 +81,10 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
     const remoteCommitId = remoteBranch.target();
     const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, remoteCommitId);
 
-    yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
+    const result = yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
+    if (null !== result.errorMessage) {
+        throw new UserError(result.errorMessage);
+    }
 });
 
 
