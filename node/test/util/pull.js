@@ -77,6 +77,21 @@ describe("pull", function () {
             source: "foo",
             expected: "x=E:Rorigin=a foo=1",
         },
+        "conflict": {
+            initial: `
+a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|y=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4|x=Cy`,
+            remote: "origin",
+            source: "foo",
+            expected: `
+x=E:H=4;QR 3:refs/heads/master 4: 0 3;Os I *a=~*8*a!Edetached HEAD,a,b! W a=\
+<<<<<<< HEAD
+8
+=======
+a
+>>>>>>> message
+;`,
+            fails: true,
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
