@@ -371,6 +371,12 @@ t
 Submodule ${colors.red("s")} is conflicted.
 `,
         },
+        "does not close open submodules when rewinding": {
+            initial: `
+a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os;C3-1 t=Sa:1;Bfoo=3;Bold=2`,
+            onto: "3",
+            expected: `x=E:C2M-3 s=Sa:1;Bmaster=2M`
+        },
 // TODO: I could not get libgit2 to remember or restore submodule branches when
 // used in the three-way mode; it stores it in "onto_name", not in "head-name".
 //        "maintain submodule branch": {
@@ -389,6 +395,7 @@ Submodule ${colors.red("s")} is conflicted.
 
         const rebaseOp = co.wrap(function *(repos, maps) {
             const repo = repos.x;
+            console.log(repo.workdir());
             const reverseCommitMap = maps.reverseCommitMap;
             const onto = yield repo.getCommit(reverseCommitMap[c.onto]);
             const errorMessage = c.errorMessage || null;
