@@ -32,22 +32,26 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("colors");
+const fs      = require("fs-promise");
+const mkdirp  = require("mkdirp");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
-const DoWorkQueue         = require("../util/do_work_queue");
-const GitUtil          = require("./git_util");
-const Open             = require("./open");
-const StatusUtil       = require("./status_util");
-const SubmoduleFetcher = require("./submodule_fetcher");
-const SubmoduleUtil    = require("./submodule_util");
-const UserError        = require("./user_error");
+const DoWorkQueue         = require("./do_work_queue");
+const GitUtil             = require("./git_util");
+const Open                = require("./open");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
+const StatusUtil          = require("./status_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
+const SubmoduleFetcher    = require("./submodule_fetcher");
+const SubmoduleUtil       = require("./submodule_util");
+const UserError           = require("./user_error");
 
 const TYPE = {
-    SOFT: "soft",
-    MIXED: "mixed",
-    HARD: "hard",
-    MERGE: "merge",
+    SOFT: "SOFT",
+    MIXED: "MIXED",
+    HARD: "HARD",
+    MERGE: "MERGE",
 };
 Object.freeze(TYPE);
 exports.TYPE = TYPE;
@@ -58,6 +62,7 @@ exports.TYPE = TYPE;
  * @return {NodeGit.Reset.TYPE}
  */
 function getType(type) {
+    assert.property(TYPE, type);
     switch (type) {
         case TYPE.SOFT : return NodeGit.Reset.TYPE.SOFT;
         case TYPE.MIXED: return NodeGit.Reset.TYPE.MIXED;
@@ -69,49 +74,75 @@ function getType(type) {
 
         case TYPE.MERGE: return NodeGit.Reset.TYPE.HARD;
     }
-    assert(false, `Bad type: ${type}`);
 }
 
 /**
- * Throw a `UserError` if any open submodule as listed by the specified
- * `opener` has unstaged changes and does not exist in the specified `shas`.
+ * Reset the specified `repo` of having  specified `index` to have the contents
+ * of the tree of the specified `commit`.  Update the `.gitmodules` file in the
+ * worktree to haave the same contents as in the index.  If the repo is not in
+ * sparse mode, create empty directories for added submodules and remove the
+ * directories of deleted submodules as indicated in the specified `changes`.
  *
- * @param {Open.Opener} opener
- * @param {Object}      shas      map from submodule path to SHA
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index
+ * @param {NodeGit.Commit}     commit
+ * @param {Object}             changes     from path to `SubmoduleChange`
  */
-exports.validateClean = co.wrap(function *(opener, shas) {
-    assert.instanceOf(opener, Open.Opener);
-    assert.isObject(shas);
+exports.resetMetaRepo = co.wrap(function *(repo, index, commit, changes) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isObject(changes);
 
-    const openSubs = Array.from(yield opener.getOpenSubs());
-    const badSubs = [];
-    const checkSub = co.wrap(function *(name) {
-        if (name in shas) {
-            // If it exists in `shas` we don't need to check it
-            return;                                                   // RETURN
+    const tree = yield commit.getTree();
+    yield index.readTree(tree);
+
+    // Render modules file
+
+    const modulesFileName = SubmoduleConfigUtil.modulesFileName;
+    const modulesPath = path.join(repo.workdir(), modulesFileName);
+    const modulesEntry = index.getByPath(modulesFileName);
+    if (undefined !== modulesEntry) {
+        const oid = modulesEntry.id;
+        const blob = yield repo.getBlob(oid);
+        const data = blob.toString();
+        yield fs.writeFile(modulesPath, data);
+    } else {
+        // If it's not in the index, remove it.
+        try {
+            yield fs.unlink(modulesPath);
+        } catch (e) {
+            if ("ENOENT" !== e.code) {
+                throw e;
+            }
         }
-        const repo = yield opener.getSubrepo(name);
-        const status = yield StatusUtil.getRepoStatus(repo, {
-            showMetaChanges: true,
+    }
+
+    // Tidy up directories when not in sparse mode.  We don't need to do this
+    // when in sparse mode because in sparse mode we have a directory for a
+    // submodule iff it's open.  Thus, when a new submodule comes into
+    // existence we do not need to make a directory for it.  When a submodule
+    // is deleted and it's not open, there's no directory to clean up; when it
+    // is open, we don't want to remove the directory anyway -- this is a
+    // behavior that libgit2 gets wrong.
+
+    if (!(yield SparseCheckoutUtil.inSparseMode(repo))) {
+        const tidySub = co.wrap(function *(name) {
+            const change = changes[name];
+            if (null === change.oldSha) {
+                mkdirp.sync(path.join(repo.workdir(), name));
+            } else if (null === change.newSha) {
+                try {
+                    yield fs.rmdir(path.join(repo.workdir(), name));
+                } catch (e) {
+                    // If we can't remove the directory, it's OK.  Git warns
+                    // here, but I think that would just be noise as most of
+                    // the time this happens when someone rebases a change that
+                    // created a submodule.
+                }
+            }
         });
-        if (!status.isWorkdirClean(true)) {
-            badSubs.push(name);
-        }
-    });
-    yield DoWorkQueue.doInParallel(openSubs, checkSub);
-    if (0 !== badSubs.length) {
-        badSubs.sort();
-        let errorMessage = `\
-The following submodules with unstaged will be deleted by this reset:
-
-`;
-        for (let name of badSubs) {
-            errorMessage += `        ${colors.red(name)}\n`;
-        }
-        errorMessage += `
-Please stage these changes or close the submodules before proceeding.
-`;
-        throw new UserError(errorMessage);
+        yield DoWorkQueue.doInParallel(Object.keys(changes), tidySub);
     }
 });
 
@@ -131,13 +162,14 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isString(type);
+    assert.property(TYPE, type);
 
     const head = yield repo.getHeadCommit();
     const headTree = yield head.getTree();
     const commitTree = yield commit.getTree();
     const diff = yield NodeGit.Diff.treeToTree(repo,
-                                               commitTree,
                                                headTree,
+                                               commitTree,
                                                null);
     const changedSubs = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
                                                                         true);
@@ -147,47 +179,39 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
     const opener = new Open.Opener(repo, null);
     const fetcher = yield opener.fetcher();
+    const openSubsSet = yield opener.getOpenSubs();
+
+    yield GitUtil.updateHead(repo, commit, `reset`);
+    const index = yield repo.index();
+
+    // With a soft reset we don't need to do anything to the meta-repo.  We're
+    // not going to touch the index or the `.gitmodules` file.
+
+    if (TYPE.SOFT !== type) {
+        yield exports.resetMetaRepo(repo, index, commit, changedSubs);
+    }
 
     const resetType = getType(type);
 
     // Make a list of submodules to reset, including all that have been changed
     // between HEAD and 'commit', and all that are open.
 
-    const openSubsSet = yield opener.getOpenSubs();
-    const pathsToResetSet = new Set(openSubsSet);
-    Object.keys(changedSubs).forEach(path => pathsToResetSet.add(path));
-    const pathsToReset = Array.from(pathsToResetSet);
-    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
-                                                               pathsToReset,
-                                                               commit);
 
-    // If doing a HARD reset, work around the problem where libgit2 may throw
-    // away unstaged changes in open submodules.  See
-    // https://github.com/twosigma/git-meta/issues/509
-
-    if (TYPE.HARD === type) {
-        yield exports.validateClean(opener, shas);
-    }
-
-    yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return NodeGit.Reset.reset(repo, commit, resetType);
-    });
-
-    const index = yield repo.index();
     const resetSubmodule = co.wrap(function *(name) {
         const change = changedSubs[name];
+
+        // Nothing to do if the change was an addition or deletion.
+
         if (undefined !== change &&
             (null === change.oldSha || null === change.newSha)) {
-            // If the submodule has been added or removed since 'commit',
-            // there's nothing to do.
             return;                                                   // RETURN
-         }
-        const sha = shas[name];
+        }
 
-        // When doing a hard reset, we don't need to open closed submodules
-        // because we would be throwing away the changes anyway.
+        // When doing a hard or merge reset, we don't need to open closed
+        // submodules because we would be throwing away the changes anyway.
 
-        if (TYPE.HARD === type && !openSubsSet.has(name)) {
+        if ((TYPE.HARD === type || TYPE.MERGE === type) &&
+            !openSubsSet.has(name)) {
             return;                                                   // RETURN
         }
 
@@ -195,9 +219,15 @@ exports.reset = co.wrap(function *(repo, commit, type) {
         // resetting in case we don't have it.
 
         const subRepo = yield opener.getSubrepo(name);
-        yield fetcher.fetchSha(subRepo, name, sha);
 
-        const subCommit = yield subRepo.getCommit(sha);
+        // If the submodule wasn't changed, we'll just reset it to HEAD
+        let subCommit;
+        if (undefined === change) {
+            subCommit = yield subRepo.getHeadCommit();
+        } else {
+            yield fetcher.fetchSha(subRepo, name, change.newSha);
+            subCommit = yield subRepo.getCommit(change.newSha);
+        }
         yield NodeGit.Reset.reset(subRepo, subCommit, resetType);
 
         // Set the index to have the commit to which we just set the submodule;
@@ -206,7 +236,10 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
         yield index.addByPath(name);
     });
-    yield DoWorkQueue.doInParallel(pathsToReset, resetSubmodule);
+    const openSubs = Array.from(openSubsSet);
+    const changedSubNames = Object.keys(changedSubs);
+    const subsToTry = Array.from(new Set(changedSubNames.concat(openSubs)));
+    yield DoWorkQueue.doInParallel(subsToTry, resetSubmodule);
     // Write the index in case we've had to stage submodule changes.
 
     yield index.write();

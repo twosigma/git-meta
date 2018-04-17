@@ -1171,7 +1171,6 @@ describe("GitUtil", function () {
             assert.equal(result.id().tostrS(), head.id().tostrS());
         }));
     });
-
     describe("getMergeBase", function () {
         const cases = {
             "base": {
@@ -1199,6 +1198,43 @@ describe("GitUtil", function () {
                     const sha = written.commitMap[result.id().tostrS()];
                     assert.equal(c.expected, sha);
                 }
+            }));
+        });
+    });
+    describe("updateHead", function () {
+        const cases = {
+            "noop": {
+                input: "x=S",
+                to: "1",
+            },
+            "another": {
+                input: "x=S:C2-1;Bfoo=2",
+                to: "2",
+                expected: "x=E:Bmaster=2;I 2",
+            },
+            "from detached": {
+                input: "x=S:H=1;C2-1;Bmaster=2",
+                to: "2",
+                expected: "x=E:H=2;I 2",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            const updateHead = co.wrap(function *(repos, maps) {
+                const repo = repos.x;
+                const rev = maps.reverseCommitMap;
+                const commit = yield repo.getCommit(rev[c.to]);
+
+                // TODO: test reason propagation to reflog; we don't have good
+                // support for this in the test facility though, and it's
+                // pretty hard to mess up.
+
+                yield GitUtil.updateHead(repo, commit, "a reason");
+            });
+            it(caseName, co.wrap(function *() {
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               updateHead);
             }));
         });
     });

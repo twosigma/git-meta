@@ -50,9 +50,17 @@ const co      = require("co");
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
+const rimraf  = require("rimraf");
 const url     = require("url");
 
-const UserError = require("./user_error");
+const SparseCheckoutUtil = require("./sparse_checkout_util");
+const UserError          = require("./user_error");
+
+function doRimRaf(fileName) {
+    return new Promise(callback => {
+        return rimraf(fileName, {}, callback);
+    });
+}
 
 const CONFIG_FILE_NAME = "config";
 
@@ -69,6 +77,106 @@ const CONFIG_FILE_NAME = "config";
  * @property {String}
  */
 exports.modulesFileName = ".gitmodules";
+
+/**
+ * Remove the first found configuration entry for the submodule having the
+ * specified `submoduleName` in the config file in the specified `repoPath`; do
+ * nothing if no entry is found.
+ *
+ * @param {String} repoPath
+ * @param {String} submoduleName
+ */
+exports.clearSubmoduleConfigEntry =
+                                  co.wrap(function *(repoPath, submoduleName) {
+    assert.isString(repoPath);
+    assert.isString(submoduleName);
+
+    // Using a very stupid algorithm here to find and remove the submodule
+    // entry.  This logic could be smarter (maybe use regexes) and more
+    // efficition (stream in and out). Note that we use only synchronous
+    // when mutating the config file to avoid race conditions.
+
+    const configPath = path.join(repoPath, "config");
+    const configText = fs.readFileSync(configPath, "utf8");
+    const configLines = configText.split("\n");
+    const newConfigLines = [];
+    const searchString = "[submodule \"" + submoduleName + "\"]";
+
+    let found = false;
+    let inSubmoduleConfig = false;
+
+    // Loop through the file and push, onto 'newConfigLines' any lines that
+    // aren't part of the bad submodule section.
+
+    for (const line of configLines) {
+        if (!found && !inSubmoduleConfig && line === searchString) {
+            inSubmoduleConfig = true;
+            found = true;
+        }
+        else if (inSubmoduleConfig) {
+            // If we see a line starting with "[" while we're in the submodule
+            // section, we can get out of it.
+
+            if (0 !== line.length && line[0] === "[") {
+                inSubmoduleConfig = false;
+            }
+        }
+        if (!inSubmoduleConfig) {
+            newConfigLines.push(line);
+        }
+    }
+
+    // If we didn't find the submodule, don't write the data back out.
+
+    if (found) {
+        newConfigLines.push("");  // one more new line
+        fs.writeFileSync(configPath, newConfigLines.join("\n"));
+    }
+
+    // Silence warning about no yield statement.
+    yield (Promise.resolve());
+});
+
+/**
+ * De-initialize the repository having the specified `submoduleName` in the
+ * specified `repo`.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             submoduleName
+ */
+exports.deinit = co.wrap(function *(repo, submoduleName) {
+
+    // This operation is a major pain, first because libgit2 does not provide
+    // any direct methods to do the equivalent of 'git deinit', and second
+    // because nodegit does not expose the method that libgit2 does provide to
+    // delete an entry from the config file.
+
+    // De-initting a submodule requires the following things:
+    // 1. Confirms there are no unpushed (to any remote) commits
+    //    or uncommited changes (including new files).
+    // 2. Remove all files under the path of the submodule, but not the
+    //    directory itself, which would look to Git as if we were trying
+    //    to remove the submodule.
+    // 3. Remove the entry for the submodule from the '.git/config' file.
+    // 4. Remove the directory .git/modules/<submodule>
+
+    // We will clear out the path for the submodule.
+
+    const rootDir = repo.workdir();
+    const submodulePath = path.join(rootDir, submoduleName);
+    const files = yield fs.readdir(submodulePath);
+
+    const sparse = yield SparseCheckoutUtil.inSparseMode(repo);
+    if (sparse) {
+        yield doRimRaf(submodulePath);
+    } else {
+        yield files.map(co.wrap(function *(filename) {
+            yield doRimRaf(path.join(submodulePath, filename));
+        }));
+    }
+    yield exports.clearSubmoduleConfigEntry(repo.path(), submoduleName);
+});
 
 /**
  * Return the relative path from the working directory of a submodule having
@@ -312,7 +420,7 @@ exports.getConfigLines = function (name, url) {
 
 /**
  * Write the entry to set up the the submodule having the specified `name` to
- * and `url` to the `.git/config` file for the repo at the specified
+ * and `url` to the `config` file for the repo at the specified
  * `repoPath`.  The behavior is undefined if there is already an entry for
  * `name` in the config file.
  *
@@ -330,7 +438,8 @@ exports.initSubmodule = co.wrap(function *(repoPath, name, url) {
     assert.isString(repoPath);
     assert.isString(name);
     assert.isString(url);
-    const configPath = path.join(repoPath, ".git", CONFIG_FILE_NAME);
+    yield exports.clearSubmoduleConfigEntry(repoPath, name);
+    const configPath = path.join(repoPath, CONFIG_FILE_NAME);
     const lines = exports.getConfigLines(name, url);
 
     // Do this sync to avoid race conditions for now.
@@ -399,7 +508,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     // Update the `.git/config` file.
 
     const repoPath = metaRepo.workdir();
-    yield exports.initSubmodule(repoPath, name, url);
+    yield exports.initSubmodule(metaRepo.path(), name, url);
 
     // Then, initialize the repository.  We pass `initExt` the right set of
     // flags so that it will set it up as a git link.

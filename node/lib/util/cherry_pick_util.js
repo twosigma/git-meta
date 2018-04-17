@@ -39,7 +39,6 @@ const path    = require("path");
 const rimraf  = require("rimraf");
 
 const ConflictUtil        = require("./conflict_util");
-const DeinitUtil          = require("./deinit_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
@@ -108,7 +107,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
     for (let name in submodules) {
         const sub = submodules[name];
         if (null === sub) {
-            yield DeinitUtil.deinit(repo, name);
+            yield SubmoduleConfigUtil.deinit(repo, name);
             changes[name] = null;
             delete urls[name];
             yield rmrf(name);
@@ -435,7 +434,7 @@ exports.closeSubs = co.wrap(function *(opener, changes) {
         if ((undefined === commits || 0 === Object.keys(commits).length) &&
             !(path in changes.conflicts)) {
             console.log(`Closing ${colors.green(path)}`);
-            yield DeinitUtil.deinit(repo, path);
+            yield SubmoduleConfigUtil.deinit(repo, path);
         }
     });
     const opened = Array.from(yield opener.getOpenedSubs());

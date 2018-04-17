@@ -966,4 +966,24 @@ exports.getMergeBase = co.wrap(function *(repo, x, y) {
     return yield repo.getCommit(baseId);
 });
 
+/*
+ * Update the HEAD of of the specified `repo` to point to the specified
+ * `commit`.  If HEAD points to a branch, update that branch to point to
+ * `commit` as well, and supply the specified `reason` for the reflog.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @param {String}             reason
+ */
+exports.updateHead = co.wrap(function *(repo, commit, reason) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isString(reason);
 
+    if (repo.headDetached()) {
+        repo.setHeadDetached(commit.id());
+    } else {
+        const headRef = yield repo.head();
+        yield headRef.setTarget(commit, reason);
+    }
+});

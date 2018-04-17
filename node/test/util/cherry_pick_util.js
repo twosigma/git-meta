@@ -891,12 +891,12 @@ describe("abort", function () {
             fails: true,
         },
         "some changes in meta": {
-            input: "x=S:C2-1;Bmaster=2;QC 1: 2: 0 2",
+            input: "x=S:C2-1 s=S/a:1;Bmaster=2;QC 1: 2: 0 2",
             expected: "x=S",
         },
         "some conflicted changes in meta": {
             input: `
-x=S:C2-1;Bmaster=2;QC 1: 2: 0 2;I *README.md=b*c*d;W README.md=8`,
+x=S:C2-1 s=S/a:1;Bmaster=2;QC 1: 2: 0 2;I *s=~*~*s=S:1`,
             expected: "x=S",
         },
 
