@@ -145,6 +145,19 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
 
     const directory = exports.buildDirectoryTree(changes);
 
+    // TODO: This is a workaround for a bug in nodegit.  The contract for
+    // libgit2's `treebuilder` is to not free the `tree_entry` objects that its
+    // methods return until your done with the `treebuilder` object that
+    // returned them -- then you must free them else leak.  Nodegit, however,
+    // appears to be freeing them as each `tree_entry` is GC'd; this seems to
+    // be the normal way the bindings work and I imagine it's a mechanical
+    // thing.  The workaround is to stick all the `tree_entry` objects we see
+    // into an array whose lifetime is scoped to that of this method.
+    //
+    // Nodegit issue on github: https://github.com/nodegit/nodegit/issues/1333
+
+    const treeEntries = [];
+
     // This method does the real work, but assumes an already aggregated
     // directory structure.
 
@@ -159,7 +172,9 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                 builder.remove(filename);
             }
             else if (entry instanceof Change) {
-                yield builder.insert(filename, entry.id, entry.mode);
+                const inserted =
+                          yield builder.insert(filename, entry.id, entry.mode);
+                treeEntries.push(inserted);
             }
             else {
                 let subtree;
@@ -174,6 +189,7 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                 }
                 if (null !== treeEntry) {
                     assert(treeEntry.isTree(), `${filename} should be a tree`);
+                    treeEntries.push(treeEntry);
                     const treeId = treeEntry.id();
                     const curTree = yield repo.getTree(treeId);
                     subtree = yield writeSubtree(curTree, entry);
@@ -185,9 +201,11 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                     builder.remove(filename);
                 }
                 else {
-                    yield builder.insert(filename,
-                                         subtree.id(),
-                                         NodeGit.TreeEntry.FILEMODE.TREE);
+                    const inserted = yield builder.insert(
+                                              filename,
+                                              subtree.id(),
+                                              NodeGit.TreeEntry.FILEMODE.TREE);
+                    treeEntries.push(inserted);
                 }
             }
         }
