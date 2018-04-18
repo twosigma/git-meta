@@ -405,6 +405,21 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 },
                 expectedSwitchBranch: "foo",
             },
+            "new branch(nested name) with remote tracking": {
+                state: "x=S:Rhar=/a managed/hey=1",
+                committish: "har/managed/hey",
+                newBranch: "foo",
+                track: true,
+                expectedSha: "1",
+                expectedNewBranch: {
+                    name: "foo",
+                    tracking: {
+                        remoteName: "har",
+                        branchName: "managed/hey",
+                    },
+                },
+                expectedSwitchBranch: "foo",
+            },
             "tracking on new branch but commit not a branch": {
                 state: "x=S",
                 committish: "1",

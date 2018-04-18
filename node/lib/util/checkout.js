@@ -471,7 +471,7 @@ Cannot setup tracking information; starting point is not a branch.`);
             // otherwise leve the remote name 'null';
 
             if (committishBranch.isRemote()) {
-                const parts = committishBranch.shorthand().split("/");
+                const parts = committishBranch.shorthand().split(/\/(.+)/);
                 tracking = {
                     remoteName: parts[0],
                     branchName: parts[1],
