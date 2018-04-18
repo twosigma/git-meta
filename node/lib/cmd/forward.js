@@ -83,6 +83,7 @@ exports.execute = co.wrap(function *(name, args) {
         "-C",
         GitUtil.getRootGitDirectory(),
         name,
+        name === "diff" ? "--submodule=diff" : ""
     ].concat(args);
     try {
         yield ChildProcess.spawn("git", gitArgs, {
