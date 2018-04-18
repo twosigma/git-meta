@@ -57,3 +57,35 @@ exports.indent = function(str, count) {
     }
     return " ".repeat(count) + str;
 };
+
+/**
+ * Convert a list of strings to a newline-delimited, indented string.
+ *
+ * @param {Array<String>} The strings
+ * @param {Integer} count (default 4)
+ * @return {String}
+ */
+exports.listToIndentedString = function(strings, count) {
+    return strings.map(s => exports.indent(s, count)).join("\n");
+};
+
+/**
+ * Pluralize a noun (if necessary).  This is kind of a hack:
+ * it doesn't handle 'children', 'wolves', 'gees', or 'oxen'.
+ *
+ * @param {String} The noun
+ * @param {Integer} the count -- if it's not 1, the noun will be pluralized.
+ * @return {String}
+ */
+exports.pluralize = function(noun, count) {
+    if (count === 1) {
+        return noun;
+    }
+    if (noun.match("(?:s|sh|ch|z|x)$")) {
+        return noun + "es";
+    }
+    if (noun.endsWith("y")) {
+        return noun.substring(0, noun.length - 1) + "ies";
+    }
+    return noun + "s";
+};
