@@ -117,7 +117,7 @@ a=B:Cf-1;Bf=f|x=U:C3-2 s=Sa:f;C4-2 t=Sa:f;H=4;Bfoo=3`,
         },
         "two commits": {
             state: `
-a=B|x=S:C2-1;Bmaster=2;Cf-1 s=Sa:1;Cg-1 t=Sa:1;Bf=f;Bg=g`,
+a=B|x=S:C2-1 q=Sa:1;Bmaster=2;Cf-1 s=Sa:1;Cg-1 t=Sa:1;Bf=f;Bg=g`,
             seq: new SequencerState({
                 type: REBASE,
                 originalHead: new CommitAndRef("2", "refs/heads/master"),
@@ -202,7 +202,7 @@ a=B:Cf-1;Cg-1;Bf=f;Bg=g|x=U:C3-2 s=Sa:f;C4-2 s=Sa:g;Bother=4;Bfoo=3;Bmaster=3`,
         },
         "two commits": {
             initial: `
-a=B|x=S:C2-1;Bmaster=g;Cf-1 s=Sa:1;Cg-f t=Sa:1;Bonto=2;Bg=g`,
+a=B|x=S:C2-1 q=Sa:1;Bmaster=g;Cf-1 s=Sa:1;Cg-f t=Sa:1;Bonto=2;Bg=g`,
             onto: "2",
             expected: "x=E:CgM-fM t=Sa:1;CfM-2 s=Sa:1;Bmaster=gM",
         },
@@ -275,7 +275,7 @@ x=U:C3-2 u=Sa:a,s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Bother=3;Os`,
         "ffwd sub 2X": {
             initial: `
 a=B:Ca-1;Cb-a;Cc-b;Bmaster=b;Bfoo=c|
-x=U:Cr-2;C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=4;Bother=r;Os;Bfoo=4`,
+x=U:Cr-2 r=Sa:1;C3-2 s=Sa:b;C4-3 s=Sa:c;Bmaster=4;Bother=r;Os;Bfoo=4`,
             onto: "r",
             expected: "x=E:C3M-r s=Sa:b;C4M-3M s=Sa:c;Bmaster=4M;Os H=c",
         },
@@ -324,7 +324,7 @@ x=E:C3M-4 q=Sa:k;Bmaster=3M`,
             initial: `
 a=B|
 b=B:Cj-1;Ck-1;Bmaster=j;Bfoo=k|
-x=S:C2-1 s=Sa:1,t=Sb:1;C3-2;C4-2 t=Sb:k;Bmaster=4;Bfoo=3;Bold=4`,
+x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 z=Sa:1;C4-2 t=Sb:k;Bmaster=4;Bfoo=3;Bold=4`,
             onto: "3",
             expected: `
 x=E:C4M-3 t=Sb:k;Bmaster=4M`,
@@ -370,6 +370,12 @@ t
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
 `,
+        },
+        "does not close open submodules when rewinding": {
+            initial: `
+a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os;C3-1 t=Sa:1;Bfoo=3;Bold=2`,
+            onto: "3",
+            expected: `x=E:C2M-3 s=Sa:1;Bmaster=2M`
         },
 // TODO: I could not get libgit2 to remember or restore submodule branches when
 // used in the three-way mode; it stores it in "onto_name", not in "head-name".

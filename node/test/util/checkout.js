@@ -91,30 +91,46 @@ describe("Checkout", function () {
         // We will operate on the repository `x`.
 
         const cases = {
+            "meta change": {
+                input: "x=S:C2-1 README.md=8;Bfoo=2",
+                committish: "foo",
+                fails: true,
+            },
+            "conflict": {
+                input: `a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3;Os I a=9`,
+                committish: "foo",
+                fails: true,
+            },
+            "removal when changes to open sub being removed": {
+                input: `
+a=B|x=U:Os I a=b! W README.md=8;C3-2 s;Bfoo=3`,
+                committish: "foo",
+                expected: "x=U:C3-2 s;H=3;Bfoo=3",
+            },
             "simple checkout with untracked file": {
                 input: "x=S:Bfoo=1;W car=bmw",
                 expected: "x=E:H=1",
                 committish: "foo",
             },
             "simple checkout with unrelated change": {
-                input: "x=S:C2-1;Bfoo=2;W README.md=meh",
+                input: `a=B|x=U:C3-2 t=Sa:1;Bfoo=3;Os I a=8`,
                 committish: "foo",
-                expected: "x=E:H=2",
+                expected: "x=E:H=3",
+            },
+            "simple checkout to branch missing sub": {
+                input: `a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os I a=8`,
+                committish: "foo",
+                expected: "x=U:C3-1 t=Sa:1;Bfoo=3;H=3",
             },
             "checkout new commit": {
-                input: "x=S:C2-1;Bfoo=2",
+                input: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
                 committish: "foo",
                 expected: "x=E:H=2",
             },
-            "checkout with conflict": {
-                input: "x=S:C2-1;Bfoo=2;W 2=meh",
-                committish: "foo",
-                fails: true,
-            },
             "checkout with conflict, but forced": {
-                input: "x=S:C2-1;Bfoo=2;W 2=meh",
+                input: `a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3;Os I a=9`,
                 committish: "foo",
-                expected: "x=E:H=2;W 2=~",
+                expected: "x=E:H=3;Os",
                 force: true,
             },
             "sub closed": {
@@ -133,7 +149,7 @@ describe("Checkout", function () {
                 expected: "x=E:H=2",
             },
             "open sub but no change to sub": {
-                input: "a=S|x=U:C4-2;Os;Bfoo=4",
+                input: "a=S|x=U:C4-2 q=Sa:1;Os;Bfoo=4",
                 committish: "foo",
                 expected: "x=E:H=4",
             },
@@ -491,7 +507,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 switchBranch: null,
             },
             "just a commit": {
-                input: "x=S:C2-1;Bfoo=2",
+                input: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
                 committish: "foo",
                 newBranch: null,
                 switchBranch: null,
@@ -508,7 +524,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 expected: "x=E:Bfoo=1;*=foo",
             },
             "commit and a branch": {
-                input: "x=S:C2-1;Bfoo=2",
+                input: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
                 committish: "foo",
                 newBranch: {
                     name: "bar",

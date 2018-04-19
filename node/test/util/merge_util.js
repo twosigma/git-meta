@@ -70,19 +70,19 @@ describe("MergeUtil", function () {
         const MODE = MergeUtil.MODE;
         const cases = {
             "simple": {
-                initial: "x=S:C2-1;Bfoo=2",
+                initial: "a=B|x=S:C2-1 q=Sa:1;Bfoo=2",
                 commit: "2",
                 mode: MODE.NORMAL,
                 expected: "x=E:Bmaster=2",
             },
             "simple, FF_ONLY": {
-                initial: "x=S:C2-1;Bfoo=2",
+                initial: "a=B|x=S:C2-1 t/y=Sa:1;Bfoo=2",
                 commit: "2",
                 mode: MODE.FF_ONLY,
                 expected: "x=E:Bmaster=2",
             },
             "simple detached": {
-                initial: "x=S:C2-1;Bfoo=2;*=",
+                initial: "a=B|x=S:C2-1 u=Sa:1;Bfoo=2;*=",
                 commit: "2",
                 mode: MODE.NORMAL,
                 expected: "x=E:H=2",
@@ -116,17 +116,17 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 fails: true,
             },
             "force commit": {
-                initial: "x=S:C2-1;Bfoo=2",
+                initial: "a=B|x=S:C2-1 z=Sa:1;Bfoo=2",
                 commit: "2",
                 mode: MODE.FORCE_COMMIT,
-                expected: "x=E:Chahaha\n#x-1,2 2=2;Bmaster=x",
+                expected: "x=E:Chahaha\n#x-1,2 z=Sa:1;Bmaster=x",
                 message: "hahaha",
             },
             "force commit, detached": {
-                initial: "x=S:C2-1;Bfoo=2;*=",
+                initial: "a=B|x=S:C2-1 y=Sa:1;Bfoo=2;*=",
                 commit: "2",
                 mode: MODE.FORCE_COMMIT,
-                expected: "x=E:Chahaha\n#x-1,2 2=2;H=x",
+                expected: "x=E:Chahaha\n#x-1,2 y=Sa:1;H=x",
                 message: "hahaha",
             },
             "ff merge adding submodule": {

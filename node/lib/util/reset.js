@@ -165,14 +165,10 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     assert.property(TYPE, type);
 
     const head = yield repo.getHeadCommit();
-    const headTree = yield head.getTree();
-    const commitTree = yield commit.getTree();
-    const diff = yield NodeGit.Diff.treeToTree(repo,
-                                               headTree,
-                                               commitTree,
-                                               null);
-    const changedSubs = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
-                                                                        true);
+    const changedSubs = yield SubmoduleUtil.getSubmoduleChanges(repo,
+                                                                commit,
+                                                                head,
+                                                                false);
 
     // Prep the opener to open submodules on HEAD; otherwise, our resets will
     // be noops.
