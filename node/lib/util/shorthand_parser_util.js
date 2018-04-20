@@ -56,7 +56,7 @@ const SequencerState = RepoAST.SequencerState;
  *
  * The shorthand syntax for describing a repository:
  *
- * shorthand      = <base repo type> [':'<override>(';\s*'<override>)*]
+ * shorthand      = ['%']<base repo type> [':'<override>(';\s*'<override>)*]
  * base repo type = 'S' | 'B' | ('C'<url>) | 'A'<commit> | 'N'
  * override       = <head> | <branch> | <current branch> | <new commit> |
  *                  <remote> | <index> | <workdir> | <open submodule> |
@@ -155,9 +155,13 @@ const SequencerState = RepoAST.SequencerState;
  * the first character in the data, e.g. `^ab$` would match a file with a line
  * ending in `ab`.
  *
+ * If the repo type begins with a percent ('%') sign, it is configured to be
+ * sparse.
+ *
  * Examples:
  *
  * S                          -- same as RepoType.S
+ * %S                         -- A sparse repo of type 'S'
  * A33                        -- Like S but the single commit is named 33 and
  *                               contains a file named 33 with the contents 33.
  * S:H=                       -- removes head, bare repo
@@ -387,6 +391,7 @@ function prepareASTArguments(baseAST, rawRepo) {
         rebase: baseAST.rebase,
         sequencerState: baseAST.sequencerState,
         bare: baseAST.bare,
+        sparse: baseAST.sparse,
     };
 
     // Process HEAD.
@@ -500,6 +505,10 @@ function prepareASTArguments(baseAST, rawRepo) {
 
     if ("sequencerState" in rawRepo) {
         resultArgs.sequencerState = rawRepo.sequencerState;
+    }
+
+    if ("sparse" in rawRepo) {
+        resultArgs.sparse = rawRepo.sparse;
     }
 
     return resultArgs;
@@ -1088,16 +1097,30 @@ exports.parseRepoShorthandRaw = function (shorthand) {
     // Manually process the base repository type; there is only one and it must
     // be at the beginning.
 
-    let typeEnd = findChar(shorthand, ":", 0, shorthand.length) ||
+    let sparse = false;
+    let typeBegin = 0;
+
+    if ("%" === shorthand[0]) {
+        typeBegin = 1;
+        sparse = true;
+    }
+
+    const typeEnd = findChar(shorthand, ":", typeBegin, shorthand.length) ||
                                                               shorthand.length;
 
-    let typeStr = shorthand[0];
-    let typeData =
-                  (typeEnd > 1) ? shorthand.substr(1, typeEnd - 1) : undefined;
+    const typeStr = shorthand[typeBegin];
+    const dataBegin = typeBegin + 1;
+    const typeData = (typeEnd - typeBegin > 1) ?
+                     shorthand.substr(dataBegin, typeEnd - dataBegin) :
+                     undefined;
 
-    let result = {
+    const result = {
         type: typeStr,
     };
+
+    if (sparse) {
+        result.sparse = sparse;
+    }
 
     // If there is data after the base type description, recurse.
 
@@ -1116,7 +1139,6 @@ exports.parseRepoShorthandRaw = function (shorthand) {
     if (undefined !== typeData) {
         result.typeData = typeData;
     }
-
     return result;
 };
 

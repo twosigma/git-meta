@@ -32,7 +32,9 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoAST             = require("../../lib/util/repo_ast");
@@ -290,6 +292,7 @@ ${sha} not in written list ${JSON.stringify(written)}`);
 
         const cases = {
             "simple": "S",
+            "sparse": "%S:H=1",
             "new head": "S:C2-1;H=2",
             "simple with branch": "S:Bfoo=1",
             "simple with ref": "S:Bfoo=1;Fa/b=1",
@@ -369,6 +372,7 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
     describe("writeMultiRAST", function () {
         const cases = {
             "simple": "a=S",
+            "simple sparse": "a=%S",
             "bare": "a=B",
             "multiple": "a=B|b=Ca:C2-1;Bmaster=2",
             "external commit": "a=S:Bfoo=2|b=S:C2-1;Bmaster=2",
@@ -453,6 +457,32 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
                 return;                                               // RETURN
             }
             assert(false, "commit still exists");
+        }));
+        it("sparse subdir rm'd", co.wrap(function *() {
+            const root = yield TestUtil.makeTempDir();
+            const input = "a=B|x=%U";
+            const asts = ShorthandParserUtil.parseMultiRepoShorthand(input);
+            yield WriteRepoASTUtil.writeMultiRAST(asts, root);
+            let exists = true;
+            try {
+                yield fs.stat(path.join(root, "x", "s"));
+            } catch (e) {
+                exists = false;
+            }
+            assert.equal(exists, false);
+        }));
+        it("sparse subdir rm'd, detached head", co.wrap(function *() {
+            const root = yield TestUtil.makeTempDir();
+            const input = "a=B|x=%U:H=2";
+            const asts = ShorthandParserUtil.parseMultiRepoShorthand(input);
+            yield WriteRepoASTUtil.writeMultiRAST(asts, root);
+            let exists = true;
+            try {
+                yield fs.stat(path.join(root, "x", "s"));
+            } catch (e) {
+                exists = false;
+            }
+            assert.equal(exists, false);
         }));
     });
 });

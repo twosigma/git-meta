@@ -43,6 +43,7 @@ const ReadRepoASTUtil     = require("../../lib/util/read_repo_ast_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const SequencerState      = require("../../lib/util/sequencer_state");
 const SequencerStateUtil  = require("../../lib/util/sequencer_state_util");
+const SparseCheckoutUtil  = require("../../lib/util/sparse_checkout_util");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 
@@ -1833,5 +1834,22 @@ describe("readRAST", function () {
             RepoASTUtil.assertEqualASTs(actual, expected);
         }));
     });
+    it("sparse", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        const result = yield ReadRepoASTUtil.readRAST(repo);
+        assert.equal(result.sparse, true);
+    }));
+    it("sparse ignores worktree", co.wrap(function *() {
+        // Unfortunately, NodeGit will view files missing from the worktree as
+        // modifications.  We need to verify that we deal with that.
+
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        yield fs.unlink(path.join(repo.workdir(), "README.md"));
+        const result = yield ReadRepoASTUtil.readRAST(repo);
+        assert.equal(result.sparse, true);
+        assert.deepEqual(result.workdir, {});
+    }));
 });
 

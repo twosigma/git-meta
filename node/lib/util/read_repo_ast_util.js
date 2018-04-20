@@ -44,6 +44,7 @@ const path     = require("path");
 
 const RepoAST             = require("./repo_ast");
 const RebaseFileUtil      = require("./rebase_file_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
@@ -425,10 +426,17 @@ exports.readRAST = co.wrap(function *(repo) {
         headCommitId = headCommit.id().tostrS();
     }
 
+    const sparse = yield SparseCheckoutUtil.inSparseMode(repo);
+
     if (!bare) {
         const current = yield loadIndexAndWorkdir(repo, headCommit);
         index = current.index;
-        workdir = current.workdir;
+
+        // Ignore the workdir if it's sparse.
+
+        if (!sparse) {
+            workdir = current.workdir;
+        }
     }
 
     // Now we can actually build the remote objects.
@@ -564,5 +572,6 @@ exports.readRAST = co.wrap(function *(repo) {
         rebase: rebase,
         sequencerState: sequencer,
         bare: bare,
+        sparse: sparse,
     });
 });
