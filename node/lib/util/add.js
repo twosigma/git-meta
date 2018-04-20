@@ -32,19 +32,23 @@
 
 const assert    = require("chai").assert;
 const co        = require("co");
+const colors    = require("colors");
+const fs        = require("fs-promise");
 const NodeGit   = require("nodegit");
+const path      = require("path");
 
 const RepoStatus    = require("./repo_status");
 const StatusUtil    = require("./status_util");
 const SubmoduleUtil = require("./submodule_util");
+const UserError     = require("./user_error");
 
 /**
  * Stage modified content at the specified `paths` in the specified `repo`.  If
  * a path in `paths` refers to a file, stage it; if it refers to  a directory,
  * stage all modified content rooted at that path, including that in open
  * submodules.  Note that a path of "" is taken to indicate the entire
- * repository.  The behavior is undefined unless every path in `paths` is a
- * valid relative path in `repo.workdir()`.
+ * repository.  Throw a `UserError` if any path in `paths` doesn't exist or
+ * can't be read.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -55,6 +59,14 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     assert.isArray(paths);
     assert.isBoolean(stageMetaChanges);
     assert.isBoolean(update);
+
+    yield paths.map(co.wrap(function* (name) {
+        try {
+            yield fs.stat(path.join(repo.workdir(), name));
+        } catch (e) {
+            throw new UserError(`Invalid path: ${colors.red(name)}`);
+        }
+    }));
 
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,

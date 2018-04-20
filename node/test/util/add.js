@@ -42,6 +42,11 @@ describe("add", function () {
                 initial: "x=S",
                 paths: [],
             },
+            "bad": {
+                initial: "x=S",
+                paths: ["foo"],
+                fails: true,
+            },
             "nothing to add": {
                 initial: "x=S",
                 paths: [""],

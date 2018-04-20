@@ -414,10 +414,10 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     }
     if (undefined !== options.cwd) {
         assert.isString(options.cwd);
-        options.paths = yield options.paths.map(filename => {
+        options.paths = options.paths.map(filename => {
             return GitUtil.resolveRelativePath(repo.workdir(),
                                                options.cwd,
-                filename);
+                                               filename);
         });
     }
     const headCommit = yield repo.getHeadCommit();
@@ -504,10 +504,9 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
                                       openArray.concat(Object.keys(changes))));
 
         if (filtering) {
-            filterPaths = yield SubmoduleUtil.resolvePaths(repo.workdir(),
-                                                           options.paths,
-                                                           subsToList,
-                                                           openArray);
+            filterPaths = SubmoduleUtil.resolvePaths(options.paths,
+                                                     subsToList,
+                                                     openArray);
             subsToList = Object.keys(filterPaths);
         }
 

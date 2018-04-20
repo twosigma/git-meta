@@ -910,12 +910,19 @@ describe("GitUtil", function () {
                 filename: "/",
                 fails: true,
             },
-            "invalid": {
+            "not there": {
                 paths: ["a"],
                 workdir: "a",
                 cwd: "a",
                 filename: "b",
-                fails: true,
+                expected: "b",
+            },
+            "not there, relative": {
+                paths: ["a/c"],
+                workdir: "a",
+                cwd: "a/c",
+                filename: "../b",
+                expected: "b",
             },
             "inside": {
                 paths: ["a/b/c"],
@@ -951,9 +958,9 @@ describe("GitUtil", function () {
                 const cwd = path.join(tempDir, c.cwd);
                 let result;
                 try {
-                    result = yield GitUtil.resolveRelativePath(workdir,
-                                                               cwd,
-                                                               c.filename);
+                    result = GitUtil.resolveRelativePath(workdir,
+                                                         cwd,
+                                                         c.filename);
                 }
                 catch (e) {
                     if (!c.fails) {

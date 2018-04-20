@@ -51,6 +51,12 @@ describe("openOnCommit", function () {
             commitSha: "1",
             expected: "x=E:Os",
         },
+        "sparse": {
+            initial: "a=B|x=%U",
+            subName: "s",
+            commitSha: "1",
+            expected: "x=E:Os",
+        },
         "not head": {
             initial: "a=B:C3-1;Bmaster=3|x=U",
             subName: "s",
