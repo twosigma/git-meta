@@ -136,6 +136,7 @@ describe("SubmoduleConfigUtil", function () {
                                                          baseSubPath,
                                                          "x/y",
                                                          1);
+            yield NodeGit.Submodule.addSetup(repo, baseSubPath, "x/z", 1);
             const subRepo = yield sub.open();
             const origin = yield subRepo.getRemote("origin");
             yield origin.connect(NodeGit.Enums.DIRECTION.FETCH,
@@ -152,11 +153,22 @@ describe("SubmoduleConfigUtil", function () {
             yield SparseCheckoutUtil.setSparseMode(repo);
             yield SubmoduleConfigUtil.deinit(repo, "x/y");
 
-            // Verify that directory is gone
-            const subPath = path.join(repo.workdir(), "x", "y");
+            // Verify that directory for sub is gone
+
             let failed = false;
             try {
-                yield fs.readdir(subPath);
+                yield fs.readdir(path.join(repo.workdir(), "x", "y"));
+            } catch (e) {
+                failed = true;
+            }
+            assert(failed);
+
+            // verify we clean the root when all is gone
+
+            failed = false;
+            yield SubmoduleConfigUtil.deinit(repo, "x/z");
+            try {
+                yield fs.readdir(path.join(repo.workdir(), "x"));
             } catch (e) {
                 failed = true;
             }

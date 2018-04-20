@@ -165,12 +165,29 @@ exports.deinit = co.wrap(function *(repo, submoduleName) {
 
     const rootDir = repo.workdir();
     const submodulePath = path.join(rootDir, submoduleName);
-    const files = yield fs.readdir(submodulePath);
 
     const sparse = yield SparseCheckoutUtil.inSparseMode(repo);
     if (sparse) {
+        // Clear out submodule's contents.
+
         yield doRimRaf(submodulePath);
+
+        // Clear parent directories until they're all gone or we find one
+        // that's non-empty.
+
+        let next = path.dirname(submoduleName);
+        try {
+            while ("." !== next) {
+                yield fs.rmdir(path.join(rootDir, next));
+                next = path.dirname(next);
+            }
+        } catch (e) {
+            if ("ENOTEMPTY" !== e.code) {
+                throw e;
+            }
+        }
     } else {
+        const files = yield fs.readdir(submodulePath);
         yield files.map(co.wrap(function *(filename) {
             yield doRimRaf(path.join(submodulePath, filename));
         }));
