@@ -56,14 +56,6 @@ sub-repo.  Also show diagnostic information if the repository is in consistent
 state, e.g., when a sub-repo is on a different branch than the meta-repo.`;
 
 exports.configureParser = function (parser) {
-    parser.addArgument(["--meta"], {
-        required: false,
-        action: "storeConst",
-        constant: true,
-        help: `
-Include changes to the meta-repo; disabled by default to improve performance.`,
-        defaultValue: false,
-    });
     parser.addArgument(["path"], {
         type: "string",
         help: "paths to inspect for changes",
@@ -91,7 +83,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const workdir = repo.workdir();
     const cwd = process.cwd();
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
-        showMetaChanges: args.meta,
         cwd: cwd,
         paths: args.path,
     });

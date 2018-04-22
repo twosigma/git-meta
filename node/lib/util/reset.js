@@ -242,50 +242,6 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 });
 
 /**
- * Helper method for `resolvePaths` to simplify use of `cacheSubmodules`.
- */
-const resetPathsHelper = co.wrap(function *(repo, commit, resolvedPaths) {
-    // Get a `Status` object reflecting only the values in `paths`.
-
-    const status = yield StatusUtil.getRepoStatus(repo, {
-        showMetaChanges: true,
-        paths: resolvedPaths,
-    });
-
-    // Reset the meta-repo.
-
-    const metaStaged = Object.keys(status.staged);
-    if (0 !== metaStaged.length) {
-        yield NodeGit.Reset.default(repo, commit, metaStaged);
-    }
-
-    const subs = status.submodules;
-    const fetcher = new SubmoduleFetcher(repo, commit);
-    const subNames = Object.keys(subs);
-    const shas =
-         yield SubmoduleUtil.getSubmoduleShasForCommit(repo, subNames, commit);
-
-    yield subNames.map(co.wrap(function *(subName) {
-        const sub = subs[subName];
-        const workdir = sub.workdir;
-        const sha = shas[subName];
-
-        // If the submodule isn't open (no workdir) or didn't exist on `commit`
-        // (i.e., it had no sha there), skip it.
-
-        if (null !== workdir && undefined !== sha) {
-            const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-            yield fetcher.fetchSha(subRepo, subName, sha);
-            const subCommit = yield subRepo.getCommit(sha);
-            const staged = Object.keys(workdir.status.staged);
-            if (0 !== staged.length) {
-                yield NodeGit.Reset.default(subRepo, subCommit, staged);
-            }
-        }
-    }));
-});
-
-/**
  * Reset the state of the index of the specified `repo` for the specified
  * `paths` to their state in the specified `commit`; or throw a `UserError` if
  * any path is invalid.  Use the specified `cwd` to resolve relative paths.
@@ -316,7 +272,34 @@ exports.resetPaths = co.wrap(function *(repo, cwd, commit, paths) {
     const resolvedPaths = paths.map(filename => {
         return GitUtil.resolveRelativePath(repo.workdir(), cwd, filename);
     });
-    yield SubmoduleUtil.cacheSubmodules(repo, () => {
-        return resetPathsHelper(repo, commit, resolvedPaths);
+
+    const status = yield StatusUtil.getRepoStatus(repo, {
+        paths: resolvedPaths,
     });
+
+    const subs = status.submodules;
+    const fetcher = new SubmoduleFetcher(repo, commit);
+    const subNames = Object.keys(subs);
+    const shas =
+         yield SubmoduleUtil.getSubmoduleShasForCommit(repo, subNames, commit);
+
+    yield subNames.map(co.wrap(function *(subName) {
+        const sub = subs[subName];
+        const workdir = sub.workdir;
+        const sha = shas[subName];
+
+        // If the submodule isn't open (no workdir) or didn't exist on `commit`
+        // (i.e., it had no sha there), skip it.
+
+        if (null !== workdir && undefined !== sha) {
+            const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+            yield fetcher.fetchSha(subRepo, subName, sha);
+            const subCommit = yield subRepo.getCommit(sha);
+            const staged = Object.keys(workdir.status.staged);
+            if (0 !== staged.length) {
+                yield NodeGit.Reset.default(subRepo, subCommit, staged);
+            }
+        }
+    }));
+
 });
