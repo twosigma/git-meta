@@ -75,10 +75,17 @@ exports.configureParser = function (parser) {
         required: true,
         help: "commit message for shadow commits",
     });
+    parser.addArgument(["-e", "--epoch-timestamp"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        defaultValue: false,
+        help: "include timestamp in the shadow commit",
+    });
 };
 
 /**
- * Exeucte the `commit-shadow` command according to the specified `args`.
+ * Execute the `commit-shadow` command according to the specified `args`.
  *
  * @async
  * @param {Object}  args
@@ -91,8 +98,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const result = yield StashUtil.makeShadowCommit(repo,
                                                     args.message,
+                                                    args.epoch_timestamp,
                                                     false,
-                                                    args.include_untracked );
+                                                    args.include_untracked);
     if (null === result) {
         const head = yield repo.getHeadCommit();
         console.log(head.id().tostrS());
