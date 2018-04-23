@@ -57,8 +57,12 @@ exports.execHook = co.wrap(function *(name, args=[]) {
         console.log(result.stdout);
         return result.stdout;
     } catch (e) {
-        // ignore the exception
-        // Fixme: Need to be sync with git. If the hook is not executable,
-        // should give user hints.
+        if (e.code === "EACCES") {
+            console.log("EACCES: Cannot execute: " + absPath);
+            return e.stderr;
+        } else if (e.stdout) {
+            console.log(e.stdout);
+            return e.stdout;
+        }
     }
 });
