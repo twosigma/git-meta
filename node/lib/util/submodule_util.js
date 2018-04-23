@@ -465,17 +465,14 @@ exports.getSubmodulesForCommit = co.wrap(function *(repo, commit, names) {
 /**
  * Return the list of submodules, listed in the specified `indexSubNames`, that
  * are a descendant of the specified `dir`, including (potentially) `dir`
- * itself (unless `dir` is suffixed with '/'), in the specified `repo`.  The
- * behavior is undefined unless `dir` is empty or refers to a valid path within
- * `repo`.  Note that if `"" === dir`, the result will be all submodules.
+ * itself (unless `dir` is suffixed with '/').
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             dir
  * @param {String []}          indexSubNames
  * @return {String[]}
  */
-exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
-    assert.isString(workdir);
+exports.getSubmodulesInPath = function (dir, indexSubNames) {
     assert.isString(dir);
     assert.isArray(indexSubNames);
     if ("" !== dir) {
@@ -486,27 +483,16 @@ exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
     if ("" === dir) {
         return indexSubNames;
     }
-    const subs = new Set(indexSubNames);
     const result = [];
-    const listForFilename = co.wrap(function *(filepath) {
-        if (subs.has(filepath)) {
-            result.push(filepath);
+    for (const subPath of indexSubNames) {
+        if (subPath === dir) {
+            return [dir];                                             // RETURN
+        } else if (subPath.startsWith(dir)) {
+            result.push(subPath);
         }
-        else {
-            const absPath = path.join(workdir, filepath);
-            const stat = yield fs.stat(absPath);
-            if (stat.isDirectory()) {
-                const subdirs = yield fs.readdir(absPath);
-                yield subdirs.map(filename => {
-                    return listForFilename(path.join(filepath, filename));
-                });
-
-            }
-        }
-    });
-    yield listForFilename(dir);
+    }
     return result;
-});
+};
 
 /**
  * Return the list of submodules found in the specified `paths` in the
@@ -515,62 +501,53 @@ exports.getSubmodulesInPath = co.wrap(function *(workdir, dir, indexSubNames) {
  * `cwd`.  Throw a `UserError` if an invalid path is encountered, and log
  * warnings for valid paths containing no submodules.
  *
- * @async
  * @param {String} workdir
  * @param {String} cwd
  * @param {String[]} submoduleNames
  * @param {String[]} paths
  * @return {String[]}
  */
-exports.resolveSubmoduleNames = co.wrap(function *(workdir,
-                                                   cwd,
-                                                   submoduleNames,
-                                                   paths) {
+exports.resolveSubmoduleNames = function (workdir,
+                                          cwd,
+                                          submoduleNames,
+                                          paths) {
     assert.isString(workdir);
     assert.isString(cwd);
     assert.isArray(submoduleNames);
     assert.isArray(paths);
 
-    const subLists = yield paths.map(co.wrap(function *(filename) {
+    const subLists = paths.map(filename => {
         // Compute the relative path for `filename` from the root of the repo,
         // and check for invalid values.
-        const relPath = yield GitUtil.resolveRelativePath(workdir,
-                                                          cwd,
-                                                          filename);
-        const result = yield exports.getSubmodulesInPath(workdir,
-                                                         relPath,
-                                                         submoduleNames);
+        const relPath = GitUtil.resolveRelativePath(workdir,
+                                                    cwd,
+                                                    filename);
+        const result = exports.getSubmodulesInPath(relPath, submoduleNames);
         if (0 === result.length) {
             console.warn(`\
 No submodules found from ${colors.yellow(filename)}.`);
         }
         return result;
-    }));
+    });
     return subLists.reduce((a, b) => a.concat(b), []);
-});
+};
 
 /**
  * Return a map from submodule name to an array of paths (relative to the root
- * of each submodule) identified by the specified `paths` relative to the root
- * of the specified `workdir`, indicating one of the submodule names in the
- * specified `indexSubNames`.  Check each path to see if it points into one of
- * the specified `openSubmodules`, and add the relative offset to the paths for
- * that submodule if it does.  If any path in `paths` contains a submodule
- * entirely (as opposed to a sub-path within it), it will be mappped to an
- * empty array (regardless of whether or not any sub-path in that submodule is
- * identified).
+ * of each submodule) identified by the specified `paths`, indicating one of
+ * the submodule names in the specified `indexSubNames`.  Check each path to
+ * see if it points into one of the specified `openSubmodules`, and add the
+ * relative offset to the paths for that submodule if it does.  If any path in
+ * `paths` contains a submodule entirely (as opposed to a sub-path within it),
+ * it will be mappped to an empty array (regardless of whether or not any
+ * sub-path in that submodule is identified).
  *
- * @param {String}    workdir
  * @param {String []} paths
  * @param {String []} indexSubNames
  * @param {String []} openSubmodules
  * @return {Object} map from submodule name to array of paths
  */
-exports.resolvePaths = co.wrap(function *(workdir,
-                                          paths,
-                                          indexSubNames,
-                                          openSubmodules) {
-    assert.isString(workdir);
+exports.resolvePaths = function (paths, indexSubNames, openSubmodules) {
     assert.isArray(paths);
     assert.isArray(indexSubNames);
     assert.isArray(openSubmodules);
@@ -580,12 +557,10 @@ exports.resolvePaths = co.wrap(function *(workdir,
     // First, populate 'result' with all the subs that are completely
     // contained.
 
-    yield paths.map(co.wrap(function *(path) {
-        const subs = yield exports.getSubmodulesInPath(workdir,
-                                                       path,
-                                                       indexSubNames);
+    paths.map(path => {
+        const subs = exports.getSubmodulesInPath(path, indexSubNames);
         subs.forEach(subName => result[subName] = []);
-    }));
+    });
 
     // Now check to see which paths refer to a path inside a submodule.
     // Checking each file against the name of each open submodule has
@@ -619,7 +594,7 @@ exports.resolvePaths = co.wrap(function *(workdir,
     }
 
     return result;
-});
+};
 
 /**
  * Create references having the specified `refs` names in each of the specified

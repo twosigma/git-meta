@@ -144,7 +144,7 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
         paths: paths,
         showMetaChanges: false,
     });
-    paths = yield paths.map(filename => {
+    paths = paths.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, head);
@@ -156,10 +156,9 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     const open = new Set(openList);
     let pathsToUse = allSubs;
     if (0 !== paths.length) {
-        pathsToUse  = Object.keys(yield SubmoduleUtil.resolvePaths(relCwd,
-                                                                   paths,
-                                                                   allSubs,
-                                                                   openList));
+        pathsToUse = Object.keys(SubmoduleUtil.resolvePaths(paths,
+                                                            allSubs,
+                                                            openList));
     }
     const pathsSet = new Set(pathsToUse);
     const subShas = {};
@@ -205,13 +204,12 @@ const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {
     // Here, we find which submodule `path` refers too.  It migt be invalid by
     // referring to no submodule, or by referring to more than one.
 
-    const relPath = yield GitUtil.resolveRelativePath(workdir,
-                                                      process.cwd(),
-                                                      path);
-    const resolvedPaths = yield SubmoduleUtil.resolvePaths(workdir,
-                                                           [relPath],
-                                                           subNames,
-                                                           openSubNames);
+    const relPath = GitUtil.resolveRelativePath(workdir,
+                                                process.cwd(),
+                                                path);
+    const resolvedPaths = SubmoduleUtil.resolvePaths([relPath],
+                                                     subNames,
+                                                     openSubNames);
     const paths = Object.keys(resolvedPaths);
     if (0 === paths.length) {
         throw new UserError(`No submodule found in ${colors.red(path)}.`);

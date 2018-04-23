@@ -99,8 +99,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const workdir = repo.workdir();
     const cwd     = process.cwd();
 
-    const paths = yield args.paths.map(filename => {
-        return  GitUtil.resolveRelativePath(workdir, cwd, filename);
+    const paths = args.paths.map(filename => {
+        return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
     yield Add.stagePaths(repo, paths, args.meta, args.update);
 });

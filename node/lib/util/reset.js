@@ -313,7 +313,7 @@ exports.resetPaths = co.wrap(function *(repo, cwd, commit, paths) {
         throw new UserError("Cannot reset files to a commit that is not HEAD");
     }
 
-    const resolvedPaths = yield paths.map(filename => {
+    const resolvedPaths = paths.map(filename => {
         return GitUtil.resolveRelativePath(repo.workdir(), cwd, filename);
     });
     yield SubmoduleUtil.cacheSubmodules(repo, () => {

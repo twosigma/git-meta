@@ -757,24 +757,18 @@ exports.parseRefspec = function(str) {
  * @param {String} dir
  * @return {String}
  */
-exports.resolveRelativePath = co.wrap(function *(workdir, cwd, filename) {
+exports.resolveRelativePath = function (workdir, cwd, filename) {
     assert.isString(workdir);
     assert.isString(cwd);
     assert.isString(filename);
 
     const absPath = path.resolve(cwd, filename);
-    try {
-        yield fs.stat(absPath);
-    }
-    catch (e) {
-        throw new UserError(`${colors.red(filename)} does not exist.`);
-    }
     const relPath = path.relative(workdir, absPath);
     if ("" !== relPath && "." === relPath[0]) {
         throw new UserError(`${colors.red(filename)} is outside the workdir.`);
     }
     return relPath;
-});
+};
 
 /*
  * Return the editor command to use for the specified `repo`.
