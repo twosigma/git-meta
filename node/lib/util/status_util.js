@@ -453,13 +453,11 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
             const treeId = head.treeId();
             tree = yield NodeGit.Tree.lookup(repo, treeId);
         }
-        const status = yield SubmoduleUtil.cacheSubmodules(repo, () => {
-            return DiffUtil.getRepoStatus(repo,
-                                          tree,
-                                          options.paths,
-                                          options.ignoreIndex,
-                                          options.showAllUntracked);
-        });
+        const status = yield DiffUtil.getRepoStatus(repo,
+                                                    tree,
+                                                    options.paths,
+                                                    options.ignoreIndex,
+                                                    options.showAllUntracked);
         args.staged = status.staged;
         args.workdir = status.workdir;
     }
