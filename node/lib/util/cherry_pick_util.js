@@ -75,10 +75,10 @@ function ensureCherryInProgress(seq) {
  * Change the specified `submodules` in the specified index.  If a name maps to
  * a `Submodule`, update it in the specified `index` in the specified `repo`
  * and if that submodule is open, reset its HEAD, index, and worktree to
- * reflect that commit.  Otherwise, if it maps to `null`, remove it and deinit
- * it if it's open.  Obtain submodule repositories from the specified `opener`,
- * but do not open any closed repositories.  The behavior is undefined if any
- * referenced submodule is open and has index or workdir modifications.
+ * reflect that commit.  Otherwise, if it maps to `null`, remove it.  Obtain
+ * submodule repositories from the specified `opener`, but do not open any
+ * closed repositories.  The behavior is undefined if any referenced submodule
+ * is open and has index or workdir modifications.
  *
  * @param {NodeGit.Repository} repo
  * @param {Open.Opener}        opener
@@ -107,7 +107,6 @@ exports.changeSubmodules = co.wrap(function *(repo,
     for (let name in submodules) {
         const sub = submodules[name];
         if (null === sub) {
-            yield SubmoduleConfigUtil.deinit(repo, name);
             changes[name] = null;
             delete urls[name];
             yield rmrf(name);
