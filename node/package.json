@@ -28,11 +28,13 @@
   "homepage": "https://github.com/twosigma/git-meta#readme",
   "dependencies": {
     "argparse": "",
+    "binary-search": "",
     "chai": "",
     "child-process-promise": "",
     "co": "",
     "colors": "",
     "fs-promise": "",
+    "group-by": "",
     "nodegit": "^0.21.1",
     "rimraf": "",
     "split": ""
