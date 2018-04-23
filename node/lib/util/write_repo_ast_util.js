@@ -51,6 +51,7 @@ const RebaseFileUtil      = require("./rebase_file_util");
 const RepoAST             = require("./repo_ast");
 const RepoASTUtil         = require("./repo_ast_util");
 const SequencerStateUtil  = require("./sequencer_state_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const TestUtil            = require("./test_util");
 const TreeUtil            = require("./tree_util");
@@ -332,7 +333,6 @@ const writeAllCommits = co.wrap(function *(repo, commits, treeCache) {
  * @param {Object}             treeCache  map of tree entries
  */
 const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
-
     const makeConflictEntry = co.wrap(function *(data) {
         assert.instanceOf(repo, NodeGit.Repository);
         if (null === data) {
@@ -408,14 +408,47 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
         }
     }
     else if (null !== ast.currentBranchName) {
-        const currentBranch =
-                   yield repo.getBranch("refs/heads/" + ast.currentBranchName);
-        yield repo.checkoutBranch(currentBranch);
+        // If we use NodeGit to checkout, it will not respect the
+        // sparse-checkout settings.
+
+        const checkoutStr = `\
+git -C '${repo.workdir()}' checkout ${ast.currentBranchName}
+`;
+        try {
+            yield exec(checkoutStr);
+        } catch (e) {
+            // This can fail if there is no .gitmodules file to checkout and
+            // it's sparse.  Git will complain that it cannot do the checkout
+            // because the worktree is empty.
+        }
     }
     else if (null !== ast.head) {
-        const headCommit = yield repo.getCommit(newHeadSha);
-        repo.setHeadDetached(newHeadSha);
-        yield NodeGit.Reset.reset(repo, headCommit, NodeGit.Reset.TYPE.HARD);
+        // If we use NodeGit to do the reset, it will not respect the sparsery
+        // of the repository, so we use plain Git.
+
+        repo.detachHead();
+        const resetStr = `\
+git -C '${repo.workdir()}' reset --hard ${newHeadSha}
+`;
+        try {
+            yield exec(resetStr);
+        } catch (e) {
+            // This can fail if there is no .gitmodules file to checkout and
+            // it's sparse.  Git will complain that it cannot do the checkout
+            // because the worktree is empty.
+        }
+        repo.detachHead();
+
+        // Git makes a master branch when we don't have one (even though there
+        // is nothing in the documentation for `reset` that says it will do
+        // so).  So, we remove it.
+
+        if (!("master" in ast.branches)) {
+            // Here, Git has created a master branch we didn't ask for; remove
+            // it.
+
+            NodeGit.Reference.remove(repo, "refs/heads/master");
+        }
     }
 
     const notes = ast.notes;
@@ -506,9 +539,10 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
         // not.  I didn't see anything about `clean` and `Checkout.index`
         // didn't seem to work..
 
+        const filesStr = ast.sparse ? "-- .gitmodules" : "-a";
         const checkoutIndexStr = `\
 git -C '${repo.workdir()}' clean -f -d
-git -C '${repo.workdir()}' checkout-index -a -f
+git -C '${repo.workdir()}' checkout-index -f ${filesStr}
 `;
         yield exec(checkoutIndexStr);
 
@@ -623,6 +657,10 @@ exports.writeRAST = co.wrap(function *(ast, path) {
     assert.deepEqual(ast.openSubmodules, {}, "open submodules not supported");
 
     const repo = yield NodeGit.Repository.init(path, ast.bare ? 1 : 0);
+
+    if (ast.sparse) {
+        yield SparseCheckoutUtil.setSparseMode(repo);
+    }
 
     yield configRepo(repo);
 
@@ -780,6 +818,9 @@ git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
                                                repoPath, {
             bare: ast.bare ? 1 : 0
         });
+        if (ast.sparse) {
+            yield SparseCheckoutUtil.setSparseMode(repo);
+        }
         yield configRepo(repo);
         yield writeRepo(repo, ast, repoPath);
         resultRepos[repoName] = repo;

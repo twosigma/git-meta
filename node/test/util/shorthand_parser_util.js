@@ -158,6 +158,7 @@ describe("ShorthandParserUtil", function () {
         }
         const cases = {
             "just type": { i: "S", e: m({ type: "S"})},
+            "sparse": { i: "%S", e: m({ type: "S", sparse: true}) },
             "just another type": { i: "B", e: m({ type: "B"})},
             "branch": { i: "S:Bm=2", e: m({
                 branches: { m: new RepoAST.Branch("2", null), },
@@ -739,6 +740,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.openSubmodules, e.openSubmodules);
                 assert.deepEqual(r.rebase, e.rebase);
                 assert.deepEqual(r.sequencerState, e.sequencerState);
+                assert.equal(r.sparse, e.sparse);
             });
         });
     });
@@ -756,6 +758,12 @@ describe("ShorthandParserUtil", function () {
             "simple": {
                 i: "S",
                 e: S
+            },
+            "sparse": {
+                i: "%S",
+                e: S.copy({
+                    sparse: true,
+                }),
             },
             "null": {
                 i: "N",

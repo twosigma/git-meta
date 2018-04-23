@@ -495,6 +495,16 @@ Expected sequencer to be ${actual.sequencerState} but got \
 ${expected.sequencerState}`);
     }
 
+    // Check sparse
+
+    if (actual.sparse !== expected.sparse) {
+        if (expected.sparse) {
+            result.push(`Expected repository to be sparse.`);
+        }
+        else {
+            result.push(`Expected repository not to be sparse.`);
+        }
+    }
 
     return result;
 }

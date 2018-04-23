@@ -178,6 +178,7 @@ describe("RepoAstUtil", function () {
                         currentCommit: 0,
                     }),
                     bare: false,
+                    sparse: false,
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
@@ -198,6 +199,7 @@ describe("RepoAstUtil", function () {
                         currentCommit: 0,
                     }),
                     bare: false,
+                    sparse: false,
                 }),
             },
             "bad bare": {
@@ -643,7 +645,12 @@ describe("RepoAstUtil", function () {
                 }),
                 fails: true,
             },
-        };
+             "bad sparse": {
+                actual: new AST({ sparse: true }),
+                expected: new AST({ sparse: false }),
+                fails: true,
+            },
+       };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
             it(caseName, function () {

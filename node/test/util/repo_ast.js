@@ -275,6 +275,8 @@ const REBASE = SequencerState.TYPE.REBASE;
                     erebase: ("rebase" in expected) ?  expected.rebase : null,
                     esequencerState: ("sequencerState" in expected) ?
                         expected.sequencerState : null,
+                    esparse   : ("sparse" in expected) ?
+                                                       expected.sparse : false,
                     fails   : fails,
                 };
             }
@@ -290,6 +292,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                         rebase: null,
                         sequencerState: null,
                         bare: false,
+                        sparse: false,
                     },
                     undefined,
                     false),
@@ -660,6 +663,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                         currentCommit: 1,
                     }),
                 }, undefined, true),
+                "with sparse": m({ sparse: true }, { sparse: true} , false),
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -684,6 +688,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.rebase, c.erebase);
                     assert.deepEqual(obj.sequencerState, c.esequencerState);
                     assert.equal(obj.bare, c.ebare);
+                    assert.equal(obj.sparse, c.esparse);
 
                     if (c.input) {
                         assert.notEqual(obj.commits, c.input.commits);
@@ -810,6 +815,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                     currentCommit: 0,
                 }),
                 bare: false,
+                sparse: false,
             });
             const newArgs = {
                 commits: { "2": new RepoAST.Commit()},
@@ -829,6 +835,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                     currentCommit: 0,
                 }),
                 bare: false,
+                sparse: false,
             };
             const cases = {
                 "trivial": {
@@ -856,6 +863,23 @@ const REBASE = SequencerState.TYPE.REBASE;
                         bare: true,
                     }),
                 },
+                "sparse": {
+                    i: {
+                        sparse: true,
+                        index: {},
+                        workdir: {},
+                        rebase: null,
+                        sequencerState: null,
+                    },
+                    e: new RepoAST({
+                        commits: { "1": new RepoAST.Commit()},
+                        branches: { "master": new RepoAST.Branch("1", null) },
+                        refs: { "a/b": "1"},
+                        head: "1",
+                        currentBranchName: "master",
+                        sparse: true,
+                    }),
+                },
             };
             Object.keys(cases).forEach(caseName => {
                 it(caseName, function () {
@@ -873,6 +897,7 @@ const REBASE = SequencerState.TYPE.REBASE;
                     assert.deepEqual(obj.rebase, c.e.rebase);
                     assert.deepEqual(obj.sequencerState, c.e.sequencerState);
                     assert.equal(obj.bare, c.e.bare);
+                    assert.equal(obj.sparse, c.e.sparse);
                 });
             });
         });

@@ -393,6 +393,7 @@ class AST {
      * @param {Object}         [args.openSubmodules]
      * @param {Rebase}         [args.rebase]
      * @param {SequencerState} [args.sequencerState]
+     * @param {Boolean}        [args.sparse]
      */
     constructor(args) {
         if (undefined === args) {
@@ -655,6 +656,13 @@ in commit ${id}.`);
                 }
             }
         }
+
+        this.d_sparse = false;
+        if ("sparse" in args) {
+            this.d_sparse = args.sparse;
+            assert.isBoolean(this.d_sparse);
+        }
+
         Object.freeze(this);
     }
 
@@ -754,6 +762,13 @@ in commit ${id}.`);
     }
 
     /**
+     * @property {Boolean} true if repo is sparse and false otherwise
+     */
+    get sparse() {
+        return this.d_sparse;
+    }
+
+    /**
      * Accumulate the specified `changes` into the specified `dest` map.  A
      * non-null value in `changes` overrides any existing value in `dest`; a
      * `null value causes the path mapped to `null` to be removed.  The
@@ -815,6 +830,7 @@ in commit ${id}.`);
             sequencerState: ("sequencerState" in args) ?
                        args.sequencerState: this.d_sequencerState,
             bare: ("bare" in args) ? args.bare : this.d_bare,
+            sparse: ("sparse" in args) ? args.sparse : this.d_sparse,
         });
     }
 
