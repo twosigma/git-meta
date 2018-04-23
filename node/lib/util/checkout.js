@@ -38,9 +38,10 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const DoWorkQueue         = require("../util/do_work_queue");
+const DoWorkQueue      = require("../util/do_work_queue");
 const GitUtil          = require("./git_util");
 const SubmoduleFetcher = require("./submodule_fetcher");
+const Reset            = require("./reset");
 const RepoStatus       = require("./repo_status");
 const StatusUtil       = require("./status_util");
 const SubmoduleUtil    = require("./submodule_util");
@@ -82,75 +83,46 @@ exports.findTrackingBranch = co.wrap(function *(repo, name) {
  * out -- the ones that are both open and also exist on `commit`.
  *
  * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
- * @return {Object}                   map from name to { repo, commit }
+ * @param {Object}             changes  map from name to `SubmoduleChange`
+ * @return {Object}            map from name to { repo, [commit] }
  */
-const loadSubmodulesToCheckout = co.wrap(function *(repo, commit) {
-    let open = yield SubmoduleUtil.listOpenSubmodules(repo);
-    const openSet = new Set(open);
+const loadSubmodulesToCheckout = co.wrap(function *(repo, changes) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isObject(changes);
 
-    const names = yield SubmoduleUtil.getSubmoduleNamesForCommit(repo, commit);
-
-    // Condense `open` to be open submodules that are also valid submodules on
-    // `commit`.
-
-    open = names.filter(name => openSet.has(name));
-
-    const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
-                                                               open,
-                                                               commit);
-
+    const openSet = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
+    const toLoad = Object.keys(changes).filter(name => openSet.has(name));
     const result = {};
-    const subFetcher = new SubmoduleFetcher(repo, commit);
+    const head = yield repo.getHeadCommit();
+    const subFetcher = new SubmoduleFetcher(repo, head);
     const doSub = co.wrap(function *(name) {
         const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-        const sha = shas[name];
-        yield subFetcher.fetchSha(subRepo, name, sha);
-        const commit = yield subRepo.getCommit(sha);
-        result[name] = { repo: subRepo, commit: commit };
+        const sha = changes[name].newSha;
+        if (null !== sha) {
+            yield subFetcher.fetchSha(subRepo, name, sha);
+            const commit = yield subRepo.getCommit(sha);
+            result[name] = { repo: subRepo, commit: commit };
+        }
     });
-    yield DoWorkQueue.doInParallel(open, doSub);
+    yield DoWorkQueue.doInParallel(toLoad, doSub);
     return result;
 });
 
 /**
  * Return a list of errors that would be encountered if a non-force attempt was
- * made to check out the specified `submodules` on the specified `commit` in
- * the specified `metaRepo`.
+ * made to check out the specified `submodules` in the specified `metaRepo`.
+ *
  * TODO: consider exposing this and testing it separately
  *
- * @param {NodeGit.Repository} repository
- * @param {NodeGit.Commit}     commit
- * @param {Object}             submodules   map from name to { repo, commit }
- * @return {String []}                       list of errors
+ * @param {NodeGit.Repository} 
+ * @param {Object}             submodules   map from name to {repo, commit}
+ * @return {String []}                      list of errors
  */
-const dryRun = co.wrap(function *(metaRepo, commit, submodules) {
+const dryRun = co.wrap(function *(metaRepo, submodules) {
+    assert.instanceOf(metaRepo, NodeGit.Repository);
+    assert.isObject(submodules);
+
     let errors = [];
-
-    /**
-     * If it is possible to check out the specified `commit` in the specified
-     * `repo`, return `null`; otherwise, return an error message.
-     */
-    const runOne = co.wrap(function *(repo, commit) {
-        try {
-            yield NodeGit.Checkout.tree(repo, commit, {
-                checkoutStrategy: NodeGit.Checkout.STRATEGY.NONE,
-            });
-            return null;                                              // RETURN
-        }
-        catch(e) {
-            return e.message;                                         // RETURN
-        }
-    });
-
-    // Check meta
-
-    const metaError = yield SubmoduleUtil.cacheSubmodules(
-                                               metaRepo,
-                                               () => runOne(metaRepo, commit));
-    if (null !== metaError) {
-        errors.push(`Unable to check out meta-repo: ${metaError}.`);
-    }
 
     // Check for new commits in submodules
 
@@ -191,17 +163,21 @@ Submodule ${colors.yellow(name)} has a new commit.`);
     // Try the submodules; store the opened repos and loaded commits for
     // use in the actual checkout later.
 
-    yield Object.keys(submodules).map(co.wrap(function *(name) {
+    const dryRunSub = co.wrap(function *(name) {
         const sub = submodules[name];
         const repo = sub.repo;
-        const subCommit = sub.commit;
-        const error = yield runOne(repo, subCommit);
-        if (null !== error) {
+        const commit = sub.commit;
+        try {
+            yield NodeGit.Checkout.tree(repo, commit, {
+                checkoutStrategy: NodeGit.Checkout.STRATEGY.NONE,
+            });
+        }
+        catch(e) {
             errors.push(`\
-Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
-            }
-    }));
-
+Unable to checkout submodule ${colors.yellow(name)}: ${e.message}.`);
+        }
+    });
+    yield DoWorkQueue.doInParallel(Object.keys(submodules), dryRunSub);
     return errors;
 });
 
@@ -209,25 +185,30 @@ Unable to checkout submodule ${colors.yellow(name)}: ${error}.`);
  * Checkout the specified `commit` in the specified `metaRepo`, and update all
  * open submodules to be on the indicated commit, fetching it if necessary.
  * Throw a `UserError` if one of the submodules or the meta-repo cannot be
- * checked out.
+ * checked out.  On successful checkout, leave HEAD detached.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
  * @param {Boolean}            force
  */
-exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
-    assert.instanceOf(metaRepo, NodeGit.Repository);
+exports.checkoutCommit = co.wrap(function *(repo, commit, force) {
+    assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isBoolean(force);
 
-    const subs = yield loadSubmodulesToCheckout(metaRepo, commit);
+    const head = yield repo.getHeadCommit();
+    const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
+                                                            commit,
+                                                            head,
+                                                            false);
+    const subs = yield loadSubmodulesToCheckout(repo, changes);
 
     // If we're not forcing the commit, attempt a dry run and fail if it
     // doesn't pass.
 
     if (!force) {
-        const errors = yield dryRun(metaRepo, commit, subs);
+        const errors = yield dryRun(repo, subs);
 
         // Throw an error if any dry-runs failed.
 
@@ -236,10 +217,14 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
         }
     }
 
-    /**
-     * Checkout and set as head the specified `commit` in the specified `repo`.
-     */
-    const doCheckout = co.wrap(function *(repo, commit) {
+    const index = yield repo.index();
+    yield Reset.resetMetaRepo(repo, index, commit, changes);
+    repo.setHeadDetached(commit);
+
+    const doCheckout = co.wrap(function *(name) {
+        const sub = subs[name];
+        const commit = sub.commit;
+        const repo = sub.repo;
         const strategy = force ?
             NodeGit.Checkout.STRATEGY.FORCE :
             NodeGit.Checkout.STRATEGY.SAFE;
@@ -248,18 +233,8 @@ exports.checkoutCommit = co.wrap(function *(metaRepo, commit, force) {
         });
         repo.setHeadDetached(commit);
     });
-
-    // Now do the actual checkouts.
-
-    yield SubmoduleUtil.cacheSubmodules(metaRepo,
-                                        () => doCheckout(metaRepo, commit));
-
-    yield Object.keys(subs).map(co.wrap(function *(name) {
-        const sub = subs[name];
-        const repo = sub.repo;
-        const subCommit = sub.commit;
-        yield doCheckout(repo, subCommit);
-    }));
+    yield DoWorkQueue.doInParallel(Object.keys(subs), doCheckout);
+    yield index.write();
 });
 
 /**
