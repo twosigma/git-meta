@@ -531,7 +531,8 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
-        return yield ChildProcess.exec(execString);
+        yield ChildProcess.exec(execString);
+        return yield repo.getCommit(sha);
     }
     catch (e) {
         throw new UserError(e.message);
@@ -981,3 +982,21 @@ exports.updateHead = co.wrap(function *(repo, commit, reason) {
         yield headRef.setTarget(commit, reason);
     }
 });
+
+/*
+ * Write the specified `data` to the specified `repo` and return its hash
+ * value.
+ *
+ * @async
+ * @private
+ * @param {NodeGit.Repository} repo
+ * @param {String}             data
+ * @return {String}
+ */
+exports.hashObject = co.wrap(function *(repo, data) {
+    const BLOB = 3;
+    const db = yield repo.odb();
+    const res = yield db.write(data, data.length, BLOB);
+    return res;
+});
+

@@ -48,7 +48,7 @@ const writeLog = co.wrap(function *(repo, reverseMap, logs) {
         const sha = reverseMap[logSha];
         log.append(NodeGit.Oid.fromString(sha), sig, `log of ${logSha}`);
     }
-    log.write();
+    yield log.write();
 });
 
 /**

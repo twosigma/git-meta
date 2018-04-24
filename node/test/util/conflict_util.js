@@ -37,13 +37,8 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 
 const ConflictUtil        = require("../../lib/util/conflict_util");
+const GitUtil             = require("../../lib/util/git_util");
 const TestUtil            = require("../../lib/util/test_util");
-
-const hashObject = co.wrap(function *(repo, data) {
-    const db = yield repo.odb();
-    const BLOB = 3;
-    return yield db.write(data, data.length, BLOB);
-});
 
 describe("ConflictUtil", function () {
 const ConflictEntry = ConflictUtil.ConflictEntry;
@@ -76,7 +71,7 @@ describe("addConflict", function () {
     it("existing", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const makeEntry = co.wrap(function *(data) {
-            const id = yield hashObject(repo, data);
+            const id = yield GitUtil.hashObject(repo, data);
             return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
         });
         const ancestor = yield makeEntry("xxx");
@@ -98,7 +93,7 @@ describe("addConflict", function () {
     it("multiple values", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const makeEntry = co.wrap(function *(data) {
-            const id = yield hashObject(repo, data);
+            const id = yield GitUtil.hashObject(repo, data);
             return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
         });
         const ancestor = yield makeEntry("xxx");
@@ -118,7 +113,7 @@ describe("addConflict", function () {
     it("with null", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const makeEntry = co.wrap(function *(data) {
-            const id = yield hashObject(repo, data);
+            const id = yield GitUtil.hashObject(repo, data);
             return new ConflictEntry(FILEMODE.BLOB, id.tostrS());
         });
         const ancestor = yield makeEntry("xxx");

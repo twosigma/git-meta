@@ -53,6 +53,7 @@ const pull         = require("./cmd/pull");
 const push         = require("./cmd/push");
 const rebase       = require("./cmd/rebase");
 const reset        = require("./cmd/reset");
+const rm           = require("./cmd/rm");
 const root         = require("./cmd/root");
 const commitShadow = require("./cmd/commit-shadow");
 const stash        = require("./cmd/stash");
@@ -135,6 +136,7 @@ const commands = {
     "push": push,
     "rebase": rebase,
     "reset": reset,
+    "rm": rm,
     "root": root,
     "commit-shadow": commitShadow,
     "stash": stash,

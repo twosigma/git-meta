@@ -46,4 +46,69 @@ describe("TextUtil", function () {
             assert.equal("   three", TextUtil.indent("three", 3));
         });
     });
+
+    describe("strcmp", function () {
+        it("breathing test", function() {
+            const cases = [
+                {
+                    a : "fleem",
+                    b : "morx",
+                    expect : -1
+                },
+                {
+                    a : "morx",
+                    b : "fleem",
+                    expect : 1
+                },
+                {
+                    a : "foo",
+                    b : "foo",
+                    expect : 0
+                }
+            ];
+            for (const c of cases) {
+                assert.equal(TextUtil.strcmp(c.a, c.b), c.expect);
+            }
+        });
+    });
+
+    describe("pluralize", function () {
+        it("breathing test", function() {
+            const cases = [
+                {
+                    noun : "fleem",
+                    count : 1,
+                    expect : "fleem"
+                },
+                {
+                    noun : "fleem",
+                    count : 0,
+                    expect : "fleems"
+                },
+                {
+                    noun : "fleem",
+                    count : 2,
+                    expect : "fleems"
+                },
+                {
+                    noun : "bass",
+                    count : 1,
+                    expect : "bass"
+                },
+                {
+                    noun : "bass",
+                    count : 2,
+                    expect : "basses"
+                },
+                {
+                    noun : "harpy",
+                    count : 2,
+                    expect : "harpies"
+                }
+            ];
+            for (const c of cases) {
+                assert.equal(TextUtil.pluralize(c.noun, c.count), c.expect);
+            }
+        });
+    });
 });

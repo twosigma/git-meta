@@ -53,6 +53,7 @@ const path    = require("path");
 const rimraf  = require("rimraf");
 const url     = require("url");
 
+const GitUtil   = require("./git_util");
 const SparseCheckoutUtil = require("./sparse_checkout_util");
 const UserError          = require("./user_error");
 
@@ -616,11 +617,44 @@ exports.writeConfigText = function (urls) {
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index
  * @param {Object}             urls   submodule name to url
+ * @param {Boolean}            cached do not write to the working tree
  */
-exports.writeUrls = co.wrap(function *(repo, index, urls) {
+exports.writeUrls = co.wrap(function *(repo, index, urls, cached) {
+    if (undefined === cached) {
+        cached = false;
+    }
+    else {
+        assert.isBoolean(cached);
+    }
+
     const modulesPath = path.join(repo.workdir(),
                                   exports.modulesFileName);
     const newConf = exports.writeConfigText(urls);
-    yield fs.writeFile(modulesPath, newConf);
-    yield index.addByPath(exports.modulesFileName);
+    if (newConf.length === 0) {
+        if (!cached) {
+            try {
+                yield fs.unlink(modulesPath);
+            } catch (e) {
+                //maybe it didn't exist prior to this
+            }
+        }
+        try {
+            yield index.removeByPath(exports.modulesFileName);
+        } catch (e) {
+            // ditto
+        }
+    }
+    else {
+        const oid = yield GitUtil.hashObject(repo, newConf);
+        const sha = oid.toString();
+        if (!cached) {
+            yield fs.writeFile(modulesPath, newConf);
+        }
+        const entry = new NodeGit.IndexEntry();
+        entry.path = exports.modulesFileName;
+        entry.mode = NodeGit.TreeEntry.FILEMODE.BLOB;
+        entry.id = NodeGit.Oid.fromString(sha);
+        entry.flags = entry.flagsExtended = 0;
+        yield index.add(entry);
+    }
 });
