@@ -476,17 +476,20 @@ exports.list = co.wrap(function *(repo) {
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         status
  * @param {String}             message
+ * @param {Bool}             useEpochTimestamp
  * @param {Bool}               includeUntracked
  * @return {String}
  */
 const makeShadowCommitForRepo = co.wrap(function *(repo,
                                                    status,
                                                    message,
+                                                   useEpochTimestamp,
                                                    includeUntracked) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
     assert.isBoolean(includeUntracked);
+    assert.isBoolean(useEpochTimestamp);
 
     const changes = yield TreeUtil.listWorkdirChanges(repo,
                                                       status,
@@ -502,7 +505,10 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
     const indexTree = yield repo.getTree(treeOid);
 
     const newTree = yield TreeUtil.writeTree(repo, indexTree, changes);
-    const sig = repo.defaultSignature();
+    let sig = repo.defaultSignature();
+    if (useEpochTimestamp) {
+        sig = NodeGit.Signature.create(sig.name(), sig.email(), 0, 0);
+    }
     const id = yield NodeGit.Commit.create(repo,
                                            null,
                                            sig,
@@ -528,6 +534,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             message
+ * @param {Bool}               useEpochTimestamp
  * @param {Bool}               includeMeta
  * @param {Bool}               includeUntracked
  * @return {Object|null}
@@ -536,12 +543,14 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
  */
 exports.makeShadowCommit = co.wrap(function *(repo,
                                               message,
+                                              useEpochTimestamp,
                                               includeMeta,
                                               includeUntracked) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(message);
     assert.isBoolean(includeMeta);
     assert.isBoolean(includeUntracked);
+    assert.isBoolean(useEpochTimestamp);
 
     if (!message.endsWith("\n")) {
         message += "\n";
@@ -572,6 +581,7 @@ exports.makeShadowCommit = co.wrap(function *(repo,
         const subSha = yield makeShadowCommitForRepo(subRepo,
                                                      wd.status,
                                                      message,
+                                                     useEpochTimestamp,
                                                      includeUntracked);
         const newSubStat = new Submodule({
             commit: subStatus.commit,
@@ -595,6 +605,7 @@ exports.makeShadowCommit = co.wrap(function *(repo,
     const metaCommit = yield makeShadowCommitForRepo(repo,
                                                      newStatus,
                                                      message,
+                                                     useEpochTimestamp,
                                                      includeUntracked);
     return {
         metaCommit: metaCommit,
