@@ -391,7 +391,17 @@ exports.getCurrentBranchName = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
     if (!repo.isEmpty() && 1 !== repo.headDetached()) {
-        const branch = yield repo.getCurrentBranch();
+        let branch;
+        try {
+            branch = yield repo.getCurrentBranch();
+        } catch (e) {
+            // TODO: raise an issue with libgit2.  If your repository is in a
+            // newly initialized state, but not fully empty (e.g., it has
+            // configured remotes), this method throws an exception:
+            // "reference 'refs/heads/master' not found".  Either it should
+            // return null or `isEmpty` should return true.
+            return null;
+        }
         return branch.shorthand();
     }
     return null;

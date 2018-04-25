@@ -49,6 +49,11 @@ describe("SubmoduleFetcher", function () {
                 metaSha: "2",
                 expected: null,
             },
+            "null commit": {
+                initial: "a=B:C4-1;Bfoo=4|b=B|x=U:Os Rorigin=c",
+                metaSha: null,
+                expected: null,
+            },
             "pulled from origin": {
                 initial: "a=B:C4-1;Bfoo=4|b=B|x=Ca",
                 metaSha: "1",
@@ -62,8 +67,11 @@ describe("SubmoduleFetcher", function () {
                 const written =
                              yield RepoASTTestUtil.createMultiRepos(c.initial);
                 const repo = written.repos.x;
-                const newSha = written.reverseCommitMap[c.metaSha];
-                const commit = yield repo.getCommit(newSha);
+                let commit = null;
+                if (null !== c.metaSha) {
+                    const newSha = written.reverseCommitMap[c.metaSha];
+                    commit = yield repo.getCommit(newSha);
+                }
                 let metaUrl = c.metaOriginUrl;
                 if (null !== metaUrl) {
                     metaUrl = written.reverseUrlMap[metaUrl];

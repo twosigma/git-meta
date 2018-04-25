@@ -53,17 +53,25 @@ class SubmoduleFetcher {
      * if provided, or the URL of the remote named "origin" in `repo`
      * otherwise.  If `repo` has no remote named "origin", and `fetchSha` is
      * called for a submodule that has a relativre URL, throw a `UserError`.
+     * If `null === commit`, no URLS are available.
      *
-     * @param {NodeGit.Repository} repo
-     * @param {NodeGit.Commit}     commit
+     * @param {NodeGit.Repository}  repo
+     * @param {NodeGit.Commit|null} commit
      */
     constructor(repo, commit) {
         assert.instanceOf(repo, NodeGit.Repository);
-        assert.instanceOf(commit, NodeGit.Commit);
+        if (null !== commit) {
+            assert.instanceOf(commit, NodeGit.Commit);
+        }
 
         this.d_repo   = repo;
         this.d_commit = commit;
-        this.d_urls   = null;
+
+        if (null === commit) {
+            this.d_urls = {};
+        } else {
+            this.d_urls = null;
+        }
 
         // d_metaOrigin may have three types of values:
         // 1. undefined -- we haven't tried to access it yet
@@ -81,7 +89,7 @@ class SubmoduleFetcher {
     }
 
     /**
-     * @param {NodeGit.Commit} commit commit associated with this fetcher
+     * @param {NodeGit.Commit|null} commit commit associated with this fetcher
      */
     get commit() {
         return this.d_commit;
