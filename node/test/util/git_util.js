@@ -516,6 +516,9 @@ describe("GitUtil", function () {
             "detached head": { input: "S:*=", expected: null },
             "not master": { input: "S:Bmaster=;Bfoo=1;*=foo", expected: "foo"},
             "empty": { input: new RepoAST(), expected: null },
+            "no current branch but not empty": {
+                input: "N:C2;Rtrunk=/a foo=2",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

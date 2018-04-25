@@ -96,6 +96,11 @@ describe("Checkout", function () {
                 committish: "foo",
                 fails: true,
             },
+            "from empty": {
+                input: "a=B:C2 s=Sb:1;Bfoo=2|b=B|x=N:Rtrunk=a foo=2",
+                committish: "trunk/foo",
+                expected: "x=E:H=2",
+            },
             "conflict": {
                 input: `a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3;Os I a=9`,
                 committish: "foo",
