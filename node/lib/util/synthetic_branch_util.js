@@ -54,6 +54,17 @@ function identity(v) {
     return v;
 }
 
+function SyntheticBranchConfig(whitelistPattern) {
+    if (whitelistPattern.length > 0) {
+        const whitelistRE = new RegExp(whitelistPattern);
+        this.whitelistTest = function(url) {
+            return whitelistRE.test(url);
+        };
+    } else {
+        this.whitelistTest = function() { return false; };
+    }
+}
+
     /**
      * (This has to be public so we can mock it for testing)
      * @param {NodeGit.Commit} commit
@@ -97,17 +108,39 @@ exports.urlToLocalPath = function *(repo, url) {
 };
 
 /**
+ * Check that a given URL i son the URLs synthetic-ref-check whitelist, if
+ * such a whitelist exists.
+ * @async
+ * @param {SyntheticBranchConfig} cfg The configuration for
+ * synthetic_branch_util
+ * @param {String}                url The configured URL of the submodule
+ * in the meta tree.
+ */
+function skipCheckForURL(cfg, url) {
+    assert.instanceOf(cfg, SyntheticBranchConfig);
+    assert.isString(url);
+    return cfg.whitelistTest(url);
+}
+
+/**
  * Check that a commit exists exists for a given submodule
  * at a given commit.
  * @async
- * @param {NodeGit.Repostory} repo The meta repository
- * @param {NodeGit.TreeEntry} submoduleEntry the submodule's tree entry
- * @param {String}            url the configured URL of the submodule
+ * @param {NodeGit.Repostory}     repo The meta repository
+ * @param {SyntheticBranchConfig} cfg The configuration for
+ * synthetic_branch_util
+ * @param {NodeGit.TreeEntry}     submoduleEntry the submodule's tree entry
+ * @param {String}                url the configured URL of the submodule
  * in the meta tree.
  */
-function* checkSubmodule(repo, metaCommit, submoduleEntry, url) {
+function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url) {
     assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(cfg, SyntheticBranchConfig);
     assert.instanceOf(submoduleEntry, NodeGit.TreeEntry);
+
+    if (skipCheckForURL(cfg,  url)) {
+        return true;
+    }
 
     const localPath = yield *exports.urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
@@ -128,6 +161,11 @@ function* checkSubmodules(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
+    const config = yield repo.config();
+    const whitelistPattern = (
+        yield ConfigUtil.getConfigString(
+            config, "gitmeta.skipsyntheticrefpattern")) || "";
+    const cfg = new SyntheticBranchConfig(whitelistPattern);
     const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
                                                                   commit,
                                                                   null);
@@ -148,7 +186,7 @@ function* checkSubmodules(repo, commit) {
             const entry = yield commit.getEntry(path);
             const submodulePath = entry.path();
             const url = submodules[submodulePath].url;
-            return yield *checkSubmodule(repo, commit, entry, url);
+            return yield *checkSubmodule(repo, cfg, commit, entry, url);
         });
         return (yield result).every(identity);
     });
