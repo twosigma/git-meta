@@ -383,11 +383,13 @@ const getStashSha = co.wrap(function *(repo, index) {
 exports.removeStash = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isNumber(index);
+
+
     const log = yield NodeGit.Reflog.read(repo, metaStashRef);
     const stashSha = yield getStashSha(repo, index);
     const count = log.entrycount();
     log.drop(index, 1 /* rewrite previous entry */);
-    log.write();
+    yield log.write();
 
     // We dropped the first element.  We need to update `refs/meta-stash`
 
@@ -403,7 +405,7 @@ exports.removeStash = co.wrap(function *(repo, index) {
             // remove the old one.
 
             log.drop(1, 1 /* rewrite previous entry */);
-            log.write();
+            yield log.write();
         }
         else {
             NodeGit.Reference.remove(repo, metaStashRef);
