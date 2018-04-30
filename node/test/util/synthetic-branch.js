@@ -45,6 +45,8 @@ describe("synthetic-branch", function () {
         const x = repos.x;
         const config = yield x.config();
         yield config.setString("gitmeta.subreporootpath", "../../");
+        yield config.setString("gitmeta.skipsyntheticrefpattern",
+                               "^MATCHES_NOTHING$");
 
         const head = yield x.getHeadCommit();
 
