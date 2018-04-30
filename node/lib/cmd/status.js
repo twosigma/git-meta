@@ -56,6 +56,13 @@ sub-repo.  Also show diagnostic information if the repository is in consistent
 state, e.g., when a sub-repo is on a different branch than the meta-repo.`;
 
 exports.configureParser = function (parser) {
+    parser.addArgument(["-s", "--short"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: "Give the output in a short format",
+        dest: "shortFormat" //"short" is a reserved word in js
+    });
     parser.addArgument(["path"], {
         type: "string",
         help: "paths to inspect for changes",
@@ -64,13 +71,12 @@ exports.configureParser = function (parser) {
 };
 
 /**
- * Execute the pull command according to the specified `args`.
+ * Execute the status command according to the specified `args`.
  *
  * @async
- * @param {Object}  args
- * @param {Boolean} args.any
- * @param {String}  repository
- * @param {String}  [source]
+ * @param {Object}   args
+ * @param {Boolean}  args.shortFormat
+ * @param {[String]} args.path
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const path = require("path");
@@ -92,6 +98,12 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const relCwd = path.relative(workdir, cwd);
 
-    const text = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
+    let text;
+    if (args.shortFormat) {
+        text = PrintStatusUtil.printRepoStatusShort(repoStatus, relCwd);
+    } else {
+        text = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
+    }
+
     process.stdout.write(text);
 });

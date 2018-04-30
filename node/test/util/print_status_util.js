@@ -722,6 +722,7 @@ A merge is in progress.
 On branch ${colors.green("master")}.
 nothing to commit, working tree clean
 `,
+                shortExact: '\n',
             },
             "sequencer": {
                 input: new RepoStatus({
@@ -742,12 +743,14 @@ A rebase is in progress.
   (use "git meta rebase --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
+                shortExact: '\n',
             },
             "detached": {
                 input: new RepoStatus({
                     headCommit: "ffffaaaaffffaaaa",
                 }),
                 regex: /detached/,
+                shortExact: '\n',
             },
             "dirty meta": {
                 input: new RepoStatus({
@@ -757,6 +760,8 @@ nothing to commit, working tree clean
                     },
                 }),
                 regex: /.*qrst/,
+                shortExact: `${colors.green('A')}  qrst
+`,
             },
             "dirty sub": {
                 input: new RepoStatus({
@@ -773,6 +778,31 @@ nothing to commit, working tree clean
                     },
                 }),
                 regex: /qrst\/x\/y\/z/,
+                shortExact: `${colors.green('A')}  qrst
+${colors.green('M')}  qrst/x/y/z
+`,
+            },
+            "dirty-and-staged sub": {
+                input: new RepoStatus({
+                    currentBranchName: "master",
+                    submodules: {
+                        qrst: new Submodule({
+                            index: new Index(null, "a", null),
+                            workdir: new Workdir(new RepoStatus({
+                                staged: {
+                                    "x/y/z": FILESTATUS.MODIFIED,
+                                },
+                                workdir: {
+                                    "x/y/z": FILESTATUS.MODIFIED,
+                                },
+                            }), null),
+                        }),
+                    },
+                }),
+                regex: /qrst\/x\/y\/z/,
+                shortExact: `${colors.green('A')}  qrst
+${colors.green('M')}${colors.red('M')} qrst/x/y/z
+`,
             },
             "cwd": {
                 input: new RepoStatus({
@@ -783,6 +813,8 @@ nothing to commit, working tree clean
                 }),
                 cwd: "u/v",
                 regex: /\.\.\/\.\.\/qrst/,
+                shortExact: `${colors.green('A')}  qrst
+`,
             },
             "untracked": {
                 input: new RepoStatus({
@@ -796,6 +828,8 @@ Untracked files:
 
 \t${colors.red("foo")}
 
+`,
+                shortExact: `${colors.red('?') + colors.red('?')} foo
 `,
             },
             "change in sub workdir": {
@@ -816,6 +850,8 @@ Changes to be committed:
 \t${colors.green("modified:     zap")} (submodule, new commits)
 
 `,
+                shortExact: `${colors.green('M')}  zap
+`,
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -834,6 +870,11 @@ Changes to be committed:
                 else {
                     assert.match(result, c.regex);
                 }
+
+
+                const shortResult = PrintStatusUtil.printRepoStatusShort(
+                    c.input, cwd);
+                assert.equal(c.shortExact, shortResult);
             });
         });
     });

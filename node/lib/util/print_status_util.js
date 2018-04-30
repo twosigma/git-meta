@@ -457,6 +457,67 @@ Untracked files:
 };
 
 /**
+ * Return a short description of the specified `status`, displaying
+ * paths relative to the specified `cwd`.  Note that a value of "" for
+ * `cwd` indicates the root of the repository.
+ *
+ * @param {RepoStatus} status
+ * @param {String}     cwd
+ */
+exports.printRepoStatusShort = function (status, cwd) {
+    assert.instanceOf(status, RepoStatus);
+    assert.isString(cwd);
+
+    let result = "";
+
+    const indexChangesByPath = {};
+    const workdirChangesByPath = {};
+    const allFiles = new Set();
+
+    const fileStatuses = exports.accumulateStatus(status);
+
+    const statusFlagByMode = "MAD";
+
+    for (const p of fileStatuses.staged) {
+        indexChangesByPath[p.path] = colors.green(statusFlagByMode[p.status]);
+        allFiles.add(p.path);
+    }
+
+    for (const p of fileStatuses.workdir) {
+        workdirChangesByPath[p.path] = colors.red(statusFlagByMode[p.status]);
+        allFiles.add(p.path);
+    }
+
+    for (const u of fileStatuses.untracked) {
+        indexChangesByPath[u] = colors.red("?");
+        workdirChangesByPath[u] = colors.red("?");
+        allFiles.add(u);
+    }
+
+    const allFilesArray = [];
+    allFilesArray.push(...allFiles);
+    exports.sortDescriptorsByPath(allFilesArray);
+    for (const f of allFilesArray) {
+        let index = " ";
+        if (f in indexChangesByPath) {
+            index = indexChangesByPath[f];
+        }
+        let workdir = " ";
+        if (f in workdirChangesByPath) {
+            workdir = workdirChangesByPath[f];
+        }
+        result += index + workdir + " " + f + "\n";
+    }
+
+    if (result.length === 0) {
+        result = "\n";
+    }
+
+    return result;
+};
+
+
+/**
  * Print a string describing the status of the specified `subsToPrint`.  Use
  * the specified `openSubs` set to determine which submodules are open.  Unless
  * the specified `true === showClosed`, do not print closed sub modules.  Use
