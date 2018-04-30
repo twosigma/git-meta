@@ -85,6 +85,28 @@ describe("TreeUtil", function () {
                     },
                 },
             },
+            "deleted tree changed to parent": {
+                input: {
+                    "a": null,
+                    "a/b": "1",
+                },
+                expected: {
+                    "a": {
+                        "b": "1",
+                    },
+                },
+            },
+            "deleted tree changed to parent, order reversed": {
+                input: {
+                    "a/b": "1",
+                    "a": null,
+                },
+                expected: {
+                    "a": {
+                        "b": "1",
+                    },
+                },
+            },
         };
         Object.keys(cases).forEach((caseName) => {
             const c = cases[caseName];
@@ -235,6 +257,58 @@ describe("TreeUtil", function () {
             });
             const entry = yield secondTree.entryByPath("foo");
             assert.equal(entry.id().tostrS(), newId.tostrS());
+        }));
+        it("from blob to tree with blob", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const id = yield hashObject(repo, "xxxxxxxh");
+            const firstTree = yield TreeUtil.writeTree(repo, null, {
+                "foo": new Change(id, FILEMODE.BLOB),
+            });
+            const secondTree = yield TreeUtil.writeTree(repo, firstTree, {
+                "foo": null,
+                "foo/bar": new Change(id, FILEMODE.BLOB),
+            });
+            const entry = yield secondTree.entryByPath("foo/bar");
+            assert.equal(entry.id().tostrS(), id.tostrS());
+        }));
+        it("from blob to tree with blob, reversed", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const id = yield hashObject(repo, "xxxxxxxh");
+            const firstTree = yield TreeUtil.writeTree(repo, null, {
+                "foo": new Change(id, FILEMODE.BLOB),
+            });
+            const secondTree = yield TreeUtil.writeTree(repo, firstTree, {
+                "foo/bar": new Change(id, FILEMODE.BLOB),
+                "foo": null,
+            });
+            const entry = yield secondTree.entryByPath("foo/bar");
+            assert.equal(entry.id().tostrS(), id.tostrS());
+        }));
+        it("from tree with blob to blob", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const id = yield hashObject(repo, "xxxxxxxh");
+            const firstTree = yield TreeUtil.writeTree(repo, null, {
+                "foo/bar": new Change(id, FILEMODE.BLOB),
+            });
+            const secondTree = yield TreeUtil.writeTree(repo, firstTree, {
+                "foo": new Change(id, FILEMODE.BLOB),
+                "foo/bar": null,
+            });
+            const entry = yield secondTree.entryByPath("foo");
+            assert.equal(entry.id().tostrS(), id.tostrS());
+        }));
+        it("from tree with blob to blob, reversed", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const id = yield hashObject(repo, "xxxxxxxh");
+            const firstTree = yield TreeUtil.writeTree(repo, null, {
+                "foo/bar": new Change(id, FILEMODE.BLOB),
+            });
+            const secondTree = yield TreeUtil.writeTree(repo, firstTree, {
+                "foo/bar": null,
+                "foo": new Change(id, FILEMODE.BLOB),
+            });
+            const entry = yield secondTree.entryByPath("foo");
+            assert.equal(entry.id().tostrS(), id.tostrS());
         }));
     });
     describe("hashFile", function () {

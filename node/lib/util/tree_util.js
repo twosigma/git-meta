@@ -62,20 +62,33 @@ exports.buildDirectoryTree = function (flatTree) {
 
         for (let i = 0; i + 1 < paths.length; ++i) {
             const nextPath = paths[i];
-            if (nextPath in tree) {
+            let nextTree = tree[nextPath];
+
+            // If we have a null entry for something that we need to be a tree,
+            // that means we've changed something that was an object into a
+            // parent directory.  Otherwise, we need to build a new object for
+            // this directory.
+
+            if (undefined !== nextTree && null !== nextTree) {
                 tree = tree[nextPath];
-                assert.isObject(tree, `for path ${path}`);
             }
             else {
-                const nextTree = {};
+                nextTree = {};
                 tree[nextPath] = nextTree;
                 tree = nextTree;
             }
         }
         const leafPath = paths[paths.length - 1];
-        assert.notProperty(tree, leafPath, `duplicate entry for ${path}`);
+        const leafData = tree[leafPath];
         const data = flatTree[subpath];
-        tree[leafPath] = data;
+
+        // Similar to above, if we see something changed to null where we
+        // alreaduy have data, we can ignore it.  This just means that
+        // something we are removing is turning into a tree.
+
+        if (undefined === leafData || null !== data) {
+            tree[leafPath] = data;
+        }
     }
 
    return result;
@@ -187,8 +200,7 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                         // 'filename' didn't exist in 'parentTree'
                     }
                 }
-                if (null !== treeEntry) {
-                    assert(treeEntry.isTree(), `${filename} should be a tree`);
+                if (null !== treeEntry && treeEntry.isTree()) {
                     treeEntries.push(treeEntry);
                     const treeId = treeEntry.id();
                     const curTree = yield repo.getTree(treeId);
