@@ -106,5 +106,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const paths = yield args.paths.map(filename => {
         return  GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
-    yield Rm.rmPaths(repo, paths, args.recursive, args.cached, args.force);
+    yield Rm.rmPaths(repo, paths, args);
 });
