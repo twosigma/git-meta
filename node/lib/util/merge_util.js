@@ -417,7 +417,7 @@ ${colors.red(commitSha)}.`);
 
     // We must write the index here or the staging we've done erlier will go
     // away.
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 
     if ("" !== errorMessage) {
         // We're about to fail due to conflict.  First, record that there is a
@@ -547,7 +547,7 @@ exports.continue = co.wrap(function *(repo) {
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
     yield DoWorkQueue.doInParallel(openSubs, continueSub);
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
@@ -616,7 +616,7 @@ exports.abort = co.wrap(function *(repo) {
     });
     yield DoWorkQueue.doInParallel(openSubs, abortSub);
     yield index.conflictCleanup();
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
     yield resetMerge(repo);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
 });

@@ -234,7 +234,7 @@ exports.checkoutCommit = co.wrap(function *(repo, commit, force) {
         repo.setHeadDetached(commit);
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), doCheckout);
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 });
 
 /**

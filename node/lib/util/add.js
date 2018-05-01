@@ -37,6 +37,7 @@ const fs        = require("fs-promise");
 const NodeGit   = require("nodegit");
 const path      = require("path");
 
+const GitUtil       = require("./git_util");
 const RepoStatus    = require("./repo_status");
 const StatusUtil    = require("./status_util");
 const SubmoduleUtil = require("./submodule_util");
@@ -115,6 +116,6 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     if (0 !== toAdd.length) {
         const index = yield repo.index();
         yield toAdd.map(filename => index.addByPath(filename));
-        yield index.write();
+        yield GitUtil.writeMetaIndex(repo, index);
     }
 });

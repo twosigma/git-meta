@@ -236,9 +236,10 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     const changedSubNames = Object.keys(changedSubs);
     const subsToTry = Array.from(new Set(changedSubNames.concat(openSubs)));
     yield DoWorkQueue.doInParallel(subsToTry, resetSubmodule);
+
     // Write the index in case we've had to stage submodule changes.
 
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 });
 
 /**
