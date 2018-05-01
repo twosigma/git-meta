@@ -722,7 +722,7 @@ A merge is in progress.
 On branch ${colors.green("master")}.
 nothing to commit, working tree clean
 `,
-                shortExact: '\n',
+                shortExact: "\n",
             },
             "sequencer": {
                 input: new RepoStatus({
@@ -743,14 +743,14 @@ A rebase is in progress.
   (use "git meta rebase --abort" to check out the original branch)
 nothing to commit, working tree clean
 `,
-                shortExact: '\n',
+                shortExact: "\n",
             },
             "detached": {
                 input: new RepoStatus({
                     headCommit: "ffffaaaaffffaaaa",
                 }),
                 regex: /detached/,
-                shortExact: '\n',
+                shortExact: "\n",
             },
             "dirty meta": {
                 input: new RepoStatus({
@@ -760,7 +760,7 @@ nothing to commit, working tree clean
                     },
                 }),
                 regex: /.*qrst/,
-                shortExact: `${colors.green('A')}  qrst
+                shortExact: `${colors.green("A")}  qrst
 `,
             },
             "dirty sub": {
@@ -778,8 +778,8 @@ nothing to commit, working tree clean
                     },
                 }),
                 regex: /qrst\/x\/y\/z/,
-                shortExact: `${colors.green('A')}  qrst
-${colors.green('M')}  qrst/x/y/z
+                shortExact: `${colors.green("A")}  qrst
+${colors.green("M")}  qrst/x/y/z
 `,
             },
             "dirty-and-staged sub": {
@@ -800,8 +800,8 @@ ${colors.green('M')}  qrst/x/y/z
                     },
                 }),
                 regex: /qrst\/x\/y\/z/,
-                shortExact: `${colors.green('A')}  qrst
-${colors.green('M')}${colors.red('M')} qrst/x/y/z
+                shortExact: `${colors.green("A")}  qrst
+${colors.green("M")}${colors.red("M")} qrst/x/y/z
 `,
             },
             "cwd": {
@@ -813,7 +813,7 @@ ${colors.green('M')}${colors.red('M')} qrst/x/y/z
                 }),
                 cwd: "u/v",
                 regex: /\.\.\/\.\.\/qrst/,
-                shortExact: `${colors.green('A')}  qrst
+                shortExact: `${colors.green("A")}  qrst
 `,
             },
             "untracked": {
@@ -829,7 +829,7 @@ Untracked files:
 \t${colors.red("foo")}
 
 `,
-                shortExact: `${colors.red('?') + colors.red('?')} foo
+                shortExact: `${colors.red("?") + colors.red("?")} foo
 `,
             },
             "change in sub workdir": {
@@ -850,7 +850,7 @@ Changes to be committed:
 \t${colors.green("modified:     zap")} (submodule, new commits)
 
 `,
-                shortExact: `${colors.green('M')}  zap
+                shortExact: `${colors.green("M")}  zap
 `,
             },
         };
