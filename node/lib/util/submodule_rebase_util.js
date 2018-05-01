@@ -351,7 +351,7 @@ ${colors.green(rebaseInfo.onto)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
     const result = {
         errorMessage: "" === errorMessage ? null : errorMessage,
         commits: commits,

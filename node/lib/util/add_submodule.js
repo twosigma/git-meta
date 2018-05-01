@@ -65,7 +65,7 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
     urls[filename] = url;
     yield SubmoduleConfigUtil.writeUrls(repo, index, urls);
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 
     const metaUrl = yield GitUtil.getOriginUrl(repo);
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);

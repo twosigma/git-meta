@@ -354,17 +354,18 @@ exports.formatEditorPrompt  = function (status, cwd) {
  * otherwise, we could commit a staged commit in a submodule that would have
  * been reverted in its open repo.
  * 
- * @param {NodeGit.Index} index
- * @param {Object}        submodules name -> RepoStatus.Submodule
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index
+ * @param {Object}             submodules name -> RepoStatus.Submodule
  */
-const stageOpenSubmodules = co.wrap(function *(index, submodules) {
+const stageOpenSubmodules = co.wrap(function *(repo, index, submodules) {
     yield Object.keys(submodules).map(co.wrap(function *(name) {
         const sub = submodules[name];
         if (null !== sub.workdir) {
             yield index.addByPath(name);
         }
     }));
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 });
 
 /**
@@ -522,7 +523,7 @@ exports.commit = co.wrap(function *(metaRepo,
     }
 
     const index = yield metaRepo.index();
-    yield stageOpenSubmodules(index, submodules);
+    yield stageOpenSubmodules(metaRepo, index, submodules);
 
     result.metaCommit = yield commitRepo(metaRepo,
                                          metaStatus.staged,
@@ -602,7 +603,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
         }
     }
 
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
 
     // Use 'TreeUtil' to create a new tree having the required paths.
 
@@ -1148,7 +1149,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
     if (null !== message) {
 
         const index = yield repo.index();
-        yield stageOpenSubmodules(index, subs);
+        yield stageOpenSubmodules(repo, index, subs);
         yield stageFiles(repo, status.staged, index);
         metaCommit = yield exports.amendRepo(repo, message);
     }

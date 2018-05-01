@@ -388,12 +388,17 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             repo.setHeadDetached(newHeadSha);
         }
     }
-    else if (null !== ast.currentBranchName) {
+    else if (null !== ast.currentBranchName || null !== ast.head) {
         // If we use NodeGit to checkout, it will not respect the
         // sparse-checkout settings.
 
+        if (null === ast.currentBranchName) {
+            repo.detachHead();
+        }
+
+        const toCheckout = ast.currentBranchName || newHeadSha;
         const checkoutStr = `\
-git -C '${repo.workdir()}' checkout ${ast.currentBranchName}
+git -C '${repo.workdir()}' checkout ${toCheckout}
 `;
         try {
             yield exec(checkoutStr);
@@ -401,34 +406,6 @@ git -C '${repo.workdir()}' checkout ${ast.currentBranchName}
             // This can fail if there is no .gitmodules file to checkout and
             // it's sparse.  Git will complain that it cannot do the checkout
             // because the worktree is empty.
-        }
-    }
-    else if (null !== ast.head) {
-        // If we use NodeGit to do the reset, it will not respect the sparsery
-        // of the repository, so we use plain Git.
-
-        repo.detachHead();
-        const resetStr = `\
-git -C '${repo.workdir()}' reset --hard ${newHeadSha}
-`;
-        try {
-            yield exec(resetStr);
-        } catch (e) {
-            // This can fail if there is no .gitmodules file to checkout and
-            // it's sparse.  Git will complain that it cannot do the checkout
-            // because the worktree is empty.
-        }
-        repo.detachHead();
-
-        // Git makes a master branch when we don't have one (even though there
-        // is nothing in the documentation for `reset` that says it will do
-        // so).  So, we remove it.
-
-        if (!("master" in ast.branches)) {
-            // Here, Git has created a master branch we didn't ask for; remove
-            // it.
-
-            NodeGit.Reference.remove(repo, "refs/heads/master");
         }
     }
 
@@ -512,6 +489,7 @@ git -C '${repo.workdir()}' reset --hard ${newHeadSha}
                 yield ConflictUtil.addConflict(index, filename, conflict);
             }
         }
+
         yield index.write();
 
         // TODO: Firgure out if this can be done with NodeGit; extend if
@@ -520,6 +498,7 @@ git -C '${repo.workdir()}' reset --hard ${newHeadSha}
 
         const filesStr = ast.sparse ? "-- .gitmodules" : "-a";
         const checkoutIndexStr = `\
+git -C '${repo.workdir()}' checkout --
 git -C '${repo.workdir()}' clean -f -d
 git -C '${repo.workdir()}' checkout-index -f ${filesStr}
 `;

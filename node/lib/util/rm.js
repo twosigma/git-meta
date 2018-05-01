@@ -38,6 +38,7 @@ const groupBy      = require("group-by");
 const path         = require("path");
 const NodeGit      = require("nodegit");
 
+const GitUtil             = require("./git_util");
 const CloseUtil           = require("./close_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -424,7 +425,7 @@ exports.rmPaths = co.wrap(function *(repo, paths, options) {
     // https://github.com/nodegit/nodegit/issues/1487
     if (toRemove.length !== 0) {
         yield index.removeAll(toRemove);
-        yield index.write();
+        yield GitUtil.writeMetaIndex(repo, index);
     }
 
     // close to-be-deleted submodules

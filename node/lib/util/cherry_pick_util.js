@@ -492,7 +492,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         errorMessage: errorMessage === "" ? null : errorMessage,
         newMetaCommit: null,
     };
-    yield index.write();
+    yield GitUtil.writeMetaIndex(repo, index);
     if ("" === errorMessage &&
         (0 !== Object.keys(changes.simpleChanges).length ||
                                     0 !== Object.keys(picks.commits).length)) {
