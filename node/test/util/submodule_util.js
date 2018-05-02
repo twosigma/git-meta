@@ -298,6 +298,42 @@ describe("SubmoduleUtil", function () {
         }));
     });
 
+    describe("listAbsorbedSubmodules", function () {
+        const cases = {
+            "simple": {
+                input: "x=S",
+                expected: [],
+            },
+            "one open": {
+                input: "a=S|x=S:I q=Sa:1;Oq",
+                expected: ["q"],
+            },
+            "two open": {
+                input: "a=S|x=S:I q=Sa:1,s/x=Sa:1;Oq;Os/x",
+                expected: ["q", "s/x"],
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written =
+                               yield RepoASTTestUtil.createMultiRepos(c.input);
+                const x = written.repos.x;
+                for (const closeSubs of [false, true]) {
+                    if (closeSubs) {
+                        const subs = yield SubmoduleUtil.listOpenSubmodules(x);
+                        for (const sub of subs) {
+                            yield SubmoduleConfigUtil.deinit(x, sub);
+                        }
+                    }
+                    const dut = SubmoduleUtil;
+                    const result = yield dut.listAbsorbedSubmodules(x);
+                    assert.deepEqual(result.sort(), c.expected.sort());
+                }
+            }));
+        });
+    });
+
     describe("listOpenSubmodules", function () {
         // We will always inspect the repo `x`.
 

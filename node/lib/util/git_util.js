@@ -387,7 +387,7 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     }
 
     const execString = `\
-git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`;
+git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
         const result = yield ChildProcess.exec(execString);
         if (result.error || !quiet) {

@@ -46,6 +46,120 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError           = require("./user_error");
 
+
+/**
+ * For a given proposed push, return a map from submodule to sha,
+ * excluding any submodules that the server likely already has.
+ *
+ * Start with the set of submodules that are either open, or that
+ * exist in .git/modules. Populate a pushMap from submodule name to
+ * commit (SHA) registered in the meta-commit being pushed.
+ *
+ * If the push target exists in remotes/$remote/$branch, remove from
+ * pushMap, any entry where the commit for a submodule already exists
+ * in the target.
+ *
+ * Note that for "exists" we mean the target points to exactly the
+ * commit needed or a descendant of that commit.
+ *
+ * If the user is pushing a branch, B, further reduce the size of
+ * pushMap by removing commits referenced in the branches that B pulls
+ * from and/or pushes to by default, if they exist and are different
+ * from the target branch.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             remoteName
+ * @param {String}             source
+ * @param {String}             target
+ * @param {NodeGit.Commit}     commit
+ */
+exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
+                                       commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(remoteName);
+    assert.isString(source);
+    assert.isString(target);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    const submoduleSet = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
+    for (const s of yield SubmoduleUtil.listAbsorbedSubmodules(repo)) {
+        submoduleSet.add(s);
+    }
+    const submodules = [...submoduleSet];
+    const pushMap = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
+                                                                  submodules,
+                                                                  commit);
+    const bareRepos = {};
+    for (const sub of Object.keys(pushMap)) {
+        const subBareRepo = yield SubmoduleUtil.getBareRepo(repo, sub);
+        bareRepos[sub] = subBareRepo;
+    }
+
+    const trackingBranches = new Set();
+    trackingBranches.add(`refs/remotes/${remoteName}/${target}`);
+    let tracking;
+    try {
+        const sourceBranch = yield repo.getReference(source);
+        tracking = yield GitUtil.getTrackingInfo(repo, sourceBranch);
+    } catch (e) {
+        // we have no local branch? maybe source is a sha.
+        tracking = null;
+    }
+
+    if (tracking !== null) {
+        if (tracking.remoteName !== null) {
+            trackingBranches.add(
+                `refs/remotes/${tracking.remoteName}/${target}`);
+        }
+        if (tracking.pushRemoteName !== null) {
+            trackingBranches.add(
+                `refs/remotes/${tracking.pushRemoteName}/${target}`);
+        }
+    }
+
+    for (const branch of trackingBranches) {
+        let reference = null;
+        try {
+            reference = yield NodeGit.Reference.lookup(repo, branch);
+        } catch (e) {
+            // if this ref doesn't exist, OK
+            continue;
+        }
+        const id = reference.target();
+        const trackingCommit = yield NodeGit.Commit.lookup(
+            repo, id);
+        const getter = SubmoduleUtil.getSubmoduleShasForCommit;
+        const submoduleShasForCommit = yield getter(repo, Object.keys(pushMap),
+                                                    trackingCommit);
+        for (const sub of Object.keys(pushMap)) {
+            const sha = submoduleShasForCommit[sub];
+            const subRepo = bareRepos[sub];
+            if (sha === pushMap[sub]) {
+                delete pushMap[sub];
+                continue;
+            }
+            const commitToPush = yield subRepo.getCommit(pushMap[sub]);
+            let trackingCommit;
+            try {
+                trackingCommit = yield subRepo.getCommit(sha);
+            } catch (e) {
+                // We haven't fetched this commit in this submodule,
+                // so we can't do an ancestry check
+                continue;
+            }
+            const descendantCheck = NodeGit.Graph.descendantOf;
+            const isDescendant = yield descendantCheck(subRepo,
+                                                       trackingCommit,
+                                                       commitToPush);
+            if (isDescendant) {
+                delete pushMap[sub];
+            }
+        }
+    }
+    return pushMap;
+});
+
 /**
  * For each open submodule that exists in the commit indicated by the specified
  * `source`, push a synthetic-meta-ref for the `source` commit.
@@ -83,27 +197,26 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
 
     let remoteUrl = yield GitUtil.getUrlFromRemoteName(repo, remoteName);
 
+    const annotatedCommit = yield GitUtil.resolveCommitish(repo, source);
+    const sha = annotatedCommit.id();
+    const commit = yield repo.getCommit(sha);
+
     // First, push the submodules.
+    const pushMap = yield exports.getPushMap(repo, remoteName, source, target,
+                                            commit);
 
     let errorMessage = "";
-    const shas = yield SubmoduleUtil.getSubmoduleShasForCommitish(repo,
-                                                                   source);
-    const annotatedCommit = yield GitUtil.resolveCommitish(repo, source);
-    const commit = yield repo.getCommit(annotatedCommit.id());
+
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
                                                                    commit);
 
     const pushSub = co.wrap(function *(subName) {
-        // If no commit for a submodule on this branch, skip it.
-        if (!(subName in shas)) {
-            return;                                                   // RETURN
-        }
         // Push to a synthetic branch; first, calculate name.
 
-        const sha = shas[subName];
+        const sha = pushMap[subName];
         const syntheticName =
                           SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-        const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+        const subRepo = yield SubmoduleUtil.getBareRepo(repo, subName);
 
         // Resolve the submodule's URL against the URL of the meta-repo,
         // ignoring the remote that is configured in the open submodule.
@@ -126,8 +239,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
            `Failed to push submodule ${colors.yellow(subName)}: ${pushResult}`;
         }
     });
-    const subRepos = yield SubmoduleUtil.listOpenSubmodules(repo);
-    yield DoWorkQueue.doInParallel(subRepos, pushSub);
+    yield DoWorkQueue.doInParallel(Object.keys(pushMap), pushSub);
 
     // Throw an error if there were any problems pushing submodules; don't push
     // the meta-repo.
