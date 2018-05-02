@@ -167,6 +167,12 @@ describe("reset", function () {
                 to: "1",
                 type: TYPE.HARD,
             },
+            "hard with commit in sub": {
+                initial: "a=B:Ca-1;Ba=a|x=U:Os H=a",
+                expected: "x=U:Os",
+                to: "2",
+                type: TYPE.HARD,
+            },
             "unchanged sub-repo not open": {
                 initial: "a=B|x=U:C4-2 t=Sa:1;Bfoo=4",
                 to: "4",

@@ -216,14 +216,23 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
         const subRepo = yield opener.getSubrepo(name);
 
-        // If the submodule wasn't changed, we'll just reset it to HEAD
-        let subCommit;
+        let subCommitSha;
+
         if (undefined === change) {
-            subCommit = yield subRepo.getHeadCommit();
+            // If there's no change, use what's been configured in the index.
+
+            const entry = index.getByPath(name);
+            subCommitSha = entry.id.tostrS();
         } else {
-            yield fetcher.fetchSha(subRepo, name, change.newSha);
-            subCommit = yield subRepo.getCommit(change.newSha);
+            subCommitSha = change.newSha;
         }
+
+        yield fetcher.fetchSha(subRepo, name, subCommitSha);
+        const subCommit = yield subRepo.getCommit(subCommitSha);
+
+        // We've already put the meta-repo index on the right commit; read it
+        // and reset to it.
+
         yield NodeGit.Reset.reset(subRepo, subCommit, resetType);
 
         // Set the index to have the commit to which we just set the submodule;
