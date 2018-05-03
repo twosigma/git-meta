@@ -103,19 +103,31 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const branch = yield repo.getCurrentBranch();
     const tracking = (yield GitUtil.getTrackingInfo(repo, branch)) || {};
 
-    let strRefspecs = [];
-    if (0 === args.refspec.length) {
-        const activeBranchName = branch.shorthand();
-        const targetName = tracking.branchName || activeBranchName;
-        strRefspecs.push(activeBranchName + ":" + targetName);
-    } else {
-        strRefspecs = strRefspecs.concat(args.refspec);
-    }
-
     // The repo is the value passed by the user, the tracking branch's remote,
     // or just "origin", in order of preference.
 
     const remoteName = args.repository || tracking.pushRemoteName || "origin";
+
+    let strRefspecs = [];
+    if (0 === args.refspec.length) {
+        // We will use the `push.default` `upstream` strategy for now: (see
+        // https://git-scm.com/docs/git-config).
+        // That is, if there is a tracking (merge) branch configured, and the
+        // remote for that branch is the one we're pushing to, we'll use it.
+        // Otherwise, we fall back on the name of the active branch.
+        //
+        // TODO: read and adhere to the configured value for `push.default`.
+
+        const activeBranchName = branch.shorthand();
+        let targetName = activeBranchName;
+        if (null !== tracking.branchName &&
+            remoteName === tracking.remoteName) {
+            targetName = tracking.branchName;
+        }
+        strRefspecs.push(activeBranchName + ":" + targetName);
+    } else {
+        strRefspecs = strRefspecs.concat(args.refspec);
+    }
 
     yield strRefspecs.map(co.wrap(function *(strRefspec) {
         const refspec = GitUtil.parseRefspec(strRefspec);
