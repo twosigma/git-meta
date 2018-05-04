@@ -69,6 +69,11 @@ describe("processRebase", function () {
             expected: "x=E:Crr-2 r=r;H=rr",
             conflictedCommit: null,
         },
+        "nothing to commit": {
+            initial: "x=S:C2-1;Cr-1 ;Bmaster=2;Br=r",
+            expected: "x=E:H=2",
+            conflictedCommit: null,
+        },
         "conflict": {
             initial: "x=S:C2-1;Cr-1 2=3;Bmaster=2;Br=r",
             expected: "x=E:I *2=~*2*3;W 2=u;H=2;Edetached HEAD,r,2",

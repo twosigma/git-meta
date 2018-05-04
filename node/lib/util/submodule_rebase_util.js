@@ -173,9 +173,18 @@ exports.processRebase = co.wrap(function *(repo, rebase, op) {
             result.conflictedCommit = op.id().tostrS();
             return result;                                            // RETURN
         }
-        const newCommit = yield rebase.commit(null, signature, null);
-        const originalCommit = op.id().tostrS();
-        result.commits[newCommit.tostrS()] = originalCommit;
+        let newCommit;
+        try {
+            newCommit = yield rebase.commit(null, signature, null);
+        } catch (e) {
+            // If there's nothing to commit, `NodeGit.Rebase.commit` will throw
+            // an error.  If that's the case, we want to just ignore the
+            // operation and move on, as Git does.
+        }
+        if (undefined !== newCommit) {
+            const originalCommit = op.id().tostrS();
+            result.commits[newCommit.tostrS()] = originalCommit;
+        }
         op = yield exports.callNext(rebase);
     }
     yield exports.callFinish(repo, rebase);
