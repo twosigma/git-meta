@@ -37,23 +37,42 @@ const NodeGit = require("nodegit");
 
 const ConfigUtil    = require("./config_util");
 const GitUtil       = require("./git_util");
+const MergeUtil     = require("./merge_util");
 const RebaseUtil    = require("./rebase_util");
 const StatusUtil    = require("./status_util");
 const UserError     = require("./user_error");
 
+const TYPE = {
+    MERGE: "MERGE",
+    REBASE: "REBASE",
+};
+
+exports.TYPE = TYPE;
+
 /**
  * Pull the specified `source` branch from the remote having the specified
- * `remoteName` into the specified `metaRepo`.
+ * `remoteName` into the specified `metaRepo`.  Perform a rebase if
+ * `TYPE.REBASE === type`.  If `TYPE.MERGE === type`, perform a merge, using
+ * the specified `editMergeMessage` to allow the user to specify a commit
+ * message for the merge.
  *
  * @async
- * @param {NodeGit.Repository} metaRepo
- * @param {String}             remoteName
- * @param {String}             source
+ * @param {NodeGit.Repository}    metaRepo
+ * @param {String}                remoteName
+ * @param {String}                source
+ * @param {TYPE}                  type
+ * @param {() -> Promise(String)} editMergeMessage
  */
-exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
+exports.pull = co.wrap(function *(metaRepo,
+                                  remoteName,
+                                  source,
+                                  type,
+                                  editMergeMessage) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(remoteName);
     assert.isString(source);
+    assert.property(TYPE, type);
+    assert.isFunction(editMergeMessage);
 
     // First do some sanity checking on the repos to see if they have a remote
     // with `remoteName` and are clean.
@@ -81,12 +100,25 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
     const remoteCommitId = remoteBranch.target();
     const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, remoteCommitId);
 
-    const result = yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
-    if (null !== result.errorMessage) {
-        throw new UserError(result.errorMessage);
+    switch (type) {
+    case TYPE.MERGE: {
+        const result = yield MergeUtil.merge(metaRepo,
+                                             remoteCommit,
+                                             MergeUtil.MODE.NORMAL,
+                                             null,
+                                             editMergeMessage);
+        if (null !== result.errorMessage) {
+            throw new UserError(result.errorMessage);
+        }
+    } break;
+    case TYPE.REBASE: {
+        const result = yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
+        if (null !== result.errorMessage) {
+            throw new UserError(result.errorMessage);
+        }
+    } break;
     }
 });
-
 
 
 /**

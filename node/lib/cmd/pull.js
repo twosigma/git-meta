@@ -75,6 +75,12 @@ used if not specified`,
         action: "storeConst",
         constant: true,
     });
+
+    parser.addArgument(["--merge"], {
+        help: "merge pulled commits into current branch",
+        action: "storeConst",
+        constant: true,
+    });
 };
 
 /**
@@ -82,20 +88,35 @@ used if not specified`,
  *
  * @async
  * @param {Object}  args
+ * @param {Boolean} args.merge
  * @param {Boolean} args.rebase
  * @param {String}  repository
  * @param {String}  [source]
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const GitUtil   = require("../util/git_util");
-    const pull      = require("../util/pull");
+    const MergeUtil = require("../util/merge_util");
+    const Pull      = require("../util/pull");
     const UserError =  require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
     const branch = yield repo.getCurrentBranch();
 
-    if (!(yield pull.userWantsRebase(args, repo, branch))) {
-        throw new UserError("Non-rebase pull not supported.");
+    if (args.merge && args.rebase) {
+        throw new UserError("'--merge' and '--rebase' do not work together");
+    }
+
+    let type;
+    if (args.merge) {
+        type = Pull.TYPE.MERGE;
+    } else if (args.rebase ||
+                            (yield Pull.userWantsRebase(args, repo, branch))) {
+        type = Pull.TYPE.REBASE;
+    }
+
+    if (undefined === type) {
+        throw new UserError(
+                   "Must choose to rebase ('--rebase') or merge ('--merge').");
     }
 
     // TODO: move the following code into `util/push.js` and add test
@@ -111,6 +132,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // or just "origin", in order of preference.
 
     const remoteName = args.repository || tracking.remoteName || "origin";
-
-    return yield pull.pull(repo, remoteName, source);
+    const editMergeMessage = MergeUtil.editMessage(repo,
+                                                   `${remoteName}/${source}`);
+    return yield Pull.pull(repo, remoteName, source, type, editMergeMessage);
 });

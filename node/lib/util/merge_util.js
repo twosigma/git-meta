@@ -620,3 +620,29 @@ exports.abort = co.wrap(function *(repo) {
     yield resetMerge(repo);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
 });
+
+/**
+ * Return a function for editing the commit message coming from the specified
+ * `committish` in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             committish
+ * @return {(repo) -> Promise(String)}
+ */
+exports.editMessage = function (repo, committish) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(committish);
+
+    return function () {
+        const message = `\
+Merge of '${committish}'
+
+# please enter a commit message to explain why this merge is necessary,
+# especially if it merges an updated upstream into a topic branch.
+#
+# lines starting with '#' will be ignored, and an empty message aborts
+# the commit.
+`;
+        return GitUtil.editMessage(repo, message);
+    };
+};
