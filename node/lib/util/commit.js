@@ -40,6 +40,7 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -536,6 +537,29 @@ exports.commit = co.wrap(function *(metaRepo,
 });
 
 /**
+ * Return true if the specified `filename` in the specified `repo` is
+ * executable and false otherwise.
+ *
+ * TODO: move this out somewhere lower-level and make an independent test.
+ *
+ * @param {Nodegit.Repository} repo
+ * @param {String} filename
+ * @return {Bool}
+ */
+const isExecutable = co.wrap(function *(repo, filename) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(filename);
+    const fullPath = path.join(repo.workdir(), filename);
+    try {
+        yield fs.access(fullPath, fs.constants.X_OK);
+        return true;
+    } catch (e) {
+        // cannot execute
+        return false;
+    }
+});
+
+/**
  * Write a commit for the specified `repo` having the specified
  * `status` using the specified commit `message` and return the ID of the new
  * commit.  Note that this method records staged commits for submodules but
@@ -574,8 +598,9 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
         }
         else {
             const blobId = yield TreeUtil.hashFile(repo, filename);
-            changes[filename] = new Change(blobId, FILEMODE.BLOB);
-
+            const executable = yield isExecutable(repo, filename);
+            const mode = executable ? FILEMODE.EXECUTABLE : FILEMODE.BLOB;
+            changes[filename] = new Change(blobId, mode);
             yield index.addByPath(filename);
         }
     }
