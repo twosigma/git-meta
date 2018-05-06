@@ -660,7 +660,7 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
     const committedSubs = {};  // map from name to RepoAST.Submodule
 
     const subs = status.submodules;
-    yield Object.keys(subs).map(co.wrap(function *(subName) {
+    const writeSubPaths = co.wrap(function *(subName) {
         const sub = subs[subName];
         const workdir = sub.workdir;
 
@@ -692,7 +692,9 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
                 headCommit: sha,
             }), Submodule.COMMIT_RELATION.SAME)
         });
-    }));
+    });
+
+    yield DoWorkQueue.doInParallel(Object.keys(subs), writeSubPaths);
 
     // We need a `RepoStatus` object containing only the set of the submodules
     // to commit to pass to `writeRepoPaths`.
