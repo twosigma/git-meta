@@ -35,6 +35,7 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
+const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const StatusUtil          = require("../../lib/util/status_util");
 const SubmoduleRebaseUtil = require("../../lib/util/submodule_rebase_util");
@@ -88,7 +89,7 @@ describe("processRebase", function () {
 `;
                 expected.x = expected.x.copy({
                     workdir: {
-                        "2": content,
+                        "2": new RepoAST.File(content, false),
                     },
                 });
                 return expected;

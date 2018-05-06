@@ -181,6 +181,10 @@ B:C2-1 x/y/qq=Sa:1,aa/bb/cc=Sb:1;C3-2 x/y/zz=Sq:1,aa/bb/dd=Sy:1;
   C7-6 aa/n/q=Spp:1,x/n/q=Sqq:1;Bm=7`,
                 shas: [["1", "2"], ["3"], ["4"], ["5"], ["6"], ["7"]],
             },
+            "file with exec bit": {
+                input: "N:C1 s=+2;Bmaster=1",
+                shas: [["1"]],
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
@@ -352,7 +356,11 @@ S:C2-1 x=y;C3-1 x=z;Bmaster=2;Bfoo=3;Erefs/heads/master,2,3;I x=q;H=3",
                 expected: new RepoAST(),
             },
             "conflict": "S:I *README.md=aa*bb*cc;W README.md=yyy",
+            "conflict with exec": "S:I *README.md=aa*+bb*cc;W README.md=yyy",
             "submodule conflict": "S:I *README.md=aa*S:1*cc;W README.md=yyy",
+            "index exec change": "S:I README.md=+hello world",
+            "workdir exec change": "S:W README.md=+hello world",
+            "workdir new exec file": "S:W foo=+hello world",
         };
 
         Object.keys(cases).forEach(caseName => {

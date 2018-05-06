@@ -36,6 +36,8 @@ const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const ShorthandParserUtil = require("../../lib/util/shorthand_parser_util");
 
+const File = RepoAST.File;
+
 describe("ShorthandParserUtil", function () {
     const SequencerState = RepoAST.SequencerState;
     const CommitAndRef = SequencerState.CommitAndRef;
@@ -177,7 +179,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "1": "1"},
+                        changes: { "1": new File("1", false)},
                         message: "message\n",
                     }),
                 }
@@ -197,7 +199,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": new Commit({
                             parents: [],
-                            changes: { y: "2" },
+                            changes: { y: new File("2", false) },
                             message: "message\n",
                         }),
                     },
@@ -207,7 +209,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "1": "1"},
+                        changes: { "1": new File("1", false) },
                         message: "hello world",
                     }),
                 }
@@ -216,7 +218,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "3": new Commit({
                         parents: ["1","2"],
-                        changes: { "3": "3"},
+                        changes: { "3": new File("3", false) },
                         message: "message\n",
                     }),
                 },
@@ -225,7 +227,10 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "3": new Commit({
                         parents: ["1","2"],
-                        changes: { x: "y", q: "r" },
+                        changes: {
+                            x: new File("y", false),
+                            q: new File("r", false),
+                        },
                         message: "hello",
                     }),
                 },
@@ -234,7 +239,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "xxx2": new Commit({
                         parents: ["yy"],
-                        changes: { "xxx2": "xxx2"},
+                        changes: { "xxx2": new File("xxx2", false) },
                         message: "message\n",
                     }),
                 }
@@ -243,7 +248,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "foo": "bar"},
+                        changes: { "foo": new File("bar", false) },
                         message: "message\n",
                     }),
                 }
@@ -252,7 +257,7 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "foo": ""},
+                        changes: { "foo": new File("", false) },
                         message: "message\n",
                     }),
                 }
@@ -261,7 +266,10 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "foo": "bar", "b": "z"},
+                        changes: {
+                            "foo": new File("bar", false),
+                            "b": new File("z", false),
+                        },
                         message: "message\n",
                     }),
                 }
@@ -270,7 +278,10 @@ describe("ShorthandParserUtil", function () {
                 commits: {
                     "1": new Commit({
                         parents: ["2"],
-                        changes: { "foo": "bar", "b": "z"},
+                        changes: {
+                            "foo": new File("bar", false),
+                            "b": new File("z", false),
+                        },
                         message: "message\n",
                     }),
                 }
@@ -286,7 +297,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": new Commit({
                             parents: ["2"],
-                            changes: { "1": "1"},
+                            changes: { "1": new File("1", false) },
                             message: "message\n",
                     })},
                     branches: { m: null },
@@ -299,7 +310,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": new Commit({
                             parents: ["2"],
-                            changes: { "1": "1"},
+                            changes: { "1": new File("1", false) },
                             message: "message\n",
                     })},
                     branches: { m: null },
@@ -321,12 +332,12 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": new Commit({
                             parents: ["2"],
-                            changes: { "1": "1"},
+                            changes: { "1": new File("1", false) },
                             message: "message\n",
                         }),
                         "3": new Commit({
                             parents: ["4"],
-                            changes: { "3": "3"},
+                            changes: { "3": new File("3", false) },
                             message: "message\n",
                         }),
                     },
@@ -425,21 +436,29 @@ describe("ShorthandParserUtil", function () {
                 i: "S:I x=y",
                 e: m({
                     type: "S",
-                    index: { x: "y" },
+                    index: { x: new File("y", false) },
                 }),
             },
             "index deletion and changes": {
                 i: "S:I x=y,q,z=r",
                 e: m({
                     type: "S",
-                    index: { x: "y", q: null, z: "r" },
+                    index: {
+                        x: new File("y", false),
+                        q: null,
+                        z: new File("r", false),
+                    },
                 }),
             },
             "index deletion and removal": {
                 i: "S:I x=y,q=~,z=r",
                 e: m({
                     type: "S",
-                    index: { x: "y", q: undefined, z: "r" },
+                    index: {
+                        x: new File("y", false),
+                        q: undefined,
+                        z: new File("r", false),
+                    },
                 }),
             },
             "index submodule change": {
@@ -454,8 +473,10 @@ describe("ShorthandParserUtil", function () {
                 e: m({
                     type: "S",
                      index: {
-                         a: new Conflict("x", "y", new Submodule("/x", "2")),
-                         b: "q",
+                         a: new Conflict(new File("x", false),
+                                         new File("y", false),
+                                         new Submodule("/x", "2")),
+                         b: new File("q", false),
                      }
                 }),
             },
@@ -464,8 +485,10 @@ describe("ShorthandParserUtil", function () {
                 e: m({
                     type: "S",
                      index: {
-                         a: new Conflict("", null, ""),
-                         b: "q",
+                         a: new Conflict(new File("", false),
+                                         null,
+                                         new File("", false)),
+                         b: new File("q", false),
                      }
                 }),
             },
@@ -473,21 +496,36 @@ describe("ShorthandParserUtil", function () {
                 i: "S:W x=y",
                 e: m({
                     type: "S",
-                    workdir: { x: "y" },
+                    workdir: { x: new File("y", false) },
+                }),
+            },
+            "workdir change, executable bit set": {
+                i: "S:W x=+y",
+                e: m({
+                    type: "S",
+                    workdir: { x: new File("y", true) },
                 }),
             },
             "workdir deletion and changes": {
                 i: "S:W x=y,q,z=r",
                 e: m({
                     type: "S",
-                    workdir: { x: "y", q: null, z: "r" },
+                    workdir: {
+                        x: new File("y", false),
+                        q: null,
+                        z: new File("r", false),
+                    },
                 }),
             },
             "workdir removal and changes": {
                 i: "S:W x=y,q=~,z=r",
                 e: m({
                     type: "S",
-                    workdir: { x: "y", q: undefined, z: "r" },
+                    workdir: {
+                        x: new File("y", false),
+                        q: undefined,
+                        z: new File("r", false),
+                    },
                 }),
             },
             "workdir submodule change": {
@@ -526,7 +564,7 @@ describe("ShorthandParserUtil", function () {
                             branches: {
                                 master: new RepoAST.Branch("foo", null),
                             },
-                            workdir: { x: "z" },
+                            workdir: { x: new File("z", false) },
                         }),
                     },
                 }),
@@ -568,7 +606,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "2": new Commit({
                             parents: ["1"],
-                            changes: { "2": "2"},
+                            changes: { "2": new File("2", false) },
                             message: "message\n",
                         }),
                     },
@@ -586,7 +624,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "2": new Commit({
                             parents: ["1"],
-                            changes: { "2": "2"},
+                            changes: { "2": new File("2", false) },
                             message: "message\n",
                         }),
                     },
@@ -735,6 +773,7 @@ describe("ShorthandParserUtil", function () {
                 assert.deepEqual(r.branches, e.branches);
                 assert.deepEqual(r.remotes, e.remotes);
                 assert.deepEqual(r.index, e.index);
+                assert.deepEqual(r.workdir, e.workdir);
                 assert.equal(r.head, e.head);
                 assert.equal(r.currentBranchName, e.currentBranchName);
                 assert.deepEqual(r.openSubmodules, e.openSubmodules);
@@ -775,7 +814,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": new Commit({
                             changes: {
-                                "1": "1",
+                                "1": new File("1", false),
                             },
                             message: "message\n",
                         }),
@@ -801,7 +840,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         "1": B.commits["1"],
                         "2": new Commit({
-                            changes: { "2": "2" },
+                            changes: { "2": new File("2", false) },
                             message: "message\n",
                             parents: ["1"],
                         }),
@@ -818,7 +857,7 @@ describe("ShorthandParserUtil", function () {
                     commits: {
                         xyz: new Commit({
                             changes: {
-                                xyz: "xyz",
+                                xyz: new File("xyz", false),
                             },
                             message: "changed xyz",
                         }),
@@ -847,7 +886,7 @@ describe("ShorthandParserUtil", function () {
                         let commits = S.commits;
                         commits[2] = new Commit({
                             parents: ["1"],
-                            changes: { "2": "2"},
+                            changes: { "2": new File("2", false) },
                             message: "message\n",
                         });
                         return commits;
@@ -867,7 +906,7 @@ describe("ShorthandParserUtil", function () {
                         let commits = S.commits;
                         commits[2] = new Commit({
                             parents: ["1"],
-                            changes: { "2": "2"},
+                            changes: { "2": new File("2", false) },
                             message: "message\n",
                         });
                         return commits;
@@ -896,7 +935,7 @@ describe("ShorthandParserUtil", function () {
                 i: "S:I a=b",
                 e: S.copy({
                     index: {
-                        a: "b",
+                        a: new File("b", false),
                     }
                 }),
             },
@@ -965,7 +1004,7 @@ describe("ShorthandParserUtil", function () {
                         commits: {
                             "1": B.commits["1"],
                             "2": new Commit({
-                                changes: { "2": "2" },
+                                changes: { "2": new File("2", false) },
                                 message: "message\n",
                                 parents: ["1"],
                             }),
@@ -1130,13 +1169,15 @@ describe("ShorthandParserUtil", function () {
                                 commits: {
                                     "1": new Commit({
                                         changes: {
-                                            "README.md": "hello world"
+                                            "README.md": new File(
+                                                                 "hello world",
+                                                                  false),
                                         },
                                         message: "the first commit",
                                     }),
                                     "2": new Commit({
                                         parents: ["1"],
-                                        changes: { "2": "2" },
+                                        changes: { "2": new File("2", false) },
                                         message: "message\n",
                                     }),
                                 },
@@ -1160,8 +1201,8 @@ describe("ShorthandParserUtil", function () {
                         openSubmodules: {
                             foo: RepoASTUtil.cloneRepo(S, "a").copy({
                                 branches: {},
-                                index: { x: "y"},
-                                workdir: { u: "2" },
+                                index: { x: new File("y", false) },
+                                workdir: { u: new File("2", false) },
                                 currentBranchName: null,
                                 remotes: { origin: new Remote("a") },
                             })
@@ -1182,7 +1223,7 @@ describe("ShorthandParserUtil", function () {
                         commits: {
                             "1": new Commit({
                                 changes: {
-                                    "README.md": "hello world",
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
@@ -1210,7 +1251,7 @@ describe("ShorthandParserUtil", function () {
                         commits: {
                             "1": new Commit({
                                 changes: {
-                                    "README.md": "hello world",
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
@@ -1243,13 +1284,15 @@ describe("ShorthandParserUtil", function () {
                                 commits: {
                                     "1": new Commit({
                                         changes: {
-                                            "README.md": "hello world"
+                                            "README.md": new File(
+                                                                 "hello world",
+                                                                  false),
                                         },
                                         message: "the first commit",
                                     }),
                                     "2": new Commit({
                                         parents: ["1"],
-                                        changes: { "2": "2" },
+                                        changes: { "2": new File("2", false) },
                                         message: "message\n",
                                     }),
                                 },
@@ -1291,7 +1334,7 @@ describe("ShorthandParserUtil", function () {
                         commits: {
                             "1": new RepoAST.Commit({
                                 changes: {
-                                    "README.md": "hello world"
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
@@ -1318,13 +1361,13 @@ describe("ShorthandParserUtil", function () {
                         commits: {
                             "1": new Commit({
                                 changes: {
-                                    "README.md": "hello world"
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
                             "8": new Commit({
                                 parents: ["1"],
-                                changes: { "8": "8" },
+                                changes: { "8": new File("8", false) },
                                 message: "message\n",
                             }),
                         },
@@ -1355,18 +1398,18 @@ x=S:Efoo,8,9`,
                         commits: {
                             "1": new Commit({
                                 changes: {
-                                    "README.md": "hello world"
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
                             "8": new Commit({
                                 parents: ["1"],
-                                changes: { "8": "8" },
+                                changes: { "8": new File("8", false) },
                                 message: "message\n",
                             }),
                             "9": new Commit({
                                 parents: ["1"],
-                                changes: { "9": "9" },
+                                changes: { "9": new File("9", false) },
                                 message: "message\n",
                             }),
                         },
@@ -1380,18 +1423,18 @@ x=S:Efoo,8,9`,
                         commits: {
                             "1": new Commit({
                                 changes: {
-                                    "README.md": "hello world"
+                                    "README.md": new File("hello world", false)
                                 },
                                 message: "the first commit",
                             }),
                             "8": new Commit({
                                 parents: ["1"],
-                                changes: { "8": "8" },
+                                changes: { "8": new File("8", false) },
                                 message: "message\n",
                             }),
                             "9": new Commit({
                                 parents: ["1"],
-                                changes: { "9": "9" },
+                                changes: { "9": new File("9", false) },
                                 message: "message\n",
                             }),
                         },

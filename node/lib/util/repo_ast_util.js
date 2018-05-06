@@ -136,25 +136,25 @@ function diffChanges(actual, expected) {
         const actualChange = actual[path];
         const expectedChange = expected[path];
         let different;
-        if ("string" === typeof actualChange &&
-            "string" === typeof expectedChange &&
-            expectedChange.startsWith("^")) {
-            const exp = expectedChange.substr(1);
-            const matcher = new RegExp(exp);
-            const match = matcher.exec(actualChange);
-            different = null === match;
+        if (actualChange instanceof RepoAST.File &&
+            expectedChange instanceof RepoAST.File) {
+            if (expectedChange.contents.startsWith("^")) {
+                const exp = expectedChange.contents.substr(1);
+                const matcher = new RegExp(exp);
+                const match = matcher.exec(actualChange.contents);
+                different = null === match ||
+                    actualChange.isExecutable !== expectedChange.isExecutable;
+            } else {
+                different = !actualChange.equal(expectedChange);
+            }
+        } else if (actualChange instanceof RepoAST.Submodule &&
+                   expectedChange instanceof RepoAST.Submodule) {
+            different = !actualChange.equal(expectedChange);
+        } else if (actualChange instanceof RepoAST.Conflict &&
+                   expectedChange instanceof RepoAST.Conflict) {
+            different = !actualChange.equal(expectedChange);
         } else {
-            different = actualChange !== expectedChange;
-        }
-        if (different &&
-            actualChange instanceof RepoAST.Submodule &&
-            expectedChange instanceof RepoAST.Submodule) {
-            different = !actualChange.equal(expectedChange);
-        }
-        else if (different &&
-            actualChange instanceof RepoAST.Conflict &&
-            expectedChange instanceof RepoAST.Conflict) {
-            different = !actualChange.equal(expectedChange);
+            different = actualChange !== null || expectedChange !== null;
         }
         if (different) {
             result.push(`\

@@ -41,6 +41,61 @@ const Rebase         = require("./rebase");
 const SequencerState = require("./sequencer_state");
 
 /**
+ * @class {File}
+ *
+ * This class represents a file in a repository.
+ */
+class File {
+    /**
+     * Create a `File` object having the specified `contents` and
+     * `isExecutable` bit.
+     *
+     * @constructor
+     * @param {String} contents
+     * @param {Bool}   isExecutable
+     */
+    constructor(contents, isExecutable) {
+        assert.isString(contents);
+        assert.isBoolean(isExecutable);
+        this.d_contents = contents;
+        this.d_isExecutable = isExecutable;
+        Object.freeze(this);
+    }
+
+    /**
+     * @property {String} contents     the contents of the file
+     */
+    get contents() {
+        return this.d_contents;
+    }
+
+    /**
+     * @property {Bool}  isExecutable   true if the file is executable
+     */
+    get isExecutable() {
+        return this.d_isExecutable;
+    }
+
+    /**
+     * Return true if this object represents the same value as the specified
+     * `rhs` and false otherwise.  Two `File` objects represent the same
+     * value if they have the same `contents` and `isExecutable` properties.
+     *
+     * @param {File} rhs
+     * @return {Bool}
+     */
+    equal(rhs) {
+        return this.d_contents === rhs.d_contents &&
+            this.d_isExecutable === rhs.d_isExecutable;
+    }
+}
+
+File.prototype.toString = function () {
+    return `File(content=${this.d_contents}, \
+isExecutable=${this.d_isExecutable})`;
+};
+
+/**
  * @class {Branch}
  *
  * This class represents a branch in a repository.
@@ -152,13 +207,13 @@ class Conflict {
      */
     constructor(ancestor, our, their) {
         assert(null === ancestor ||
-               "string" === typeof ancestor ||
+               ancestor instanceof File ||
                ancestor instanceof Submodule, ancestor);
         assert(null === our ||
-               "string" === typeof our ||
+               our instanceof File ||
                our instanceof Submodule, our);
         assert(null === their ||
-               "string" === typeof their ||
+               their instanceof File ||
                their instanceof Submodule, their);
         this.d_ancestor = ancestor;
         this.d_our = our;
@@ -246,12 +301,12 @@ class Commit {
         if ("changes" in args) {
             assert.isObject(args.changes);
             for (let path in args.changes) {
-                const content = args.changes[path];
-
-                if (null !== content && !(content instanceof Submodule)) {
-                    assert.isString(content, path);
-                }
-                this.d_changes[path] = content;
+                const file = args.changes[path];
+                assert(file === null ||
+                       file instanceof File ||
+                       file instanceof Submodule,
+                       `commit change at ${path} has invalid content ${file}`);
+                this.d_changes[path] = file;
             }
         }
         this.d_message = "";
@@ -609,7 +664,9 @@ in commit ${id}.`);
                 assert.isFalse(this.d_bare);
                 const change = workdir[path];
                 if (null !== change) {
-                    assert.isString(change);
+                    assert.instanceOf(change,
+                                      File,
+                                      `workdir change at ${path}`);
                 }
                 this.d_workdir[path] = change;
             }
@@ -625,7 +682,7 @@ in commit ${id}.`);
                 assert.isFalse(this.d_bare);
                 const change = index[path];
                 assert(null === change ||
-                       "string" === typeof change ||
+                       change instanceof File ||
                        change instanceof Submodule ||
                        change instanceof Conflict,
                        `Invalid value in index for ${path} -- ${change}`);
@@ -912,6 +969,7 @@ in commit ${id}.`);
 AST.Branch = Branch;
 AST.Commit = Commit;
 AST.Conflict = Conflict;
+AST.File = File;
 AST.Rebase = Rebase;
 AST.Remote = Remote;
 AST.SequencerState = SequencerState;
