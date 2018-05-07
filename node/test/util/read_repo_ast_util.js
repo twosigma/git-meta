@@ -49,6 +49,7 @@ const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 const TestUtil            = require("../../lib/util/test_util");
 
 const CommitAndRef = SequencerState.CommitAndRef;
+const File = RepoAST.File;
 
                                // Test utilities
 
@@ -66,7 +67,7 @@ const astFromSimpleRepo = co.wrap(function *(repo) {
     const commit = headId.id().tostrS();
     let commits = {};
     commits[commit] = new RepoAST.Commit({
-        changes: { "README.md": ""},
+        changes: { "README.md": new File("", false)},
         message: "first commit",
     });
     return new RepoAST({
@@ -102,14 +103,14 @@ const repoWithCommit = co.wrap(function *() {
     const secondCommit = anotherCommit.id().tostrS();
     let commits = {};
     commits[firstCommit] = new Commit({
-        changes: { "README.md": ""},
+        changes: { "README.md": new File("", false)},
         message: "first commit",
     });
     commits[secondCommit] = new Commit({
         parents: [firstCommit],
         changes: {
-            "README.md": "bleh",
-            "foobar": "meh",
+            "README.md": new File("bleh", false),
+            "foobar": new File("meh", false),
         },
         message: "message\n",
     });
@@ -151,11 +152,11 @@ const repoWithDeeperCommits = co.wrap(function *() {
 
     let commits = {};
     commits[firstCommit] = new Commit({
-        changes: { "README.md": ""},
+        changes: { "README.md": new File("", false)},
         message: "first commit",
     });
     commits[secondCommit] = new Commit({
-        changes: { "README.md": "bleh" },
+        changes: { "README.md": new File("bleh", false) },
         parents: [firstCommit],
         message: "message\n",
     });
@@ -215,7 +216,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -238,7 +239,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -267,12 +268,12 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[firstSha] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[secondSha] = new Commit({
             parents: [firstSha],
-            changes: { "foo/bar": "meh" },
+            changes: { "foo/bar": new File("meh", false) },
             message: "message\n",
         });
         const expected = new RepoAST({
@@ -297,7 +298,7 @@ describe("readRAST", function () {
         const delCommit = yield TestUtil.makeCommit(r, []);
         const delSha = delCommit.id().tostrS();
         commits[headSha] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[delSha] = new Commit({
@@ -325,7 +326,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -344,7 +345,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -383,7 +384,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -442,7 +443,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const path = repos.bare.path();
@@ -476,7 +477,7 @@ describe("readRAST", function () {
         const commit = headId.tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const workdir = base.workdir();
@@ -509,7 +510,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -542,7 +543,7 @@ describe("readRAST", function () {
         yield SubmoduleConfigUtil.deinit(repo, "x/y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
@@ -590,7 +591,7 @@ describe("readRAST", function () {
         yield SubmoduleConfigUtil.deinit(repo, "x/y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
@@ -642,7 +643,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
@@ -688,7 +689,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -696,7 +697,7 @@ describe("readRAST", function () {
             branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
-            index: { "README.md": "foo" },
+            index: { "README.md": new File("foo", false) },
         });
         const ast = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(ast, expected);
@@ -716,7 +717,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -724,7 +725,7 @@ describe("readRAST", function () {
             branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
-            index: { "foo": "foo" },
+            index: { "foo": new File("foo", false), },
         });
         const ast = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(ast, expected);
@@ -746,7 +747,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -754,7 +755,7 @@ describe("readRAST", function () {
             branches: { "master": new RepoAST.Branch(commit, null), },
             head: commit,
             currentBranchName: "master",
-            index: { "foo": "foo" },
+            index: { "foo": new File("foo", false), },
             workdir: { "foo": null },
         });
         const ast = yield ReadRepoASTUtil.readRAST(r);
@@ -775,7 +776,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -803,7 +804,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -848,7 +849,7 @@ describe("readRAST", function () {
 
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[commit.id().tostrS()] = new Commit({
@@ -881,7 +882,7 @@ describe("readRAST", function () {
         yield fs.unlink(path.join(r.workdir(), "README.md"));
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -903,7 +904,7 @@ describe("readRAST", function () {
         yield fs.appendFile(path.join(r.workdir(), "foo"), "x");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -913,7 +914,7 @@ describe("readRAST", function () {
             },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
-            workdir: { foo: "x" },
+            workdir: { foo: new File("x", false),  },
         });
         const actual = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(actual, expected);
@@ -925,7 +926,7 @@ describe("readRAST", function () {
         yield fs.appendFile(path.join(r.workdir(), "README.md"), "x");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -935,7 +936,7 @@ describe("readRAST", function () {
             },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
-            workdir: { "README.md": "x" },
+            workdir: { "README.md": new File("x", false) },
         });
         const actual = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(actual, expected);
@@ -951,7 +952,7 @@ describe("readRAST", function () {
         yield fs.appendFile(path.join(r.workdir(), "README.md"), "y");
         let commits = {};
         commits[headCommit.id().tostrS()] = new Commit({
-            changes: {"README.md":""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -961,8 +962,8 @@ describe("readRAST", function () {
             },
             currentBranchName: "master",
             head: headCommit.id().tostrS(),
-            index: { "README.md": "x" },
-            workdir: { "README.md": "xy" },
+            index: { "README.md": new File("x", false), },
+            workdir: { "README.md": new File("xy", false), },
         });
         const actual = yield ReadRepoASTUtil.readRAST(r);
         RepoASTUtil.assertEqualASTs(actual, expected);
@@ -1026,22 +1027,22 @@ describe("readRAST", function () {
         const commits = {};
         const Commit = RepoAST.Commit;
         commits[firstSha] = new Commit({
-            changes: { "README.md": "", },
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[bSha] = new Commit({
             parents: [firstSha],
-            changes: { foo: "foo" },
+            changes: { foo: new File("foo", false) },
             message: "message\n",
         });
         commits[cSha] = new Commit({
             parents: [firstSha],
-            changes: { bar: "bar" },
+            changes: { bar: new File("bar", false) },
             message: "message\n",
         });
         commits[mergeSha] = new Commit({
             parents: [cSha, bSha],
-            changes: { foo: "foo" },
+            changes: { foo: new File("foo", false) },
             message: "Merge branch 'b'",
         });
         const expected = new RepoAST({
@@ -1146,23 +1147,23 @@ describe("readRAST", function () {
 
         const subCommits = {};
         subCommits[baseMasterSha] = new Commit({
-            changes: { "README.md": "", },
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         subCommits[fooSha] = new Commit({
             parents: [baseMasterSha],
-            changes: { foo: "foo" },
+            changes: { foo: new File("foo", false), },
             message: "message\n",
         });
         subCommits[barSha] = new Commit({
             parents: [baseMasterSha],
-            changes: { bar: "bar" },
+            changes: { bar: new File("bar", false) },
             message: "message\n",
         });
 
         const commits = {};
         commits[firstSha] = new Commit({
-            changes: { "README.md": "", },
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[subSha] = new Commit({
@@ -1298,23 +1299,23 @@ describe("readRAST", function () {
 
         const subCommits = {};
         subCommits[baseMasterSha] = new Commit({
-            changes: { "README.md": "", },
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         subCommits[fooSha] = new Commit({
             parents: [baseMasterSha],
-            changes: { foo: "foo" },
+            changes: { foo: new File("foo", false) },
             message: "message\n",
         });
         subCommits[barSha] = new Commit({
             parents: [baseMasterSha],
-            changes: { bar: "bar" },
+            changes: { bar: new File("bar", false) },
             message: "message\n",
         });
 
         const commits = {};
         commits[firstSha] = new Commit({
-            changes: { "README.md": "", },
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         commits[subSha] = new Commit({
@@ -1379,7 +1380,7 @@ describe("readRAST", function () {
         const commit = headId.tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const note = {};
@@ -1586,7 +1587,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -1637,7 +1638,7 @@ describe("readRAST", function () {
         };
         subCommits[subCommit.id().tostrS()] = new RepoAST.Commit({
             changes: {
-                "README.md": "data",
+                "README.md": new File("data", false),
             },
             message: "message\n",
         });
@@ -1646,7 +1647,7 @@ describe("readRAST", function () {
         const commit = headId.id().tostrS();
         let commits = {};
         commits[commit] = new Commit({
-            changes: { "README.md": ""},
+            changes: { "README.md": new File("", false)},
             message: "first commit",
         });
         const expected = new RepoAST({
@@ -1713,10 +1714,12 @@ describe("readRAST", function () {
             const simple = yield astFromSimpleRepo(repo);
             const expected = simple.copy({
                 index: {
-                    "README.md": new RepoAST.Conflict("xxx", "yyy", "zzz"),
+                    "README.md": new RepoAST.Conflict(new File("xxx", false),
+                                                      new File("yyy", false),
+                                                      new File("zzz", false)),
                 },
                 workdir: {
-                    "README.md": "conflicted",
+                    "README.md": new File("conflicted", false),
                 },
             });
             RepoASTUtil.assertEqualASTs(result, expected);
@@ -1740,10 +1743,12 @@ describe("readRAST", function () {
             const simple = yield astFromSimpleRepo(repo);
             const expected = simple.copy({
                 index: {
-                    "README.md": new RepoAST.Conflict("xxx", null, "zzz"),
+                    "README.md": new RepoAST.Conflict(new File("xxx", false),
+                                                      null,
+                                                      new File("zzz", false)),
                 },
                 workdir: {
-                    "README.md": "conflicted",
+                    "README.md": new File("conflicted", false),
                 },
             });
             RepoASTUtil.assertEqualASTs(result, expected);
@@ -1788,7 +1793,7 @@ describe("readRAST", function () {
             yield index.write();
             let commits = {};
             commits[sha] = new Commit({
-                changes: {"README.md":""},
+                changes: { "README.md": new File("", false)},
                 message: "first commit",
             });
             commits[commit.id().tostrS()] = new Commit({
@@ -1845,6 +1850,190 @@ describe("readRAST", function () {
         const result = yield ReadRepoASTUtil.readRAST(repo);
         assert.equal(result.sparse, true);
         assert.deepEqual(result.workdir, {});
+    }));
+    it("workdir exec bit change", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        // Make readme executable
+        yield fs.chmod(path.join(r.workdir(), "README.md"), "755");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(commit, null), },
+            head: commit,
+            currentBranchName: "master",
+            workdir: {
+                "README.md": new File("", true),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+    it("new, executable file", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        // Make readme executable
+        const filePath = path.join(r.workdir(), "foo");
+        yield fs.writeFile(filePath, "meh");
+        yield fs.chmod(filePath, "755");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(commit, null), },
+            head: commit,
+            currentBranchName: "master",
+            workdir: {
+                foo: new File("meh", true),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+    it("executable change in index", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        // Make readme executable and stage it
+        yield fs.chmod(path.join(r.workdir(), "README.md"), "755");
+        const index = yield r.index();
+        yield index.addByPath("README.md");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(commit, null), },
+            head: commit,
+            currentBranchName: "master",
+            index: {
+                "README.md": new File("", true),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+    it("new, executable file in index", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        // Make readme executable
+        const filePath = path.join(r.workdir(), "foo");
+        yield fs.writeFile(filePath, "meh");
+        yield fs.chmod(filePath, "755");
+        const index = yield r.index();
+        yield index.addByPath("foo");
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(commit, null), },
+            head: commit,
+            currentBranchName: "master",
+            index: {
+                foo: new File("meh", true),
+            },
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+    it("executable change in commit", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+
+        // Make readme executable and stage it
+        yield fs.chmod(path.join(r.workdir(), "README.md"), "755");
+        const index = yield r.index();
+        yield index.addByPath("README.md");
+        const execCommit = yield TestUtil.makeCommit(r, ["README.md"]);
+        const execSha = execCommit.id().tostrS();
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+        commits[execSha] = new Commit({
+            changes: {
+                "README.md": new File("", true),
+            },
+            parents: [commit],
+            message: "message\n",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(execSha, null), },
+            head: execSha,
+            currentBranchName: "master",
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
+    }));
+    it("executable new file in commit", co.wrap(function *() {
+        const r = yield TestUtil.createSimpleRepository();
+
+        const headId = yield r.getHeadCommit();
+        const commit = headId.id().tostrS();
+
+        // Make readme executable and stage it
+        const filePath = path.join(r.workdir(), "foo");
+        yield fs.writeFile(filePath, "meh");
+        yield fs.chmod(filePath, "755");
+        const index = yield r.index();
+        yield index.addByPath("foo");
+        const execCommit = yield TestUtil.makeCommit(r, ["foo"]);
+        const execSha = execCommit.id().tostrS();
+
+        const ast = yield ReadRepoASTUtil.readRAST(r);
+
+        let commits = {};
+        commits[commit] = new Commit({
+            changes: { "README.md": new File("", false)},
+            message: "first commit",
+        });
+        commits[execSha] = new Commit({
+            changes: {
+                "foo": new File("meh", true),
+            },
+            parents: [commit],
+            message: "message\n",
+        });
+        const expected = new RepoAST({
+            commits: commits,
+            branches: { "master": new RepoAST.Branch(execSha, null), },
+            head: execSha,
+            currentBranchName: "master",
+        });
+        RepoASTUtil.assertEqualASTs(ast, expected);
     }));
 });
 

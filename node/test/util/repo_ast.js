@@ -35,6 +35,7 @@ const assert = require("chai").assert;
 const RepoAST = require("../../lib/util/repo_ast");
 
 describe("RepoAST", function () {
+const File = RepoAST.File;
 const SequencerState = RepoAST.SequencerState;
 const CommitAndRef = SequencerState.CommitAndRef;
 const REBASE = SequencerState.TYPE.REBASE;
@@ -49,6 +50,14 @@ const REBASE = SequencerState.TYPE.REBASE;
         it("null tracking", function () {
             const b = new RepoAST.Branch("name", null);
             assert.isNull(b.tracking);
+        });
+    });
+
+    describe("File", function () {
+        it("breath", function () {
+            const f = new RepoAST.File("foo", true);
+            assert.equal(f.contents, "foo");
+            assert.equal(f.isExecutable, true);
         });
     });
 
@@ -92,10 +101,12 @@ const REBASE = SequencerState.TYPE.REBASE;
 
     describe("Conflict", function () {
         it("breath", function () {
-            const c = new RepoAST.Conflict("foo", "bar", "baz");
-            assert.equal(c.ancestor, "foo");
-            assert.equal(c.our, "bar");
-            assert.equal(c.their, "baz");
+            const c = new RepoAST.Conflict(new File("foo", false),
+                                           new File("bar", true),
+                                           new File("baz", false));
+            assert.equal(c.ancestor.contents, "foo");
+            assert.equal(c.our.contents, "bar");
+            assert.equal(c.their.contents, "baz");
         });
         it("nulls", function () {
             const c = new RepoAST.Conflict(null, null, null);
@@ -114,25 +125,33 @@ const REBASE = SequencerState.TYPE.REBASE;
         });
         it("equal", function () {
             const Conflict = RepoAST.Conflict;
+            const foo = new File("foo", false);
+            const bam = new File("bam", false);
+            const bar = new File("bar", false);
+            const baz = new File("baz", false);
+            const food = new File("food", true);
+            const bark = new File("bark", false);
             const cases = {
                 "same": {
-                    lhs: new Conflict("foo", "bar", "baz"),
-                    rhs: new Conflict("foo", "bar", "baz"),
+                    lhs: new Conflict(foo, bar, baz),
+                    rhs: new Conflict(new File("foo", false),
+                                      new File("bar", false),
+                                      new File("baz", false)),
                     expected: true,
                 },
                 "diff ancestor": {
-                    lhs: new Conflict("foo", "bar", "baz"),
-                    rhs: new Conflict("food", "bar", "baz"),
+                    lhs: new Conflict(foo, bar, baz),
+                    rhs: new Conflict(food, bar, baz),
                     expected: false,
                 },
                 "diff ours": {
-                    lhs: new Conflict("foo", "bar", "baz"),
-                    rhs: new Conflict("foo", "bark", "baz"),
+                    lhs: new Conflict(foo, bar, baz),
+                    rhs: new Conflict(foo, bark, baz),
                     expected: false,
                 },
                 "diff theirs": {
-                    lhs: new Conflict("foo", "bar", "baz"),
-                    rhs: new Conflict("foo", "bar", "bam"),
+                    lhs: new Conflict(foo, bar, baz),
+                    rhs: new Conflict(foo, bar, bam),
                     expected: false,
                 },
             };
@@ -157,11 +176,11 @@ const REBASE = SequencerState.TYPE.REBASE;
             "simple": {
                 input: {
                     parents: ["foo"],
-                    changes: { a: "b" },
+                    changes: { a: new File("b", true) },
                     message: "bam",
                 },
                 eparents: ["foo"],
-                echanges: { a: "b"},
+                echanges: { a: new File("b", true) },
                 emessage: "bam",
             },
             "delete change": {
@@ -281,6 +300,11 @@ const REBASE = SequencerState.TYPE.REBASE;
                 };
             }
 
+            const barFile = new File("bar", true);
+            const yFile = new File("y", true);
+            const aConflict = new RepoAST.Conflict(new File("foo", false),
+                                                   new File("bar", true),
+                                                   new File("baz", false));
             const cases = {
                 "trivial": m(undefined, undefined, false),
                 "simple" : m(
@@ -299,13 +323,13 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "with bare": m({ bare: true }, { bare: true} , false),
                 "bad bare with index": m({
                     bare: true,
-                    index: { foo: "bar" },
+                    index: { foo: barFile },
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
                 "bad bare with workdir": m({
                     bare: true,
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     commits: {"1": c1 },
                     head: "1",
                 }, undefined, true),
@@ -446,20 +470,20 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "index": m({
                     commits: { "1": c1},
                     head: "1",
-                    index: { foo: "bar"},
+                    index: { foo: barFile },
                 }, {
                     commits: { "1": c1},
                     head: "1",
-                    index: { foo: "bar"},
+                    index: { foo: barFile },
                 }, false),
                 "index without head": m({
                     commits: { "1": c1},
                     head: null,
-                    index: { foo: "bar"},
+                    index: { foo: barFile },
                 }, {
                     commits: { "1": c1},
                     head: "1",
-                    index: { foo: "bar"},
+                    index: { foo: barFile},
                 }, true),
                 "index with submodule": m({
                     commits: { "1": c1},
@@ -473,31 +497,31 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "index with conflict": m({
                     commits: { "1": c1},
                     head: "1",
-                    index: { foo: new RepoAST.Conflict("foo", "bar", "baz") },
-                    workdir: { foo: "bar" },
+                    index: { foo: aConflict },
+                    workdir: { foo: barFile },
                 }, {
                     commits: { "1": c1},
                     head: "1",
-                    index: { foo: new RepoAST.Conflict("foo", "bar", "baz") },
-                    workdir: { foo: "bar" },
+                    index: { foo: aConflict },
+                    workdir: { foo: barFile },
                 }, false),
                 "workdir": m({
                     commits: { "1": c1},
                     head: "1",
-                    workdir: { foo: "bar"},
+                    workdir: { foo: barFile },
                 }, {
                     commits: { "1": c1},
                     head: "1",
-                    workdir: { foo: "bar"},
+                    workdir: { foo: barFile },
                 }, false),
                 "workdir without head": m({
                     commits: { "1": c1},
                     head: null,
-                    workdir: { foo: "bar"},
+                    workdir: { foo: barFile },
                 }, {
                     commits: { "1": c1},
                     head: "1",
-                    workdir: { foo: "bar"},
+                    workdir: { foo: barFile },
                 }, true),
                 "openSubmodules": m({
                     commits: { "1": cWithSubmodule },
@@ -516,45 +540,45 @@ const REBASE = SequencerState.TYPE.REBASE;
                 }, true),
                 "bad commit change": m({
                     commits: {
-                        "1": new Commit({ changes: { x: "y"}}),
+                        "1": new Commit({ changes: { x: yFile }}),
                         "2": new Commit({
                             parents: ["1"],
-                            changes: { x: "y"},
+                            changes: { x: yFile },
                         }),
                     },
                     head: "2",
                 }, {}, true),
                 "bad commit change from ancestor": m({
                     commits: {
-                        "1": new Commit({ changes: { x: "y"}}),
+                        "1": new Commit({ changes: { x: yFile }}),
                         "2": new Commit({
                             parents: ["1"],
-                            changes: { y: "y"},
+                            changes: { y: yFile },
                         }),
                         "3": new Commit({
                             parents: ["2"],
-                            changes: { x: "y"},
+                            changes: { x: yFile },
                         }),
                     },
                     head: "2",
                 }, {}, true),
                 "ok commit duplicting right-hand ancestory": m({
                     commits: {
-                        "1": new Commit({ changes: { x: "y"}}),
-                        "2": new Commit({ changes: { y: "y"}, }),
+                        "1": new Commit({ changes: { x: yFile }}),
+                        "2": new Commit({ changes: { y: yFile }, }),
                         "3": new Commit({
                             parents: ["1","2"],
-                            changes: { y: "y"},
+                            changes: { y: yFile },
                         }),
                     },
                     head: "3",
                 }, {
                     commits: {
-                        "1": new Commit({ changes: { x: "y"}}),
-                        "2": new Commit({ changes: { y: "y"}, }),
+                        "1": new Commit({ changes: { x: yFile }}),
+                        "2": new Commit({ changes: { y: yFile }, }),
                         "3": new Commit({
                             parents: ["1","2"],
-                            changes: { y: "y"},
+                            changes: { y: yFile },
                         }),
                     },
                     head: "3",
@@ -735,9 +759,12 @@ const REBASE = SequencerState.TYPE.REBASE;
             });
         });
 
+        const barFile = new File("bar", false);
+        const bazFile = new File("baz", false);
+
         describe("renderCommit", function () {
             const Commit = RepoAST.Commit;
-            const c1 = new Commit({ changes: { foo: "bar" }});
+            const c1 = new Commit({ changes: { foo: barFile }});
             const deleter = new Commit({
                 parents: ["1"],
                 changes: { foo: null }
@@ -751,9 +778,9 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "one": {
                     commits: { "1": c1},
                     from: "1",
-                    expected: { foo: "bar" },
+                    expected: { foo: barFile },
                     ecache: {
-                        "1": { foo: "bar" },
+                        "1": { foo: barFile },
                     },
                 },
                 "deletion": {
@@ -768,18 +795,18 @@ const REBASE = SequencerState.TYPE.REBASE;
                 "with sub": {
                     commits: { "1": c1, "2": subCommit },
                     from: "2",
-                    expected: { foo: "bar", baz: submodule },
+                    expected: { foo: barFile, baz: submodule },
                     ecache: {
                         "1": c1.changes,
-                        "2": { foo: "bar", baz: submodule },
+                        "2": { foo: barFile, baz: submodule },
                     },
                 },
                 "use the cache": {
                     commits: { "1": c1 },
                     from: "1",
-                    cache: { "1": { foo: "baz" } },
-                    expected: { foo: "baz" },
-                    ecache: { "1": { foo: "baz"}, },
+                    cache: { "1": { foo: bazFile } },
+                    expected: { foo: bazFile },
+                    ecache: { "1": { foo: bazFile }, },
                 },
             };
             Object.keys(cases).forEach(caseName => {
@@ -798,14 +825,15 @@ const REBASE = SequencerState.TYPE.REBASE;
 
         describe("AST.copy", function () {
             const Rebase = RepoAST.Rebase;
+            const barFile = new File("bar", false);
             const base = new RepoAST({
                 commits: { "1": new RepoAST.Commit()},
                 branches: { "master": new RepoAST.Branch("1", null) },
                 refs: { "a/b": "1"},
                 head: "1",
                 currentBranchName: "master",
-                index: { foo: "bar" },
-                workdir: { foo: "bar" },
+                index: { foo: barFile },
+                workdir: { foo: barFile },
                 rebase: new Rebase("hello", "1", "1"),
                 sequencerState: new SequencerState({
                     type: REBASE,
@@ -824,8 +852,8 @@ const REBASE = SequencerState.TYPE.REBASE;
                 head: "2",
                 currentBranchName: "foo",
                 remotes: { "foo": new RepoAST.Remote("meeeee") },
-                index: { foo: "bar" },
-                workdir: { foo: "bar" },
+                index: { foo: barFile },
+                workdir: { foo: barFile },
                 rebase: new Rebase("hello world", "2", "2"),
                 sequencerState: new SequencerState({
                     type: REBASE,
@@ -908,26 +936,33 @@ const REBASE = SequencerState.TYPE.REBASE;
             // `accumulateChanges`.  We just need to make sure they're put
             // together properly.
 
+            const bbFile = new File("bb", false);
+            const fooFile = new File("foo", false);
+            const barFile = new File("bar", true);
+            const zFile = new File("z", false);
             const Commit = RepoAST.Commit;
             const Conflict = RepoAST.Conflict;
-            const c1 = new Commit({ changes: { foo: "bar" }});
+            const c1 = new Commit({ changes: { foo: barFile }});
             const cases = {
                 "no index": {
                     commits: { "1": c1},
                     from: "1",
-                    expected: { foo: "bar" },
+                    expected: { foo: barFile },
                 },
                 "with index": {
                     commits: { "1": c1},
                     from: "1",
-                    index: { y: "z" },
-                    expected: { foo: "bar", y: "z" },
+                    index: { y: zFile },
+                    expected: { foo: barFile, y: zFile },
                 },
                 "ignore conflict": {
                     commits: { "1": c1},
                     from: "1",
-                    index: { y: "z", foo: new Conflict("foo", "bar", "bb") },
-                    expected: { foo: "bar", y: "z" },
+                    index: {
+                        y: zFile,
+                        foo: new Conflict(fooFile, barFile, bbFile),
+                    },
+                    expected: { foo: barFile, y: zFile },
                 },
             };
             Object.keys(cases).forEach(caseName => {

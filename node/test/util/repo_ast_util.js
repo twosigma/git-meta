@@ -35,6 +35,10 @@ const assert = require("chai").assert;
 const RepoAST     = require("../../lib/util/repo_ast");
 const RepoASTUtil = require("../../lib/util/repo_ast_util");
 
+const File = RepoAST.File;
+const barFile = new File("bar", false);
+const bamFile = new File("bam", true);
+
 describe("RepoAstUtil", function () {
     const Conflict = RepoAST.Conflict;
     const Sequencer = RepoAST.SequencerState;
@@ -51,12 +55,24 @@ describe("RepoAstUtil", function () {
             "with data": {
                 actual: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                     message: "foo",
                 }),
                 expected: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
+                    message: "foo",
+                }),
+            },
+            "with null data": {
+                actual: new Commit({
+                    parents: ["1"],
+                    changes: { foo: null },
+                    message: "foo",
+                }),
+                expected: new Commit({
+                    parents: ["1"],
+                    changes: { foo: null },
                     message: "foo",
                 }),
             },
@@ -67,44 +83,44 @@ describe("RepoAstUtil", function () {
             "bad parents": {
                 actual: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                 }),
                 expected: new Commit({
                     parents: ["2"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                 }),
                 fails: true,
             },
             "wrong change": {
                 actual: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                 }),
                 expected: new Commit({
                     parents: ["2"],
-                    changes: { foo: "z" },
+                    changes: { foo: new File("z", false) },
                 }),
                 fails: true,
             },
             "extra change": {
                 actual: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar", z: "q" },
+                    changes: { foo: barFile, z: new File("q", false) },
                 }),
                 expected: new Commit({
                     parents: ["2"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                 }),
                 fails: true,
             },
             "missing change": {
                 actual: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar" },
+                    changes: { foo: barFile },
                 }),
                 expected: new Commit({
                     parents: ["1"],
-                    changes: { foo: "bar", k: "z" },
+                    changes: { foo: barFile, k: new File("z", false) },
                 }),
                 fails: true,
             },
@@ -141,7 +157,7 @@ describe("RepoAstUtil", function () {
         const Remote = AST.Remote;
         const Submodule = AST.Submodule;
 
-        const aCommit = new Commit({ changes: { x: "y" } });
+        const aCommit = new Commit({ changes: { x: new File("y", true) } });
         const aRemote = new Remote("/z");
         const aSubmodule = new Submodule("/y", "1");
         const anAST = new RepoAST({
@@ -167,7 +183,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
                     sequencerState: new Sequencer({
@@ -188,7 +204,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                     rebase: new Rebase("foo", "1", "1"),
                     sequencerState: new Sequencer({
@@ -210,14 +226,16 @@ describe("RepoAstUtil", function () {
             "wrong commit": {
                 actual: new AST({
                     commits: {
-                        "1": new Commit({ changes: { x: "z" } }),
+                        "1": new Commit({
+                            changes: { x: new File("z", false) }
+                        }),
                     },
                     branches: { master: new RepoAST.Branch("1", null) },
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -227,7 +245,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -240,7 +258,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -253,7 +271,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -267,7 +285,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -278,7 +296,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -293,7 +311,7 @@ describe("RepoAstUtil", function () {
                     head: "2",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -305,7 +323,7 @@ describe("RepoAstUtil", function () {
                     head: "1",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -320,7 +338,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -329,7 +347,7 @@ describe("RepoAstUtil", function () {
                     head: "1",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -342,7 +360,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote, yyyy: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -352,7 +370,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -364,8 +382,8 @@ describe("RepoAstUtil", function () {
                     head: "1",
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
-                    index: { y: aSubmodule, x: "xxxx" },
-                    workdir: { foo: "bar" },
+                    index: { y: aSubmodule, x: new File("xxxx", false) },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -375,37 +393,46 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
             },
             "wrong file data": {
                 actual: new AST({
-                    index: { foo: "bar", },
+                    index: { foo: barFile, },
                 }),
                 expected: new AST({
-                    index: { foo: "baz", },
+                    index: { foo: new File("baz", false), },
                 }),
                 fails: true,
             },
             "regex match data miss": {
                 actual: new AST({
-                    index: { foo: "bar", },
+                    index: { foo: barFile, },
                 }),
                 expected: new AST({
-                    index: { foo: "^^ar", },
+                    index: { foo: new File("^^ar", false) },
                 }),
                 fails: true,
             },
             "regex match data hit": {
                 actual: new AST({
-                    index: { foo: "bar", },
+                    index: { foo: barFile, },
                 }),
                 expected: new AST({
-                    index: { foo: "^^ba", },
+                    index: { foo: new File("^^ba", false), },
                 }),
                 fails: false,
+            },
+            "regex match data hit but bad bit": {
+                actual: new AST({
+                    index: { foo: barFile, },
+                }),
+                expected: new AST({
+                    index: { foo: new File("^^ba", true), },
+                }),
+                fails: true,
             },
             "bad workdir": {
                 actual: new AST({
@@ -415,7 +442,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -425,7 +452,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { oo: "bar" },
+                    workdir: { oo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -438,7 +465,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                 }),
                 expected: new AST({
                     commits: { "1": aCommit},
@@ -447,7 +474,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 fails: true,
@@ -460,7 +487,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: anAST },
                 }),
                 expected: new AST({
@@ -470,7 +497,7 @@ describe("RepoAstUtil", function () {
                     currentBranchName: "master",
                     remotes: { origin: aRemote },
                     index: { y: aSubmodule },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                     openSubmodules: { y: new AST({
                         commits: { "4": aCommit },
                         head: "4",
@@ -611,36 +638,44 @@ describe("RepoAstUtil", function () {
             "same Conflict": {
                 actual: new AST({
                     index: {
-                        "foo": new Conflict("foo", "bar", "baz"),
+                        "foo": new Conflict(new File("foo", false),
+                                            new File("bar", false),
+                                            new File("baz", true)),
                     },
                     workdir: {
-                        "foo": "boo",
+                        "foo": new File("boo", false),
                     },
                 }),
                 expected: new AST({
                     index: {
-                        "foo": new Conflict("foo", "bar", "baz"),
+                        "foo": new Conflict(new File("foo", false),
+                                            new File("bar", false),
+                                            new File("baz", true)),
                     },
                     workdir: {
-                        "foo": "boo",
+                        "foo": new File("boo", false),
                     },
                 }),
             },
             "diff Conflict": {
                 actual: new AST({
                     index: {
-                        "foo": new Conflict("foo", "bar", "baz"),
+                        "foo": new Conflict(new File("foo", false),
+                                            new File("bar", false),
+                                            new File("baz", true)),
                     },
                     workdir: {
-                        "foo": "boo",
+                        "foo": new File("boo", false),
                     },
                 }),
                 expected: new AST({
                     index: {
-                        "foo": new Conflict("foo", "bar", "bam"),
+                        "foo": new Conflict(new File("foo", true),
+                                            new File("bar", false),
+                                            new File("baz", true)),
                     },
                     workdir: {
-                        "foo": "boo",
+                        "foo": new File("boo", false),
                     },
                 }),
                 fails: true,
@@ -890,7 +925,7 @@ describe("RepoAstUtil", function () {
                     remotes: {
                         foo: new RepoAST.Remote("my-url"),
                     },
-                    index: { foo: "bar" },
+                    index: { foo: barFile },
                 }),
                 m: { "1": "2"},
                 e: new RepoAST({
@@ -899,7 +934,7 @@ describe("RepoAstUtil", function () {
                     remotes: {
                         foo: new RepoAST.Remote("my-url"),
                     },
-                    index: { foo: "bar" },
+                    index: { foo: barFile },
                 }),
             },
             "index unchanged submodule": {
@@ -910,7 +945,7 @@ describe("RepoAstUtil", function () {
                         foo: new RepoAST.Remote("my-url"),
                     },
                     index: {
-                        foo: "bar",
+                        foo: barFile,
                         baz: new RepoAST.Submodule("x", "y"),
                     },
                 }),
@@ -923,7 +958,7 @@ describe("RepoAstUtil", function () {
                         foo: new RepoAST.Remote("my-url"),
                     },
                     index: {
-                        foo: "bar",
+                        foo: barFile,
                         baz: new RepoAST.Submodule("x", "y"),
                     },
                 }),
@@ -936,7 +971,7 @@ describe("RepoAstUtil", function () {
                         foo: new RepoAST.Remote("my-url"),
                     },
                     index: {
-                        foo: "bar",
+                        foo: barFile,
                         baz: new RepoAST.Submodule("q", "1"),
                     },
                 }),
@@ -949,7 +984,7 @@ describe("RepoAstUtil", function () {
                         foo: new RepoAST.Remote("my-url"),
                     },
                     index: {
-                        foo: "bar",
+                        foo: barFile,
                         baz: new RepoAST.Submodule("z", "2"),
                     },
                 }),
@@ -983,7 +1018,7 @@ describe("RepoAstUtil", function () {
                     remotes: {
                         foo: new RepoAST.Remote("my-url"),
                     },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                 }),
                 m: { "1": "2"},
                 e: new RepoAST({
@@ -992,7 +1027,7 @@ describe("RepoAstUtil", function () {
                     remotes: {
                         foo: new RepoAST.Remote("my-url"),
                     },
-                    workdir: { foo: "bar" },
+                    workdir: { foo: barFile },
                 }),
             },
             "submodule with changes": {
@@ -1098,8 +1133,8 @@ describe("RepoAstUtil", function () {
         const AST = RepoAST;
         const Commit = AST.Commit;
         const Remote = AST.Remote;
-        const c1 = new Commit({ changes: { foo: "bar" } });
-        const c2 = new Commit({ changes: { baz: "bam" } });
+        const c1 = new Commit({ changes: { foo: barFile } });
+        const c2 = new Commit({ changes: { baz: bamFile } });
         const child = new Commit({ parents: ["1"] });
         const cases = {
             "sipmlest": {

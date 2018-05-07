@@ -124,11 +124,12 @@ const writeTree = co.wrap(function *(repo,
 
             pathToChange[filename] = null;
         }
-        else if ("string" === typeof entry) {
-            // A string is just plain data.
-
-            const id = (yield GitUtil.hashObject(repo, entry)).tostrS();
-            pathToChange[filename] = new TreeUtil.Change(id, FILEMODE.BLOB);
+        else if (entry instanceof RepoAST.File) {
+            const id =
+                     (yield GitUtil.hashObject(repo, entry.contents)).tostrS();
+            const mode =
+                      entry.isExecutable ? FILEMODE.EXECUTABLE : FILEMODE.BLOB;
+            pathToChange[filename] = new TreeUtil.Change(id, mode);
         }
         else if (entry instanceof RepoAST.Submodule) {
             // For submodules, we must map the logical sha it contains to the
@@ -328,9 +329,9 @@ const configureRepo = co.wrap(function *(repo, ast, commitMap, treeCache) {
             const sha = commitMap[data.sha];
             return new ConflictUtil.ConflictEntry(FILEMODE.COMMIT, sha);
         }
-        const id = yield GitUtil.hashObject(repo, data);
-        const BLOB = FILEMODE.BLOB;
-        return new ConflictUtil.ConflictEntry(BLOB, id.tostrS());
+        const id = yield GitUtil.hashObject(repo, data.contents);
+        const mode = data.isExecutable ? FILEMODE.EXECUTABLE : FILEMODE.BLOB;
+        return new ConflictUtil.ConflictEntry(mode, id.tostrS());
     });
 
     const makeRef = co.wrap(function *(name, commit) {
@@ -516,7 +517,10 @@ git -C '${repo.workdir()}' checkout-index -f ${filesStr}
             else {
                 const dirname = path.dirname(absPath);
                 mkdirp.sync(dirname);
-                yield fs.writeFile(absPath, change);
+                yield fs.writeFile(absPath, change.contents);
+                if (change.isExecutable) {
+                    yield fs.chmod(absPath, "755");
+                }
             }
         }
     }

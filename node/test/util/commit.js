@@ -1827,6 +1827,13 @@ my message
                 },
                 expected: "x=S:Cx-1 README.md=haha;Bmaster=x",
             },
+            "staged change with exec bit": {
+                state: "x=S:I README.md=+haha",
+                fileChanges: {
+                    "README.md": FILESTATUS.MODIFIED,
+                },
+                expected: "x=S:Cx-1 README.md=+haha;Bmaster=x",
+            },
             "simple staged change, added eol": {
                 state: "x=S:I README.md=haha",
                 message: "hah",
@@ -1839,6 +1846,11 @@ my message
                 state: "x=S:W README.md=haha",
                 fileChanges: { "README.md": FILESTATUS.MODIFIED, },
                 expected: "x=S:Cx-1 README.md=haha;Bmaster=x",
+            },
+            "workdir change with exec bit": {
+                state: "x=S:W README.md=+haha",
+                fileChanges: { "README.md": FILESTATUS.MODIFIED, },
+                expected: "x=S:Cx-1 README.md=+haha;Bmaster=x",
             },
             "simple change with message": {
                 state: "x=S:I README.md=haha",

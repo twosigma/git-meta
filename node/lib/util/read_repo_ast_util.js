@@ -48,6 +48,9 @@ const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 
+const FILEMODE = NodeGit.TreeEntry.FILEMODE;
+const File = RepoAST.File;
+
 /**
  * Load the submodules objects from the specified `repo` on the specified
  * `commitId`.
@@ -96,8 +99,15 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
         } catch (e) {
             // no file
         }
+        let isExecutable = false;
+        try {
+            yield fs.access(absPath, fs.constants.X_OK);
+            isExecutable = true;
+        } catch (e) {
+            // cannot execute
+        }
         if (undefined !== data) {
-            workdir[filePath] = data;
+            workdir[filePath] = new File(data, isExecutable);
         }
     });
 
@@ -106,11 +116,12 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
             return null;                                              // RETURN
         }
         const oid = entry.id;
-        if (NodeGit.TreeEntry.FILEMODE.COMMIT === entry.mode) {
+        if (FILEMODE.COMMIT === entry.mode) {
             return new RepoAST.Submodule("", oid.tostrS());
         }
+        const isExecutable = FILEMODE.EXECUTABLE === entry.mode;
         const blob = yield repo.getBlob(oid);
-        return blob.toString();
+        return new File(blob.toString(), isExecutable);
     });
 
     const stats = yield repo.getStatusExt();
@@ -305,8 +316,10 @@ exports.readRAST = co.wrap(function *(repo) {
                 else if (!(path in submodules)) {
                     // Skip submodules; we handle them later.
                     const entry = yield commit.getEntry(path);
+                    const isExecutable =
+                                      FILEMODE.EXECUTABLE === entry.filemode();
                     const blob = yield entry.getBlob();
-                    changes[path] = blob.toString();
+                    changes[path] = new File(blob.toString(), isExecutable);
                 }
             }
 

@@ -35,6 +35,7 @@ const assert      = require("chai").assert;
 const RepoAST     = require("../util/repo_ast");
 const RepoASTUtil  = require("../util/repo_ast_util");
 
+const File           = RepoAST.File;
 const SequencerState = RepoAST.SequencerState;
 
 /**
@@ -70,11 +71,12 @@ const SequencerState = RepoAST.SequencerState;
  * current branch = '*='<commit>
  * new commit     = 'C'[message#]<commit>['-'<commit>(,<commit>)*]
  *                  [' '<change>(',\s*'<change>*)]
- * change         = path ['=' <submodule> | "~" | <data>] |
+ * change         = path ['=' <submodule> | "~" | <file>] |
  *                  *path=<conflict item>'*'<conflict item>'*'<conflict item>
- * conflict item  = <submodule> | <data>
+ * conflict item  = <submodule> | <file>
  * path           = (<alpha numeric>|'/')+
  * submodule      = Surl:[<commit>]
+ * file           = (['^'] | ['+']) <data>
  * data           = ('0-9'|'a-z'|'A-Z'|' ')*    basically non-delimiter ascii
  * remote         = R<name>=[<url>]
  *                  [' '<name>=[<commit>](',\s*'<name>=[<commit>])*]
@@ -129,10 +131,14 @@ const SequencerState = RepoAST.SequencerState;
  * commit specifies removal of the branch from the remote in the base repo.
  *
  * A change generally indicates:
- * - textual data
+ * - a file
  * - a submodule definition
  * - if the '=' is omitted, a deletion
  * - if `~` removes the change from the base, if an override
+ * - Use '+' at the beginning of the data to indicate an executable file.
+ * - When the text for the file in shorthand used to specify *expected* values
+ *   starts with '^', the rest of the content will be treated as a regular
+ *   expression when validating the actual contents.
  *
  * An Index override indicates changes staged in the repository index.
  *
@@ -194,6 +200,8 @@ const SequencerState = RepoAST.SequencerState;
  *                                 as conflicted, having a base content of 'a',
  *                                 "our" content as 'b', and "their" content as
  *                                 'c'.
+ * S:I foo=+bar                 -- A file named foo with its executable bit set
+ *                                 and the contents of "bar" has been staged.
  * QR a:refs/heads/master q: 1 c,d,a
  *                              -- A sequencer is in progress that is a 
  *                              -- rebase.  When the rebase started, HEAD
@@ -308,7 +316,13 @@ function parseChangeData(commitData) {
     }
     const end = commitData.length;
     if (0 === end || "S" !== commitData[0]) {
-        return commitData;                                            // RETURN
+        let contents = commitData;
+        let isExecutable = false;
+        if (contents.startsWith("+")) {
+            isExecutable = true;
+            contents = contents.substr(1);
+        }
+        return new RepoAST.File(contents, isExecutable);             // RETURN
     }
     assert(1 !== commitData.length);
     return parseSubmodule(commitData.substr(1));
@@ -797,7 +811,7 @@ function parseOverrides(shorthand, begin, end, delimiter) {
             changes = parseChanges(parentsEnd + 1, end);
         }
         else {
-            changes[commitId] = commitId;
+            changes[commitId] = new File(commitId, false);
         }
         commits[commitId] = new RepoAST.Commit({
             parents: parents,
@@ -1159,7 +1173,7 @@ function getBaseRepo(type, data) {
     if ("A" === type) {
         let commits = {};
         let changes = {};
-        changes[data] = data;
+        changes[data] = new File(data, false);
         commits[data] = new RepoAST.Commit({
             changes: changes,
             message: `changed ${data}`,
@@ -1529,7 +1543,7 @@ exports.RepoType = (() => {
             commits: {
                 "1": new RepoAST.Commit({
                     changes: {
-                        "README.md": "hello world"
+                        "README.md": new File("hello world", false),
                     },
                     message: "the first commit",
                 }),
@@ -1553,7 +1567,7 @@ exports.RepoType = (() => {
             commits: {
                 "1": new RepoAST.Commit({
                     changes: {
-                        "README.md": "hello world",
+                        "README.md": new File("hello world", false),
                     },
                     message: "the first commit",
                 }),
