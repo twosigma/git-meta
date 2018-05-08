@@ -52,32 +52,37 @@ describe("pull", function () {
             initial: "a=B|x=Ca",
             remote: "origin",
             source: "master",
+            type: Pull.TYPE.REBASE,
         },
         "bad remote": {
             initial: "x=S",
             remote: "origin",
             source: "master",
+            type: Pull.TYPE.REBASE,
             fails: true,
         },
         "bad branch": {
             initial: "a=B|x=Ca",
             remote: "origin",
             source: "foo",
+            type: Pull.TYPE.REBASE,
             fails: true,
         },
         "changes": {
             initial: "a=B:C2-1 s=Sa:1;Bfoo=2|x=Ca",
             remote: "origin",
             source: "foo",
+            type: Pull.TYPE.REBASE,
             expected: "x=E:Bmaster=2 origin/master",
         },
         "doesn't pull down unneeded branches": {
             initial: "a=B:Bfoo=1|x=S:Rorigin=a",
             remote: "origin",
             source: "foo",
+            type: Pull.TYPE.REBASE,
             expected: "x=E:Rorigin=a foo=1",
         },
-        "conflict": {
+        "rebase conflict": {
             initial: `
 a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|y=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4|x=Cy`,
             remote: "origin",
@@ -90,6 +95,24 @@ x=E:H=4;QR 3:refs/heads/master 4: 0 3;Os I *a=~*8*a!Edetached HEAD,a,b! W a=\
 a
 >>>>>>> message
 ;`,
+            type: Pull.TYPE.REBASE,
+            fails: true,
+        },
+        "merge conflict": {
+            initial: `
+a=B:Ca-1;Cb-1 a=8;Ba=a;Bb=b|y=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4|x=Cy`,
+            remote: "origin",
+            source: "foo",
+            expected: `
+x=E:Qa merge message\n#M 3: 4: 0 4;
+  Os I *a=~*a*8!Qa merge message\n#M a: b: 0 b!W a=\
+<<<<<<< ours
+a
+=======
+8
+>>>>>>> theirs
+;`,
+            type: Pull.TYPE.MERGE,
             fails: true,
         },
     };
@@ -97,7 +120,10 @@ a
         const c = cases[caseName];
         const pull = co.wrap(function *(repos) {
             const repo = repos.x;
-            yield Pull.pull(repo, c.remote, c.source);
+            function mergeMessage() {
+                return Promise.resolve("a merge message");
+            }
+            yield Pull.pull(repo, c.remote, c.source, c.type, mergeMessage);
         });
         it(caseName, co.wrap(function *() {
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,

@@ -150,21 +150,13 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         throw new UserError(`\
 Could not resolve ${colors.red(args.commit)} to a commit.`);
     }
-    const editMessage = function () {
-        const message = `\
-Merge of '${args.commit}'
-
-# please enter a commit message to explain why this merge is necessary,
-# especially if it merges an updated upstream into a topic branch.
-#
-# lines starting with '#' will be ignored, and an empty message aborts
-# the commit.
-`;
-        return GitUtil.editMessage(repo, message);
-    };
     const commit = yield repo.getCommit(commitish.id());
-    const result =
-          yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
+    const result = yield MergeUtil.merge(
+                                     repo,
+                                     commit,
+                                     mode,
+                                     args.message,
+                                     MergeUtil.editMessage(repo, args.commit));
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
     }
