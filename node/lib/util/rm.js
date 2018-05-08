@@ -471,4 +471,5 @@ exports.rmPaths = co.wrap(function *(repo, paths, options) {
     }
 
     yield SubmoduleConfigUtil.writeUrls(repo, index, modules, options.cached);
+    yield index.write();
 });
