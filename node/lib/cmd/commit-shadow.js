@@ -80,7 +80,15 @@ exports.configureParser = function (parser) {
         action: "storeConst",
         constant: true,
         defaultValue: false,
-        help: "include timestamp in the shadow commit",
+        help: "deprecated, but same as '--increment-timestamp'",
+    });
+
+    parser.addArgument(["-i", "--increment-timestamp"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        defaultValue: false,
+        help: "use timestamp of HEAD + 1 instead of current time",
     });
 };
 
@@ -96,9 +104,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const StashUtil = require("../util/stash_util");
 
     const repo = yield GitUtil.getCurrentRepo();
+    const incrementTimestamp =
+                              args.increment_timestamp || args.epoch_timestamp;
     const result = yield StashUtil.makeShadowCommit(repo,
                                                     args.message,
-                                                    args.epoch_timestamp,
+                                                    incrementTimestamp,
                                                     false,
                                                     args.include_untracked);
     if (null === result) {
