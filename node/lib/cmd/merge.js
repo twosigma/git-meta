@@ -142,17 +142,21 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         yield MergeUtil.abort(repo);
         return;                                                       // RETURN
     }
-    if (null === args.commit) {
+    let commitName = args.commit;
+    if (null === commitName) {
+        commitName = yield GitUtil.getCurrentTrackingBranchName(repo);
+    }
+    if (null === commitName) {
         throw new UserError("Commit required.");
     }
-    const commitish = yield GitUtil.resolveCommitish(repo, args.commit);
+    const commitish = yield GitUtil.resolveCommitish(repo, commitName);
     if (null === commitish) {
         throw new UserError(`\
-Could not resolve ${colors.red(args.commit)} to a commit.`);
+Could not resolve ${colors.red(commitName)} to a commit.`);
     }
     const editMessage = function () {
         const message = `\
-Merge of '${args.commit}'
+Merge of '${commitName}'
 
 # please enter a commit message to explain why this merge is necessary,
 # especially if it merges an updated upstream into a topic branch.

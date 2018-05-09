@@ -138,6 +138,36 @@ describe("GitUtil", function () {
             }));
         });
     });
+    describe("getCurrentTrackingBranchName", function () {
+        const cases = {
+            "no tracking": {
+                state: "S",
+                expected: null,
+            },
+            "local tracking": {
+                state: "S:Bfoo=1;Bblah=1 foo;*=blah",
+                expected: "foo",
+            },
+            "no branch": {
+                state: "S:H=1",
+                expected: null,
+            },
+            "with remote": {
+                state: "S:Rhoo=/a gob=1;Bmaster=1 hoo/gob",
+                expected: "hoo/gob",
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const written = yield RepoASTTestUtil.createRepo(c.state);
+                const repo = written.repo;
+                const result =
+                              yield GitUtil.getCurrentTrackingBranchName(repo);
+                assert.equal(result, c.expected);
+            }));
+        });
+    });
     describe("getRemoteForBranch", function () {
         it("no upstream", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createRepo("S");
