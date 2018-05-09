@@ -473,25 +473,27 @@ exports.list = co.wrap(function *(repo) {
  * Make a shadow commit for the specified `repo` having the specified `status`;
  * use the specified commit `message`.  Ignored untracked files unless the
  * specified `includeUntracked` is true.  Return the sha of the created commit.
- * Note that this method does not recurse into submodules.
+ * Note that this method does not recurse into submodules.  If the specified
+ * `incrementTimestamp` is true, use the timestamp of HEAD + 1; otherwise, use
+ * the current time.
  *
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         status
  * @param {String}             message
- * @param {Bool}             useEpochTimestamp
+ * @param {Bool}               incrementTimestamp
  * @param {Bool}               includeUntracked
  * @return {String}
  */
 const makeShadowCommitForRepo = co.wrap(function *(repo,
                                                    status,
                                                    message,
-                                                   useEpochTimestamp,
+                                                   incrementTimestamp,
                                                    includeUntracked) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
     assert.isBoolean(includeUntracked);
-    assert.isBoolean(useEpochTimestamp);
+    assert.isBoolean(incrementTimestamp);
 
     const changes = yield TreeUtil.listWorkdirChanges(repo,
                                                       status,
@@ -508,8 +510,11 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
 
     const newTree = yield TreeUtil.writeTree(repo, indexTree, changes);
     let sig = repo.defaultSignature();
-    if (useEpochTimestamp) {
-        sig = NodeGit.Signature.create(sig.name(), sig.email(), 0, 0);
+    if (incrementTimestamp && null !== head) {
+        sig = NodeGit.Signature.create(sig.name(),
+                                       sig.email(),
+                                       head.time() + 1,
+                                       head.timeOffset());
     }
     const id = yield NodeGit.Commit.create(repo,
                                            null,

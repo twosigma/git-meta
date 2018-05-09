@@ -720,7 +720,7 @@ meta-stash@{1}: log of 1
                 expected: "x=E:Cfoo\n#m-1 foo/bar=2;Bm=m",
                 message: "foo",
                 includeMeta: true,
-                useEpochTimestamp: true,
+                incrementTimestamp: true,
             },
             "deleted file": {
                 state: "x=S:W README.md",
@@ -786,22 +786,23 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
                 const meta = c.includeMeta;
                 const includeUntracked =
                         undefined === c.includeUntracked || c.includeUntracked;
-                const useEpochTimestamp =
-                        (undefined === c.useEpochTimestamp) ?
-                        false : c.useEpochTimestamp;
+                const incrementTimestamp =
+                        (undefined === c.incrementTimestamp) ?
+                        false : c.incrementTimestamp;
                 const result = yield StashUtil.makeShadowCommit(
-                                                             repo,
-                                                             message,
-                                                             useEpochTimestamp,
-                                                             meta,
-                                                             includeUntracked);
+                                                            repo,
+                                                            message,
+                                                            incrementTimestamp,
+                                                            meta,
+                                                            includeUntracked);
 
                 const commitMap = {};
                 if (null !== result) {
                     const metaSha = result.metaCommit;
                     const commit = yield repo.getCommit(metaSha);
-                    if (useEpochTimestamp) {
-                        assert.equal(commit.time(), 0);
+                    const head = yield repo.getHeadCommit();
+                    if (incrementTimestamp) {
+                        assert.equal(commit.time(), head.time() + 1);
                     }
                     commitMap[metaSha] = "m";
                     yield NodeGit.Branch.create(repo, "m", commit, 1);
