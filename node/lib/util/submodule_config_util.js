@@ -645,16 +645,39 @@ exports.writeUrls = co.wrap(function *(repo, index, urls, cached) {
         }
     }
     else {
-        const oid = yield GitUtil.hashObject(repo, newConf);
-        const sha = oid.toString();
         if (!cached) {
             yield fs.writeFile(modulesPath, newConf);
+            yield index.addByPath(exports.modulesFileName);
+        } else {
+            // If we use this method of staging the change along with the
+            // `fs.writeFile` above in the `!cached` case, it will randomly
+            // confuse Git into thinking the `.gitmodules` file is modified
+            // even though a `git diff` shows no changes.  I suspect we're
+            // writing some garbage flags somwewhere.  You can replicate (after
+            // reverting the change that introduces this comment:
+            //```bash
+            //$ while :;
+            //> do
+            //> write-repos -o 'a=B|x=U:C3-2 t=Sa:1;Bmaster=3;Bfoo=2'
+            //> git -C x meta cherry-pick foo
+            //> git -C x status
+            //> sleep 0.01
+            //> done
+            //
+            // and wait, about 1/4 times the `status` command will show a dirty
+            // `.gitmodules` file.
+            //
+            // TODO: track down why this confuses libgit2, *or* get rid of the
+            // caching logic; I don't think it buys us anything.
+
+            const oid = yield GitUtil.hashObject(repo, newConf);
+            const sha = oid.toString();
+            const entry = new NodeGit.IndexEntry();
+            entry.path = exports.modulesFileName;
+            entry.mode = NodeGit.TreeEntry.FILEMODE.BLOB;
+            entry.id = NodeGit.Oid.fromString(sha);
+            entry.flags = entry.flagsExtended = 0;
+            yield index.add(entry);
         }
-        const entry = new NodeGit.IndexEntry();
-        entry.path = exports.modulesFileName;
-        entry.mode = NodeGit.TreeEntry.FILEMODE.BLOB;
-        entry.id = NodeGit.Oid.fromString(sha);
-        entry.flags = entry.flagsExtended = 0;
-        yield index.add(entry);
     }
 });
