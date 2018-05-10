@@ -169,6 +169,28 @@ exports.getTrackingInfo = co.wrap(function *(repo, branch) {
 });
 
 /**
+ * If the current branch branch in the specified `repo` tracks another branch,
+ * return its name (qualified by $remote-name if it's tracking a remote
+ * branch), or return null if it tracks no branch.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {String|null}
+ */
+exports.getCurrentTrackingBranchName = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const head = yield repo.head();
+    const tracking = yield exports.getTrackingInfo(repo, head);
+    if (null === tracking) {
+        return null;                                                  // RETURN
+    }
+    if (null === tracking.remoteName) {
+        return tracking.branchName;                                   // RETURN
+    }
+    return `${tracking.remoteName}/${tracking.branchName}`;
+});
+
+/**
  * Return the remote associated with the upstream reference of the specified
  * `branch` in the specified `repo`.
  *

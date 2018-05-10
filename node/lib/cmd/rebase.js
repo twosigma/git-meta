@@ -102,13 +102,17 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         }
     }
     else {
-        if (null === args.commit) {
+        let commitName = args.commit;
+        if (null === commitName) {
+            commitName = yield GitUtil.getCurrentTrackingBranchName(repo);
+        }
+        if (null === commitName) {
             throw new UserError(`No onto committish specified.`);
         }
-        const committish = yield GitUtil.resolveCommitish(repo, args.commit);
+        const committish = yield GitUtil.resolveCommitish(repo, commitName);
         if (null === committish) {
             throw new UserError(
-                  `Could not resolve ${colors.red(args.commit)} to a commit.`);
+                  `Could not resolve ${colors.red(commitName)} to a commit.`);
         }
         const commit = yield repo.getCommit(committish.id());
         const result = yield RebaseUtil.rebase(repo, commit);
