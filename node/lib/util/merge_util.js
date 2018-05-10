@@ -349,6 +349,15 @@ running merge.`);
         return result;
     }
 
+    const upToDate  = yield NodeGit.Graph.descendantOf(repo,
+                                                       head.id().tostrS(),
+                                                       commitSha);
+
+    if (upToDate) {
+        console.log("Up-to-date.");
+        return result;
+    }
+
     const canFF = yield NodeGit.Graph.descendantOf(repo,
                                                    commitSha,
                                                    head.id().tostrS());

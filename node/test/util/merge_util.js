@@ -221,6 +221,10 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 initial: "x=S",
                 fromCommit: "1",
             },
+            "up-to-date": {
+                initial: "a=B|x=U:C3-2 t=Sa:1;Bmaster=3;Bfoo=2",
+                fromCommit: "2",
+            },
             "trivial -- nothing to do, has untracked change": {
                 initial: "a=B|x=U:Os W foo=8",
                 fromCommit: "2",
