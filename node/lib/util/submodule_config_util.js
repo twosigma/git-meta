@@ -443,11 +443,6 @@ exports.getConfigLines = function (name, url) {
  * `name` in the config file.
  *
  * @async
- * @param {NodeGit.Repository} repo
- * @param {String}             name
- * @param {String}             url
- *
- * @async
  * @param {String} repoPath
  * @param {String} name
  * @param {String} url
