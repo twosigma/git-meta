@@ -37,7 +37,8 @@
     "group-by": "",
     "nodegit": "^0.21.1",
     "rimraf": "",
-    "split": ""
+    "split": "",
+    "walk": ""
   },
   "devDependencies": {
     "deepcopy": "",

@@ -30,12 +30,16 @@
  */
 "use strict";
 
+const assert = require("chai").assert;
 const co     = require("co");
 
-const Push            = require("../../lib/util/push");
-const RepoAST         = require("../../lib/util/repo_ast");
-const RepoASTUtil     = require("../../lib/util/repo_ast_util");
-const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const GitUtil             = require("../../lib/util/git_util");
+const Push                = require("../../lib/util/push");
+const RepoAST             = require("../../lib/util/repo_ast");
+const RepoASTUtil         = require("../../lib/util/repo_ast_util");
+const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
+const SubmoduleUtil       = require("../../lib/util/submodule_util");
+const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
 
 /**
  * Return a map from name to RepoAST that is the same as the one in the
@@ -187,6 +191,147 @@ describe("refMapper", function () {
             });
             RepoASTUtil.assertEqualRepoMaps(result, c.expected);
         });
+    });
+});
+
+describe("getPushMap", function () {
+    const cases = {
+        "empty, by sha" : {
+            initial: "x=S:C2-1;Bmaster=2",
+            source: "2",
+            expectedPushMap: {}
+        },
+        "simple" : {
+            initial: `sub=S:C8-1;Bmaster=8|x=S:C2-1 d=Ssub:8;Bmaster=2;Od`,
+            source: "2",
+            expectedPushMap: {
+                d : "8"
+            },
+        },
+        "another sub in parent commit" : {
+            initial: `sub1=S:C8-1;Bmaster=8|
+                      sub2=S:C7-1;Bmaster=7|
+                      x=S:C2-1 d1=Ssub1:8;C3-2 d2=Ssub2:7;Bmaster=3;Od1;Od2`,
+            source: "3",
+            expectedPushMap: {
+                d1 : "8",
+                d2 : "7"
+            },
+        },
+        "another sub in parent commit, but origin already has it" : {
+            initial: `sub1=S:C8-1;Bmaster=8|
+                      sub2=S:C7-1;Bmaster=7|
+                      x=S:C2-1 d1=Ssub1:8;C3-2 d2=Ssub2:7;Bmaster=3;
+                      Rorigin=foo target=2;
+                      Od1;Od2`,
+            source: "3",
+            expectedPushMap: {
+                d2 : "7",
+            },
+        },
+        "origin has a child but we didn't fetch it, so we don't know that" : {
+            initial: `sub=S:C7-1;C8-7;Bmaster=8|
+                      x=S:C2-1 d=Ssub:8;C3-1 d=Ssub:7;Bmaster=3;
+                      Rorigin=foo target=2;
+                      Od`,
+            source: "3",
+            expectedPushMap: {
+                d : "7",
+            },
+        },
+        "origin has a child (which we know is a child)" : {
+            initial: `sub=S:C7-1;C8-7;Bmaster=8|
+                      x=S:C2-1 d=Ssub:8;C3-1 d=Ssub:7;Bmaster=3;
+                      Rorigin=foo target=2;
+                      Od`,
+            extraFetch: {
+                "d" : {
+                    sub: "sub",
+                    commits: ["8"],
+                },
+            },
+            source: "3",
+            expectedPushMap: {},
+        },
+        "origin is equal" : {
+            initial: `sub=S:C7-1;Bmaster=7|
+                      x=S:C2-1 d=Ssub:7;Bmaster=2;
+                      Rorigin=foo target=2;
+                      Od`,
+            extraFetch: {
+                "d" : {
+                    sub: "sub",
+                    commits: ["7"],
+                },
+            },
+            source: "2",
+            expectedPushMap: {},
+        },
+    };
+
+    const testGetPushMap = function(source, expectedPushMap, extraFetch) {
+        return co.wrap(function *(repos, commitMap) {
+            const repo = repos.x;
+            let sha;
+            if (parseInt(source) > 0) {
+                sha = commitMap.reverseCommitMap[source];
+            } else {
+                sha = yield repo.getReference(source).target();
+            }
+
+            const commit = yield repo.getCommit(sha);
+
+            // Do any necessary extra fetches in submodules
+            for (const sub of Object.keys(extraFetch)) {
+                const extra = extraFetch[sub];
+                const subRepo = yield SubmoduleUtil.getBareRepo(repo, sub);
+                for (const toFetch of extra.commits) {
+                    const mappedCommit = commitMap.reverseCommitMap[toFetch];
+                    yield GitUtil.fetchSha(subRepo,
+                                           commitMap.reverseUrlMap[extra.sub],
+                                           mappedCommit);
+                    }
+            }
+
+            // We want to test two modes: one with submodules open,
+            // and another with them closed. We need them to be initially
+            // open, because this will populate .git/modules, but
+            // we also want to test with them closed to ensure
+            // that we can handle that case.
+            for (const closeSubs of [false, true]) {
+                if (closeSubs) {
+                    const subs = yield SubmoduleUtil.listOpenSubmodules(repo);
+                    for (const sub of subs) {
+                        yield SubmoduleConfigUtil.deinit(repo, sub);
+                    }
+                }
+
+                const pushMap = yield Push.getPushMap(repo, "origin", source,
+                                                      "target", commit);
+                const mappedPushMap = {};
+                for (const sub of Object.keys(pushMap)) {
+                    mappedPushMap[sub] = commitMap.commitMap[pushMap[sub]];
+                }
+                assert.deepEqual(expectedPushMap, mappedPushMap);
+            }
+        });
+    };
+
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            const parts = c.initial.split(";");
+            const expectedParts = parts.filter(
+                part => !part.trim().startsWith("O"));
+            const expected = expectedParts.join(";");
+            const manipulator = testGetPushMap(c.source,
+                                               c.expectedPushMap,
+                                               c.extraFetch || {});
+            yield RepoASTTestUtil.testMultiRepoManipulator(
+                c.initial,
+                expected,
+                manipulator);
+        }));
     });
 });
 

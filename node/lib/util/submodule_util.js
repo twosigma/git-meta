@@ -40,6 +40,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 const fs      = require("fs-promise");
 const path    = require("path");
+const walk    = require("walk");
 
 const DoWorkQueue         = require("../util/do_work_queue");
 const GitUtil             = require("./git_util");
@@ -201,6 +202,62 @@ exports.getCurrentSubmoduleShas = function (index, submoduleNames) {
     return result;
 };
 
+const gitReservedNames = new Set(["HEAD", "FETCH_HEAD", "ORIG_HEAD",
+                                  "COMMIT_EDITMSG", "index", "config",
+                                  "logs", "rr-cache", "hooks", "info",
+                                  "objects", "refs"]);
+/**
+ * Return a list of submodules from .git/modules -- that is,
+ * approximately, those which we have ever opened.
+ */
+exports.listAbsorbedSubmodules = co.wrap(function*(repo) {
+    const options = {
+        followLinks: false
+    };
+
+    const modules_dir = path.join(repo.path(), "modules");
+    const walker = walk.walk(modules_dir, options);
+    const out = [];
+
+    walker.on("names", function (root, nodeNamesArray) {
+        if (nodeNamesArray.indexOf("HEAD") !== -1) {
+            // We've hit an actual git module -- don't recurse
+            // further.  It's possible that our module contains other
+            // modules (e.g. if foo/bar/baz gets moved to
+            // foo/bar/baz/fleem).  If so, really weird things could
+            // happen -- e.g. .git/modules/foo/bar/baz/objects could
+            // secretly contain another entire git repo.  There are
+            // cases here that regular git can't handle (for instance,
+            // if you move a submodule to a subdirectory of itself
+            // named "config").  But the vast majority of the time,
+            // nested repos won't have name conflicts with git
+            // reserved dir names, so we'll just eliminate those
+            // reserved name, and recurse the rest if any.
+
+            const filtered = [];
+            for (const name of nodeNamesArray) {
+                if (!gitReservedNames.has(name)) {
+                    filtered.push(name);
+                }
+            }
+            nodeNamesArray.splice(0, nodeNamesArray.length, filtered);
+            out.push(root.substring(modules_dir.length + 1));
+        }
+    });
+
+    yield new Promise(function(resolve, reject) {
+        try {
+            walker.on("end", resolve);
+        } catch (e) {
+            reject();
+        }
+    });
+
+    return out;
+
+});
+
+
 /**
  * Return true if the submodule having the specified `submoduleName` in the
  * specified `repo` is visible and false otherwise.
@@ -237,6 +294,25 @@ exports.getRepo = function (metaRepo, name) {
 
     const submodulePath = path.join(metaRepo.workdir(), name);
     return NodeGit.Repository.open(submodulePath);
+};
+
+/**
+ * Return the `Repository` for the absorbed bare repo for th submodule
+ * having the specified `name` in the specified `metaRepo`.  That's
+ * the one in meta/.git/modules/...
+ *
+ * @async
+ * @param {NodeGit.Repository} metaRepo
+ * @param {String}             name
+ * @return {NodeGit.Repository}
+ */
+exports.getBareRepo = function (metaRepo, name) {
+    assert.instanceOf(metaRepo, NodeGit.Repository);
+    assert.isString(name);
+
+    // metaRepo.path() returns the path to the gitdir.
+    const submodulePath = path.join(metaRepo.path(), "modules", name);
+    return NodeGit.Repository.openBare(submodulePath);
 };
 
 /**
