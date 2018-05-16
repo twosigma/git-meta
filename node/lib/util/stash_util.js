@@ -500,15 +500,20 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
                                                       includeUntracked);
     const head = yield repo.getHeadCommit();
     const parents = [];
-    if (null !== head) {
-        parents.push(head);
-    }
 
     const index = yield repo.index();
     const treeOid = yield index.writeTree();
     const indexTree = yield repo.getTree(treeOid);
 
     const newTree = yield TreeUtil.writeTree(repo, indexTree, changes);
+    if (null !== head) {
+        parents.push(head);
+        const headTree = yield head.getTree();
+        if (newTree.id().equal(headTree.id())) {
+            return head.sha();
+        }
+    }
+
     let sig = repo.defaultSignature();
     if (incrementTimestamp && null !== head) {
         sig = NodeGit.Signature.create(sig.name(),
@@ -581,7 +586,9 @@ exports.makeShadowCommit = co.wrap(function *(repo,
         // If the submodule is closed or its workdir is clean, we don't need to
         // do anything for it.
 
-        if (null === wd || wd.status.isClean(includeUntracked)) {
+        if (null === wd || ((subStatus.commit === null ||
+                             wd.status.headCommit === subStatus.commit.sha) &&
+                            wd.status.isClean(includeUntracked))) {
             return;                                                   // RETURN
         }
         const subRepo = yield SubmoduleUtil.getRepo(repo, name);

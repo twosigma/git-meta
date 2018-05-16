@@ -742,9 +742,19 @@ meta-stash@{1}: log of 1
                 expected: "x=E:Cm-2 README.md=2;Bm=m",
                 includeMeta: true,
             },
-            "new commit in unopened submodule": {
+            "new, staged commit in opened submodule": {
+                state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a;Os",
+                expected: "x=E:Cm-2 s=Sa:a;Bm=m",
+                includeMeta: true,
+            },
+            "new, staged commit in unopened submodule": {
                 state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a",
                 expected: "x=E:Cm-2 s=Sa:a;Bm=m",
+                includeMeta: true,
+            },
+            "new, unstaged commit in opened submodule": {
+                state: "a=B:Ca-1;Ba=a|x=U:C3-2;Bmaster=3;Os H=a",
+                expected: "x=E:Cm-3 s=Sa:a;Bm=m",
                 includeMeta: true,
             },
             "new file in open submodule, untracked not included": {
@@ -775,7 +785,7 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
-            const shadower = co.wrap(function *(repos) {
+            const shadower = co.wrap(function *(repos, mapping) {
                 // If a meta commit was made, map it to "m" and create a branch
                 // named "m" pointing to it.  For each submodule commit made,
                 // map the commit to one with that submodule's name, and make a
@@ -811,11 +821,13 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
                         const subRepo = yield SubmoduleUtil.getRepo(repo,
                                                                     path);
                         const subCommit = yield subRepo.getCommit(subSha);
-                        commitMap[subSha] = path;
-                        yield NodeGit.Branch.create(subRepo,
-                                                    path,
-                                                    subCommit,
-                                                    1);
+                        if (!(subSha in mapping.commitMap)) {
+                            commitMap[subSha] = path;
+                            yield NodeGit.Branch.create(subRepo,
+                                                        path,
+                                                        subCommit,
+                                                        1);
+                        }
                     }
                 }
                 return {
