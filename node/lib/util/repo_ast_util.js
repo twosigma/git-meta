@@ -213,15 +213,15 @@ expected url to be ${colorExp(expected.url)} but got ${colorAct(actual.url)}`
                    );
     }
     function missingActual(branch) {
-        result.push(`missing branch ${colorBad(branch)}`);
+        result.push(`missing remote branch ${colorBad(branch)}`);
     }
     function missingExpected(branch) {
-        result.push(`unexpected branch ${colorBad(branch)}`);
+        result.push(`unexpected remote branch ${colorBad(branch)}`);
     }
     function compare(branch) {
         if (actual.branches[branch] !== expected.branches[branch]) {
             result.push(`\
-for branch ${colorBad(branch)} expected \
+for remote branch ${colorBad(branch)} expected \
 ${colorExp(expected.branches[branch])} but got \
 ${colorAct(actual.branches[branch])}`
                        );

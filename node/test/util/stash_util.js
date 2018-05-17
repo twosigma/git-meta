@@ -220,6 +220,11 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os",
                 expected: `x=E:Cstash#s-2 ;Fmeta-stash=s`,
             },
+            "open sub on updated commit, unstaged": {
+                state: `a=B:Css-1;Bss=ss|
+                        x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os H=ss`,
+                expected: `x=E:Cstash#s-2 s=Sa:ss;Fmeta-stash=s;Os Fsub-stash/ss=ss!H=ss`,
+            },
             "open sub with an added file": {
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os W foo=bar",
                 expected: `x=E:Cstash#s-2 ;Fmeta-stash=s`,
@@ -285,7 +290,7 @@ x=E:Fmeta-stash=s;
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             const includeUntracked = c.includeUntracked || false;
-            const stasher = co.wrap(function *(repos) {
+            const stasher = co.wrap(function *(repos, mapping) {
                 const repo = repos.x;
                 const stashMessage = c.message || null;
                 let expMessage = c.expectedMessage;
@@ -310,23 +315,28 @@ x=E:Fmeta-stash=s;
                 const message = entry.message();
                 assert.equal(message, expMessage);
                 commitMap[stashId.target().tostrS()] = "s";
-
                 // Look up the commits made for stashed submodules and create
                 // the appropriate mappings.
 
                 for (let subName in result) {
                     const subSha = result[subName];
-                    commitMap[subSha] = `s${subName}`;
+                    if (!(subSha in mapping.commitMap)) {
+                        commitMap[subSha] = `s${subName}`;
+                    }
+
                     const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
                     const subStash = yield subRepo.getCommit(subSha);
-                    const indexCommit = yield subStash.parent(1);
-                    commitMap[indexCommit.id().tostrS()] = `si${subName}`;
-                    if (includeUntracked) {
-                        const untrackedCommit = yield subStash.parent(2);
-                        commitMap[untrackedCommit.id().tostrS()] =
+                    if (subStash.parentcount() > 1) {
+                        const indexCommit = yield subStash.parent(1);
+                        commitMap[indexCommit.id().tostrS()] = `si${subName}`;
+                        if (includeUntracked) {
+                            const untrackedCommit = yield subStash.parent(2);
+                            commitMap[untrackedCommit.id().tostrS()] =
                                                                 `su${subName}`;
+                        }
                     }
                 }
+
                 return {
                     commitMap: commitMap,
                 };
@@ -742,9 +752,19 @@ meta-stash@{1}: log of 1
                 expected: "x=E:Cm-2 README.md=2;Bm=m",
                 includeMeta: true,
             },
-            "new commit in unopened submodule": {
+            "new, staged commit in opened submodule": {
+                state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a;Os",
+                expected: "x=E:Cm-2 s=Sa:a;Bm=m",
+                includeMeta: true,
+            },
+            "new, staged commit in unopened submodule": {
                 state: "a=B:Ca-1;Ba=a|x=U:I s=Sa:a",
                 expected: "x=E:Cm-2 s=Sa:a;Bm=m",
+                includeMeta: true,
+            },
+            "new, unstaged commit in opened submodule": {
+                state: "a=B:Ca-1;Ba=a|x=U:C3-2;Bmaster=3;Os H=a",
+                expected: "x=E:Cm-3 s=Sa:a;Bm=m",
                 includeMeta: true,
             },
             "new file in open submodule, untracked not included": {
@@ -775,7 +795,7 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
-            const shadower = co.wrap(function *(repos) {
+            const shadower = co.wrap(function *(repos, mapping) {
                 // If a meta commit was made, map it to "m" and create a branch
                 // named "m" pointing to it.  For each submodule commit made,
                 // map the commit to one with that submodule's name, and make a
@@ -811,11 +831,13 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
                         const subRepo = yield SubmoduleUtil.getRepo(repo,
                                                                     path);
                         const subCommit = yield subRepo.getCommit(subSha);
-                        commitMap[subSha] = path;
-                        yield NodeGit.Branch.create(subRepo,
-                                                    path,
-                                                    subCommit,
-                                                    1);
+                        if (!(subSha in mapping.commitMap)) {
+                            commitMap[subSha] = path;
+                            yield NodeGit.Branch.create(subRepo,
+                                                        path,
+                                                        subCommit,
+                                                        1);
+                        }
                     }
                 }
                 return {
