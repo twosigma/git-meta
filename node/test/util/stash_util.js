@@ -220,6 +220,11 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os",
                 expected: `x=E:Cstash#s-2 ;Fmeta-stash=s`,
             },
+            "open sub on updated commit, unstaged": {
+                state: `a=B:Css-1;Bss=ss|
+                        x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os H=ss`,
+                expected: `x=E:Cstash#s-2 s=Sa:ss;Fmeta-stash=s;Os Fsub-stash/ss=ss!H=ss`,
+            },
             "open sub with an added file": {
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os W foo=bar",
                 expected: `x=E:Cstash#s-2 ;Fmeta-stash=s`,
@@ -285,7 +290,7 @@ x=E:Fmeta-stash=s;
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             const includeUntracked = c.includeUntracked || false;
-            const stasher = co.wrap(function *(repos) {
+            const stasher = co.wrap(function *(repos, mapping) {
                 const repo = repos.x;
                 const stashMessage = c.message || null;
                 let expMessage = c.expectedMessage;
@@ -310,23 +315,28 @@ x=E:Fmeta-stash=s;
                 const message = entry.message();
                 assert.equal(message, expMessage);
                 commitMap[stashId.target().tostrS()] = "s";
-
                 // Look up the commits made for stashed submodules and create
                 // the appropriate mappings.
 
                 for (let subName in result) {
                     const subSha = result[subName];
-                    commitMap[subSha] = `s${subName}`;
+                    if (!(subSha in mapping.commitMap)) {
+                        commitMap[subSha] = `s${subName}`;
+                    }
+
                     const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
                     const subStash = yield subRepo.getCommit(subSha);
-                    const indexCommit = yield subStash.parent(1);
-                    commitMap[indexCommit.id().tostrS()] = `si${subName}`;
-                    if (includeUntracked) {
-                        const untrackedCommit = yield subStash.parent(2);
-                        commitMap[untrackedCommit.id().tostrS()] =
+                    if (subStash.parentcount() > 1) {
+                        const indexCommit = yield subStash.parent(1);
+                        commitMap[indexCommit.id().tostrS()] = `si${subName}`;
+                        if (includeUntracked) {
+                            const untrackedCommit = yield subStash.parent(2);
+                            commitMap[untrackedCommit.id().tostrS()] =
                                                                 `su${subName}`;
+                        }
                     }
                 }
+
                 return {
                     commitMap: commitMap,
                 };

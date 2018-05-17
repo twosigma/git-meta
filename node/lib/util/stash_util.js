@@ -148,21 +148,30 @@ exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
         const wd = sub.workdir;
         if (null === wd ||
             (wd.status.isClean() &&
-                (!includeUntracked ||
-                    0 === Object.keys(wd.status.workdir).length))) {
+             (sub.commit === null ||
+              wd.status.headCommit === sub.commit.sha) &&
+             (!includeUntracked ||
+              0 === Object.keys(wd.status.workdir).length))) {
             // Nothing to do for closed or clean subs
 
             return;                                                   // RETURN
         }
         const subRepo = yield SubmoduleUtil.getRepo(repo, name);
         subRepos[name] = subRepo;
-        const FLAGS = NodeGit.Stash.FLAGS;
-        const flags = includeUntracked ?
-                      FLAGS.INCLUDE_UNTRACKED :
-                      FLAGS.DEFAULT;
-        const stashId = yield NodeGit.Stash.save(subRepo, sig, "stash", flags);
-        subResults[name] = stashId.tostrS();
 
+        let stashId;
+        if (sub.commit !== null && wd.status.headCommit === sub.commit.sha) {
+            const FLAGS = NodeGit.Stash.FLAGS;
+            const flags = includeUntracked ?
+                  FLAGS.INCLUDE_UNTRACKED :
+                  FLAGS.DEFAULT;
+            stashId = yield NodeGit.Stash.save(subRepo, sig, "stash",
+                                                     flags);
+        }
+        else {
+            stashId = NodeGit.Oid.fromString(wd.status.headCommit);
+        }
+        subResults[name] = stashId.tostrS();
         // Record the values we've created.
 
         subChanges[name] = new TreeUtil.Change(
