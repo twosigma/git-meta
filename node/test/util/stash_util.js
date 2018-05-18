@@ -223,7 +223,8 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
             "open sub on updated commit, unstaged": {
                 state: `a=B:Css-1;Bss=ss|
                         x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os H=ss`,
-                expected: `x=E:Cstash#s-2 s=Sa:ss;Fmeta-stash=s;Os Fsub-stash/ss=ss!H=ss`,
+                expected: `x=E:Cstash#s-2 s=Sa:ss;Fmeta-stash=s;
+                           Os Fsub-stash/ss=ss!H=ss`,
             },
             "open sub with an added file": {
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os W foo=bar",
