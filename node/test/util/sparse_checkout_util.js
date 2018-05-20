@@ -32,7 +32,6 @@
 
 const assert = require("chai").assert;
 const co     = require("co");
-const fs      = require("fs-promise");
 const path   = require("path");
 
 const SparseCheckoutUtil = require("../../lib/util/sparse_checkout_util");
@@ -53,37 +52,12 @@ describe("inSparseMode", function () {
         const result = yield SparseCheckoutUtil.inSparseMode(repo);
         assert.equal(result, false);
     }));
-    it("configured but no file", co.wrap(function *() {
+    it("configured", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
         const config = yield repo.config();
         yield config.setString("core.sparsecheckout", "true");
-        const result = yield SparseCheckoutUtil.inSparseMode(repo);
-        assert.equal(result, false);
-    }));
-    it("configured but wrong file", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const config = yield repo.config();
-        yield config.setString("core.sparsecheckout", "true");
-        yield fs.writeFile(SparseCheckoutUtil.getSparseCheckoutPath(repo),
-                           "foo\n");
-        const result = yield SparseCheckoutUtil.inSparseMode(repo);
-        assert.equal(result, false);
-    }));
-    it("configured good file", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        const config = yield repo.config();
-        yield config.setString("core.sparsecheckout", "true");
-        yield fs.writeFile(SparseCheckoutUtil.getSparseCheckoutPath(repo),
-                           ".gitmodules\n");
         const result = yield SparseCheckoutUtil.inSparseMode(repo);
         assert.equal(result, true);
-    }));
-    it("good file, not configured", co.wrap(function *() {
-        const repo = yield TestUtil.createSimpleRepository();
-        yield fs.writeFile(SparseCheckoutUtil.getSparseCheckoutPath(repo),
-                           ".gitmodules\n");
-        const result = yield SparseCheckoutUtil.inSparseMode(repo);
-        assert.equal(result, false);
     }));
 });
 describe("setSparseMode", function () {
@@ -92,6 +66,47 @@ describe("setSparseMode", function () {
         yield SparseCheckoutUtil.setSparseMode(repo);
         const isSet = yield SparseCheckoutUtil.inSparseMode(repo);
         assert.equal(isSet, true);
+        const content = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(content, ".gitmodules\n");
+    }));
+});
+describe("readSparseCheckout", function () {
+    it("doesn't exist", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const result = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(result, "");
+    }));
+    it("exists", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        const result = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(result, ".gitmodules\n");
+    }));
+});
+describe("addToSparseCheckoutFile", function () {
+    it("breathing", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        yield SparseCheckoutUtil.addToSparseCheckoutFile(repo, "foo");
+        const result = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(result, ".gitmodules\nfoo\n");
+    }));
+});
+describe("removeFromSparseCheckoutFile", function () {
+    it("nothing to remove", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        SparseCheckoutUtil.removeFromSparseCheckoutFile(repo, ["foo"]);
+        const result = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(result, ".gitmodules\n");
+    }));
+    it("remove one", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        yield SparseCheckoutUtil.setSparseMode(repo);
+        yield SparseCheckoutUtil.addToSparseCheckoutFile(repo, "foo");
+        SparseCheckoutUtil.removeFromSparseCheckoutFile(repo, ["foo"]);
+        const result = SparseCheckoutUtil.readSparseCheckout(repo);
+        assert.equal(result, ".gitmodules\n");
     }));
 });
 });

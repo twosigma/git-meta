@@ -45,6 +45,7 @@ const Open                = require("./open");
 const Reset               = require("./reset");
 const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -428,16 +429,16 @@ Please try with normal git commands.`);
  */
 exports.closeSubs = co.wrap(function *(opener, changes) {
     const repo = opener.repo;
-    const closeSub = co.wrap(function *(path) {
+    const toClose = (yield opener.getOpenedSubs()).filter(path => {
         const commits = changes.commits[path];
         if ((undefined === commits || 0 === Object.keys(commits).length) &&
             !(path in changes.conflicts)) {
             console.log(`Closing ${colors.green(path)}`);
-            yield SubmoduleConfigUtil.deinit(repo, path);
+            return true;
         }
+        return false;
     });
-    const opened = Array.from(yield opener.getOpenedSubs());
-    DoWorkQueue.doInParallel(opened, closeSub);
+    yield SubmoduleConfigUtil.deinit(repo, toClose);
 });
 
 /**
@@ -492,7 +493,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         errorMessage: errorMessage === "" ? null : errorMessage,
         newMetaCommit: null,
     };
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
     if ("" === errorMessage &&
         (0 !== Object.keys(changes.simpleChanges).length ||
                                     0 !== Object.keys(picks.commits).length)) {

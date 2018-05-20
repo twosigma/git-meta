@@ -35,8 +35,8 @@ const NodeGit = require("nodegit");
 const co      = require("co");
 const colors  = require("colors");
 
-const DoWorkQueue         = require("../util/do_work_queue");
 const Hook                = require("../util/hook");
+const SparseCheckoutUtil  = require("../util/sparse_checkout_util");
 const StatusUtil          = require("../util/status_util");
 const SubmoduleConfigUtil = require("../util/submodule_config_util");
 const SubmoduleUtil       = require("../util/submodule_util");
@@ -73,12 +73,10 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
     });
     const subStats = repoStatus.submodules;
     let errorMessage = "";
-    let subsClosedSuccessfully = [];
-
-    const closer = co.wrap(function *(name) {
+    const subsClosedSuccessfully = subsToClose.filter(name => {
         const sub = subStats[name];
         if (undefined === sub || null === sub.workdir) {
-            return;                                                   // RETURN
+            return false;                                             // RETURN
         }
         const subWorkdir = sub.workdir;
         const subRepo = subWorkdir.status;
@@ -93,17 +91,17 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
 Could not close ${colors.cyan(name)} because it is not clean.
 Pass ${colors.magenta("--force")} to close it anyway.
 `;
-                return;                                               // RETURN
+                return false;                                         // RETURN
             }
         }
-        // TODO: something smarter so that we're not doing an O(N^2) operation
-        // here.  Probably not going to matter for now as few users will every
-        // have enough submodules open that it will cause a problem.
-
-        yield SubmoduleConfigUtil.deinit(repo, name);
-        subsClosedSuccessfully.push(name);
+        return true;                                                  // RETURN
     });
-    yield DoWorkQueue.doInParallel(subsToClose, closer);
+    yield SubmoduleConfigUtil.deinit(repo, subsClosedSuccessfully);
+
+    // Write out the meta index to update SKIP_WORKTREE flags for closed
+    // submodules.
+
+    yield SparseCheckoutUtil.writeMetaIndex(repo, yield repo.index());
 
     // Run post-close-submodule hook with submodules which closed successfully.
     yield Hook.execHook("post-close-submodule", subsClosedSuccessfully);

@@ -44,8 +44,6 @@ const path         = require("path");
 
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
-const SparseCheckoutUtil  = require("./sparse_checkout_util");
-const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
 
 /**
@@ -1032,31 +1030,4 @@ exports.hashObject = co.wrap(function *(repo, data) {
     const db = yield repo.odb();
     const res = yield db.write(data, data.length, BLOB);
     return res;
-});
-
-/**
- * Write out the specified `index` for the specified meta-repo, `repo`.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Index} index
- */
-exports.writeMetaIndex = co.wrap(function *(repo, index) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(index, NodeGit.Index);
-
-    // If we're in sparse mode, manually set bits to skip the worktree since
-    // libgit2 will not.
-
-    if (yield SparseCheckoutUtil.inSparseMode(repo)) {
-        const SKIP_WORKTREE = 1 << 14;
-        const NORMAL = 0;
-        for (const e of index.entries()) {
-            if (NORMAL === NodeGit.Index.entryStage(e) &&
-                SubmoduleConfigUtil.modulesFileName !== index.path) {
-                e.flagsExtended |= SKIP_WORKTREE;
-                yield index.add(e);
-            }
-        }
-    }
-    yield index.write();
 });

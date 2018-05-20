@@ -53,7 +53,8 @@ const path    = require("path");
 const rimraf  = require("rimraf");
 const url     = require("url");
 
-const GitUtil   = require("./git_util");
+const DoWorkQueue        = require("./do_work_queue");
+const GitUtil            = require("./git_util");
 const SparseCheckoutUtil = require("./sparse_checkout_util");
 const UserError          = require("./user_error");
 
@@ -139,61 +140,73 @@ exports.clearSubmoduleConfigEntry =
 });
 
 /**
- * De-initialize the repository having the specified `submoduleName` in the
+ * De-initialize the repositories having the specified `submoduleNames` in the
  * specified `repo`.
+ *
+ * Note that after calling this method, `SparseCheckoutUtil.writeMetaIndex`
+ * must be called to update the SKIP_WORKTREE flags for closed submodules.
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {String}             submoduleName
+ * @param {String[]}           submoduleNames
  */
-exports.deinit = co.wrap(function *(repo, submoduleName) {
-
-    // This operation is a major pain, first because libgit2 does not provide
-    // any direct methods to do the equivalent of 'git deinit', and second
-    // because nodegit does not expose the method that libgit2 does provide to
-    // delete an entry from the config file.
-
-    // De-initting a submodule requires the following things:
-    // 1. Confirms there are no unpushed (to any remote) commits
-    //    or uncommited changes (including new files).
-    // 2. Remove all files under the path of the submodule, but not the
-    //    directory itself, which would look to Git as if we were trying
-    //    to remove the submodule.
-    // 3. Remove the entry for the submodule from the '.git/config' file.
-    // 4. Remove the directory .git/modules/<submodule>
-
-    // We will clear out the path for the submodule.
-
-    const rootDir = repo.workdir();
-    const submodulePath = path.join(rootDir, submoduleName);
+exports.deinit = co.wrap(function *(repo, submoduleNames) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isArray(submoduleNames);
 
     const sparse = yield SparseCheckoutUtil.inSparseMode(repo);
-    if (sparse) {
-        // Clear out submodule's contents.
 
-        yield doRimRaf(submodulePath);
+    const deinitOne = co.wrap(function *(submoduleName) {
 
-        // Clear parent directories until they're all gone or we find one
-        // that's non-empty.
+        // This operation is a major pain, first because libgit2 does not
+        // provide any direct methods to do the equivalent of 'git deinit', and
+        // second because nodegit does not expose the method that libgit2 does
 
-        let next = path.dirname(submoduleName);
-        try {
-            while ("." !== next) {
-                yield fs.rmdir(path.join(rootDir, next));
-                next = path.dirname(next);
+        // De-initting a submodule requires the following things:
+        // 1. Confirms there are no unpushed (to any remote) commits
+        //    or uncommited changes (including new files).
+        // 2. Remove all files under the path of the submodule, but not the
+        //    directory itself, which would look to Git as if we were trying
+        //    to remove the submodule.
+        // 3. Remove the entry for the submodule from the '.git/config' file.
+        // 4. Remove the directory .git/modules/<submodule>
+
+        // We will clear out the path for the submodule.
+
+        const rootDir = repo.workdir();
+        const submodulePath = path.join(rootDir, submoduleName);
+
+        if (sparse) {
+            // Clear out submodule's contents.
+
+            yield doRimRaf(submodulePath);
+
+            // Clear parent directories until they're all gone or we find one
+            // that's non-empty.
+
+            let next = path.dirname(submoduleName);
+            try {
+                while ("." !== next) {
+                    yield fs.rmdir(path.join(rootDir, next));
+                    next = path.dirname(next);
+                }
+            } catch (e) {
+                if ("ENOTEMPTY" !== e.code) {
+                    throw e;
+                }
             }
-        } catch (e) {
-            if ("ENOTEMPTY" !== e.code) {
-                throw e;
-            }
+        } else {
+            const files = yield fs.readdir(submodulePath);
+            yield files.map(co.wrap(function *(filename) {
+                yield doRimRaf(path.join(submodulePath, filename));
+            }));
         }
-    } else {
-        const files = yield fs.readdir(submodulePath);
-        yield files.map(co.wrap(function *(filename) {
-            yield doRimRaf(path.join(submodulePath, filename));
-        }));
+        yield exports.clearSubmoduleConfigEntry(repo.path(), submoduleName);
+    });
+    yield DoWorkQueue.doInParallel(submoduleNames, deinitOne);
+    if (yield SparseCheckoutUtil.inSparseMode(repo)) {
+        SparseCheckoutUtil.removeFromSparseCheckoutFile(repo, submoduleNames);
     }
-    yield exports.clearSubmoduleConfigEntry(repo.path(), submoduleName);
 });
 
 /**

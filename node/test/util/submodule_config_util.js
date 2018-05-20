@@ -116,7 +116,7 @@ describe("SubmoduleConfigUtil", function () {
 
             // Then close it and recheck status.
 
-            yield SubmoduleConfigUtil.deinit(repo, "x/y");
+            yield SubmoduleConfigUtil.deinit(repo, ["x/y"]);
             const closedStatus =
                                 yield NodeGit.Submodule.status(repo, "x/y", 0);
             assert(closedStatus & WD_UNINITIALIZED);
@@ -151,7 +151,7 @@ describe("SubmoduleConfigUtil", function () {
             yield TestUtil.makeCommit(repo, ["x/y", ".gitmodules"]);
 
             yield SparseCheckoutUtil.setSparseMode(repo);
-            yield SubmoduleConfigUtil.deinit(repo, "x/y");
+            yield SubmoduleConfigUtil.deinit(repo, ["x/y"]);
 
             // Verify that directory for sub is gone
 
@@ -166,7 +166,7 @@ describe("SubmoduleConfigUtil", function () {
             // verify we clean the root when all is gone
 
             failed = false;
-            yield SubmoduleConfigUtil.deinit(repo, "x/z");
+            yield SubmoduleConfigUtil.deinit(repo, ["x/z"]);
             try {
                 yield fs.readdir(path.join(repo.workdir(), "x"));
             } catch (e) {
@@ -665,7 +665,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield SubmoduleConfigUtil.deinit(repo, subName);
+            yield SubmoduleConfigUtil.deinit(repo, [subName]);
             const repoPath = repo.workdir();
             const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
                                                                      originUrl,
@@ -708,7 +708,7 @@ foo
             const sub = yield NodeGit.Submodule.lookup(repo, "foo");
             const subRepo = yield sub.open();
             NodeGit.Remote.setUrl(subRepo, "origin", "/bar");
-            yield SubmoduleConfigUtil.deinit(repo, "foo");
+            yield SubmoduleConfigUtil.deinit(repo, ["foo"]);
             const newSub =
                 yield SubmoduleConfigUtil.initSubmoduleAndRepo("",
                                                                repo,
@@ -776,7 +776,7 @@ foo
                                           sig,
                                           sig,
                                           "my message");
-            yield SubmoduleConfigUtil.deinit(repo, "foo");
+            yield SubmoduleConfigUtil.deinit(repo, ["foo"]);
 
             // Remove `foo` dir, otherwise, we will not need to re-init the
             // repo and the template will not be executed.

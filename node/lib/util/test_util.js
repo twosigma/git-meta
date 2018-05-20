@@ -39,7 +39,7 @@ const co      = require("co");
 const fs      = require("fs-promise");
 const path    = require("path");
 const NodeGit = require("nodegit");
-const temp    = require("temp").track();
+const temp    = require("temp");
 
 /**
  * Return the path to a newly-created temporary directory.

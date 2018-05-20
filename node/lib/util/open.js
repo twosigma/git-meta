@@ -38,6 +38,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
@@ -48,6 +49,11 @@ const SubmoduleFetcher    = require("./submodule_fetcher");
  * using `fetcher` and set HEAD to point to it.  Configure the "origin" remote
  * to the `url` configured in the meta-repo.  If the specified `templatePath`
  * is provided, use it to configure the newly-opened submodule's repository.
+ *
+ * Note that after opening one or more submodules,
+ * `SparseCheckoutUtil.writeMetaIndex` must be called so that `SKIP_WORKTREE`
+ * is *unset*; since this operation is expensive, we cannot do it automatically
+ * each time a submodule is opened.
  *
  * @async
  * @param {SubmoduleFetcher} fetcher
@@ -87,7 +93,7 @@ exports.openOnCommit = co.wrap(function *(fetcher,
         yield fetcher.fetchSha(submoduleRepo, submoduleName, submoduleSha);
     }
     catch (e) {
-        yield SubmoduleConfigUtil.deinit(metaRepo, submoduleName);
+        yield SubmoduleConfigUtil.deinit(metaRepo, [submoduleName]);
         throw e;
     }
 
@@ -96,6 +102,13 @@ exports.openOnCommit = co.wrap(function *(fetcher,
     const commit = yield submoduleRepo.getCommit(submoduleSha);
     yield GitUtil.setHeadHard(submoduleRepo, commit);
 
+    // If we're in sparse mode, we need to add a submodule to the
+    // `.git/info/sparse-checkout` file so that it's "visible".
+
+    if (yield SparseCheckoutUtil.inSparseMode(metaRepo)) {
+        yield SparseCheckoutUtil.addToSparseCheckoutFile(metaRepo,
+                                                         submoduleName);
+    }
     return submoduleRepo;
 });
 
@@ -193,6 +206,11 @@ Opener.prototype.isOpen = co.wrap(function *(subName) {
 /**
  * Return the repository for the specified `submoduleName`, opening it if
  * necessary.
+ *
+ * Note that after opening one or more submodules,
+ * `SparseCheckoutUtil.writeMetaIndex` must be called so that `SKIP_WORKTREE`
+ * is *unset*; since this operation is expensive, we cannot do it automatically
+ * each time a submodule is opened.
  *
  * @param {String} subName
  * @return {NodeGit.Repository}

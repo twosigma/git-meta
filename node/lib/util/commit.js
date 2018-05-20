@@ -50,6 +50,7 @@ const GitUtil             = require("./git_util");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -366,7 +367,7 @@ const stageOpenSubmodules = co.wrap(function *(repo, index, submodules) {
             yield index.addByPath(name);
         }
     }));
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 });
 
 /**
@@ -628,7 +629,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
         }
     }
 
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
     // Use 'TreeUtil' to create a new tree having the required paths.
 

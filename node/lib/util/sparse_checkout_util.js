@@ -57,9 +57,7 @@ exports.getSparseCheckoutPath = function (repo) {
 
 /**
  * Return true if the specified `repo` is in sparse mode and false otherwise.
- * A repo is in sparse mode iff: `core.sparsecheckout` is true and the contents
- * of `.git/info/sparse-checkout` is exactly ".gitmodules\n".  We can do
- * something more general purpose later if we deem it useful.
+ * A repo is in sparse mode iff: `core.sparsecheckout` is true.
  *
  * @param {NodeGit.Repository} repo
  * @return {Bool}
@@ -67,23 +65,16 @@ exports.getSparseCheckoutPath = function (repo) {
 exports.inSparseMode = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    if (!(yield ConfigUtil.configIsTrue(repo, "core.sparsecheckout"))) {
-        return false;
-    }
-    let content;
-    try {
-        content = yield fs.readFile(exports.getSparseCheckoutPath(repo),
-                                    "utf8");
-    } catch (e) {
-        return false;                                                 // RETURN
-    }
-    return content === ".gitmodules\n";
+    return (yield ConfigUtil.configIsTrue(repo, "core.sparsecheckout")) ||
+        false;
 });
 
 /**
  * Configure the specified `repo` to be in sparse-checkout mode --
  * specifically, our sparse checkout mode where everything but `.gitmodules` is
- * excluded.
+ * excluded.  Note that this method is just for testing; to make it work in a
+ * real environment you'd also need to udpate the index entries and the
+ * sparse-checkout file for open submodules.
  *
  * @param {NodeGit.Repository} repo
  */
@@ -93,4 +84,98 @@ exports.setSparseMode = co.wrap(function *(repo) {
     const config = yield repo.config();
     yield config.setString("core.sparsecheckout", "true");
     yield fs.writeFile(exports.getSparseCheckoutPath(repo), ".gitmodules\n");
+});
+
+/**
+ * This bit is set in the `flagsExtended` field of a `NodeGit.Index.Entry` for
+ * paths that should be skipped due to sparse checkout.
+ */
+const SKIP_WORKTREE = 1 << 14;
+
+/**
+ * Return the contents of the `.git/info/sparse-checkout` file for the
+ * specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {String}
+ */
+exports.readSparseCheckout = function (repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    const filePath = exports.getSparseCheckoutPath(repo);
+    try {
+        return fs.readFileSync(filePath, "utf8");
+    } catch (e) {
+        if ("ENOENT" !== e.code) {
+            throw e;
+        }
+        return "";
+    }
+};
+
+/**
+ * Add the specified `filename` to the set of files visible in the sparse
+ * checkout in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             filename
+ */
+exports.addToSparseCheckoutFile = co.wrap(function *(repo, filename) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(filename);
+
+    const sparsePath = exports.getSparseCheckoutPath(repo);
+    yield fs.appendFile(sparsePath, filename + "\n");
+});
+
+/**
+ * Remove the specified `filenames` from the set of files visible in the sparse
+ * checkout in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String[]}           filenames
+ */
+exports.removeFromSparseCheckoutFile = function (repo, filenames) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isArray(filenames);
+    const sparseFile = exports.readSparseCheckout(repo);
+    const toRemoveSet = new Set(filenames);
+    const newContent = sparseFile.split("\n").filter(
+                                               name => !toRemoveSet.has(name));
+    fs.writeFileSync(exports.getSparseCheckoutPath(repo),
+                     newContent.join("\n"));
+};
+
+/**
+ * Write out the specified `index` for the specified meta-repo, `repo`, set the
+ * index flags to the correct values based on the contents of
+ * `.git/info/sparse-checkout`, which libgit2 does not do.
+ *
+ * TODO: independent test
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index} index
+ */
+exports.writeMetaIndex = co.wrap(function *(repo, index) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(index, NodeGit.Index);
+
+    // If we're in sparse mode, manually set bits to skip the worktree since
+    // libgit2 will not.
+
+    if (yield exports.inSparseMode(repo)) {
+        const sparseCheckout = exports.readSparseCheckout(repo);
+        const sparseSet = new Set(sparseCheckout.split("\n"));
+        const NORMAL = 0;
+        for (const e of index.entries()) {
+            if (NORMAL === NodeGit.Index.entryStage(e)) {
+                if (sparseSet.has(e.path)) {
+                    e.flagsExtended &= ~SKIP_WORKTREE;
+                } else {
+                    e.flagsExtended |= SKIP_WORKTREE;
+                }
+                yield index.add(e);
+            }
+        }
+    }
+    yield index.write();
 });

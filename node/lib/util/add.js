@@ -37,11 +37,11 @@ const fs        = require("fs-promise");
 const NodeGit   = require("nodegit");
 const path      = require("path");
 
-const GitUtil       = require("./git_util");
-const RepoStatus    = require("./repo_status");
-const StatusUtil    = require("./status_util");
-const SubmoduleUtil = require("./submodule_util");
-const UserError     = require("./user_error");
+const RepoStatus         = require("./repo_status");
+const SparseCheckoutUtil = require("./sparse_checkout_util");
+const StatusUtil         = require("./status_util");
+const SubmoduleUtil      = require("./submodule_util");
+const UserError          = require("./user_error");
 
 /**
  * Stage modified content at the specified `paths` in the specified `repo`.  If
@@ -116,6 +116,6 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     if (0 !== toAdd.length) {
         const index = yield repo.index();
         yield toAdd.map(filename => index.addByPath(filename));
-        yield GitUtil.writeMetaIndex(repo, index);
+        yield SparseCheckoutUtil.writeMetaIndex(repo, index);
     }
 });

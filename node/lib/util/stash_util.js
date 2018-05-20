@@ -35,14 +35,15 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const GitUtil         = require("./git_util");
-const Open            = require("./open");
-const PrintStatusUtil = require("./print_status_util");
-const RepoStatus      = require("./repo_status");
-const StatusUtil      = require("./status_util");
-const SubmoduleUtil   = require("./submodule_util");
-const TreeUtil        = require("./tree_util");
-const UserError       = require("./user_error");
+const GitUtil            = require("./git_util");
+const Open               = require("./open");
+const PrintStatusUtil    = require("./print_status_util");
+const RepoStatus         = require("./repo_status");
+const SparseCheckoutUtil = require("./sparse_checkout_util");
+const StatusUtil         = require("./status_util");
+const SubmoduleUtil      = require("./submodule_util");
+const TreeUtil           = require("./tree_util");
+const UserError          = require("./user_error");
 
 /**
  * Return the IDs of tress reflecting the current state of the index and
@@ -349,6 +350,7 @@ ${colors.red(name)}`);
             result[name] = stashSha;
         }
     }));
+    yield SparseCheckoutUtil.writeMetaIndex(repo, yield repo.index());
     return result;
 });
 

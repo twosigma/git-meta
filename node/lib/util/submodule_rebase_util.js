@@ -41,6 +41,7 @@ const GitUtil             = require("./git_util");
 const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
 const RepoStatus          = require("./repo_status");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleUtil       = require("./submodule_util");
 
 /**
@@ -360,7 +361,7 @@ ${colors.green(rebaseInfo.onto)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
     const result = {
         errorMessage: "" === errorMessage ? null : errorMessage,
         commits: commits,

@@ -322,9 +322,7 @@ describe("SubmoduleUtil", function () {
                 for (const closeSubs of [false, true]) {
                     if (closeSubs) {
                         const subs = yield SubmoduleUtil.listOpenSubmodules(x);
-                        for (const sub of subs) {
-                            yield SubmoduleConfigUtil.deinit(x, sub);
-                        }
+                        yield SubmoduleConfigUtil.deinit(x, subs);
                     }
                     const dut = SubmoduleUtil;
                     const result = yield dut.listAbsorbedSubmodules(x);
