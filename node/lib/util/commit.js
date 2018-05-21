@@ -58,6 +58,8 @@ const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
+const getSubmodulesFromCommit = SubmoduleConfigUtil.getSubmodulesFromCommit;
+
 /**
  * If the specified `message` does not end with '\n', return the result of
  * appending '\n' to 'message'; otherwise, return 'message'.
@@ -841,6 +843,62 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
     };
 });
 
+/* Read the state of the commits in the commit before the one to be
+ * amended, so that we can see what's been changed.
+ */
+
+const computeAmendSubmoduleChanges = co.wrap(function*(repo, head) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(head, NodeGit.Commit);
+
+    const headTree = yield head.getTree();
+    const oldUrls = {};
+    const parents = yield head.getParents();
+
+    // `merged` records changes that were present in at least one parent
+    const merged = {};
+    // `changes` records what changes were actually made in this
+    // commit (as opposed to merged from a parent).
+    let changes = null;
+    if (parents.length === 0) {
+        changes = {};
+    }
+
+    for (const parent of parents) {
+        const parentTree = yield parent.getTree();
+        const parentSubmodules = yield getSubmodulesFromCommit(repo, parent);
+        // TODO: this doesn't really handle URL updates
+        Object.assign(oldUrls, parentSubmodules);
+        const diff =
+              yield NodeGit.Diff.treeToTree(repo, parentTree, headTree, null);
+        const ourChanges = yield SubmoduleUtil.getSubmoduleChangesFromDiff(
+            diff,
+            true);
+        if (changes === null) {
+            changes = ourChanges;
+        } else {
+            for (const path of Object.keys(changes)) {
+                if (ourChanges[path] === undefined) {
+                    merged[path] = changes[path];
+                    delete changes[path];
+                } else {
+                    delete ourChanges[path];
+                }
+            }
+            for (const path of Object.keys(ourChanges)) {
+                merged[path] = ourChanges[path];
+                delete changes[path];
+            }
+        }
+    }
+
+    return {
+        changes: changes,
+        merged: merged,
+        oldUrls: oldUrls
+    };
+});
+
 /**
  * Return the status object describing an amend commit to be created in the
  * specified `repo` and a map containing the submodules to have amend
@@ -887,26 +945,14 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
     });
 
     const head = yield repo.getHeadCommit();
-    const headTree = yield head.getTree();
 
-    const newUrls =
-                 yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, head);
+    const newUrls = yield getSubmodulesFromCommit(repo, head);
 
-    // Read the state of the commits in the commit before the one to be
-    // amended.
+    const amendChanges = yield computeAmendSubmoduleChanges(repo, head);
+    const changes = amendChanges.changes;
+    const merged = amendChanges.merged;
+    const oldUrls = amendChanges.oldUrls;
 
-    let oldUrls = {};
-    const parent = yield GitUtil.getParentCommit(repo, head);
-    let parentTree = null;
-    if (null !== parent) {
-        parentTree = yield parent.getTree();
-        oldUrls =
-               yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, parent);
-    }
-    const diff =
-               yield NodeGit.Diff.treeToTree(repo, parentTree, headTree, null);
-    const changes = yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff,
-                                                                    true);
     const submodules = baseStatus.submodules;  // holds resulting sub statuses
     const opener = new Open.Opener(repo, null);
 
@@ -922,7 +968,15 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
         const change = changes[name];
         let currentSub = submodules[name];
         let old = null;
-        if (undefined !== change) {
+        const isMerged = name in merged;
+        // TODO: This is pretty complicated -- it might be simpler to
+        // figure out if a commit is present in any ancestor.
+        if (isMerged) {
+            // In this case, the "old" version is actually the merged
+            // version
+            old = new Submodule(oldUrls[name], merged[name].newSha);
+        }
+        else if (undefined !== change) {
             // We handle deleted submodules later.  TODO: this should not be a
             // special case when we've done the refactoring noted below.
 
@@ -971,9 +1025,12 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
                                                              old,
                                                              getRepo,
                                                              all);
-        // If no status was returned, remove this submodule.
 
-        if (null === result.status) {
+        // If no status was returned, or this was a merged
+        // submodule with no local changes, remove this submodule.
+        if (null === result.status ||
+            (isMerged && result.status.isWorkdirClean() &&
+             result.status.isIndexClean())) {
             delete submodules[name];
         }
         else {
