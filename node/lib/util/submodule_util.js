@@ -240,7 +240,7 @@ exports.listAbsorbedSubmodules = co.wrap(function*(repo) {
                     filtered.push(name);
                 }
             }
-            nodeNamesArray.splice(0, nodeNamesArray.length, filtered);
+            nodeNamesArray.splice(0, nodeNamesArray.length, ...filtered);
             out.push(root.substring(modules_dir.length + 1));
         }
     });
