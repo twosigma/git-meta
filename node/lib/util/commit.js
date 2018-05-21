@@ -809,7 +809,7 @@ exports.getSubmoduleAmendStatus = co.wrap(function *(status,
 
         indexSha = commitSha;
 
-        // The read in the staged/workdir changes based on the difference in
+        // Then read in the staged/workdir changes based on the difference in
         // this submodule's open repo and the prior commit.
 
         repo = yield getRepo();
@@ -929,7 +929,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
             if (null === change.newSha) {
                 return;                                               // RETURN
             }
-            // This submodule was affected by the commit; record it's old sha
+            // This submodule was affected by the commit; record its old sha
             // if it wasn't added.
 
             if (null !== change.oldSha) {
