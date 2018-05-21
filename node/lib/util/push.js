@@ -139,7 +139,15 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
                 delete pushMap[sub];
                 continue;
             }
-            const commitToPush = yield subRepo.getCommit(pushMap[sub]);
+            let commitToPush;
+            try {
+                commitToPush = yield subRepo.getCommit(pushMap[sub]);
+            } catch (e) {
+                // We haven't fetched this commit in this submodule,
+                // so we can't push
+                delete pushMap[sub];
+                continue;
+            }
             let trackingCommit;
             try {
                 trackingCommit = yield subRepo.getCommit(sha);
