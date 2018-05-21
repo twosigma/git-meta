@@ -45,6 +45,7 @@ const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const SubmoduleUtil       = require("./submodule_util");
@@ -424,9 +425,9 @@ ${colors.red(commitSha)}.`);
         errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
     });
 
-    // We must write the index here or the staging we've done erlier will go
+    // We must write the index here or the staging we've done earlier will go
     // away.
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
     if ("" !== errorMessage) {
         // We're about to fail due to conflict.  First, record that there is a
@@ -556,7 +557,7 @@ exports.continue = co.wrap(function *(repo) {
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
     yield DoWorkQueue.doInParallel(openSubs, continueSub);
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
@@ -625,7 +626,7 @@ exports.abort = co.wrap(function *(repo) {
     });
     yield DoWorkQueue.doInParallel(openSubs, abortSub);
     yield index.conflictCleanup();
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
     yield resetMerge(repo);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
 });

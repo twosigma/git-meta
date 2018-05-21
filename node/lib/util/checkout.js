@@ -38,14 +38,15 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const DoWorkQueue      = require("../util/do_work_queue");
-const GitUtil          = require("./git_util");
-const SubmoduleFetcher = require("./submodule_fetcher");
-const Reset            = require("./reset");
-const RepoStatus       = require("./repo_status");
-const StatusUtil       = require("./status_util");
-const SubmoduleUtil    = require("./submodule_util");
-const UserError        = require("./user_error");
+const DoWorkQueue        = require("../util/do_work_queue");
+const GitUtil            = require("./git_util");
+const Reset              = require("./reset");
+const RepoStatus         = require("./repo_status");
+const SparseCheckoutUtil = require("./sparse_checkout_util");
+const StatusUtil         = require("./status_util");
+const SubmoduleFetcher   = require("./submodule_fetcher");
+const SubmoduleUtil      = require("./submodule_util");
+const UserError          = require("./user_error");
 
 /**
  * If the specified `name` matches the tracking branch for one and only one
@@ -234,7 +235,7 @@ exports.checkoutCommit = co.wrap(function *(repo, commit, force) {
         repo.setHeadDetached(commit);
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), doCheckout);
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 });
 
 /**

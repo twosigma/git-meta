@@ -248,7 +248,7 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
     // Write the index in case we've had to stage submodule changes.
 
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 });
 
 /**

@@ -36,6 +36,7 @@ const colors    = require("colors");
 const NodeGit   = require("nodegit");
 
 const GitUtil             = require("./git_util");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
 
@@ -65,7 +66,7 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
     urls[filename] = url;
     yield SubmoduleConfigUtil.writeUrls(repo, index, urls);
-    yield GitUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
     const metaUrl = yield GitUtil.getOriginUrl(repo);
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);

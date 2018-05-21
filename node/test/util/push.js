@@ -301,9 +301,7 @@ describe("getPushMap", function () {
             for (const closeSubs of [false, true]) {
                 if (closeSubs) {
                     const subs = yield SubmoduleUtil.listOpenSubmodules(repo);
-                    for (const sub of subs) {
-                        yield SubmoduleConfigUtil.deinit(repo, sub);
-                    }
+                    yield SubmoduleConfigUtil.deinit(repo, subs);
                 }
 
                 const pushMap = yield Push.getPushMap(repo, "origin", source,
