@@ -42,15 +42,17 @@ const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
+const RepoStatus          = require("./repo_status");
 const Reset               = require("./reset");
 const SequencerState      = require("./sequencer_state");
 const SequencerStateUtil  = require("./sequencer_state_util");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
+const SubmoduleChange     = require("./submodule_change");
+const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleRebaseUtil = require("./submodule_rebase_util");
-const SubmoduleUtil       = require("./submodule_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
@@ -176,138 +178,122 @@ exports.containsUrlChanges = co.wrap(function *(repo, commit, baseCommit) {
 });
 
 /**
- * Return the entry for the specified `path` in the optionally specified `tree`
- * or null if `null === tree` or `path` does not exist in `tree`.
- *
- * @param {NodeGit.Tree|null} tree
- * @param {String}            path
- * @return {NodeGit.TreeEntry}
- */
-const getTreeEntry = co.wrap(function *(tree, path) {
-    if (null === tree) {
-        return null;
-    }
-    try {
-        return yield tree.entryByPath(path);
-    } catch (e) {
-        // only way to tell if entry doesn't exist
-    }
-    return null;
-});
-
-/**
  * Determine how to apply the submodule changes introduced in the
- * specified `commit` to the commit on the head of the specified `repo`.
- * Return an object describing what changes to make, including which submodules
- * cannot be updated at all due to a conflicts, such as a change being
- * introduced to a submodule that does not exist in HEAD.  If the specified
- * `fromBase` is true, comput the changes from the merge base between `commit`
- * and HEAD; otherwise, compute them between `commit` and its first parent.
- * Throw a `UserError` if non-submodule changes are detected.  The behavior is
- * undefined if there is no merge base between HEAD and `commit`.
+ * specified `targetCommit` to the commit on the head of the specified `repo`
+ * as described in the specified in-memory `index`.  Return an object
+ * describing what changes to make, including which submodules cannot be
+ * updated at all due to a conflicts, such as a change being introduced to a
+ * submodule that does not exist in HEAD.  Throw a `UserError` if non-submodule
+ * changes are detected.  The behavior is undefined if there is no merge base
+ * between HEAD and `commit`.
+ *
+ * Note that this method will cause conflicts in `index` to be cleaned up.
  *
  * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
- * @param {Bool}               fromBase
+ * @param {NodeGit.Index}      index
+ * @param {NodeGit.Commit}     targetCommit
  * @return {Object} return
  * @return {Object} return.changes        from sub name to `SubmoduleChange`
  * @return {Object} return.simpleChanges  from sub name to `Submodule` or null
- * @return {Object} return.conflicts map  from sub name to `Conflict`
+ * @return {Object} return.conflicts      from sub name to `Conflict`
  */
-exports.computeChanges = co.wrap(function *(repo, commit, fromBase) {
+exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(commit, NodeGit.Commit);
-    assert.isBoolean(fromBase);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.instanceOf(targetCommit, NodeGit.Commit);
 
-    const head = yield repo.getHeadCommit();
-    const headTree = yield head.getTree();
-    const mergeBase = yield GitUtil.getMergeBase(repo, head, commit);
-    assert.isNotNull(mergeBase);
-    const baseTree = yield mergeBase.getTree();
-    const changeBase = fromBase ? mergeBase : null;
-    const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
-                                                            commit,
-                                                            changeBase,
-                                                            false);
-    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo,
-                                                                   commit);
-    const result = {
-        changes: {},
-        simpleChanges: {},
-        conflicts: {},
-    };
+    const conflicts = {};
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
+                                                                 repo,
+                                                                 targetCommit);
 
+    // Group together all parts of conflicted entries.
+
+    const conflictEntries = new Map();  // name -> normal, ours, theirs
+    const entries = index.entries();
+    const STAGE = RepoStatus.STAGE;
+    for (const entry of entries) {
+        const name = entry.path;
+        const stage = NodeGit.Index.entryStage(entry);
+        if (STAGE.NORMAL !== stage) {
+            let subEntry = conflictEntries.get(name);
+            if (undefined === subEntry) {
+                subEntry = {};
+                conflictEntries.set(name, subEntry);
+            }
+            subEntry[stage] = entry;
+        }
+    }
+
+    // Now, look at `conflictEntries` and see if any are eligible for further
+    // work -- basically, submodule changes where there is a conflict that
+    // could be resolved by an internal merge, cherry-pick, etc.  Otherwise,
+    // log and resolve conflicts.
+
+    const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
     const ConflictEntry = ConflictUtil.ConflictEntry;
     const Conflict = ConflictUtil.Conflict;
-    const FILEMODE = NodeGit.TreeEntry.FILEMODE;
-
-    yield Object.keys(changes).map(co.wrap(function *(sub) {
-        const change = changes[sub];
-        const headEntry = yield getTreeEntry(headTree, sub);
-
-        const makeConflict = co.wrap(function *() {
-            const baseEntry = yield getTreeEntry(baseTree, sub);
-            let ancestor = null;
-            if (null !== baseEntry) {
-                ancestor = new ConflictEntry(baseEntry.filemode(),
-                                             baseEntry.sha());
-            }
-            let our = null;
-            if (null !== headEntry) {
-                our = new ConflictEntry(headEntry.filemode(), headEntry.sha());
-            }
-            let their = null;
-            if (null !== change.newSha) {
-                their = new ConflictEntry(FILEMODE.COMMIT, change.newSha);
-            }
-            return new Conflict(ancestor, our, their);
-        });
-
-        if (null === headEntry) {
-            // If doesn't exist on HEAD, only valid change is an addition;
-            // ignore a removal.
-
-            if (null === change.oldSha) {
-                result.simpleChanges[sub] = new Submodule(urls[sub],
-                                                          change.newSha);
-            } else if (null !== change.newSha) {
-                result.conflicts[sub] = yield makeConflict();
-            }
-        } else if (FILEMODE.COMMIT !== headEntry.filemode()) {
-            // If the path on HEAD is not a submodule, we have a conflict.
-
-            result.conflicts[sub] = yield makeConflict();
-        } else if (null === change.oldSha) {
-            // We have an addition.  We've already covered the case where this
-            // sub doesn't exist on head, so it's going to be a conflict unless
-            // the SHA on HEAD is the same.
-
-            if (headEntry.sha() !== change.newSha) {
-                result.conflicts[sub] = yield makeConflict();
-            }
-        } else if (null === change.newSha) {
-            // Register a deletion unless the SHA was changed on HEAD.
-
-            if (headEntry.sha() === change.oldSha) {
-                result.simpleChanges[sub] = null;
-            } else {
-                result.conflicts[sub] = yield makeConflict();
-            }
-        } else if (change.newSha !== headEntry.sha()) {
-            // Finally, we have a normal update, new commits in the submodule.
-            // We still deem it to be a "simple" change not needing a
-            // cherry-pick if the old sha for the change is the same as that on
-            // head.
-
-            if (change.oldSha === headEntry.sha()) {
-                result.simpleChanges[sub] = new Submodule(urls[sub],
-                                                          change.newSha);
-            } else {
-                result.changes[sub] = change;
-            }
+    const changes = {};
+    function makeConflict(entry) {
+        if (undefined === entry) {
+            return null;
         }
-    }));
-    return result;
+        return new ConflictEntry(entry.mode, entry.id.tostrS());
+    }
+    for (const [name, entries] of conflictEntries) {
+        const ancestor = entries[STAGE.ANCESTOR];
+        const ours = entries[STAGE.OURS];
+        const theirs = entries[STAGE.THEIRS];
+        if (undefined !== ancestor &&
+            undefined !== ours &&
+            undefined !== theirs &&
+            COMMIT === ours.mode &&
+            COMMIT === theirs.mode) {
+            changes[name] = new SubmoduleChange(ancestor.id.tostrS(),
+                                                theirs.id.tostrS());
+        } else if (SubmoduleConfigUtil.modulesFileName !== name) {
+            conflicts[name] = new Conflict(makeConflict(ancestor),
+                                           makeConflict(ours),
+                                           makeConflict(theirs));
+        }
+    }
+
+
+    // Now we handle the changes that Git was able to take care of by itself.
+    // First, we're going to need to write the index to a tree; this write
+    // requires that we clean the conflicts.  Anything we've already diagnosed
+    // as either a conflict or a non-simple change will be ignored here.
+
+    yield index.conflictCleanup();
+    const simpleChanges = {};
+    const treeId = yield index.writeTreeTo(repo);
+    const tree = yield NodeGit.Tree.lookup(repo, treeId);
+    const head = yield repo.getHeadCommit();
+    const headTree = yield head.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo, headTree, tree, null);
+    const treeChanges =
+                  yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff, false);
+    for (let name in treeChanges) {
+        // Skip changes we've already taken into account and the `.gitmodules`
+        // file.
+
+        if (SubmoduleConfigUtil.modulesFileName === name ||
+            name in changes ||
+            name in conflicts) {
+            continue;                                               // CONTINUE
+        }
+        const change = treeChanges[name];
+        if (null === change.newSha) {
+            simpleChanges[name] = null;
+        } else {
+            simpleChanges[name] = new Submodule(urls[name], change.newSha);
+        }
+    }
+    return {
+        simpleChanges: simpleChanges,
+        changes: changes,
+        conflicts: conflicts,
+    };
 });
 
 /**
@@ -463,7 +449,10 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
 
     yield exports.ensureNoURLChanges(repo, commit);
 
-    const changes = yield exports.computeChanges(repo, commit, false);
+    const head = yield repo.getHeadCommit();
+    const changeIndex =
+                    yield NodeGit.Cherrypick.commit(repo, commit, head, 0, []);
+    const changes = yield exports.computeChanges(repo, changeIndex, commit);
     const index = yield repo.index();
 
     // Perform simple changes that don't require picks -- addition, deletions,

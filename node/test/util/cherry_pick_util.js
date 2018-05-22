@@ -41,6 +41,7 @@ const Open            = require("../../lib/util/open");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const Submodule       = require("../../lib/util/submodule");
 const SubmoduleChange = require("../../lib/util/submodule_change");
+const UserError       = require("../../lib/util/user_error");
 
 /**
  * Return a commit map as expected from  a manipulator for `RepoASTTestUtil`
@@ -235,7 +236,7 @@ describe("containsUrlChanges", function () {
         }));
     });
 });
-describe("computeChanges", function () {
+describe("computeChangesFromIndex", function () {
     const Conflict      = ConflictUtil.Conflict;
     const ConflictEntry = ConflictUtil.ConflictEntry;
     const FILEMODE      = NodeGit.TreeEntry.FILEMODE;
@@ -265,14 +266,6 @@ x=U:C3-2 s=Sa:a;Ct-2 s=Sa:b;Bt=t;Bmaster=3`,
             simpleChanges: {
                 "s": new Submodule("a", "1"),
             },
-        },
-        "addition in ancestor, but from base": {
-            input: "a=B|x=S:Ct-2 s=Sa:1;C2-1 t=Sa:1;Bt=t",
-            simpleChanges: {
-                "s": new Submodule("a", "1"),
-                "t": new Submodule("a", "1"),
-            },
-            fromBase: true,
         },
         "double addition": {
             input: `
@@ -309,7 +302,7 @@ x=S:C2-1 s=Sa:a;Ct-1 s=Sa:a;Bmaster=2;Bt=t`,
         "change, but never on HEAD": {
             input: "a=B:Ca-1;Ba=a|x=U:Bmaster=1;Ct-2 s=Sa:a;Bt=t",
             conflicts: {
-                "s": new Conflict(null,
+                "s": new Conflict(new ConflictEntry(FILEMODE.COMMIT, "1"),
                                   null,
                                   new ConflictEntry(FILEMODE.COMMIT, "a")),
             },
@@ -321,6 +314,7 @@ x=S:C2-1 s=Sa:a;Ct-1 s=Sa:a;Bmaster=2;Bt=t`,
                                   new ConflictEntry(FILEMODE.BLOB, "foo"),
                                   null),
             },
+            fails: true,
         },
         "deletion, but was changed on HEAD": {
             input: `
@@ -342,11 +336,26 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
             const commitMap = w.commitMap;
             const reverseCommitMap = w.reverseCommitMap;
             const urlMap = w.urlMap;
+            const head = yield repo.getHeadCommit();
             const target = yield repo.getCommit(reverseCommitMap.t);
-            const fromBase = c.fromBase || false;
-            const result = yield CherryPickUtil.computeChanges(repo,
-                                                               target,
-                                                               fromBase);
+            const index =
+                    yield NodeGit.Cherrypick.commit(repo, target, head, 0, []);
+            let result;
+            let exception;
+            try {
+                result = yield CherryPickUtil.computeChanges(repo,
+                                                             index,
+                                                             target);
+            } catch (e) {
+                exception = e;
+            }
+            if (undefined !== exception) {
+                if (!c.fails || !(exception instanceof UserError)) {
+                    throw exception;
+                }
+                return;                                               // RETURN
+            }
+            assert.equal(c.fails || false, false);
             const changes = {};
             for (let name in result.changes) {
                 const change = result.changes[name];
@@ -378,7 +387,7 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
                           yield repo.getBlob(NodeGit.Oid.fromString(entry.id));
                 return new ConflictEntry(entry.mode, data.toString());
             });
-            assert.deepEqual(simpleChanges, c.simpleChanges || {});
+            assert.deepEqual(simpleChanges, c.simpleChanges || {}, "simple");
 
             const conflicts = {};
             for (let name in result.conflicts) {
@@ -721,15 +730,6 @@ a
 `,
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
-`,
-        },
-        "type conflict": {
-            input: `
-a=B:Ca-1;Ba=a|
-x=U:C3-2 s=foo;C8-2 s=Sa:a;Bmaster=3;Bfoo=8`,
-            expected: `x=E:I *s=S:1*foo*S:a;W s=foo`,
-            errorMessage: `\
-Conflicting entries for submodule ${colors.red("s")}
 `,
         },
     };
