@@ -118,6 +118,7 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
         }
     }
 
+    let anyTrackingBranches = false;
     for (const branch of trackingBranches) {
         let reference = null;
         try {
@@ -126,6 +127,7 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
             // if this ref doesn't exist, OK
             continue;
         }
+        anyTrackingBranches = true;
         const id = reference.target();
         const trackingCommit = yield NodeGit.Commit.lookup(
             repo, id);
@@ -161,6 +163,21 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
                                                        trackingCommit,
                                                        commitToPush);
             if (isDescendant) {
+                delete pushMap[sub];
+            }
+        }
+    }
+
+    if (!anyTrackingBranches) {
+        // We make sure we actually locally have the commits we want
+        // to push.  If there were any tracking branches, this would
+        // have been handled above, but since there aren't, we've got
+        // to do it here.
+        for (const sub of Object.keys(pushMap)) {
+            const subRepo = bareRepos[sub];
+            try {
+                yield subRepo.getCommit(pushMap[sub]);
+            } catch (e) {
                 delete pushMap[sub];
             }
         }

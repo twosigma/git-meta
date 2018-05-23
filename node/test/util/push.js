@@ -331,6 +331,35 @@ describe("getPushMap", function () {
                 manipulator);
         }));
     });
+
+    it("handles a case with no tracking branches", co.wrap(function*() {
+        // We can't use the usual multi-repo test for this because it
+        // gets confused about which commits should exist in which
+        // submodules.  Instead, we create a meta commit in one repo
+        // then do a fetch into a fresh repo (which has ever opened
+        // the repo in question but which doesn't have the
+        // newly-fetched commit).
+
+        const them = "sub=S:C8-1;Bmaster=8|x=S:C2-1 d=Ssub:8;Bmaster=2";
+        const us = "sub=S:C7-1;Bmaster=7|x=S:C3-1 d=Ssub:7;Bmaster=3;Od";
+
+        const theirWritten = yield RepoASTTestUtil.createMultiRepos(them);
+        const theirRepo = theirWritten.repos.x;
+        const theirCommitMap = theirWritten.reverseCommitMap;
+
+        const ourWritten = yield RepoASTTestUtil.createMultiRepos(us);
+
+        const ourRepo = ourWritten.repos.x;
+        const config = yield ourRepo.config();
+        yield config.setString("remote.upstream.url", theirRepo.path());
+        yield GitUtil.fetch(ourRepo, "upstream");
+
+        const sha = theirCommitMap["2"];
+        const commit = yield ourRepo.getCommit(sha);
+        const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
+                                              "target", commit);
+        assert.deepEqual({}, pushMap);
+    }));
 });
 
 describe("push", function () {
