@@ -395,7 +395,9 @@ ${colors.red(commitSha)}.`);
 
     const sig = repo.defaultSignature();
 
-    const changes = yield CherryPickUtil.computeChanges(repo, commit, true);
+    const changeIndex = yield NodeGit.Merge.commits(repo, head, commit, []);
+    const changes =
+        yield CherryPickUtil.computeChanges(repo, changeIndex, commit);
     const index = yield repo.index();
     const opener = new Open.Opener(repo, null);
 

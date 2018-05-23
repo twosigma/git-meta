@@ -468,6 +468,18 @@ x=U:C3-2 t=Sa:1;C4-2 s;Bmaster=4;Bfoo=3`,
                 fromCommit: "3",
                 expected: `x=E:Cx-4,3 t=Sa:1;Bmaster=x`,
             },
+            "change with multiple merge bases": {
+                initial: `
+a=B:Ca-1;Ba=a|
+x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
+    C3-2 s=Sa:a;
+    C4-2 t=Sa:a;
+    Cl-3,4 s,t;
+    Ct-3,4 a=Sa:1,t=Sa:a;
+    Bmaster=l;Bfoo=t`,
+                fromCommit: "t",
+                expected: "x=E:Cx-l,t a=Sa:1;Bmaster=x",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
