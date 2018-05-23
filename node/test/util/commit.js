@@ -1284,6 +1284,96 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
                     },
                 },
             },
+            "no-op amend of a merge": {
+                state: `a=B:Chi#a-1;Cbranch2#b-1;Ba=a;Bb=b|
+                    x=U:C3-1 s2=Sa:b;Cm-2,3 s2=Sa:b;Bmaster=m;Os`,
+                expected: {
+                    status: new RepoStatus({
+                        currentBranchName: "master",
+                        headCommit: "m",
+                        submodules: {},
+                    }),
+                },
+                toAmend: {}
+            },
+            "amend of a merge (left)": {
+                state: `a=B:Chi#a-1;Cbranch2#b-1;Ba=a;Bb=b|
+                    x=U:C3-1 s2=Sa:b;Cm-2,3 s2=Sa:b;Bmaster=m;Os I a=b`,
+                all: true,
+                expected: {
+                    status: new RepoStatus({
+                        currentBranchName: "master",
+                        headCommit: "m",
+                        submodules: {
+                            s : new Submodule({
+                                commit: new Submodule.Commit("1", "a"),
+                                index: new Submodule.Index("1", "a", SAME),
+                                workdir: new Submodule.Workdir(new RepoStatus({
+                                    headCommit: "1",
+                                    staged: {
+                                        a: FILESTATUS.ADDED,
+                                    },
+                                }), SAME),
+                            }),
+                        },
+                    }),
+                },
+            },
+            "amend of a merge (right)": {
+                state: `a=B:Chi#a-1;Cbranch2#b-1;Ba=a;Bb=b|
+                    x=U:C3-1 s2=Sa:b;Cm-2,3 s2=Sa:b;Bmaster=m;Os2 I a=b`,
+                all: true,
+                expected: {
+                    status: new RepoStatus({
+                        currentBranchName: "master",
+                        headCommit: "m",
+                        submodules: {
+                            s2 : new Submodule({
+                                commit: new Submodule.Commit("b", "a"),
+                                index: new Submodule.Index("b", "a", SAME),
+                                workdir: new Submodule.Workdir(new RepoStatus({
+                                    headCommit: "b",
+                                    staged: {
+                                        a: FILESTATUS.ADDED,
+                                    },
+                                }), SAME),
+                            }),
+                        },
+                    }),
+                },
+            },
+            "no-op amend of a merge (changed in merge)": {
+                state: `a=B:Chi#a-1;Cbranch2#b-1;Cthird#c-a;Ba=a;Bb=b;Bc=c|
+                    x=U:C3-1 s2=Sa:b;Cm-2,3 s2=Sa:c;Bmaster=m`,
+                all: true,
+                expected: {
+                    status: new RepoStatus({
+                        currentBranchName: "master",
+                        headCommit: "m",
+                        submodules: {
+                            s2 : new Submodule({
+                                index: new Submodule.Index("c", "a", null),
+                            }),
+                        },
+                    }),
+                },
+            },
+            "actual amend of a merge (changed in merge)": {
+                state: `a=B:Chi#a-1;Cbranch2#b-1;Cc-a;Cd-a;Ba=a;Bb=b;Bc=c;Bd=d|
+                    x=U:C3-1 s2=Sa:b;Cm-2,3 s2=Sa:c;Bmaster=m;I s2=Sa:d`,
+                all: true,
+                expected: {
+                    status: new RepoStatus({
+                        currentBranchName: "master",
+                        headCommit: "m",
+                        submodules: {
+                            s2 : new Submodule({
+                                index: new Submodule.Index("d", "a", null),
+                            }),
+                        },
+                    }),
+                },
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

@@ -365,8 +365,8 @@ class Submodule {
     }
 
     /**
-     * Return true if this submodule can be committed, either being not new, or
-     * having some staged changes or commits.
+     * Return true if this submodule can be committed, because it is both not
+     * new and has some staged changes or commits.
      *
      * @return {Boolean}
      */
