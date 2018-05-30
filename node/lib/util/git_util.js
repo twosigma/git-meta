@@ -384,10 +384,16 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
         forceStr = "-f";
     }
 
+    const environ = Object.assign({}, process.env);
+    // Hack: set a fake work-tree because the repo's core.worktree might
+    // be set to a directory that, due to sparseness, doesn't exist, and
+    // git push has a bug which requires it to have a worktree.
+    environ.GIT_WORK_TREE = repo.path();
+
     const execString = `\
 git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
-        const result = yield ChildProcess.exec(execString);
+        const result = yield ChildProcess.exec(execString, {env : environ});
         if (result.error || !quiet) {
             if (result.stdout) {
                 console.log(result.stdout);
