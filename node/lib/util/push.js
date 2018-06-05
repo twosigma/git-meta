@@ -223,6 +223,9 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     let remoteUrl = yield GitUtil.getUrlFromRemoteName(repo, remoteName);
 
     const annotatedCommit = yield GitUtil.resolveCommitish(repo, source);
+    if (annotatedCommit === null) {
+        throw new UserError(`No such ref: ${source}`);
+    }
     const sha = annotatedCommit.id();
     const commit = yield repo.getCommit(sha);
 
