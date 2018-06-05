@@ -93,6 +93,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const cwd     = process.cwd();
     const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
+    args.path = Array.from(new Set(args.path));
     const subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
                                                                  cwd,
                                                                  subs,
