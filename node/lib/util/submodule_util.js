@@ -621,22 +621,36 @@ No submodules found from ${colors.yellow(filename)}.`);
  * @param {String []} paths
  * @param {String []} indexSubNames
  * @param {String []} openSubmodules
+ * @param {Boolean} failOnUnprefixed
  * @return {Object} map from submodule name to array of paths
  */
-exports.resolvePaths = function (paths, indexSubNames, openSubmodules) {
+exports.resolvePaths = function (paths, indexSubNames, openSubmodules,
+                                 failOnUnprefixed) {
     assert.isArray(paths);
     assert.isArray(indexSubNames);
     assert.isArray(openSubmodules);
+    if (failOnUnprefixed === undefined) {
+        failOnUnprefixed = false;
+    } else {
+        assert.isBoolean(failOnUnprefixed);
+    }
 
     const result = {};
 
     // First, populate 'result' with all the subs that are completely
-    // contained.
+    // contained, and clean the relevant specs out of paths
 
-    paths.map(path => {
+    const remainingPaths = [];
+    const add = subName => result[subName] = [];
+    for (const path of paths) {
         const subs = exports.getSubmodulesInPath(path, indexSubNames);
-        subs.forEach(subName => result[subName] = []);
-    });
+        if (subs.length > 0) {
+            subs.forEach(add);
+        } else {
+            remainingPaths.push(path);
+        }
+    }
+    paths = remainingPaths;
 
     // Now check to see which paths refer to a path inside a submodule.
     // Checking each file against the name of each open submodule has
@@ -653,9 +667,11 @@ exports.resolvePaths = function (paths, indexSubNames, openSubmodules) {
 
     for (let i = 0; i < paths.length; ++i) {
         const filename = paths[i];
-        for (let j = 0;  j < subsToCheck.length; ++j) {
+        let found = false;
+        for (let j = 0; j < subsToCheck.length; ++j) {
             const subName = subsToCheck[j];
             if (filename.startsWith(subName + "/")) {
+                found = true;
                 const pathInSub = filename.slice(subName.length + 1,
                                                  filename.length);
                 const subPaths = result[subName];
@@ -666,6 +682,10 @@ exports.resolvePaths = function (paths, indexSubNames, openSubmodules) {
                     subPaths.push(pathInSub);
                 }
             }
+        }
+        if (!found && failOnUnprefixed) {
+            throw new UserError(`\
+pathspec '${filename}' did not match any files`);
         }
     }
 

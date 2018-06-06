@@ -345,6 +345,8 @@ exports.rmPaths = co.wrap(function *(repo, paths, options) {
     const openArray = yield SubmoduleUtil.listOpenSubmodules(repo);
     const openSubmoduleSet = new Set(openArray);
 
+    // TODO: consider changing resolvePaths to support root-level items
+    // items, which would enable removal of checkAllPathsResolved
     const resolved = yield SubmoduleUtil.resolvePaths(paths,
                                                       rootLevelItems,
                                                       openArray);

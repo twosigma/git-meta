@@ -922,6 +922,35 @@ describe("SubmoduleUtil", function () {
                 open: ["s"],
                 expected: {},
             },
+            "path not in sub (but has a slash)": {
+                subNames: ["s"],
+                paths: ["t/README.md"],
+                open: ["s"],
+                expected: {},
+            },
+            "path not in sub, fail": {
+                subNames: ["s"],
+                paths: ["README.md"],
+                open: ["s"],
+                failOnUnprefixed: true,
+                fails: true
+            },
+            "path of sub": {
+                subNames: ["s"],
+                paths: ["s"],
+                open: ["s"],
+                failOnUnprefixed: true,
+                expected: {
+                    "s": []
+                }
+            },
+            "path not in sub (but has a slash), fail": {
+                subNames: ["s"],
+                paths: ["t/README.md"],
+                open: ["s"],
+                failOnUnprefixed: true,
+                fails: true
+            },
             "filename starts with subname but not in it": {
                 subNames: ["s"],
                 paths: ["sam"],
@@ -932,10 +961,20 @@ describe("SubmoduleUtil", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function () {
-                const result = SubmoduleUtil.resolvePaths(c.paths,
-                                                          c.subNames,
-                                                          c.open);
-                assert.deepEqual(result, c.expected);
+                let result;
+                let failed;
+                try {
+                    result = SubmoduleUtil.resolvePaths(c.paths,
+                                                        c.subNames,
+                                                        c.open,
+                                                        c.failOnUnprefixed);
+                } catch (e) {
+                    failed = true;
+                }
+                assert.equal(failed, c.fails);
+                if (!failed) {
+                    assert.deepEqual(result, c.expected);
+                }
             });
         });
     });
