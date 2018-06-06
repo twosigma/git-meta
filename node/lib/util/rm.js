@@ -254,8 +254,8 @@ function checkAllPathsResolved(paths, resolved) {
             const nextResolved = allResolvedPaths[insertionPoint];
             if (insertionPoint >= allResolvedPaths.length ||
                 !nextResolved.startsWith(stripped + "/")) {
-                throw new UserError(`pathspec '${spec}' did not match any \
-                                    files`);
+                throw new UserError(`\
+pathspec '${spec}' did not match any files`);
             }
         }
     }
