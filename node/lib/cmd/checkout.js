@@ -31,6 +31,7 @@
 
 const co = require("co");
 const Hook = require("../util/hook");
+const UserError = require("../../lib/util/user_error");
 
 /**
  * This module contains the entrypoint for the `checkout` command.
@@ -52,14 +53,20 @@ exports.configureParser = function (parser) {
         nargs: 1,
     });
 
-    parser.addArgument(["committish"], {
+    parser.addArgument(["committish_or_file"], {
         type: "string",
-        help: `
-commit to check out.  If this <committish> is not found, but does \
+        help: `if this resolves to a commit, check out that commit.
+If this <committish> is not found, but does \
 match a single remote tracking branch, treat as equivalent to \
-'checkout -b <committish> -t <remote>/<committish>'`,
+'checkout -b <committish> -t <remote>/<committish>'.  Else, treat \
+        as a file`,
         defaultValue: null,
         nargs: "?",
+    });
+
+    parser.addArgument(["files"], {
+        type: "string",
+        nargs: "*"
     });
 
     parser.addArgument(["-t", "--track"], {
@@ -76,6 +83,40 @@ match a single remote tracking branch, treat as equivalent to \
     });
 };
 
+/*
+Argparse literally can't represent git's semantics here.  Checkout
+takes optional arguments [branch] and [files].  In git, anything after
+"--" (hereinafter, "the separator") is part of "files".  So if you say
+"git checkout -- myfile", it'll assume that last argument is a file.
+
+There are two types of arguments that argparse recognizes: regular and
+positional.  Branch can't be a non-required regular argument, because
+regular arguments must have names which start with "-".  So it must be
+a positional argument with nargs='?'.  In argparse, the right side of
+"--" is always positional arguments.  And that means that the branch
+will be read from the right side of the separator if it is not present
+on the left side.
+
+(Incidentally, the same is true of Python's argparse, of which node's
+argparse is a port.)
+
+Thanks, git, for using "--" for an utterly non-standard fashion.
+*/
+function reanalyzeArgs(args)  {
+    const separatorIndex = process.argv.indexOf("--");
+    if (separatorIndex === -1) {
+        return;
+    }
+
+    const countAfterSeparator = (process.argv.length - 1) - separatorIndex;
+
+    if (args.files.length !== countAfterSeparator) {
+        const firstFile = args.committish_or_file;
+        args.committish_or_file = null;
+        args.files.splice(0, 0, firstFile);
+    }
+}
+
 /**
  * Execute the `checkout` command based on the supplied arguments.
  *
@@ -84,6 +125,8 @@ match a single remote tracking branch, treat as equivalent to \
  * @param {String} args.committish
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
+    reanalyzeArgs(args);
+
     const colors  = require("colors");
 
     const Checkout  = require("../util/checkout");
@@ -99,10 +142,25 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     // Validate and determine what operation we're actually doing.
 
+    let committish = args.committish_or_file;
+    let files = args.files;
+
+    if (files.length > 0 && newBranch) {
+        throw new UserError(`Cannot update paths and switch to branch
+                            '${newBranch}' at the same time.`);
+    }
+
     const op = yield Checkout.deriveCheckoutOperation(repo,
-                                                      args.committish,
+                                                      committish,
                                                       newBranch,
-                                                      args.track || false);
+                                                      args.track || false,
+                                                      files);
+
+    // If we're going to check out files, just do that
+    if (Object.keys(op.resolvedPaths).length !== 0) {
+        yield Checkout.checkoutFiles(repo, op.commit, op.resolvedPaths);
+        return;
+    }
 
     // If we're already on this branch, note it and exit.
 

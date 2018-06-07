@@ -44,6 +44,7 @@ const Reset              = require("./reset");
 const RepoStatus         = require("./repo_status");
 const SparseCheckoutUtil = require("./sparse_checkout_util");
 const StatusUtil         = require("./status_util");
+const StashUtil          = require("./stash_util");
 const SubmoduleFetcher   = require("./submodule_fetcher");
 const SubmoduleUtil      = require("./submodule_util");
 const UserError          = require("./user_error");
@@ -274,6 +275,17 @@ ${colors.yellow(remoteName)}`);
     };
 });
 
+const makeShadowCommitFromIndex = co.wrap(function *(repo) {
+    const committish = yield StashUtil.makeShadowCommit(
+        repo, "index", true, true, false, true);
+    if (committish === null) {
+        const head = yield repo.head();
+        return yield NodeGit.Commit.lookup(repo, head.target());
+    } else {
+        return committish;
+    }
+});
+
 /**
  * Return an object describing what operation to perform in the specified
  * `repo` based on the optionally specified `committish`, the optionally
@@ -287,6 +299,7 @@ ${colors.yellow(remoteName)}`);
  * @param {String|null}        committish
  * @param {String|null}        newBranch
  * @param {Boolean}            track
+ * @param {Array<String>|null}      files
  * @return {Object}
  * @return {NodeGit.Commit}      return.commit           to check out
  * @return {Object|null}         return.newBranch        to create
@@ -295,11 +308,13 @@ ${colors.yellow(remoteName)}`);
  * @return {String|null}         return.newBranch.tracking.remoteName
  * @return {String}              return.newBranch.tracking.branchName
  * @return {String|null}         return.switchBranch     to make current
+ * @return {Array<String>}       return.resolvedPaths    to check out
  */
 exports.deriveCheckoutOperation = co.wrap(function *(repo,
                                                      committish,
                                                      newBranch,
-                                                     track) {
+                                                     track,
+                                                     files) {
     assert.instanceOf(repo, NodeGit.Repository);
     if (null !== committish) {
         assert.isString(committish);
@@ -307,12 +322,18 @@ exports.deriveCheckoutOperation = co.wrap(function *(repo,
     if (null !== newBranch) {
         assert.isString(newBranch);
     }
+    if (null === files || undefined === files) {
+        files = [];
+    } else {
+        assert.isArray(files);
+    }
     assert.isBoolean(track);
 
     const result = {
         commit: null,
         newBranch: null,
         switchBranch: null,
+        resolvedPaths: null
     };
 
     const ensureBranchDoesntExist = co.wrap(function *(name) {
@@ -355,15 +376,15 @@ A branch named ${colors.red(name)} already exists.`);
     if (null !== committish) {
         // Now, we have a committish to resolve.
 
-        const annotated = yield GitUtil.resolveCommitish(repo, committish);
+        let annotated = yield GitUtil.resolveCommitish(repo, committish);
         if (null === annotated) {
 
-            // If we are not explicitly setting up a tracking branch and are
-            // not explicitly createing a new branch, we may implicitly do both
+            // If we are not explicitly setting up a tracking branch nor
+            // explicitly creating a new branch, we may implicitly do both
             // when `committish` is not directly resolveable, but does match a
             // single remote tracking branch.
 
-            if (null === newBranch) {
+            if (null === newBranch && files.length === 0) {
                 const remote = yield exports.findTrackingBranch(repo,
                                                                 committish);
                 if (null !== remote) {
@@ -382,18 +403,27 @@ A branch named ${colors.red(name)} already exists.`);
                         },
                     };
                     result.switchBranch = committish;
+                    if (null === result.commit) {
+                        throw new UserError(`\
+Could not resolve ${colors.red(committish)} as a branch or commit.`);
+                    }
                 }
             }
+            if (null === annotated) {
+                // If we didn't resolve anything from `committish`, try it
+                // as a file.
+                files.splice(0, 0, committish);
+                // We would now like to resolve from the index, but
+                // libgit2 doesn't support the ":0" shorthand, and our
+                // remaining code all assumes an actual commit, so
+                // we're just going to make one.  The cache-tree ought to
+                // make this relatively cheap.
 
-            // If we didn't resolve anything from `committish`, throw an error.
-
-            if (null === result.commit) {
-                throw new UserError(
-         `Could not resolve ${colors.red(committish)} as a branch or commit.`);
+                annotated = yield makeShadowCommitFromIndex(repo);
             }
+            result.commit = annotated;
         }
         else {
-
             const commit = yield repo.getCommit(annotated.id());
             result.commit = commit;
 
@@ -415,14 +445,31 @@ A branch named ${colors.red(name)} already exists.`);
         }
     }
     else {
-        // If we're implicitly using HEAD, see if it's on a branch and record
-        // that branch's name.
+        if (files.length !== 0) {
+            //When checking out files, we're implicitly using the index
+            result.commit = yield makeShadowCommitFromIndex(repo);
+        } else {
+            // If we're implicitly using HEAD, see if it's on a branch
+            // and record that branch's name.
 
-        const head = yield repo.head();
-        if (head.isBranch()) {
-            committishBranch = head;
+            const head = yield repo.head();
+            if (head.isBranch()) {
+                committishBranch = head;
+            }
         }
     }
+
+    if (files.length !== 0) {
+        const indexSubNames = yield SubmoduleUtil.getSubmoduleNames(
+            repo);
+        const openSubmodules = yield SubmoduleUtil.listOpenSubmodules(
+            repo);
+        result.resolvedPaths = SubmoduleUtil.resolvePaths(
+            files, indexSubNames, openSubmodules);
+
+        return result;
+    }
+
 
     if (null !== newBranch) {
         // If we have a `newBranch`, we need to make sure it doesn't already
@@ -540,4 +587,35 @@ exports.executeCheckout = co.wrap(function *(repo,
     if (null !== switchBranch) {
         yield repo.setHead(`refs/heads/${switchBranch}`);
     }
+});
+
+
+/**
+ * Checkout files in submodules.
+ *
+ * @param {NodeGit.repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @param {Object}             resolvedPaths -- keys are submodules, values are
+ *                                              files
+ */
+exports.checkoutFiles = co.wrap(function*(repo, commit, resolvedPaths) {
+
+    const getShas = SubmoduleUtil.getSubmoduleShasForCommit;
+    const subCommits = yield getShas(repo, Object.keys(resolvedPaths), commit);
+    const checkoutSub = co.wrap(function*(subName) {
+        const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+        const subCommit = subCommits[subName];
+
+        const paths = resolvedPaths[subName];
+        const resolvedSubCommit = yield NodeGit.Commit.lookup(subRepo,
+                                                              subCommit);
+        const opts = new NodeGit.CheckoutOptions();
+        opts.checkoutStrategy = NodeGit.Checkout.STRATEGY.FORCE;
+        if (paths.length > 0) {
+            opts.paths = paths;
+        }
+        yield NodeGit.Checkout.tree(subRepo, resolvedSubCommit, opts);
+    });
+
+    yield DoWorkQueue.doInParallel(Object.keys(resolvedPaths), checkoutSub);
 });
