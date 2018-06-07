@@ -110,7 +110,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                     args.message,
                                                     incrementTimestamp,
                                                     false,
-                                                    args.include_untracked);
+                                                    args.include_untracked,
+                                                    false);
     if (null === result) {
         const head = yield repo.getHeadCommit();
         console.log(head.id().tostrS());

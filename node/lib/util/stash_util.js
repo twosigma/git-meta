@@ -499,12 +499,23 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
                                                    status,
                                                    message,
                                                    incrementTimestamp,
-                                                   includeUntracked) {
+                                                   includeUntracked,
+                                                   indexOnly) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
     assert.isBoolean(includeUntracked);
     assert.isBoolean(incrementTimestamp);
+    assert.isBoolean(indexOnly);
+
+    if (indexOnly) {
+        const index = yield repo.index();
+        const tree = yield index.writeTree();
+        const sig = repo.defaultSignature();
+        const subCommit = yield repo.createCommit(null, sig, sig,
+                                                     message, tree, []);
+        return subCommit.tostrS();
+    }
 
     const changes = yield TreeUtil.listWorkdirChanges(repo,
                                                       status,
@@ -560,6 +571,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
  * @param {Bool}               useEpochTimestamp
  * @param {Bool}               includeMeta
  * @param {Bool}               includeUntracked
+ * @param {Bool}               indexOnly         include only staged changes
  * @return {Object|null}
  * @return {String} return.metaCommit
  * @return {Object} return.subCommits  path to sha of generated subrepo commits
@@ -568,12 +580,18 @@ exports.makeShadowCommit = co.wrap(function *(repo,
                                               message,
                                               useEpochTimestamp,
                                               includeMeta,
-                                              includeUntracked) {
+                                              includeUntracked,
+                                              indexOnly) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(message);
     assert.isBoolean(includeMeta);
     assert.isBoolean(includeUntracked);
     assert.isBoolean(useEpochTimestamp);
+    if (indexOnly === undefined) {
+        indexOnly = false;
+    } else {
+        assert.isBoolean(indexOnly);
+    }
 
     if (!message.endsWith("\n")) {
         message += "\n";
@@ -607,7 +625,8 @@ exports.makeShadowCommit = co.wrap(function *(repo,
                                                      wd.status,
                                                      message,
                                                      useEpochTimestamp,
-                                                     includeUntracked);
+                                                     includeUntracked,
+                                                     indexOnly);
         const newSubStat = new Submodule({
             commit: subStatus.commit,
             index: subStatus.index,
@@ -631,7 +650,8 @@ exports.makeShadowCommit = co.wrap(function *(repo,
                                                      newStatus,
                                                      message,
                                                      useEpochTimestamp,
-                                                     includeUntracked);
+                                                     includeUntracked,
+                                                     false);
     return {
         metaCommit: metaCommit,
         subCommits: subCommits,
