@@ -815,7 +815,8 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
                                                             message,
                                                             incrementTimestamp,
                                                             meta,
-                                                            includeUntracked);
+                                                            includeUntracked,
+                                                            false);
 
                 const commitMap = {};
                 if (null !== result) {
