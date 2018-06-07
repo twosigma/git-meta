@@ -32,10 +32,13 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const NodeGit = require("nodegit");
 
 const Checkout        = require("../../lib/util/checkout");
 const GitUtil         = require("../../lib/util/git_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const StashUtil       = require("../../lib/util/stash_util");
+const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const UserError       = require("../../lib/util/user_error");
 
 describe("Checkout", function () {
@@ -315,7 +318,11 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 state: "x=S",
                 committish: "bar",
                 track: false,
-                fails: true,
+                expectedSha: "1", // here, there are no index changes, so the
+                                  // shadow-commit will be a no-op
+                expectedFiles: "bar",
+                expectedNewBranch: null,
+                expectedSwitchBranch: null,
             },
             "commit, no new branch, nameless": {
                 state: "x=S",
@@ -589,6 +596,93 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                                                                c.expected,
                                                                manipulator,
                                                                c.fails);
+            }));
+        });
+    });
+    describe("checkoutFiles", function () {
+        const cases = {
+            //TODO: bad pathspecs
+            "index: one file": {
+                input: "a=S|x=S:I s=Sa:1;Os I foo=bar!W foo=baz",
+                paths: ["s/foo"],
+                commit: ":0",
+                expected: "x=S:I s=Sa:1;Os I foo=bar"
+            },
+            "index: two files, one spec": {
+                input: `a=S|
+                    x=S:I s=Sa:1;Os I foo=bar,foo2=bar2!W foo=baz,foo2=baz2`,
+                paths: ["s/foo"],
+                commit: ":0",
+                expected: "x=S:I s=Sa:1;Os I foo=bar,foo2=bar2!W foo2=baz2"
+            },
+            "index: two files, two specs": {
+                input: `a=S|
+                    x=S:I s=Sa:1;Os I foo=bar,foo2=bar2!W foo=baz,foo2=baz2`,
+                paths: ["s/foo", "s/foo2"],
+                commit: ":0",
+                expected: "x=S:I s=Sa:1;Os I foo=bar,foo2=bar2"
+            },
+            "index: two files, wide spec": {
+                input: `a=S|
+                    x=S:I s=Sa:1;Os I foo=bar,foo2=bar2!W foo=baz,foo2=baz2`,
+                paths: ["s"],
+                commit: ":0",
+                expected: "x=S:I s=Sa:1;Os I foo=bar,foo2=bar2"
+            },
+            "index: two files, two submodules, two specs": {
+                input: `a=S|b=S:C2-1;Bmaster=2|
+                    x=S:I a=Sa:1,b=Sb:2;Oa I foo=bar!W foo=baz;
+                    Ob I foo=bar!W foo=baz`,
+                paths: ["a/foo", "b/foo"],
+                commit: ":0",
+                expected: `x=S:I a=Sa:1,b=Sb:2;Oa I foo=bar;
+                    Ob I foo=bar`
+            },
+            "some commit: one file": {
+                input: `a=S:C2-1 foo=c2;C3-2 foo=c3;Bmaster=3|
+                    x=S:C4-1 a=Sa:2;C5-4 a=Sa:3;Bmaster=5;Oa`,
+                paths: ["a/foo"],
+                commit: "4",
+                expected: `x=S:C4-1 a=Sa:2;C5-4 a=Sa:3;Bmaster=5;Oa I foo=c2`
+            },
+        };
+        Object.keys(cases).forEach(caseName => {
+            const c = cases[caseName];
+            it(caseName, co.wrap(function *() {
+                const manipulator = co.wrap(function*(repos, maps) {
+                    const repo = repos.x;
+                    const index = yield SubmoduleUtil.getSubmoduleNames(
+                        repo);
+                    const open = yield SubmoduleUtil.listOpenSubmodules(
+                        repo);
+                    const resolvedFiles = SubmoduleUtil.resolvePaths(c.paths,
+                                                                     index,
+                                                                     open,
+                                                                     true);
+                    let annotated;
+                    if (c.commit === ":0") {
+                        let shadow = yield StashUtil.makeShadowCommit(
+                            repo, "index", true, true, false, true);
+                        if (shadow === null) {
+                            const head = yield repo.head();
+                            shadow = yield head.target();
+                        }
+                        annotated = yield NodeGit.Commit.lookup(repo,
+                            shadow.metaCommit);
+                        assert (annotated !== null);
+                    } else {
+                        const mapped = maps.reverseCommitMap[c.commit];
+                        annotated = yield NodeGit.Commit.lookup(repo, mapped);
+                    }
+
+                    yield Checkout.checkoutFiles(repo, annotated,
+                                                 resolvedFiles);
+                });
+                yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
+                                                               c.expected,
+                                                               manipulator,
+                                                               c.fails);
+
             }));
         });
     });
