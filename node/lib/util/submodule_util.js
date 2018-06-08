@@ -686,7 +686,7 @@ exports.resolvePaths = function (paths, indexSubNames, openSubmodules) {
  * @param {String[]}           refs
  * @param {String[]}           submodules
  */
-exports.addRefs = co.wrap(function *(repo, refs, submodules) {
+exports.syncRefs = co.wrap(function *(repo, refs, submodules) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isArray(refs);
     assert.isArray(submodules);
@@ -728,7 +728,7 @@ exports.addRefs = co.wrap(function *(repo, refs, submodules) {
                                                name,
                                                NodeGit.Oid.fromString(sha),
                                                1,
-                                               "addRefs");
+                                               "syncRefs");
             }
         }));
     }));

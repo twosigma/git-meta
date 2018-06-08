@@ -58,6 +58,7 @@ const root         = require("./cmd/root");
 const commitShadow = require("./cmd/commit-shadow");
 const stash        = require("./cmd/stash");
 const status       = require("./cmd/status");
+const syncrefs     = require("./cmd/syncrefs");
 const submodule    = require("./cmd/submodule");
 const UserError    = require("./util/user_error");
 const version      = require("./cmd/version");
@@ -142,6 +143,7 @@ const commands = {
     "stash": stash,
     "submodule": submodule,
     "status": status,
+    "sync-refs": syncrefs,
     "version": version,
 };
 

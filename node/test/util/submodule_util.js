@@ -939,7 +939,7 @@ describe("SubmoduleUtil", function () {
             });
         });
     });
-    describe("addRefs", function () {
+    describe("syncRefs", function () {
         const cases = {
             "trivial": {
                 input: "x=S",
@@ -972,13 +972,13 @@ describe("SubmoduleUtil", function () {
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, co.wrap(function *() {
-                const addRefs = co.wrap(function *(repos) {
+                const syncRefs = co.wrap(function *(repos) {
                     const repo = repos.x;
-                    yield SubmoduleUtil.addRefs(repo, c.refs, c.subs);
+                    yield SubmoduleUtil.syncRefs(repo, c.refs, c.subs);
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                                c.expected,
-                                                               addRefs,
+                                                               syncRefs,
                                                                c.fails);
             }));
         });
