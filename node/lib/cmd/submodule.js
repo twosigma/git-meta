@@ -277,31 +277,6 @@ meta-repo.`);
     }
 });
 
-const doAddRefs = co.wrap(function *(paths) {
-    const NodeGit = require("nodegit");
-
-    const GitUtil             = require("../util/git_util");
-    const SubmoduleUtil       = require("../util/submodule_util");
-
-    const repo = yield GitUtil.getCurrentRepo();
-    let subs   = yield SubmoduleUtil.listOpenSubmodules(repo);
-
-    if (0 !== paths.length) {
-        const workdir = repo.workdir();
-        const cwd     = process.cwd();
-        const names   = yield SubmoduleUtil.getSubmoduleNames(repo);
-
-        const includedSubs = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
-                                                                       cwd,
-                                                                       names,
-                                                                       paths);
-        const includedSet = new Set(includedSubs);
-        subs = subs.filter(name => includedSet.has(name));
-    }
-    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
-    yield SubmoduleUtil.addRefs(repo, refs, subs);
-});
-
 /**
  * Execute the `submodule` command according to the specified `args`.
  *
@@ -316,7 +291,17 @@ exports.executeableSubcommand = function (args) {
         return doStatusCommand(args.path, args.verbose);
     }
     else if ("addrefs" === args.command) {
-        return doAddRefs(args.path);
+        const SyncRefs = require("../util/syncrefs.js");
+        console.error(
+            "This command is deprecated -- use git meta sync-refs instead");
+        if (args.path.length !== 0) {
+            console.error(`\
+Also, the paths argument is deprecated. Exiting with no change.`);
+            /*jshint noyield:true*/
+            const fail = co.wrap(function*() {return 1;});
+            return fail();
+        }
+        return SyncRefs.doSyncRefs();
     }
     return doFindCommand(args.path,
                          args.meta_committish,
