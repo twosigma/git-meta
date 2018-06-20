@@ -58,6 +58,7 @@ const UserError           = require("./user_error");
 
 const CommitAndRef = SequencerState.CommitAndRef;
 const CHERRY_PICK = SequencerState.TYPE.CHERRY_PICK;
+const STAGE = RepoStatus.STAGE;
 
 /**
  * Throw a `UserError` if the specfied `seq` is null or does not indicate a
@@ -177,6 +178,60 @@ exports.containsUrlChanges = co.wrap(function *(repo, commit, baseCommit) {
     return false;
 });
 
+const populateLibgit2MergeBugData = co.wrap(function*(repo, data) {
+    if (data.mergeBases === undefined) {
+        const head = data.head;
+        const targetCommit = data.targetCommit;
+        const mergeBases = yield GitUtil.mergeBases(repo, head, targetCommit);
+        data.mergeBases = [];
+        for (const base of mergeBases) {
+            const commit = yield NodeGit.Commit.lookup(repo, base);
+            data.mergeBases.push(commit);
+        }
+    }
+
+    return data.mergeBases;
+});
+
+const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
+                                                     entries) {
+    let ancestor = entries[STAGE.ANCESTOR];
+    const ours = entries[STAGE.OURS];
+    const theirs = entries[STAGE.THEIRS];
+    if (undefined === ancestor &&
+        undefined !== ours &&
+        undefined !== theirs) {
+        // This might be a normal conflict that libgit2 is falsely
+        // telling us is an add-add conflict.  I don't yet have a
+        // libgit2 bug report for this because the only repro is a
+        // complex case in Two Sigma's proprietary monorepo.
+
+        // We work around this by looking at all merge-bases, and checking
+        // if any of them have an entry for this name, and if so, filling
+        // in the ancestor with it
+        const mergeBases = yield populateLibgit2MergeBugData(repo, data);
+        for (const base of mergeBases) {
+            const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(
+                repo, [ours.path], base);
+            if (shas[name] !== undefined) {
+
+                ancestor = new NodeGit.IndexEntry();
+                ancestor.id = NodeGit.Oid.fromString(shas[name]);
+                ancestor.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
+                ancestor.path = ours.path;
+                ancestor.flags = ours.flags;
+                ancestor.gid = ours.gid;
+                ancestor.uid = ours.uid;
+                ancestor.fileSize = 0;
+                ancestor.ino = 0;
+                ancestor.dev = 0;
+                entries[STAGE.ANCESTOR] = ancestor;
+                break;
+            }
+        }
+    }
+});
+
 /**
  * Determine how to apply the submodule changes introduced in the
  * specified `targetCommit` to the commit on the head of the specified `repo`
@@ -202,6 +257,7 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
     assert.instanceOf(index, NodeGit.Index);
     assert.instanceOf(targetCommit, NodeGit.Commit);
 
+    const head = yield repo.getHeadCommit();
     const conflicts = {};
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
                                                                  repo,
@@ -211,7 +267,6 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
 
     const conflictEntries = new Map();  // name -> normal, ours, theirs
     const entries = index.entries();
-    const STAGE = RepoStatus.STAGE;
     for (const entry of entries) {
         const name = entry.path;
         const stage = NodeGit.Index.entryStage(entry);
@@ -240,7 +295,14 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
         }
         return new ConflictEntry(entry.mode, entry.id.tostrS());
     }
+
+    const libgit2MergeBugData = {
+        head: head,
+        targetCommit: targetCommit
+    };
     for (const [name, entries] of conflictEntries) {
+        yield workAroundLibgit2MergeBug(libgit2MergeBugData, repo, name,
+                                        entries);
         const ancestor = entries[STAGE.ANCESTOR];
         const ours = entries[STAGE.OURS];
         const theirs = entries[STAGE.THEIRS];
@@ -268,7 +330,6 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
     const simpleChanges = {};
     const treeId = yield index.writeTreeTo(repo);
     const tree = yield NodeGit.Tree.lookup(repo, treeId);
-    const head = yield repo.getHeadCommit();
     const headTree = yield head.getTree();
     const diff = yield NodeGit.Diff.treeToTree(repo, headTree, tree, null);
     const treeChanges =
