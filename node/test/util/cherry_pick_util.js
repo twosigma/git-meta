@@ -400,7 +400,30 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
             assert.deepEqual(conflicts, c.conflicts || {});
         }));
     });
+    it("works around a libgit2 bug", co.wrap(function*() {
+        const w = yield RepoASTTestUtil.createMultiRepos(`
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=S:C2-1 s=Sa:1;C3-2 s=Sa:a;Ct-2 s=Sa:b;Bmaster=3;Bt=t`
+        );
+        const repos = w.repos;
+        const repo = repos.x;
+        const reverseCommitMap = w.reverseCommitMap;
+        const head = yield repo.getHeadCommit();
+        const target = yield repo.getCommit(reverseCommitMap.t);
+        const index =
+              yield NodeGit.Cherrypick.commit(repo, target, head, 0, []);
+        yield index.remove("s", 1);
+        const result = yield CherryPickUtil.computeChanges(repo,
+                                                           index,
+                                                           target);
+
+        const change = result.changes.s;
+        const expect = new SubmoduleChange(reverseCommitMap["1"],
+                                           reverseCommitMap.b);
+        assert.deepEqual(expect, change);
+    }));
 });
+
 describe("pickSubs", function () {
     // Most of the logic is done via `RebaseUtil.rewriteCommits`.  We need to
     // validate that we invoke that method correctly and that we fetch commits

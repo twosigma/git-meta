@@ -1037,3 +1037,21 @@ exports.hashObject = co.wrap(function *(repo, data) {
     const res = yield db.write(data, data.length, BLOB);
     return res;
 });
+
+/**
+ * You would like to use NodeGit.Merge.bases, but unfortunately,
+ * https://github.com/nodegit/nodegit/issues/1231
+ * @async
+ */
+exports.mergeBases = co.wrap(function *(repo, commit1, commit2) {
+    const id1 = commit1.id().tostrS();
+    const id2 = commit2.id().tostrS();
+    const execString = `\
+git -C '${repo.path()}' merge-base ${id1} ${id2}`;
+    const result = yield ChildProcess.exec(execString);
+    if (result.error) {
+        throw new UserError("Couldn't run git merge-base: " +
+                            result.stderr);
+    }
+    return result.stdout.split("\n").filter(x => x);
+});
