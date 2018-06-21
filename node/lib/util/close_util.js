@@ -63,10 +63,11 @@ exports.close = co.wrap(function *(repo, cwd, paths, force) {
 
     const workdir = repo.workdir();
     const subs    = yield SubmoduleUtil.getSubmoduleNames(repo);
-    const subsToClose = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
-                                                                  cwd,
-                                                                  subs,
-                                                                  paths);
+    let subsToClose = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
+                                                                cwd,
+                                                                subs,
+                                                                paths);
+    subsToClose = Array.from(new Set(subsToClose));
 
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         paths: subsToClose,

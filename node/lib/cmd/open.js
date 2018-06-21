@@ -94,10 +94,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
     args.path = Array.from(new Set(args.path));
-    const subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
-                                                                 cwd,
-                                                                 subs,
-                                                                 args.path);
+    let subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
+                                                               cwd,
+                                                               subs,
+                                                               args.path);
+    subsToOpen = Array.from(new Set(subsToOpen));
     const index      = yield repo.index();
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
                                                                    subsToOpen);
