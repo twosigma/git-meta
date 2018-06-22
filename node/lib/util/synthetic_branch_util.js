@@ -185,7 +185,15 @@ function* checkSubmodules(repo, commit) {
         const result = changeSet.map(function *(path) {
             const entry = yield commit.getEntry(path);
             const submodulePath = entry.path();
-            const url = submodules[submodulePath].url;
+            const submodule = submodules[submodulePath];
+            if (!submodule) {
+                console.error(
+                    "A submodule exists in the tree but not the .gitmodules.");
+                console.error(
+                    `The commit ${commit.id().tostrS()} is corrupt`);
+                return false;
+            }
+            const url = submodule.url;
             return yield *checkSubmodule(repo, cfg, commit, entry, url);
         });
         return (yield result).every(identity);
