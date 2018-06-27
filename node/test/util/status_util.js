@@ -58,7 +58,7 @@ describe("StatusUtil", function () {
     const Commit           = Submodule.Commit;
     const Index            = Submodule.Index;
     const Workdir          = Submodule.Workdir;
- 
+
     describe("remapSubmodule", function () {
         const cases = {
             "all": {
@@ -548,7 +548,7 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                 const written = yield RepoASTTestUtil.createRepo(c.state);
                 const repo = written.repo;
                 const index = yield repo.index();
-                const result = StatusUtil.readConflicts(index);
+                const result = StatusUtil.readConflicts(index, []);
                 assert.deepEqual(result, c.expected);
             }));
         });
