@@ -296,13 +296,18 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
 });
 
 /**
- * Return the conflicts listed in the specified `index`.
+ * Return the conflicts listed in the specified `index` and
+ * the specified `paths`. You can specify an empty Array if
+ * you want to list conflicts for the whole index.
  *
  * @param {NodeGit.Index} index
+ * @param {String []} paths
  * @return {Object} map from entry name to `RepoStatus.Conflict`
  */
-exports.readConflicts = function (index) {
+exports.readConflicts = function (index, paths) {
     assert.instanceOf(index, NodeGit.Index);
+    assert.isArray(paths);
+    paths = new Set(paths);
     const conflicted = {};
     function getConflict(path) {
         let obj = conflicted[path];
@@ -338,7 +343,9 @@ exports.readConflicts = function (index) {
     const COMMIT = NodeGit.TreeEntry.FILEMODE.COMMIT;
     for (let name in conflicted) {
         const c = conflicted[name];
-
+        if (paths.size !== 0 && !paths.has(name)) {
+            continue;
+        }
         // Ignore the conflict if it's just between submodule SHAs
 
         if (COMMIT !== c.our || COMMIT !== c.their) {
@@ -478,7 +485,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         const openSet = new Set(openArray);
         const index = yield repo.index();
 
-        Object.assign(args.staged, exports.readConflicts(index));
+        Object.assign(args.staged, exports.readConflicts(index, options.paths));
 
         const headTree = yield headCommit.getTree();
         const diff = yield NodeGit.Diff.treeToIndex(repo, headTree, index);

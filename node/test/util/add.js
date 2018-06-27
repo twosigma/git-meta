@@ -156,6 +156,19 @@ a=B|x=S:C2-1 a/b=Sa:1;Oa/b W x/y/z=a,x/r/z=b;Bmaster=2`,
                 paths: ["s"],
                 expected: "x=E:Os I README.md=foo",
             },
+            "sub with conflict multiple files": {
+                initial: `a=B|x=U:Os I *README.md=a*b*c,
+                    *lol.txt=a*b*c!W README.md=foo,lol.txt=bar`,
+                paths: ["s"],
+                expected: "x=E:Os I README.md=foo, lol.txt=bar",
+            },
+            "sub with conflict multiple by path": {
+                initial: `a=B|x=U:Os I *README.md=a*b*c,
+                    *lol.txt=a*b*c!W README.md=foo,lol.txt=bar`,
+                paths: ["s/README.md"],
+                expected: `x=E:Os I README.md=foo,
+                    *lol.txt=a*b*c!W lol.txt=bar`,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
