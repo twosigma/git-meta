@@ -157,8 +157,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                       files);
 
     // If we're going to check out files, just do that
-    if (Object.keys(op.resolvedPaths).length !== 0) {
-        yield Checkout.checkoutFiles(repo, op.commit, op.resolvedPaths);
+    if (op.resolvedPaths !== null &&
+        Object.keys(op.resolvedPaths).length !== 0) {
+        yield Checkout.checkoutFiles(repo, op);
         return;
     }
 
