@@ -363,7 +363,7 @@ exports.readConflicts = function (index, paths) {
  * (default []), list the status only of the files contained in `paths`.  If
  * the optionally specified `options.showMetaChanges` is provided (default
  * true), return the status of changes in `repo`; otherwise, show only changes
- * in submobules.  If the optionally specified `ignoreIndex` is specified,
+ * in submodules.  If the optionally specified `ignoreIndex` is specified,
  * calculate the status matching the workdir to the underlying commit rather
  * than against the index.  If the specified `options.cwd` is provided, resolve
  * paths in the context of that directory.
