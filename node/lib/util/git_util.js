@@ -787,7 +787,7 @@ exports.parseRefspec = function(str) {
 /**
  * Resolve the specified `filename` against the specified `cwd` and return the
  * relative value for that resulting path to the specified `workdir`.  Throw a
- * `UserError` if the path lies outsied `workdir` or does not refer to a file
+ * `UserError` if the path lies outside `workdir` or does not refer to a file
  * in `workdir`.  Note that if `filename` resolves to `workdir`, the result is
  * `""`.
  *
