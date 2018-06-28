@@ -93,6 +93,9 @@ function readDiff(diff) {
 }
 
 /**
+ * Do not use this on the meta repo because it uses libgit2 operations
+ * with bad performance and without the ability to handle sparse checkouts.
+ *
  * Return differences for the specified `paths` in the specified `repo` between
  * the current index and working directory, and the specified `tree`, if
  * not null.  If the specified `allUntracked` is true, include all untracked
