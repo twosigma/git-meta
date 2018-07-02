@@ -44,7 +44,6 @@ const Reset              = require("./reset");
 const RepoStatus         = require("./repo_status");
 const SparseCheckoutUtil = require("./sparse_checkout_util");
 const StatusUtil         = require("./status_util");
-const StashUtil          = require("./stash_util");
 const SubmoduleFetcher   = require("./submodule_fetcher");
 const SubmoduleUtil      = require("./submodule_util");
 const UserError          = require("./user_error");
@@ -275,17 +274,6 @@ ${colors.yellow(remoteName)}`);
     };
 });
 
-const makeShadowCommitFromIndex = co.wrap(function *(repo) {
-    const committish = yield StashUtil.makeShadowCommit(
-        repo, "index", true, true, false, true);
-    if (committish === null) {
-        const head = yield repo.head();
-        return yield NodeGit.Commit.lookup(repo, head.target());
-    } else {
-        return committish;
-    }
-});
-
 /**
  * Return an object describing what operation to perform in the specified
  * `repo` based on the optionally specified `committish`, the optionally
@@ -333,7 +321,8 @@ exports.deriveCheckoutOperation = co.wrap(function *(repo,
         commit: null,
         newBranch: null,
         switchBranch: null,
-        resolvedPaths: null
+        resolvedPaths: null,
+        checkoutFromIndex: false
     };
 
     const ensureBranchDoesntExist = co.wrap(function *(name) {
@@ -419,9 +408,10 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
                 // we're just going to make one.  The cache-tree ought to
                 // make this relatively cheap.
 
-                annotated = yield makeShadowCommitFromIndex(repo);
+                result.checkoutFromIndex = true;
+            } else {
+                result.commit = annotated;
             }
-            result.commit = annotated;
         }
         else {
             const commit = yield repo.getCommit(annotated.id());
@@ -447,7 +437,7 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
     else {
         if (files.length !== 0) {
             //When checking out files, we're implicitly using the index
-            result.commit = yield makeShadowCommitFromIndex(repo);
+            result.checkoutFromIndex = true;
         } else {
             // If we're implicitly using HEAD, see if it's on a branch
             // and record that branch's name.
@@ -464,8 +454,16 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
             repo);
         const openSubmodules = yield SubmoduleUtil.listOpenSubmodules(
             repo);
+
+        const workdir = repo.workdir();
+        const cwd = process.cwd();
+
+        const absfiles = files.map(filename =>
+                                   GitUtil.resolveRelativePath(workdir, cwd,
+                                                               filename));
+
         result.resolvedPaths = SubmoduleUtil.resolvePaths(
-            files, indexSubNames, openSubmodules);
+            absfiles, indexSubNames, openSubmodules);
 
         return result;
     }
@@ -491,7 +489,7 @@ Cannot setup tracking information; starting point is not a branch.`);
             }
 
             // If the branch is remote, set up remote tracking information,
-            // otherwise leve the remote name 'null';
+            // otherwise leave the remote name 'null';
 
             if (committishBranch.isRemote()) {
                 const parts = committishBranch.shorthand().split(/\/(.+)/);
@@ -589,33 +587,106 @@ exports.executeCheckout = co.wrap(function *(repo,
     }
 });
 
+function noSuchFileMessage(subName, path) {
+    const fn = `${subName}/${path}`;
+    return `error: pathspec '${fn}' did not match any file(s) known to git.`;
+}
 
 /**
  * Checkout files in submodules.
  *
  * @param {NodeGit.repository} repo
- * @param {NodeGit.Commit}     commit
- * @param {Object}             resolvedPaths -- keys are submodules, values are
- *                                              files
+ * @param {Object}             options
+ * @param {Object}             options.resolvedPaths -- keys are submodules,
+ *                                                      values are files
+ * @param {NodeGit.boolean}    options.checkoutFromIndex  Check out from the
+                                                          index
+ * @param {NodeGit.Commit}     options.commit  If not null, checking out
+ *                                             from a commit
+ * @param {NodeGit.Stage}      options.stage  If not null, index stage else 0
  */
-exports.checkoutFiles = co.wrap(function*(repo, commit, resolvedPaths) {
+exports.checkoutFiles = co.wrap(function*(repo, options) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    const resolvedPaths = options.resolvedPaths;
+    const subNames = Object.keys(resolvedPaths);
 
-    const getShas = SubmoduleUtil.getSubmoduleShasForCommit;
-    const subCommits = yield getShas(repo, Object.keys(resolvedPaths), commit);
-    const checkoutSub = co.wrap(function*(subName) {
+    let subCommits;
+    let stage = 0;
+    if (undefined !== options.stage) {
+        assert(options.checkoutFromIndex);
+        stage = options.stage;
+        assert.isNumber(stage);
+    }
+
+    if (options.commit) {
+        assert.instanceOf(options.commit, NodeGit.Commit);
+        assert(!options.checkoutFromIndex);
+        const getShas = SubmoduleUtil.getSubmoduleShasForCommit;
+        subCommits = yield getShas(repo, subNames, options.commit);
+    } else {
+        assert(options.checkoutFromIndex);
+    }
+
+    const errors = [];
+    const submoduleInfo = {};
+    const prepSub = co.wrap(function*(subName) {
+        const info = {};
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-        const subCommit = subCommits[subName];
+        info.repo = subRepo;
 
         const paths = resolvedPaths[subName];
-        const resolvedSubCommit = yield NodeGit.Commit.lookup(subRepo,
-                                                              subCommit);
+        if (options.checkoutFromIndex) {
+            const index = yield subRepo.index();
+            info.index = index;
+            // libgit2 doesn't care if requested paths don't exist,
+            // but we do.
+            for (const path of paths) {
+                if (undefined === index.getByPath(path, stage)) {
+                    errors.push(noSuchFileMessage(subName, path));
+                }
+            }
+        } else {
+            const subCommit = subCommits[subName];
+            const resolvedSubCommit = yield NodeGit.Commit.lookup(subRepo,
+                                                                  subCommit);
+            info.resolvedSubCommit = resolvedSubCommit;
+            // libgit2 doesn't care if requested paths don't exist,
+            // but we do.
+            const treeId = resolvedSubCommit.treeId();
+            const tree = yield NodeGit.Tree.lookup(subRepo, treeId);
+
+            for (const path of paths) {
+                const entry = yield tree.entryByPath(path);
+                if (null === entry) {
+                    errors.push(noSuchFileMessage(subName, path));
+                }
+            }
+        }
+
+        submoduleInfo[subName] = info;
+    });
+
+    yield DoWorkQueue.doInParallel(subNames, prepSub);
+    if (errors.length !== 0) {
+        throw new UserError(errors.join("\n"));
+    }
+
+    const checkoutSub = co.wrap(function*(subName) {
+        const info = submoduleInfo[subName];
+        const subRepo = info.repo;
+        const paths = resolvedPaths[subName];
+
         const opts = new NodeGit.CheckoutOptions();
         opts.checkoutStrategy = NodeGit.Checkout.STRATEGY.FORCE;
         if (paths.length > 0) {
             opts.paths = paths;
         }
-        yield NodeGit.Checkout.tree(subRepo, resolvedSubCommit, opts);
+        if (options.checkoutFromIndex) {
+            yield NodeGit.Checkout.index(subRepo, info.index, opts);
+        } else {
+            yield NodeGit.Checkout.tree(subRepo, info.resolvedSubCommit, opts);
+        }
     });
 
-    yield DoWorkQueue.doInParallel(Object.keys(resolvedPaths), checkoutSub);
+    yield DoWorkQueue.doInParallel(subNames, checkoutSub);
 });

@@ -37,7 +37,6 @@ const NodeGit = require("nodegit");
 const Checkout        = require("../../lib/util/checkout");
 const GitUtil         = require("../../lib/util/git_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
-const StashUtil       = require("../../lib/util/stash_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const UserError       = require("../../lib/util/user_error");
 
@@ -655,28 +654,24 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                         repo);
                     const open = yield SubmoduleUtil.listOpenSubmodules(
                         repo);
-                    const resolvedFiles = SubmoduleUtil.resolvePaths(c.paths,
+                    const resolvedPaths = SubmoduleUtil.resolvePaths(c.paths,
                                                                      index,
                                                                      open,
                                                                      true);
+                    let checkoutFromIndex;
                     let annotated;
                     if (c.commit === ":0") {
-                        let shadow = yield StashUtil.makeShadowCommit(
-                            repo, "index", true, true, false, true);
-                        if (shadow === null) {
-                            const head = yield repo.head();
-                            shadow = yield head.target();
-                        }
-                        annotated = yield NodeGit.Commit.lookup(repo,
-                            shadow.metaCommit);
-                        assert (annotated !== null);
+                        checkoutFromIndex = true;
                     } else {
                         const mapped = maps.reverseCommitMap[c.commit];
                         annotated = yield NodeGit.Commit.lookup(repo, mapped);
                     }
 
-                    yield Checkout.checkoutFiles(repo, annotated,
-                                                 resolvedFiles);
+                    yield Checkout.checkoutFiles(repo, {
+                        commit: annotated,
+                        resolvedPaths: resolvedPaths,
+                        checkoutFromIndex: checkoutFromIndex
+                    });
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                                c.expected,
