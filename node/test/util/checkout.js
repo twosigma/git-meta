@@ -317,8 +317,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 state: "x=S",
                 committish: "bar",
                 track: false,
-                expectedSha: "1", // here, there are no index changes, so the
-                                  // shadow-commit will be a no-op
+                expectedCheckoutFromIndex: true,
                 expectedFiles: "bar",
                 expectedNewBranch: null,
                 expectedSwitchBranch: null,
@@ -480,6 +479,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 const newBranch = c.newBranch || null;
                 const track = c.track || false;
                 let result;
+                process.chdir(repo.workdir());
                 try {
                     result = yield Checkout.deriveCheckoutOperation(repo,
                                                                     committish,
@@ -495,7 +495,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 assert(!c.fails, "was supposed to fail");
                 const expectedSha = c.expectedSha;
                 const commit = result.commit;
-                if (null !== expectedSha) {
+                if (!!expectedSha) {
                     assert.isNotNull(commit);
                     const commitId = commit.id().tostrS();
                     const sha = written.commitMap[commitId];
@@ -503,6 +503,10 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 }
                 else {
                     assert.isNull(commit);
+                }
+                if (undefined !== c.expectedCheckoutFromIndex) {
+                    assert.equal(c.expectedCheckoutFromIndex,
+                                 result.checkoutFromIndex);
                 }
                 assert.deepEqual(result.newBranch, c.expectedNewBranch);
                 assert.equal(result.switchBranch, c.expectedSwitchBranch);
