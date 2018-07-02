@@ -398,19 +398,11 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
                     }
                 }
             }
-            if (null === annotated) {
+            if (null === annotated && !result.newBranch) {
                 // If we didn't resolve anything from `committish`, try it
                 // as a file.
                 files.splice(0, 0, committish);
-                // We would now like to resolve from the index, but
-                // libgit2 doesn't support the ":0" shorthand, and our
-                // remaining code all assumes an actual commit, so
-                // we're just going to make one.  The cache-tree ought to
-                // make this relatively cheap.
-
                 result.checkoutFromIndex = true;
-            } else {
-                result.commit = annotated;
             }
         }
         else {
@@ -435,10 +427,7 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
         }
     }
     else {
-        if (files.length !== 0) {
-            //When checking out files, we're implicitly using the index
-            result.checkoutFromIndex = true;
-        } else {
+        if (files.length === 0) {
             // If we're implicitly using HEAD, see if it's on a branch
             // and record that branch's name.
 
