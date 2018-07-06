@@ -710,6 +710,13 @@ exports.setHeadHard = co.wrap(function *(repo, commit) {
     yield NodeGit.Checkout.tree(repo, commit, {
         checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
     });
+    const execString = `\
+git -C '${repo.workdir()}' checkout ${commit.id()} -f `;
+    try {
+        yield ChildProcess.exec(execString);
+    } catch (e) {
+        throw new UserError(e.message);
+    }
     repo.setHeadDetached(commit);
 });
 
