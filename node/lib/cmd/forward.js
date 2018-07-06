@@ -79,16 +79,17 @@ exports.execute = co.wrap(function *(name, args) {
 
     const GitUtil = require("../util/git_util");
 
+    if (name === "diff") {
+        args.splice(0, 0, "--submodule=diff");
+    }
     const gitArgs = [
         "-C",
         GitUtil.getRootGitDirectory(),
         name,
-        name === "diff" ? "--submodule=diff" : ""
     ].concat(args);
     try {
         yield ChildProcess.spawn("git", gitArgs, {
             stdio: "inherit",
-            shell: true,
         });
     }
     catch (e) {
