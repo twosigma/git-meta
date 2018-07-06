@@ -2058,9 +2058,9 @@ exports.doCommitCommand = co.wrap(function *(repo,
         // If no message on the command line, prompt for one.
 
         const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
-        const rawMessage = yield editMessage(repo, initialMessage);
-        message = GitUtil.stripMessage(rawMessage);
+        message = yield editMessage(repo, initialMessage);
     }
+    message = GitUtil.stripMessage(message);
 
     if ("" === message) {
         abortForNoMessage();
