@@ -209,5 +209,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     process.stdout.write(statusText);
 
     // Run post-reset hook.
-    yield Hook.execHook("post-reset");
+    yield Hook.execHook(repo, "post-reset");
 });

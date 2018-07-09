@@ -206,7 +206,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const headId = yield repo.getHeadCommit();
     const oldHead = headId.id().tostrS();
     const newHead = op.commit;
-    yield Hook.execHook("post-checkout", [oldHead, newHead, branchCheckout]);
+    yield Hook.execHook(repo, "post-checkout",
+                        [oldHead, newHead, branchCheckout]);
     // If we made a new branch, let the user know about it.
 
     const newB = op.newBranch;

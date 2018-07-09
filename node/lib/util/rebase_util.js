@@ -147,7 +147,7 @@ exports.runRebase = co.wrap(function *(repo, seq) {
     yield restoreHeadBranch(repo, seq);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
     console.log("Finished rebase.");
-    yield Hook.execHook("post-rewrite", ["rebase"]);
+    yield Hook.execHook(repo, "post-rewrite", ["rebase"]);
     return result;
 });
 

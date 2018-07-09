@@ -41,12 +41,13 @@ describe("Hook", function () {
     describe("execHook", function () {
         // 1. Hook does not exist, no error throws.
         it("hook_does_not_exist", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
             const hookName = "fake_hook";
             assert.doesNotThrow(
                 function () {
                     //Nothing happened, no error throws.
                 },
-                yield Hook.execHook(hookName)
+                yield Hook.execHook(repo, hookName)
             );
         }));
 
@@ -61,7 +62,7 @@ describe("Hook", function () {
             yield fs.writeFile(hookFile,
                                "#!/bin/bash \necho 'it is a test hook'\n");
             yield fs.chmod(hookFile, "755");
-            const result = yield Hook.execHook(hookName);
+            const result = yield Hook.execHook(repo, hookName);
             assert.equal(result, "it is a test hook\n");
         }));
     });
