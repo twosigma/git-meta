@@ -44,6 +44,7 @@ const path         = require("path");
 
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
+const Hook                = require("./hook");
 const UserError           = require("./user_error");
 
 /**
@@ -707,10 +708,20 @@ exports.setHeadHard = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
+    const headId = yield repo.getHeadCommit();
+    let oldHead;
+    if (headId === null) {
+        oldHead = "0000000000000000000000000000000000000000";
+    } else {
+        oldHead = headId.id().tostrS();
+    }
+    const newHead = commit.sha();
+
     yield NodeGit.Checkout.tree(repo, commit, {
         checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
     });
     repo.setHeadDetached(commit);
+    yield Hook.execHook(repo, "post-checkout", [oldHead, newHead, "1"]);
 });
 
 /**
