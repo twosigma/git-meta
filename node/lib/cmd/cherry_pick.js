@@ -137,5 +137,5 @@ Could not resolve ${colors.red(commitish)} to a commit.`);
     }
 
     // Run post-commit hook as regular git.
-    yield Hook.execHook("post-commit");
+    yield Hook.execHook(repo, "post-commit");
 });

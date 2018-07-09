@@ -34,7 +34,6 @@ const assert    = require("chai").assert;
 const ChildProcess = require("child-process-promise");
 const co        = require("co");
 const path      = require("path");
-const GitUtil   = require("../util/git_util");
 const process   = require("process");
 
 /**
@@ -44,15 +43,15 @@ const process   = require("process");
  * @param {String[]} args
  * @return {String}
  */
-exports.execHook = co.wrap(function *(name, args=[]) {
+exports.execHook = co.wrap(function *(repo, name, args=[]) {
     assert.isString(name);
 
-    const rootDirectory = GitUtil.getRootGitDirectory();
-    const hookPath = path.join(rootDirectory, ".git/hooks");
+    const rootDirectory = repo.path();
+    const hookPath = path.join(rootDirectory, "hooks");
     const absPath = path.resolve(hookPath, name);
 
     try {
-        process.chdir(rootDirectory);
+        process.chdir(repo.workdir());
         const result = yield ChildProcess.execFile(absPath, args);
         console.log(result.stdout);
         return result.stdout;

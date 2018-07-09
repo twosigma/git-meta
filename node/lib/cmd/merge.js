@@ -177,5 +177,5 @@ Merge of '${commitName}'
     // Fixme: --squash is not supported yet, once supported, need to parse 0/1
     // as arg into the post-merge hook, 1 means it is a squash merge, 0 means
     // not.
-    yield Hook.execHook("post-merge", ["0"]);
+    yield Hook.execHook(repo, "post-merge", ["0"]);
 });

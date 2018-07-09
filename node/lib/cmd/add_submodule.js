@@ -127,5 +127,5 @@ you will not be able to use 'git meta commit' until you do so.`);
     }
 
     //Run post-add-submodule hook with submodule names which added successfully.
-    yield Hook.execHook("post-add-submodule", [args.path]);
+    yield Hook.execHook(repo, "post-add-submodule", [args.path]);
 });
