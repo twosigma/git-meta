@@ -203,6 +203,7 @@ running rebase.`);
     if (canFF) {
         yield Reset.reset(repo, onto, Reset.TYPE.HARD);
         console.log(`Fast-forwarded to ${GitUtil.shortSha(ontoSha)}`);
+        yield Hook.execHook(repo, "post-checkout", [headSha, ontoSha, "1"]);
         return result;                                                // RETURN
     }
 
