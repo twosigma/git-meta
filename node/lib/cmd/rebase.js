@@ -30,6 +30,7 @@
  */
 
 const co = require("co");
+const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `rebase` command.
@@ -120,4 +121,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             throw new UserError(result.errorMessage);
         }
     }
+
+    yield Hook.execHook(repo, "post-rewrite", ["rebase"]);
 });
