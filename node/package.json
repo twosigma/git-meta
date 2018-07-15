@@ -33,6 +33,7 @@
     "child-process-promise": "",
     "co": "",
     "colors": "",
+    "deeper": "",
     "fs-promise": "",
     "group-by": "",
     "nodegit": "^0.21.1",
@@ -42,7 +43,6 @@
   },
   "devDependencies": {
     "deepcopy": "",
-    "deeper": "",
     "istanbul": "",
     "mkdirp": "",
     "mocha": "^3.1.2",
