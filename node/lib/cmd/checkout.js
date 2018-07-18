@@ -198,7 +198,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         // we checked out.
         
         branchCheckout = "0";
-        console.log(`Checked out ${colors.green(args.committish)}.`);
+        console.log(`Checked out ${colors.green(committish)}.`);
     }
 
     // Run post-checkout hook.
