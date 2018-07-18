@@ -156,6 +156,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                       args.track || false,
                                                       files);
 
+    if (op.commit === null) {
+        throw new UserError(`pathspec '${committish}' did not match any
+                            file(s) known to git.`);
+    }
+
     // If we're going to check out files, just do that
     if (op.resolvedPaths !== null &&
         Object.keys(op.resolvedPaths).length !== 0) {
