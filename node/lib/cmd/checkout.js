@@ -132,13 +132,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Checkout  = require("../util/checkout");
     const GitUtil   = require("../util/git_util");
     let newBranch = null;
-    let branchCheckout = "1";
 
     const newBranchNameArr = args["new branch name"];
     if (newBranchNameArr) {
         newBranch = newBranchNameArr[0];
     }
     const repo = yield GitUtil.getCurrentRepo();
+    const headId = yield repo.getHeadCommit();
+    const oldHead = headId.id().tostrS();
 
     // Validate and determine what operation we're actually doing.
 
@@ -161,10 +162,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                             file(s) known to git.`);
     }
 
+    const newHead = op.commit;
+
     // If we're going to check out files, just do that
     if (op.resolvedPaths !== null &&
         Object.keys(op.resolvedPaths).length !== 0) {
         yield Checkout.checkoutFiles(repo, op);
+        yield Hook.execHook(repo, "post-checkout",
+                            [oldHead, newHead, "0"]);
         return;
     }
 
@@ -196,8 +201,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     if (null !== op.commit && null === op.switchBranch) {
         // In this case, we're not making a branch; just let the user know what
         // we checked out.
-        
-        branchCheckout = "0";
+
         console.log(`Checked out ${colors.green(committish)}.`);
     }
 
@@ -208,11 +212,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // branches, flag = "1"), or a file checkout (retrieving a file from the
     // index, flag = "0").
 
-    const headId = yield repo.getHeadCommit();
-    const oldHead = headId.id().tostrS();
-    const newHead = op.commit;
     yield Hook.execHook(repo, "post-checkout",
-                        [oldHead, newHead, branchCheckout]);
+                        [oldHead, newHead, "1"]);
     // If we made a new branch, let the user know about it.
 
     const newB = op.newBranch;
