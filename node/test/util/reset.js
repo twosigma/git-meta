@@ -103,6 +103,50 @@ describe("reset", function () {
 
             }));
         });
+        it("does a mixed and non-mixed reset", co.wrap(function *() {
+            const input = "a=B|x=S:C2-1 s=Sa:1;Bmaster=2";
+            const maps = yield RepoASTTestUtil.createMultiRepos(input);
+            const repo = maps.repos.x;
+            const index = yield repo.index();
+
+            let fromWorkdir =
+                yield SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+            assert.equal(1, Object.keys(fromWorkdir).length);
+            let fromIndex =
+                yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+            assert.equal(1, Object.keys(fromIndex).length);
+
+            const rev = maps.reverseCommitMap;
+            const commit = yield repo.getCommit(rev["1"]);
+            const head = yield repo.getHeadCommit();
+            const headTree = yield head.getTree();
+            const commitTree = yield commit.getTree();
+            const diff = yield NodeGit.Diff.treeToTree(repo,
+                                                       headTree,
+                                                       commitTree,
+                                                       null);
+            const changes =
+                  yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff, true);
+
+            yield Reset.resetMetaRepo(repo, index, commit, changes, true);
+
+            fromWorkdir =
+                yield SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+            assert.equal(1, Object.keys(fromWorkdir).length);
+            fromIndex =
+                yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+            assert.equal(0, Object.keys(fromIndex).length);
+
+            yield Reset.resetMetaRepo(repo, index, commit, changes, false);
+
+            fromWorkdir =
+                yield SubmoduleConfigUtil.getSubmodulesFromWorkdir(repo);
+            assert.equal(0, Object.keys(fromWorkdir).length);
+            fromIndex =
+                yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+            assert.equal(0, Object.keys(fromIndex).length);
+
+        }));
         it("submodule directory is cleaned up", co.wrap(function *() {
             const written = yield RepoASTTestUtil.createRepo(
                                                             "U:C3-2 s;Bfoo=3");

@@ -219,7 +219,7 @@ exports.checkoutCommit = co.wrap(function *(repo, commit, force) {
     }
 
     const index = yield repo.index();
-    yield Reset.resetMetaRepo(repo, index, commit, changes);
+    yield Reset.resetMetaRepo(repo, index, commit, changes, false);
     repo.setHeadDetached(commit);
 
     const doCheckout = co.wrap(function *(name) {

@@ -87,8 +87,10 @@ function getType(type) {
  * @param {NodeGit.Index}      index
  * @param {NodeGit.Commit}     commit
  * @param {Object}             changes     from path to `SubmoduleChange`
+ * @param {Boolean}            mixed       do not change the working tree
  */
-exports.resetMetaRepo = co.wrap(function *(repo, index, commit, changes) {
+exports.resetMetaRepo = co.wrap(function *(repo, index, commit, changes,
+                                          mixed) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
     assert.instanceOf(commit, NodeGit.Commit);
@@ -96,6 +98,10 @@ exports.resetMetaRepo = co.wrap(function *(repo, index, commit, changes) {
 
     const tree = yield commit.getTree();
     yield index.readTree(tree);
+
+    if (mixed) {
+        return;
+    }
 
     // Render modules file
 
@@ -184,14 +190,13 @@ exports.reset = co.wrap(function *(repo, commit, type) {
     // not going to touch the index or the `.gitmodules` file.
 
     if (TYPE.SOFT !== type) {
-        yield exports.resetMetaRepo(repo, index, commit, changedSubs);
+        yield exports.resetMetaRepo(repo, index, commit, changedSubs,
+                                   TYPE.MIXED === type);
     }
 
     const resetType = getType(type);
 
-    // Make a list of submodules to reset, including all that have been changed
-    // between HEAD and 'commit', and all that are open.
-
+    const removedSubmodules = [];
 
     const resetSubmodule = co.wrap(function *(name) {
         const change = changedSubs[name];
@@ -222,6 +227,14 @@ exports.reset = co.wrap(function *(repo, commit, type) {
             // If there's no change, use what's been configured in the index.
 
             const entry = index.getByPath(name);
+            // It is possible that this submodule exists in
+            // .gitmodules but not in the index.  Probably this is
+            // because it is newly-created, but not yet git-added.
+            if (undefined === entry) {
+                removedSubmodules.push(name);
+                return;
+            }
+
             subCommitSha = entry.id.tostrS();
         } else {
             subCommitSha = change.newSha;
@@ -241,10 +254,23 @@ exports.reset = co.wrap(function *(repo, commit, type) {
 
         yield index.addByPath(name);
     });
+
+    // Make a list of submodules to reset, including all that have been changed
+    // between HEAD and 'commit', and all that are open.
     const openSubs = Array.from(openSubsSet);
     const changedSubNames = Object.keys(changedSubs);
     const subsToTry = Array.from(new Set(changedSubNames.concat(openSubs)));
     yield DoWorkQueue.doInParallel(subsToTry, resetSubmodule);
+
+    // remove added submodules from .gitmodules
+    const modules = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo,
+                                                                     index);
+    for (const file of removedSubmodules) {
+        delete modules[file];
+    }
+
+    yield SubmoduleConfigUtil.writeUrls(repo, index, modules,
+                                        type === TYPE.MIXED);
 
     // Write the index in case we've had to stage submodule changes.
 
