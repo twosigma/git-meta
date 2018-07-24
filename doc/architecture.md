@@ -108,7 +108,7 @@ products that take a similar approach:
 
 - [Gitslave](http://gitslave.sourceforge.net)
 - [myrepos](https://myrepos.branchable.com)
-- [Android Repo](https://source.android.com/source/using-repo.html)
+- [git-repo](https://gerrit.googlesource.com/git-repo/)
 - [gclient](http://dev.chromium.org/developers/how-tos/depottools#TOC-gclient)
 - [Git subtrees](https://git-scm.com/book/en/v1/Git-Tools-Subtree-Merging)
 - [Git submodules](https://git-scm.com/docs/git-submodule)
@@ -116,16 +116,22 @@ products that take a similar approach:
 All of these tools overlap with the problems git-meta is trying to solve, but
 none of them are sufficient:
 
-- most don't provide a way to reference the state of all repositories
-  (Gitslave, Android Repo, Myrepos)
-- some require a custom server (Android Repo)
-- many are strongly focused on supporting a specific software platform (Android
-  Repo, gclient)
+- Most don't provide a way to reference the state of all repositories (Gitslave
+  and Myrepos). git-repo does the ability to reference the state of all repos,
+  but not in a way that can be used easily with normal Git commands (the state
+  is tracked in an XML file  in a separate repository).
+- or are strongly focused on supporting a specific piece of software (gclient)
 - doesn't fully solve the scaling issue (Git subtrees)
 - prohibitively difficult to use (Git submodules)
 - lack scalable collaboration (e.g., pull request) strategies
 
-Git submodules come the closest: they do provide the technical ability to solve
+The git-repo project uses an approach that is structurally similar to the one
+used by git-meta: a (remote) meta-repo tracks the state of the sub-repos in an
+XML file.  It does not generally try to provide a full suite of
+cross-repository operations (such as `rebase`, `cherry-pick`, etc.) and assumes
+the use of the Gerrit code review tool.
+
+Git submodules come the close: they do provide the technical ability to solve
 the problem, but are very difficult to use and lack some of the desired
 features.  With git-meta, we build on top of Git submodules to provide the
 desired functionality by leveraging only existing Git commands.
