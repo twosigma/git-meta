@@ -156,7 +156,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                       args.track || false,
                                                       files);
 
-    if (op.commit === null) {
+    if (null === op.commit && null === op.newBranch) {
         throw new UserError(`pathspec '${committish}' did not match any
                             file(s) known to git.`);
     }
