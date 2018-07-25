@@ -117,9 +117,9 @@ All of these tools overlap with the problems git-meta is trying to solve, but
 none of them are sufficient:
 
 - Most don't provide a way to reference the state of all repositories (Gitslave
-  and Myrepos). git-repo does the ability to reference the state of all repos,
+  and Myrepos). git-repo has the ability to reference the state of all repos,
   but not in a way that can be used easily with normal Git commands (the state
-  is tracked in an XML file  in a separate repository).
+  is tracked in an XML file in a separate repository).
 - or are strongly focused on supporting a specific piece of software (gclient)
 - doesn't fully solve the scaling issue (Git subtrees)
 - prohibitively difficult to use (Git submodules)
