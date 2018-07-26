@@ -670,7 +670,10 @@ exports.resolvePaths = function (paths, indexSubNames, openSubmodules,
         let found = false;
         for (let j = 0; j < subsToCheck.length; ++j) {
             const subName = subsToCheck[j];
-            if (filename.startsWith(subName + "/")) {
+            if (filename === subName) {
+                found = true;
+                result[subName] = [];
+            } else if (filename.startsWith(subName + "/")) {
                 found = true;
                 const pathInSub = filename.slice(subName.length + 1,
                                                  filename.length);
