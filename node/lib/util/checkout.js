@@ -452,7 +452,7 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
                                                                filename));
 
         result.resolvedPaths = SubmoduleUtil.resolvePaths(
-            absfiles, indexSubNames, openSubmodules);
+            absfiles, indexSubNames, openSubmodules, true);
 
         if (null === result.commit) {
             let annotated = yield GitUtil.resolveCommitish(repo, "HEAD");
