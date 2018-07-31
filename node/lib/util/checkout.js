@@ -455,8 +455,7 @@ Could not resolve ${colors.red(committish)} as a branch or commit.`);
             absfiles, indexSubNames, openSubmodules, true);
 
         if (null === result.commit) {
-            let annotated = yield GitUtil.resolveCommitish(repo, "HEAD");
-            result.commit = yield repo.getCommit(annotated.id());
+            result.checkoutFromIndex = true;
         }
 
         return result;

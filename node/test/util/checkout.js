@@ -323,7 +323,7 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 state: "a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os",
                 committish: "s",
                 track: false,
-                expectedSha: "2",
+                expectedCheckoutFromIndex: true,
                 expectedNewBranch: null,
                 expectedSwitchBranch: null,
             },
@@ -331,9 +331,18 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 state: "a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os",
                 committish: "s/no-such-file-but-we-will-detect-that-later",
                 track: false,
-                expectedSha: "2",
+                expectedCheckoutFromIndex: true,
                 expectedNewBranch: null,
                 expectedSwitchBranch: null,
+            },
+            "some files after --": {
+                state: "a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os",
+                committish: null,
+                track: false,
+                expectedCheckoutFromIndex: true,
+                expectedNewBranch: null,
+                expectedSwitchBranch: null,
+                files: ["s/no-such-file-but-we-will-detect-that-later"]
             },
             "commit, no new branch, nameless": {
                 state: "x=S",
@@ -491,13 +500,15 @@ a=B|x=S:C2-1 s=Sa:1;C3-2 r=Sa:1,t=Sa:1;Os;Bmaster=3;Bfoo=2;H=2`,
                 }
                 const newBranch = c.newBranch || null;
                 const track = c.track || false;
+                let files = c.files;
                 let result;
                 process.chdir(repo.workdir());
                 try {
                     result = yield Checkout.deriveCheckoutOperation(repo,
                                                                     committish,
                                                                     newBranch,
-                                                                    track);
+                                                                    track,
+                                                                    files);
                 }
                 catch (e) {
                     if (!c.fails || !(e instanceof UserError)) {
