@@ -90,6 +90,12 @@ exports.configureParser = function (parser) {
         defaultValue: false,
         help: "use timestamp of HEAD + 1 instead of current time",
     });
+    parser.addArgument(["-s", "--include-subrepos"], {
+        type: "string",
+        required: false,
+        defaultValue: "",
+        help: "only include specified sub-repos, includes all if left empty",
+    });
 };
 
 /**
@@ -106,11 +112,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const incrementTimestamp =
                               args.increment_timestamp || args.epoch_timestamp;
+    const includedSubrepos = (args.include_subrepos.length === 0) ?
+                              [] : args.include_subrepos.split(",");
     const result = yield StashUtil.makeShadowCommit(repo,
                                                     args.message,
                                                     incrementTimestamp,
                                                     false,
                                                     args.include_untracked,
+                                                    includedSubrepos,
                                                     false);
     if (null === result) {
         const head = yield repo.getHeadCommit();

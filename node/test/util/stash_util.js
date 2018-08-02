@@ -721,10 +721,21 @@ meta-stash@{1}: log of 1
                 expected: "x=E:Cm-1 foo/bar=2;Bm=m",
                 includeMeta: true,
             },
+            "a new file, included in subrepo list": {
+                state: "x=S:W foo/bar=2",
+                includedSubrepos: ["foo/bar"],
+                expected: "x=E:Cm-1 foo/bar=2;Bm=m",
+                includeMeta: true,
+            },
             "a new file, untracked not included": {
                 state: "x=S:W foo/bar=2",
                 includeMeta: true,
                 includeUntracked: false,
+            },
+            "a new file, tracked but not included in subrepo list": {
+                state: "x=S:W foo/bar=2",
+                includedSubrepos: ["bar/"],
+                includeMeta: true,
             },
             "with a message": {
                 state: "x=S:W foo/bar=2",
@@ -810,12 +821,16 @@ x=E:Cm-1 s=Sa:s;Bm=m;Os Cs foo=bar!Bs=s!W foo=bar`
                 const incrementTimestamp =
                         (undefined === c.incrementTimestamp) ?
                         false : c.incrementTimestamp;
+                const includedSubrepos =
+                        (undefined === c.includedSubrepos) ?
+                        [] : c.includedSubrepos;
                 const result = yield StashUtil.makeShadowCommit(
                                                             repo,
                                                             message,
                                                             incrementTimestamp,
                                                             meta,
                                                             includeUntracked,
+                                                            includedSubrepos,
                                                             false);
 
                 const commitMap = {};
