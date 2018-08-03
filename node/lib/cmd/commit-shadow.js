@@ -52,12 +52,12 @@ exports.helpText =
 exports.description  = `Create a "shadow" commit containing all local
 modifications (including untracked files if '--include-untracked' is specified,
 include only files in the specified directories following '--include-subrepos' 
-if it is specified and non-empty) to all sub-repos and then print the SHA of 
-the created commit.  If there are no local modifications, print the SHA of 
-HEAD.  Do not modify the index or update HEAD to point to the created commit.  
-Note that this command ignores non-submodule changes to the meta-repo. 
-Note also that this command is meant for programmatic use and its output
-format is stable.`;
+if it is specified, if unspecified all paths are considered) to all sub-repos 
+and then print the SHA of the created commit.  If there are no local 
+modifications, print the SHA of HEAD.  Do not modify the index or update HEAD 
+to point to the created commit.  Note that this command ignores non-submodule 
+changes to the meta-repo. Note also that this command is meant for programmatic 
+use and its output format is stable.`;
 
 /**
  * Configure the specified `parser` for the `commit` command.
@@ -96,7 +96,7 @@ exports.configureParser = function (parser) {
         type: "string",
         required: false,
         defaultValue: "",
-        help: "only include specified sub-repos, includes all if left empty",
+        help: "only include specified sub-repos",
     });
 };
 
@@ -114,6 +114,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const incrementTimestamp =
                               args.increment_timestamp || args.epoch_timestamp;
+    if (args.include_subrepos.length === 0){
+        args.error(
+            "--include-subrepos must be passed a comma separated list of paths"
+        );
+    }
     const includedSubrepos = (args.include_subrepos.length === 0) ?
                               [] : args.include_subrepos.split(",");
     const result = yield StashUtil.makeShadowCommit(repo,
