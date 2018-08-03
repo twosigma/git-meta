@@ -95,7 +95,7 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-s", "--include-subrepos"], {
         type: "string",
         required: false,
-        defaultValue: "",
+        nargs: "+",
         help: "only include specified sub-repos",
     });
 };
@@ -114,13 +114,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const incrementTimestamp =
                               args.increment_timestamp || args.epoch_timestamp;
-    if (args.include_subrepos.length === 0){
-        args.error(
-            "--include-subrepos must be passed a comma separated list of paths"
-        );
-    }
-    const includedSubrepos = (args.include_subrepos.length === 0) ?
-                              [] : args.include_subrepos.split(",");
+    const includedSubrepos = args.include_subrepos || [];
     const result = yield StashUtil.makeShadowCommit(repo,
                                                     args.message,
                                                     incrementTimestamp,
