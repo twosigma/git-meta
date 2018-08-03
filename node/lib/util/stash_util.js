@@ -558,7 +558,9 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
 /**
  * Generate a shadow commit in the specified 'repo' with the specified
  * 'message' and return an object describing the created commits.  Ignore
- * untracked files unless the specified 'includeUntracked' is true.  If the
+ * untracked files unless the specified 'includeUntracked' is true.
+ * When 'includedSubrepos' is non-empty only consider files contained within the
+ * paths specified in includedSubrepos.  If the
  * repository is clean, return null.  Note that this command does not affect
  * the state of 'repo' other than to generate commits.
  *

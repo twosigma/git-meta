@@ -50,12 +50,14 @@ exports.helpText =
  * @property {String}
  */
 exports.description  = `Create a "shadow" commit containing all local
-modifications (including untracked files if '--include-untracked' is specified)
-to all sub-repos and then print the SHA of the created commit.  If there are no
-local modifications, print the SHA of HEAD.  Do not modify the index or update
-HEAD to point to the created commit.  Note that this command ignores
-non-submodule changes to the meta-repo.  Note also that this command is meant
-for programmatic use and its output format is stable.`;
+modifications (including untracked files if '--include-untracked' is specified,
+include only files in the specified directories following '--include-subrepos' 
+if it is specified and non-empty) to all sub-repos and then print the SHA of 
+the created commit.  If there are no local modifications, print the SHA of 
+HEAD.  Do not modify the index or update HEAD to point to the created commit.  
+Note that this command ignores non-submodule changes to the meta-repo. 
+Note also that this command is meant for programmatic use and its output
+format is stable.`;
 
 /**
  * Configure the specified `parser` for the `commit` command.
