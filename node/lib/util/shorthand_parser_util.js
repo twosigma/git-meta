@@ -101,7 +101,7 @@ const SequencerState = RepoAST.SequencerState;
  *        "s" with a url of "a" on commit `1`
  * - N -- for "null", a completely empty repo
  *
- * Whitespace is skipped at the beginning of shorthanad, and also after some,
+ * Whitespace is skipped at the beginning of shorthand, and also after some,
  * but not all delimitors.  We can't skip it in places where the space
  * character is itself a separator, such as after the parent commit ids.  It is
  * skipped after separators for:

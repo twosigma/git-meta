@@ -50,12 +50,14 @@ exports.helpText =
  * @property {String}
  */
 exports.description  = `Create a "shadow" commit containing all local
-modifications (including untracked files if '--include-untracked' is specified)
-to all sub-repos and then print the SHA of the created commit.  If there are no
-local modifications, print the SHA of HEAD.  Do not modify the index or update
-HEAD to point to the created commit.  Note that this command ignores
-non-submodule changes to the meta-repo.  Note also that this command is meant
-for programmatic use and its output format is stable.`;
+modifications (including untracked files if '--include-untracked' is specified,
+include only files in the specified directories following '--include-subrepos' 
+if it is specified, if unspecified all paths are considered) to all sub-repos 
+and then print the SHA of the created commit.  If there are no local 
+modifications, print the SHA of HEAD.  Do not modify the index or update HEAD 
+to point to the created commit.  Note that this command ignores non-submodule 
+changes to the meta-repo. Note also that this command is meant for programmatic 
+use and its output format is stable.`;
 
 /**
  * Configure the specified `parser` for the `commit` command.
@@ -90,6 +92,12 @@ exports.configureParser = function (parser) {
         defaultValue: false,
         help: "use timestamp of HEAD + 1 instead of current time",
     });
+    parser.addArgument(["-s", "--include-subrepos"], {
+        type: "string",
+        required: false,
+        nargs: "+",
+        help: "only include specified sub-repos",
+    });
 };
 
 /**
@@ -106,11 +114,13 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const incrementTimestamp =
                               args.increment_timestamp || args.epoch_timestamp;
+    const includedSubrepos = args.include_subrepos || [];
     const result = yield StashUtil.makeShadowCommit(repo,
                                                     args.message,
                                                     incrementTimestamp,
                                                     false,
                                                     args.include_untracked,
+                                                    includedSubrepos,
                                                     false);
     if (null === result) {
         const head = yield repo.getHeadCommit();

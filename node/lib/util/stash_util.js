@@ -558,7 +558,9 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
 /**
  * Generate a shadow commit in the specified 'repo' with the specified
  * 'message' and return an object describing the created commits.  Ignore
- * untracked files unless the specified 'includeUntracked' is true.  If the
+ * untracked files unless the specified 'includeUntracked' is true.
+ * When 'includedSubrepos' is non-empty only consider files contained within the
+ * paths specified in includedSubrepos.  If the
  * repository is clean, return null.  Note that this command does not affect
  * the state of 'repo' other than to generate commits.
  *
@@ -571,6 +573,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
  * @param {Bool}               useEpochTimestamp
  * @param {Bool}               includeMeta
  * @param {Bool}               includeUntracked
+ * @param {Object}             includedSubrepos
  * @param {Bool}               indexOnly         include only staged changes
  * @return {Object|null}
  * @return {String} return.metaCommit
@@ -581,11 +584,13 @@ exports.makeShadowCommit = co.wrap(function *(repo,
                                               useEpochTimestamp,
                                               includeMeta,
                                               includeUntracked,
+                                              includedSubrepos,
                                               indexOnly) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(message);
     assert.isBoolean(includeMeta);
     assert.isBoolean(includeUntracked);
+    assert.isArray(includedSubrepos);
     assert.isBoolean(useEpochTimestamp);
     if (indexOnly === undefined) {
         indexOnly = false;
@@ -601,6 +606,7 @@ exports.makeShadowCommit = co.wrap(function *(repo,
         showMetaChanges: includeMeta,
         showAllUntracked: true,
         ignoreIndex: false,
+        paths: includedSubrepos,
     });
     if (status.isDeepClean(includeUntracked)) {
         return null;                                                  // RETURN
