@@ -1163,27 +1163,36 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
         const subStatus = subs[subName];
 
-        // If the sub-repo doesn't have an open status, and there are no amend
-        // changes, there's nothing to do.
+        // We're working on only open repos (they would have been opened
+        // earlier if necessary).
 
         if (null === subStatus.workdir) {
             return;                                                   // RETURN
         }
 
+        const doAmend = amendSubSet.has(subName);
         const repoStatus = subStatus.workdir.status;
+        const staged = repoStatus.staged;
+        const numStaged = Object.keys(staged).length;
+
+        // If we're not amending and nothing staged, exit now.
+
+        if (!doAmend && 0 === numStaged) {
+            return;                                                   // RETURN
+        }
+
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
 
         // If the submodule is to be amended, we don't do the normal commit
         // process.
 
-        if (amendSubSet.has(subName)) {
+        if (doAmend) {
             // First, we check to see if this submodule needs to have its last
             // commit stripped.  That will be the case if we have no files
             // staged indicated as staged.
 
             assert.isNotNull(repoStatus);
-            const staged = repoStatus.staged;
-            if (0 === Object.keys(staged).length) {
+            if (0 === numStaged) {
                 const head = yield subRepo.getHeadCommit();
                 const parent = yield GitUtil.getParentCommit(subRepo, head);
                 const TYPE = NodeGit.Reset.TYPE;
@@ -1220,7 +1229,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
 
         const commit = yield commitRepo(subRepo,
-                                        repoStatus.staged,
+                                        staged,
                                         all,
                                         subMessage,
                                         false,
