@@ -31,30 +31,35 @@
 "use strict";
 
 const assert    = require("chai").assert;
-const ChildProcess = require("child-process-promise");
+const spawn     = require("child-process-promise").spawn;
 const co        = require("co");
 const path      = require("path");
 const process   = require("process");
+const fs        = require("fs");
 
 /**
  * Run git-meta hook with given hook name.
+ * Return 0 on success, non-zero status otherwise.
  * @async
  * @param {String} name
  * @param {String[]} args
- * @return {String}
+ * @return {int}
  */
-exports.execHook = co.wrap(function *(repo, name, args=[]) {
+exports.execHook = co.wrap(function*(repo, name, args=[]) {
     assert.isString(name);
 
     const rootDirectory = repo.path();
     const hookPath = path.join(rootDirectory, "hooks");
     const absPath = path.resolve(hookPath, name);
 
+    if (!fs.existsSync(absPath)) {
+        return -1;
+    }
+
     try {
         process.chdir(repo.workdir());
-        const result = yield ChildProcess.execFile(absPath, args);
-        console.log(result.stdout);
-        return result.stdout;
+        const result = yield spawn(absPath, args, { stdio: "inherit" });
+        return result.status;
     } catch (e) {
         if (e.code === "EACCES") {
             console.log("EACCES: Cannot execute: " + absPath);
