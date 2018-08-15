@@ -147,7 +147,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         commitName = yield GitUtil.getCurrentTrackingBranchName(repo);
     }
     if (null === commitName) {
-        throw new UserError("Commit required.");
+        throw new UserError("No remote for the current branch.");
     }
     const commitish = yield GitUtil.resolveCommitish(repo, commitName);
     if (null === commitish) {
