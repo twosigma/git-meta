@@ -1879,22 +1879,7 @@ my message
                     },
                 }),
                 req: new RepoStatus(),
-                exp: new RepoStatus({
-                    submodules: {
-                        xxx: new Submodule({
-                            commit: new Submodule.Commit("1", "/a"),
-                            index: new Submodule.Index("1",
-                                                       "/a",
-                                                       RELATION.SAME),
-                            workdir: new Submodule.Workdir(new RepoStatus({
-                                headCommit: "1",
-                                workdir: {
-                                    xxx: FILESTATUS.MODIFIED,
-                                },
-                            }), RELATION.SAME),
-                        }),
-                    },
-                }),
+                exp: new RepoStatus(),
             },
         };
         Object.keys(cases).forEach(caseName => {
@@ -3085,8 +3070,18 @@ x=S:Cfoo\n#x-2 s=Sa:s;Os Cfoo\n#s-1 a/b=b!I b=d!H=s;Bmaster=x`,
             "not path-compatible": {
                 initial: "x=S:I s=S.:1,a=b",
                 message: "foo",
-                paths: ["a"],
+                paths: ["s"],
                 fails: true,
+            },
+            "path-compatible (submodule)": {
+                initial: "x=S:C2-1 g=S I s=S.:1,a=b;Bmaster=2",
+                message: "foo",
+                paths: ["s"],
+            },
+            "path-compatible": {
+                initial: "x=S:I s=S.:1,a=b",
+                message: "foo",
+                paths: ["a"],
             },
             "interactive": {
                 initial: "a=B|x=U:Os I a=b",
