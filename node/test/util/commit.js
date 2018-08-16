@@ -1938,6 +1938,11 @@ my message
                 fileChanges: { "q": FILESTATUS.ADDED },
                 expected: "x=S:Cx-1 q=3;Bmaster=x",
             },
+            "removed file": {
+                state: "x=S:C2-1 foo=bar;C3-2;W foo;Bmaster=3",
+                fileChanges: { "foo": FILESTATUS.REMOVED },
+                expected: "x=S:Cx-3 foo;Bmaster=x",
+            },
             "added two files, but mentioned only one": {
                 state: "x=S:W q=3,r=4",
                 fileChanges: { "q": FILESTATUS.ADDED },

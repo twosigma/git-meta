@@ -597,6 +597,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
     for (let filename in staged) {
         const stat = staged[filename];
         if (FILESTATUS.REMOVED === stat) {
+            yield index.removeByPath(filename);
             changes[filename] = null;
         }
         else {
