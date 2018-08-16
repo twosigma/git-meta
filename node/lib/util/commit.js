@@ -1408,19 +1408,16 @@ exports.calculatePathCommitStatus = function (current, requested) {
     Object.keys(currentSubs).forEach(subName => {
         const currentSub = currentSubs[subName];
         const requestedSub = requestedSubs[subName];
+        // If this submodule was not requested, don't include it.
+        if (undefined === requestedSub) {
+            return;
+        }
         const curWd = currentSub.workdir;
         if (null !== curWd) {
             const curStatus = curWd.status;
 
-            // If this submodule was not requested (i.e.,
-            // `undefined === requestedSubs`, default to an empty repo status;
-            // this will cause all current status files to be moved to the
-            // workdir.
+            const reqStatus = requestedSub.workdir.status;
 
-            let reqStatus = new RepoStatus();
-            if (undefined !== requestedSub) {
-                reqStatus = requestedSub.workdir.status;
-            }
             const newSubFiles = calculateOneRepo(curStatus.staged,
                                                  curStatus.workdir,
                                                  reqStatus.staged,
