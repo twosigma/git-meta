@@ -77,7 +77,7 @@ exports.configureParser = function (parser) {
  * @param {String} args.path
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("../util/colors");
+    const colors = require("colors");
 
     const DoWorkQueue         = require("../util/do_work_queue");
     const GitUtil             = require("../util/git_util");

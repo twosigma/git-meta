@@ -33,7 +33,7 @@
 const assert  = require("chai").assert;
 const NodeGit = require("nodegit");
 const co      = require("co");
-const colors  = require("../util/colors");
+const colors  = require("colors");
 
 const Hook                = require("../util/hook");
 const SparseCheckoutUtil  = require("../util/sparse_checkout_util");

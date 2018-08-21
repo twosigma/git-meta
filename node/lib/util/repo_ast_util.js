@@ -36,7 +36,7 @@
  */
 
 const assert   = require("chai").assert;
-const colors   = require("../util/colors");
+const colors   = require("colors");
 const deeper   = require("deeper");
 
 const RepoAST  = require("../util/repo_ast");

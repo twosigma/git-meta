@@ -33,7 +33,7 @@
 const assert       = require("chai").assert;
 const ChildProcess = require("child-process-promise");
 const co           = require("co");
-const colors       = require("../util/colors");
+const colors       = require("colors");
 const NodeGit      = require("nodegit");
 
 const Checkout            = require("./checkout");

@@ -106,7 +106,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     // TODO: For now, we will always create a merge commit.  We should be able
     // to control whether FF is allowed/required for meta and sub repos.
 
-    const colors = require("../util/colors");
+    const colors = require("colors");
 
     const MergeUtil  = require("../util/merge_util");
     const GitUtil    = require("../util/git_util");
