@@ -32,7 +32,7 @@
 
 const assert       = require("chai").assert;
 const co           = require("co");
-const colors       = require("colors");
+const colors       = require("../../lib/util/colors");
 
 const MergeUtil       = require("../../lib//util/merge_util");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");

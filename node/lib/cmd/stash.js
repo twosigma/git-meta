@@ -165,7 +165,7 @@ const doDrop = co.wrap(function *(args) {
  * @param {Object}  args
  */
 exports.executeableSubcommand = function (args) {
-    const colors = require("colors");
+    const colors = require("../util/colors");
 
     switch(args.type) {
         case "pop" : return doPop(args);

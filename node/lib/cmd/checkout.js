@@ -127,7 +127,7 @@ function reanalyzeArgs(args)  {
 exports.executeableSubcommand = co.wrap(function *(args) {
     reanalyzeArgs(args);
 
-    const colors  = require("colors");
+    const colors  = require("../util/colors");
 
     const Checkout  = require("../util/checkout");
     const GitUtil   = require("../util/git_util");

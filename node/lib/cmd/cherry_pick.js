@@ -85,7 +85,7 @@ abort the cherry-pick and return to previous state, throwing away all changes`,
  * @param {String[]} args.commit
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("colors");
+    const colors = require("../util/colors");
 
     const CherryPickUtil  = require("../util/cherry_pick_util");
     const GitUtil         = require("../util/git_util");

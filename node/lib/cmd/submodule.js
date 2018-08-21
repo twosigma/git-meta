@@ -183,7 +183,7 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
 });
 
 const doFindCommand = co.wrap(function *(path, metaCommittish, subCommittish) {
-    const colors = require("colors");
+    const colors = require("../util/colors");
 
     const GitUtil             = require("../util/git_util");
     const LogUtil             = require("../util/log_util");
