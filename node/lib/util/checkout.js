@@ -35,7 +35,7 @@
  */
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("colors");
+const colors  = require("../util/colors");
 const NodeGit = require("nodegit");
 
 const DoWorkQueue        = require("../util/do_work_queue");

@@ -31,7 +31,7 @@
 "use strict";
 
 const assert  = require("chai").assert;
-const colors  = require("colors");
+const colors  = require("../../lib/util/colors");
 const NodeGit = require("nodegit");
 
 const RepoStatus          = require("../../lib/util/repo_status");
