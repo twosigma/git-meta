@@ -39,7 +39,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("../util/colors");
+const colors  = require("colors");
 const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");

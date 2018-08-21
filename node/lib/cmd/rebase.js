@@ -81,7 +81,7 @@ exports.configureParser = function (parser) {
 exports.executeableSubcommand = co.wrap(function *(args) {
     // TODO: add applicable `git rebase` options.
 
-    const colors = require("../util/colors");
+    const colors = require("colors");
 
     const RebaseUtil  = require("../util/rebase_util");
     const GitUtil     = require("../util/git_util");

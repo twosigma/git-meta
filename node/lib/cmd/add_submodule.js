@@ -75,7 +75,7 @@ Branch in repo from which we are importing to checkout as HEAD.`,
  * @param {String[]} args.paths
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("../util/colors");
+    const colors = require("colors");
     const fs     = require("fs-promise");
     const path   = require("path");
 
