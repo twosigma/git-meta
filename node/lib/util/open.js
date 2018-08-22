@@ -85,6 +85,10 @@ exports.openOnCommit = co.wrap(function *(fetcher,
                                                                 submoduleUrl,
                                                                 templatePath);
 
+    // Turn off GC for the submodule
+    const config = yield submoduleRepo.config();
+    config.setInt64("gc.auto", 0);
+
     // Fetch the needed sha.  Close if the fetch fails; otherwise, the
     // repository ends up in a state where it things the submodule is open, but
     // it's actually not.

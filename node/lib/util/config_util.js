@@ -62,13 +62,13 @@ exports.getConfigString = co.wrap(function *(config, key) {
 /**
  * Returns whether a config variable is, according to git's reckoning,
  * true.  That is, it's set to 'true', 'yes', or 'on'.  If the variable is not
- * se at all, return null.
+ * set at all, return null.
  * @async
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit} configVar
  * @return {Bool|null}
  * @throws if the configuration variable doesn't exist
-*/
+ */
 exports.configIsTrue = co.wrap(function*(repo, configVar) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(configVar);

@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const ConfigUtil       = require("../../lib/util/config_util");
 const Open             = require("../../lib/util/open");
 const RepoASTTestUtil  = require("../../lib/util/repo_ast_test_util");
 const SubmoduleFetcher = require("../../lib/util/submodule_fetcher");
@@ -117,6 +118,10 @@ describe("openOnCommit", function () {
             const base = yield SubmoduleUtil.getRepo(repo, "s");
             assert.equal(s1, s2, "not re-opened");
             assert.equal(s1.workdir(), base.workdir(), "right path");
+            const config = yield s1.config();
+            const gcConfig = yield ConfigUtil.getConfigString(config,
+                                                            "gc.auto");
+            assert.equal("0", gcConfig);
         }));
         it("different commit", co.wrap(function *() {
             const state = "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3";
@@ -203,9 +208,13 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s");
+            const s = yield opener.getSubrepo("s");
             const result = yield opener.isOpen("s");
             assert.equal(true, result);
+            const config = yield s.config();
+            const gcConfig = yield ConfigUtil.getConfigString(config,
+                                                            "gc.auto");
+            assert.equal("0", gcConfig);
         }));
         it("getOpenSubs, true immediately", co.wrap(function *() {
             const state = "a=B|x=U:Os";
