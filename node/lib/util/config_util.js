@@ -59,16 +59,31 @@ exports.getConfigString = co.wrap(function *(config, key) {
     return null;
 });
 
+
+/**
+ * Attempt to set the key, value pair in the specified git configuration.  Returns 0 or an error code
+ * @param {NodeGit.Config} config
+ * @param {String}         key
+ * @param {Integer}        value
+ *
+ */
+exports.setConfigInt = co.wrap(function *(config, key, val) {
+    assert.instanceOf(config, NodeGit.Config);
+    assert.isString(key);
+    assert.isNumber(val);
+    return config.setInt64(key, val);
+});
+
 /**
  * Returns whether a config variable is, according to git's reckoning,
  * true.  That is, it's set to 'true', 'yes', or 'on'.  If the variable is not
- * se at all, return null.
+ * set at all, return null.
  * @async
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit} configVar
  * @return {Bool|null}
  * @throws if the configuration variable doesn't exist
-*/
+ */
 exports.configIsTrue = co.wrap(function*(repo, configVar) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(configVar);

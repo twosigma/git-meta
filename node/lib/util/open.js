@@ -37,6 +37,7 @@ const co      = require("co");
 const colors  = require("../util/colors");
 const NodeGit = require("nodegit");
 
+const ConfigUtil          = require("./config_util");
 const GitUtil             = require("./git_util");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleUtil       = require("./submodule_util");
@@ -84,6 +85,10 @@ exports.openOnCommit = co.wrap(function *(fetcher,
                                                                 submoduleName,
                                                                 submoduleUrl,
                                                                 templatePath);
+
+    // Turn off GC for the submodule
+    const config = yield submoduleRepo.config();
+    yield ConfigUtil.setConfigInt(config, "gc.auto", 0);
 
     // Fetch the needed sha.  Close if the fetch fails; otherwise, the
     // repository ends up in a state where it things the submodule is open, but
