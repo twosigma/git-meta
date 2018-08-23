@@ -33,6 +33,7 @@
 const assert       = require("chai").assert;
 const co           = require("co");
 const NodeGit      = require("nodegit");
+const UserError    = require("../../lib/util/user_error");
 
 /**
  * This module contains methods for interacting with git configuration entries.
@@ -82,4 +83,27 @@ exports.configIsTrue = co.wrap(function*(repo, configVar) {
             configured === "on";
 });
 
+
+/**
+ * Returns the default Signature for a repo.  Replaces repo.defaultSignature,
+ * which occasionally returns unknown@example.com for unknown reasons.
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit} configVar
+ * @return {Bool|null}
+ * @throws if the configuration variable doesn't exist
+*/
+exports.defaultSignature = co.wrap(function*(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const config = yield repo.config();
+    const email = yield exports.getConfigString(config, "user.email");
+    const name = yield exports.getConfigString(config, "user.name");
+    if (name && email) {
+        const now = new Date();
+        const tz = now.getTimezoneOffset();
+        return NodeGit.Signature.create(name, email, now.getTime() / 1000, tz);
+    }
+    throw new UserError("Git config vars user.email and user.name are unset");
+});
 

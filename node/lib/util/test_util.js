@@ -34,6 +34,8 @@
  * This module contains methods used in testing other git-meta components.
  */
 
+const ConfigUtil          = require("./config_util");
+
 const assert  = require("chai").assert;
 const co      = require("co");
 const fs      = require("fs-promise");
@@ -106,7 +108,7 @@ exports.createSimpleRepository = co.wrap(function *(repoPath) {
     const fileName = "README.md";
     const filePath = path.join(repoPath, fileName);
     yield fs.writeFile(filePath, "");
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     yield repo.createCommitOnHead([fileName], sig, sig, "first commit");
     return repo;
 });
@@ -130,7 +132,7 @@ exports.createSimpleRepositoryOnBranch = co.wrap(function *(branchName) {
     const repo = yield exports.createSimpleRepository();
 
     const commit = yield repo.getHeadCommit();
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     const publicBranch = yield repo.createBranch(branchName, commit, 0, sig);
     yield repo.setHead(publicBranch.name());
 
@@ -211,7 +213,7 @@ exports.makeCommit = co.wrap(function *(repo, files) {
     assert.isArray(files);
     files.forEach((name, i) => assert.isString(name, i));
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     const commitId = yield repo.createCommitOnHead(files,
                                                    sig,
                                                    sig,

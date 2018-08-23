@@ -45,6 +45,7 @@ const mkdirp   = require("mkdirp");
 const NodeGit  = require("nodegit");
 const path     = require("path");
 
+const ConfigUtil          = require("./config_util");
 const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
@@ -210,7 +211,7 @@ exports.writeCommits = co.wrap(function *(oldCommitMap,
 
     let newCommitMap = {};  // from new to old sha
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
 
     const commitObjs = {};  // map from new id to `Commit` object
 
@@ -411,7 +412,7 @@ git -C '${repo.workdir()}' checkout ${toCheckout}
     }
 
     const notes = ast.notes;
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     for (let notesRef in notes) {
         const commits = notes[notesRef];
         for (let commit in commits) {

@@ -35,6 +35,7 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
+const ConfigUtil         = require("./config_util");
 const GitUtil            = require("./git_util");
 const Open               = require("./open");
 const PrintStatusUtil    = require("./print_status_util");
@@ -134,7 +135,7 @@ exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
     const subChanges = {};  // name to TreeUtil.Change
     const subRepos   = {};  // name to submodule open repo
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
 
     // First, we process the submodules.  If a submodule is open and dirty,
     // we'll create the stash commits in its repo, populate `subResults` with
@@ -242,7 +243,7 @@ exports.createReflogIfNeeded = co.wrap(function *(repo,
     const log = yield NodeGit.Reflog.read(repo, reference);
     if (0 === log.entrycount()) {
         const id = NodeGit.Oid.fromString(sha);
-        log.append(id, repo.defaultSignature(), message);
+        log.append(id, yield ConfigUtil.defaultSignature(repo), message);
         yield log.write();
     }
 });
@@ -511,7 +512,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
     if (indexOnly) {
         const index = yield repo.index();
         const tree = yield index.writeTree();
-        const sig = repo.defaultSignature();
+        const sig = yield ConfigUtil.defaultSignature(repo);
         const subCommit = yield repo.createCommit(null, sig, sig,
                                                      message, tree, []);
         return subCommit.tostrS();
@@ -536,7 +537,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
         }
     }
 
-    let sig = repo.defaultSignature();
+    let sig = yield ConfigUtil.defaultSignature(repo);
     if (incrementTimestamp && null !== head) {
         sig = NodeGit.Signature.create(sig.name(),
                                        sig.email(),
