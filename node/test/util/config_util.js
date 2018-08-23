@@ -93,4 +93,13 @@ describe("configIsTrue", function () {
         }));
     });
 });
+
+describe("defaultSignature", function () {
+    it("works", co.wrap(function *() {
+        const repo = yield TestUtil.createSimpleRepository();
+        const actual = yield ConfigUtil.defaultSignature(repo);
+        assert.equal(actual.toString(),
+                     repo.defaultSignature().toString());
+    }));
+});
 });
