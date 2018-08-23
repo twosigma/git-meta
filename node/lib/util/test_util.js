@@ -263,7 +263,7 @@ exports.makeBareCopy = co.wrap(function *(repo, path) {
     // Then create all the branches that weren't copied initially.
 
     const refs = yield repo.getReferences(NodeGit.Reference.TYPE.LISTALL);
-    const sig = bare.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(bare);
     for (let i = 0; i < refs.length; ++i) {
         const ref = refs[i];
         const shorthand = ref.shorthand();

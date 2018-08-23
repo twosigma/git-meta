@@ -522,7 +522,7 @@ exports.continue = co.wrap(function *(repo) {
                            `Submodule ${colors.red(subPath)} has conflicts.\n`;
             return;                                                   // RETURN
         }
-        const sig = subRepo.defaultSignature();
+        const sig = yield ConfigUtil.defaultSignature(subRepo);
         const subSeq = yield getSequencerIfMerge(subRepo.path());
         if (null === subSeq) {
             // There is no merge in this submodule, but if there are staged
