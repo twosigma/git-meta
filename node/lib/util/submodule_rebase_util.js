@@ -37,6 +37,7 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 const rimraf  = require("rimraf");
 
+const ConfigUtil          = require("./config_util");
 const GitUtil             = require("./git_util");
 const DoWorkQueue         = require("./do_work_queue");
 const RebaseFileUtil      = require("./rebase_file_util");
@@ -92,7 +93,7 @@ exports.makeCommit = co.wrap(function *(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const defaultSig = repo.defaultSignature();
+    const defaultSig = yield ConfigUtil.defaultSignature(repo);
     const metaCommit = yield repo.createCommitOnHead([],
                                                      commit.author(),
                                                      defaultSig,
@@ -167,7 +168,7 @@ exports.processRebase = co.wrap(function *(repo, rebase, op) {
         commits: {},
         conflictedCommit: null,
     };
-    const signature = repo.defaultSignature();
+    const signature = yield ConfigUtil.defaultSignature(repo);
     while (null !== op) {
         const index = yield repo.index();
         if (index.hasConflicts()) {

@@ -88,7 +88,7 @@ exports.createBranchFromHead = co.wrap(function *(repo, branchName) {
     return yield repo.createBranch(branchName,
                                    head,
                                    0,
-                                   repo.defaultSignature(),
+                                   yield ConfigUtil.defaultSignature(repo),
                                    "git-meta branch");
 });
 

@@ -39,6 +39,7 @@ const NodeGit      = require("nodegit");
 const Checkout            = require("./checkout");
 const CherryPickUtil      = require("./cherry_pick_util");
 const Commit              = require("./commit");
+const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
@@ -137,7 +138,7 @@ exports.fastForwardMerge = co.wrap(function *(repo, mode, commit, message) {
         // Then, generate a new commit that has the previous HEAD and commit to
         // merge as children.
 
-        const sig = repo.defaultSignature();
+        const sig = yield ConfigUtil.defaultSignature(repo);
         const tree = yield commit.getTree();
         const id = yield NodeGit.Commit.create(
                                            repo,
@@ -199,7 +200,7 @@ const mergeSubmodules = co.wrap(function *(repo,
         conflicts: {},
         commits: {},
     };
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     const fetcher = yield opener.fetcher();
     const mergeSubmodule = co.wrap(function *(name) {
         const subRepo = yield opener.getSubrepo(name);
@@ -393,7 +394,7 @@ ${colors.red(commitSha)}.`);
         return result;
     }
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
 
     const changeIndex = yield NodeGit.Merge.commits(repo, head, commit, []);
     const changes =
@@ -566,7 +567,7 @@ exports.continue = co.wrap(function *(repo) {
     }
     const treeId = yield index.writeTreeTo(repo);
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     const head = yield repo.getHeadCommit();
     const mergeHead = yield repo.getCommit(seq.target.sha);
     const metaCommit = yield repo.createCommit("HEAD",

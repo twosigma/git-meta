@@ -44,6 +44,7 @@ const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
+const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("../util/do_work_queue");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -641,7 +642,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
 
     // Create a commit with this tree.
 
-    const sig = repo.defaultSignature();
+    const sig = yield ConfigUtil.defaultSignature(repo);
     const parents = [headCommit];
     const commitId = yield NodeGit.Commit.create(
                                           repo,
@@ -2044,7 +2045,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
         // If 'interactive' mode is requested, ask the user to specify which
         // repos are committed and with what commit messages.
 
-        const sig = repo.defaultSignature();
+        const sig = yield ConfigUtil.defaultSignature(repo);
         const prompt = exports.formatSplitCommitEditorPrompt(repoStatus,
                                                              sig,
                                                              null,
@@ -2139,7 +2140,7 @@ exports.doAmendCommand = co.wrap(function *(repo,
     const subsToAmend = amendStatus.subsToAmend;
 
     const head = yield repo.getHeadCommit();
-    const defaultSig = repo.defaultSignature();
+    const defaultSig = yield ConfigUtil.defaultSignature(repo);
     const headMeta = exports.getCommitMetaData(head);
     let subMessages = null;
     if (interactive) {
