@@ -481,7 +481,7 @@ exports.commit = co.wrap(function *(metaRepo,
     assert(null !== message || undefined !== subMessages,
            "if no meta message, sub messages must be specified");
 
-    const signature = metaRepo.defaultSignature();
+    const signature = yield ConfigUtil.defaultSignature(metaRepo);
     const submodules = metaStatus.submodules;
 
     // Commit submodules.  If any changes, remember this so we know to generate
