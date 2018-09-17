@@ -287,9 +287,10 @@ exports.setStashHead = co.wrap(function *(repo, sha) {
  *
  * @param {NodeGit.Repository} repo
  * @param {String}             id
- * @return {Boolean}
+ * @param {Boolean}            reinstateIndex
+ * @return {Object}            submodule name to stashed commit
  */
-exports.apply = co.wrap(function *(repo, id) {
+exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(id);
 
@@ -338,10 +339,12 @@ ${colors.red(name)}`);
         // And then apply it.
 
         const APPLY_FLAGS = NodeGit.Stash.APPLY_FLAGS;
+        const flag = reinstateIndex ?
+            APPLY_FLAGS.APPLY_REINSTATE_INDEX : APPLY_FLAGS.APPLY_DEFAULT;
 
         try {
             yield NodeGit.Stash.pop(subRepo, 0, {
-                flags: APPLY_FLAGS.APPLY_REINSTATE_INDEX,
+                flags: flag,
             });
         }
         catch (e) {
@@ -434,13 +437,15 @@ Dropped ${colors.green(refText)} ${colors.blue(stashSha)}`);
  * remove `refs/meta-stash`.
  *
  * @param {NodeGit.Repository} repo
+ * @param {int}                index
+ * @param {Boolean}            reinstateIndex
  */
-exports.pop = co.wrap(function *(repo, index) {
+exports.pop = co.wrap(function *(repo, index, reinstateIndex) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isNumber(index);
 
     const stashSha = yield getStashSha(repo, index);
-    const applyResult = yield exports.apply(repo, stashSha);
+    const applyResult = yield exports.apply(repo, stashSha, reinstateIndex);
 
     const status = yield StatusUtil.getRepoStatus(repo);
     process.stdout.write(PrintStatusUtil.printRepoStatus(status, ""));

@@ -481,6 +481,7 @@ x=U:Fmeta-stash=s;Cstash#s-2 s=Sa:ss;
                 result: {
                     s: "ss",
                 },
+                reinstateIndex: true,
                 expected: `
 x=E:Os Bss=ss!
        C*#ss-1,sis README.md=bar!
@@ -492,29 +493,34 @@ x=E:Os Bss=ss!
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
-            const applier = co.wrap(function *(repos, mapping) {
-                const repo = repos.x;
-                assert.property(mapping.reverseCommitMap, c.sha);
-                const sha = mapping.reverseCommitMap[c.sha];
-                const result = yield StashUtil.apply(repo, sha);
-                if (null === c.result) {
-                    assert.isNull(result);
-                }
-                else {
-                    const expected = {};
-                    Object.keys(c.result).forEach(name => {
-                        const sha = c.result[name];
-                        expected[name] = mapping.reverseCommitMap[sha];
-                    });
-                    assert.deepEqual(result, expected);
-                }
+            const reinstateIndexValues = (undefined === c.reinstateIndex) ?
+                [false, true] : [c.reinstateIndex];
+            reinstateIndexValues.forEach(function(reinstateIndex) {
+                const applier = co.wrap(function* (repos, mapping) {
+                    const repo = repos.x;
+                    assert.property(mapping.reverseCommitMap, c.sha);
+                    const sha = mapping.reverseCommitMap[c.sha];
+                    const result = yield StashUtil.apply(repo, sha,
+                        reinstateIndex);
+                    if (null === c.result) {
+                        assert.isNull(result);
+                    }
+                    else {
+                        const expected = {};
+                        Object.keys(c.result).forEach(name => {
+                            const sha = c.result[name];
+                            expected[name] = mapping.reverseCommitMap[sha];
+                        });
+                        assert.deepEqual(result, expected);
+                    }
+                });
+                it(caseName, co.wrap(function* () {
+                    yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
+                        c.expected,
+                        applier,
+                        c.fails);
+                }));
             });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
-                                                               c.expected,
-                                                               applier,
-                                                               c.fails);
-            }));
         });
     });
     describe("removeStash", function () {
@@ -643,35 +649,40 @@ x=E:Fmeta-stash=2;
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
-            const popper = co.wrap(function *(repos, mapping) {
-                const repo = repos.x;
-                const revMap = mapping.reverseCommitMap;
-                yield writeLog(repo, revMap, c.log || []);
+            const reinstateIndexValues = (undefined === c.reinstateIndex) ?
+                [false, true] : [c.reinstateIndex];
+            reinstateIndexValues.forEach(function(reinstateIndex){
+                const popper = co.wrap(function *(repos, mapping) {
+                    const repo = repos.x;
+                    const revMap = mapping.reverseCommitMap;
+                    yield writeLog(repo, revMap, c.log || []);
 
-                // set up stash refs in submodules, if requested
+                    // set up stash refs in submodules, if requested
 
-                const subStash = c.subStash || {};
-                for (let subName in subStash) {
-                    const sha = revMap[subStash[subName]];
-                    const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-                    const refName = `refs/sub-stash/${sha}`;
-                    NodeGit.Reference.create(subRepo,
-                                             refName,
-                                             NodeGit.Oid.fromString(sha),
-                                             1,
-                                             "test stash");
-                }
-                const index = (undefined === c.index) ? 0 : c.index;
-                yield StashUtil.pop(repo, index);
-            });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.init,
-                                                               c.expected,
-                                                               popper,
-                                                               c.fails, {
-                    expectedTransformer: refMapper,
+                    const subStash = c.subStash || {};
+                    for (let subName in subStash) {
+                        const sha = revMap[subStash[subName]];
+                        const subRepo = yield SubmoduleUtil.getRepo(repo,
+                            subName);
+                        const refName = `refs/sub-stash/${sha}`;
+                        NodeGit.Reference.create(subRepo,
+                            refName,
+                            NodeGit.Oid.fromString(sha),
+                            1,
+                            "test stash");
+                    }
+                    const index = (undefined === c.index) ? 0 : c.index;
+                    yield StashUtil.pop(repo, index, reinstateIndex);
                 });
-            }));
+                it(caseName, co.wrap(function *() {
+                    yield RepoASTTestUtil.testMultiRepoManipulator(c.init,
+                        c.expected,
+                        popper,
+                        c.fails, {
+                            expectedTransformer: refMapper,
+                        });
+                }));
+            });
         });
     });
 
