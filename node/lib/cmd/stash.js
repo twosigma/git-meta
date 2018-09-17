@@ -83,6 +83,13 @@ default`,
         action: "storeConst",
         constant: true,
     });
+
+    parser.addArgument("--index", {
+        help: `Reinstate not only the working tree's changes, but also \
+index's ones`,
+        action: "storeConst",
+        constant: true,
+    });
 };
 
 const doPop = co.wrap(function *(args) {
@@ -91,7 +98,8 @@ const doPop = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const index = (null === args.stash) ? 0 : args.stash;
-    yield StashUtil.pop(repo, index);
+    const reinstateIndex = args.index || false;
+    yield StashUtil.pop(repo, index, reinstateIndex);
 });
 
 function cleanSubs(status, includeUntracked) {
