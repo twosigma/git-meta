@@ -440,7 +440,7 @@ Dropped ${colors.green(refText)} ${colors.blue(stashSha)}`);
  * @param {int}                index
  * @param {Boolean}            reinstateIndex
  */
-exports.pop = co.wrap(function *(repo, index, reinstateIndex) {
+exports.pop = co.wrap(function *(repo, index, reinstateIndex, shouldDrop) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isNumber(index);
 
@@ -453,15 +453,17 @@ exports.pop = co.wrap(function *(repo, index, reinstateIndex) {
     // If the application succeeded, remove it.
 
     if (null !== applyResult) {
-        yield exports.removeStash(repo, index);
+        if (shouldDrop) {
+            yield exports.removeStash(repo, index);
 
-        // Clean up sub-repo meta-refs
+            // Clean up sub-repo meta-refs
 
-        Object.keys(applyResult).forEach(co.wrap(function *(subName) {
-            const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-            const refName = makeSubRefName(applyResult[subName]);
-            NodeGit.Reference.remove(subRepo, refName);
-        }));
+            Object.keys(applyResult).forEach(co.wrap(function* (subName) {
+                const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+                const refName = makeSubRefName(applyResult[subName]);
+                NodeGit.Reference.remove(subRepo, refName);
+            }));
+        }
     }
     else {
         throw new UserError(`\

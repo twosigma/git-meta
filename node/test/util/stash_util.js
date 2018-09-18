@@ -672,7 +672,7 @@ x=E:Fmeta-stash=2;
                             "test stash");
                     }
                     const index = (undefined === c.index) ? 0 : c.index;
-                    yield StashUtil.pop(repo, index, reinstateIndex);
+                    yield StashUtil.pop(repo, index, reinstateIndex, true);
                 });
                 it(caseName, co.wrap(function *() {
                     yield RepoASTTestUtil.testMultiRepoManipulator(c.init,
