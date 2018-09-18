@@ -99,7 +99,17 @@ const doPop = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const index = (null === args.stash) ? 0 : args.stash;
     const reinstateIndex = args.index || false;
-    yield StashUtil.pop(repo, index, reinstateIndex);
+    yield StashUtil.pop(repo, index, reinstateIndex, true);
+});
+
+const doApply = co.wrap(function *(args){
+    const GitUtil   = require("../../lib/util/git_util");
+    const StashUtil = require("../../lib/util/stash_util");
+    
+    const repo = yield GitUtil.getCurrentRepo();
+    const index = (null === args.stash) ? 0 : args.stash;
+    const reinstateIndex = args.index || false;
+    yield StashUtil.pop(repo, index, reinstateIndex, false);
 });
 
 function cleanSubs(status, includeUntracked) {
@@ -177,6 +187,7 @@ exports.executeableSubcommand = function (args) {
 
     switch(args.type) {
         case "pop" : return doPop(args);
+        case "apply": return doApply(args);
         case "save": return doSave(args);
         case "list": return doList(args);
         case "drop": return doDrop(args);
