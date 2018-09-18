@@ -979,7 +979,7 @@ x=E:C*#s foo/bar/a=a;Bstitched=s;N refs/notes/stitched/converted 2=s`,
                                                         adjustPath,
                                                         skipEmpty);
                 if (true === c.isNull) {
-                    assert.isNull(stitch);
+                    assert(null === stitch, "stitch should have been null");
                     return;
                 } else {
                     // Need to root the commit we wrote

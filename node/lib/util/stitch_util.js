@@ -591,7 +591,7 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
     let updateModules = false;  // if any kept subs added or removed
     const changes = {};
     const subCommits = {};
-    const stitchSub = co.wrap(function *(name, sha) {
+    const stitchSub = co.wrap(function *(name, oldName, sha) {
         let subCommit;
         try {
             subCommit = yield repo.getCommit(sha);
@@ -603,7 +603,7 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         }
         const subTreeId = subCommit.treeId();
         changes[name] = new TreeUtil.Change(subTreeId, FILEMODE.TREE);
-        subCommits[name] = subCommit;
+        subCommits[oldName] = subCommit;
     });
 
     function changeKept(name, newSha) {
@@ -611,19 +611,21 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         changes[name] = new TreeUtil.Change(id, FILEMODE.COMMIT);
     }
 
-    const synthetics = [];  // list of submodules whose refs need cleaned up
-
     for (let name in subChanges) {
+        const mapped = adjustPath(name);
+        if (null === mapped) {
+            continue;                                               // CONTINUE
+        }
         const newSha = subChanges[name].newSha;
-        changes[name] = null;
+        changes[mapped] = null;
+
         if (keepAsSubmodule(name)) {
             updateModules = true;
             if (null !== newSha) {
                 changeKept(name, newSha);
             }
-        } else if (null !== newSha && null !== adjustPath(name)) {
-            synthetics.push(name);
-            yield stitchSub(name, newSha);
+        } else if (null !== newSha) {
+            yield stitchSub(mapped, name, newSha);
         }
     }
 
@@ -639,32 +641,18 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         changes[SubmoduleConfigUtil.modulesFileName] = content;
     }
 
-    // Adjust paths using the provided `adjustPath` function.
-
-    const mappedChanges = {};
-
-    for (let name in changes) {
-        const mapped = adjustPath(name);
-        if (null !== mapped) {
-            mappedChanges[mapped] = changes[name];
-        }
-    }
-
-    let parentTree = null;
-    if (0 !== parents.length) {
-        const parentCommit = parents[0];
-        parentTree = yield parentCommit.getTree();
-    }
-
-    const newTree = yield TreeUtil.writeTree(repo, parentTree, mappedChanges);
-
     let newCommit = null;
     let mappedSha = null;
-    if (skipEmpty && exports.isTreeUnchanged(newTree, parentTree)) {
+
+    if (!skipEmpty || 0 !== Object.keys(changes).length) {
+        let parentTree = null;
         if (0 !== parents.length) {
-            mappedSha = parents[0].id().tostrS();
+            const parentCommit = parents[0];
+            parentTree = yield parentCommit.getTree();
         }
-    } else {
+
+        const newTree = yield TreeUtil.writeTree(repo, parentTree, changes);
+
         const commitMessage = exports.makeStitchCommitMessage(commit,
                                                               subCommits);
         const newCommitId = yield NodeGit.Commit.create(
@@ -683,6 +671,8 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
                                          mappedSha,
                                          commit.id().tostrS(),
                                          subCommits);
+    } else if (0 !== parents.length) {
+        mappedSha = parents[0].id().tostrS();
     }
     yield exports.writeConvertedNote(repo, commit.id().tostrS(), mappedSha);
     return newCommit;
