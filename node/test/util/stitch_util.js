@@ -38,7 +38,9 @@ const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
 const StitchUtil          = require("../../lib/util/stitch_util");
+const SubmoduleChange     = require("../../lib/util/submodule_change");
 const SubmoduleConfigUtil = require("../../lib/util/submodule_config_util");
+const SubmoduleUtil       = require("../../lib/util/submodule_util");
 const TreeUtil            = require("../../lib/util/tree_util");
 
 const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
@@ -108,6 +110,28 @@ function refMapper(actual, mapping) {
     });
     return result;
 }
+
+/**
+ * Return the submodule changes in the specified `commit` in the specified
+ * `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ */
+const getCommitChanges = co.wrap(function *(repo, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    const commitParents = yield commit.getParents();
+    let parentCommit = null;
+    if (0 !== commitParents.length) {
+        parentCommit = commitParents[0];
+    }
+    return yield SubmoduleUtil.getSubmoduleChanges(repo,
+                                                   commit,
+                                                   parentCommit,
+                                                   true);
+});
 
 describe("StitchUtil", function () {
 describe("writeConvertedNote", function () {
@@ -944,9 +968,12 @@ x=E:C*#s foo/bar/a=a;Bstitched=s;N refs/notes/stitched/converted 2=s`,
                 }));
                 const adjustPath = c.adjustPath || ((x) => x);
                 const skipEmpty = c.skipEmpty || false;
+
+                const changes = yield getCommitChanges(x, commit);
                 const stitch = yield StitchUtil.writeStitchedCommit(
                                                         x,
                                                         commit,
+                                                        changes,
                                                         parents,
                                                         c.keepAsSubmodule,
                                                         adjustPath,
@@ -983,8 +1010,10 @@ it("messaging", co.wrap(function *() {
     const written = yield RepoASTTestUtil.createRepo(state);
     const repo = written.repo;
     const head = yield repo.getHeadCommit();
+    const changes = yield getCommitChanges(repo, head);
     const stitch = yield StitchUtil.writeStitchedCommit(repo,
                                                         head,
+                                                        changes,
                                                         [],
                                                         () => false,
                                                         (x) => x,
@@ -1005,8 +1034,10 @@ it("reference note", co.wrap(function *() {
     const written = yield RepoASTTestUtil.createRepo(state);
     const repo = written.repo;
     const head = yield repo.getHeadCommit();
+    const changes = yield getCommitChanges(repo, head);
     const stitch = yield StitchUtil.writeStitchedCommit(repo,
                                                         head,
+                                                        changes,
                                                         [],
                                                         () => false,
                                                         (x) => x,
@@ -1026,6 +1057,33 @@ it("reference note", co.wrap(function *() {
     const actual = JSON.parse(note.message());
     assert.deepEqual(actual, expected);
 }));
+describe("listSubmoduleChanges", function () {
+    it("empty", co.wrap(function *() {
+        const written = yield RepoASTTestUtil.createRepo("S");
+        const repo = written.repo;
+        const head = yield repo.getHeadCommit();
+        const result = yield StitchUtil.listSubmoduleChanges(repo, [head]);
+        const expected = {};
+        expected[head.id().tostrS()] = {};
+        assert.deepEqual(result, expected);
+    }));
+    it("with one", co.wrap(function *() {
+        const written = yield RepoASTTestUtil.createRepo("S:C2-1 s=Sa:1;H=2");
+        const repo = written.repo;
+        const head = yield repo.getHeadCommit();
+        const expected = {};
+        const parents = yield head.getParents();
+        const parent = parents[0];
+        const firstSha = parent.id().tostrS();
+        expected[head.id().tostrS()] = {
+            "s": new SubmoduleChange(null, firstSha),
+        };
+        expected[firstSha] = {};
+        const result =
+                   yield StitchUtil.listSubmoduleChanges(repo, [head, parent]);
+        assert.deepEqual(result, expected);
+    }));
+});
 describe("listFetches", function () {
     const cases = {
         "trivial": {
@@ -1111,8 +1169,11 @@ describe("listFetches", function () {
                 return yield repo.getCommit(sha);
             }));
             const adjustPath = c.adjustPath || ((x) => x);
+            const changes = yield StitchUtil.listSubmoduleChanges(repo,
+                                                                  toFetch);
             const result = yield StitchUtil.listFetches(repo,
                                                         toFetch,
+                                                        changes,
                                                         c.keepAsSubmodule,
                                                         adjustPath,
                                                         c.numParallel);
