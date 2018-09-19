@@ -53,20 +53,6 @@ const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
 const maxParallel = 1000;
 
 /**
- * Return a string having the value of the specified `sha` with the "/"
- * character inserted between the second and third characters of `sha`.  The
- * behavior is undefined unless `sha` is at least three characters long.
- *
- * @param {String} sha
- * @return {String}
- */
-exports.splitSha = function (sha) {
-    const pre = sha.slice(0, 2);
-    const post = sha.slice(2);
-    return `${pre}/${post}`;
-};
-
-/**
  * The name of the note used to record conversion information.
  *
  * @property {String}

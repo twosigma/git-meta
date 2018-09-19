@@ -45,10 +45,6 @@ const TreeUtil            = require("../../lib/util/tree_util");
 
 const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
 
-function deSplitSha(sha) {
-    return sha.slice(0, 2) + sha.slice(3);
-}
-
 /**
  *  Replace refs and notes with their equivalent logical mapping.
  */
@@ -605,9 +601,6 @@ describe("isTreeUnchanged", function () {
         assert.isFalse(result);
     }));
 });
-it("deSplitSha", function () {
-    assert.equal("1234", deSplitSha("12/34"));
-});
 describe("refMapper", function () {
     const Commit    = RepoAST.Commit;
     const cases = {
@@ -773,9 +766,6 @@ describe("refMapper", function () {
         });
     });
 
-});
-it("splitSha", function () {
-    assert.equal("34/56", StitchUtil.splitSha("3456"));
 });
 describe("computeModulesFile", function () {
     const cases = {
