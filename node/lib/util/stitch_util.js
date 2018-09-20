@@ -208,7 +208,11 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
     const metaWhen = metaAuthor.when();
     const metaTime = metaWhen.time();
     const metaOffset = metaWhen.offset();
-    const metaMessage = metaCommit.message();
+
+    // Sometimes (I don't know if this list libgit2 vs. git or what) otherwise
+    // matching messages may be missing line endings.
+
+    const metaMessage = Commit.ensureEolOnLastLine(metaCommit.message());
     let result = metaCommit.message();
 
     // Add information from submodule commits that differs from the the
@@ -229,7 +233,7 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
         if (when.time() !== metaTime || when.offset() !== metaOffset) {
             whenText = `Date:   ${Commit.formatCommitTime(when)}\n`;
         }
-        const message = commit.message();
+        const message = Commit.ensureEolOnLastLine(commit.message());
         let messageText = "";
         if (message !== metaMessage) {
             messageText = "\n" + message;
