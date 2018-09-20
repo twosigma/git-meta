@@ -43,6 +43,7 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const TreeUtil            = require("./tree_util");
+const UserError           = require("./user_error");
 
 const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
 
@@ -150,6 +151,23 @@ exports.readNotes = co.wrap(function *(repo, refName) {
     return result;
 });
 
+/**
+ * @property {String}
+ */
+exports.whitelistNoteRef = "refs/notes/stitched/whitelist";
+
+/**
+ * Return a set of meta-repo commits that are allowed to fail.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {Set}
+ */
+exports.readWhitelist = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const notes = yield exports.readNotes(repo, exports.whitelistNoteRef);
+    return new Set(Object.keys(notes));
+});
 
 /**
  * The name of the note used to record conversion information.
@@ -648,6 +666,9 @@ exports.listFetches = co.wrap(function *(repo,
  * Then do not generate a commit; instead, return the first parent (and an
  * empty `subCommits` map), or null if there are no parents.
  *
+ * Allow commits in the specified `whitelist` to reference invalid submodule
+ * commits; skip those (submodule) commits.
+ *
  * @param {NodeGit.Repository}      repo
  * @param {NodeGit.Commit}          commit
  * @param {Object}                  subChanges   path to SubmoduleChange
@@ -655,6 +676,7 @@ exports.listFetches = co.wrap(function *(repo,
  * @param {(String) => Boolean}     keepAsSubmodule
  * @param {(String) => String|null} adjustPath
  * @param {Bool}                    skipEmpty
+ * @param {Set of String}           whitelist
  * @return {Object}
  * @return {NodeGit.Commit} [return.stitchedCommit]
  * @return {Object}         return.subCommits       path to NodeGit.Commit
@@ -665,7 +687,8 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
                                                  parents,
                                                  keepAsSubmodule,
                                                  adjustPath,
-                                                 skipEmpty) {
+                                                 skipEmpty,
+                                                 whitelist) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isObject(subChanges);
@@ -673,21 +696,25 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
     assert.isFunction(keepAsSubmodule);
     assert.isFunction(adjustPath);
     assert.isBoolean(skipEmpty);
-
-    // changes and additions
+    assert.instanceOf(whitelist, Set);
 
     let updateModules = false;  // if any kept subs added or removed
-    const changes = {};
-    let subCommits = {};
+    const changes = {};         // changes and additions
+    let subCommits = {};        // included submodule commits
     const stitchSub = co.wrap(function *(name, sha) {
         let subCommit;
         try {
             subCommit = yield repo.getCommit(sha);
         }
         catch (e) {
-            console.error("On meta-commit", commit.id().tostrS(),
-                          name, "is missing", sha);
-            throw e;
+            const metaSha = commit.id().tostrS();
+            if (whitelist.has(metaSha)) {
+                return;                                               // RETURN
+            }
+            throw new UserError(`\
+On meta-commit ${metaSha}, ${name} is missing ${sha}.
+To add to allow this submodule change to be skipped, run:
+git notes --ref ${exports.whitelistNoteRef} add -m skip ${metaSha}`);
         }
         const subTreeId = subCommit.treeId();
         changes[name] = new TreeUtil.Change(subTreeId, FILEMODE.TREE);
@@ -732,6 +759,8 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
     let newCommit = null;
 
     if (!skipEmpty || 0 !== Object.keys(changes).length) {
+        // If we've got changes or are not skipping commits, we make one.
+
         let parentTree = null;
         if (0 !== parents.length) {
             const parentCommit = parents[0];
@@ -754,6 +783,9 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
                                                       parents);
         newCommit = yield repo.getCommit(newCommitId);
     } else if (0 !== parents.length) {
+        // If we skip this commit, map to its parent to indicate that whenever
+        // we see this commit in the future, substitute its parent.
+
         newCommit = parents[0];
         subCommits = {};
     }
@@ -972,6 +1004,8 @@ ${name}`;
         records = {};
     });
 
+    const whitelist = yield exports.readWhitelist(repo);
+
     for (let i = 0; i < commitsToStitch.length; ++i) {
         const next = commitsToStitch[i];
 
@@ -993,7 +1027,8 @@ ${name}`;
                                                        newParents,
                                                        options.keepAsSubmodule,
                                                        adjustPath,
-                                                       skipEmpty);
+                                                       skipEmpty,
+                                                       whitelist);
         records[nextSha] = result;
         const newCommit = result.stitchedCommit;
         const newSha = null === newCommit ? null : newCommit.id().tostrS();

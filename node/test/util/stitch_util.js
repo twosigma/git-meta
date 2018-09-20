@@ -182,6 +182,17 @@ S:C2-1;H=2;N ${ref} 1=hello`);
         assert.deepEqual(result, expected);
     }));
 });
+describe("readWhitelist", function () {
+    it("breathing", co.wrap(function *() {
+        const written = yield RepoASTTestUtil.createRepo(`
+S:N refs/notes/stitched/whitelist 1=`);
+        const repo = written.repo;
+        const head = yield repo.getHeadCommit();
+        const headSha = head.id().tostrS();
+        const result = yield StitchUtil.readWhitelist(repo);
+        assert(result.has(headSha));
+    }));
+});
 describe("makeConvertedNoteContent", function () {
     it("with target sha", function () {
         const result = StitchUtil.makeConvertedNoteContent("foo");
@@ -1005,6 +1016,24 @@ x=B:Ca;Cfoo#2-1 s=S.:a;Ba=a;Bmaster=2`,
             subCommits: { "foo/bar": "a" },
             expected: `x=E:C*#s foo/bar/a=a;Bstitched=s`,
         },
+        "missing commit": {
+            input: `
+a=B|b=B:Cb-1;Bb=b|x=U:C3-2 s=Sa:b;H=3`,
+            commit: "3",
+            parents: [],
+            keepAsSubmodule: () => false,
+            fails: true,
+        },
+        "missing commit, whitelisted": {
+            input: `
+a=B|b=B:Cb-1;Bb=b|x=U:C3-2 s=Sa:b;H=3`,
+            commit: "3",
+            parents: [],
+            keepAsSubmodule: () => false,
+            whitelist: ["3"],
+            subCommits: {},
+            expected: `x=E:Cs ;Bstitched=s`,
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
@@ -1021,6 +1050,9 @@ x=B:Ca;Cfoo#2-1 s=S.:a;Ba=a;Bmaster=2`,
                 const skipEmpty = c.skipEmpty || false;
 
                 const changes = yield getCommitChanges(x, commit);
+                const whitelist = new Set((c.whitelist || []).map(c => {
+                    return revMap[c];
+                }));
                 const stitch = yield StitchUtil.writeStitchedCommit(
                                                         x,
                                                         commit,
@@ -1028,7 +1060,8 @@ x=B:Ca;Cfoo#2-1 s=S.:a;Ba=a;Bmaster=2`,
                                                         parents,
                                                         c.keepAsSubmodule,
                                                         adjustPath,
-                                                        skipEmpty);
+                                                        skipEmpty,
+                                                        whitelist);
                 const subCommits = {};
                 for (let path in stitch.subCommits) {
                     const commit = stitch.subCommits[path];
@@ -1072,13 +1105,15 @@ x=B:Ca;Cfoo#2-1 s=S.:a;Ba=a;Bmaster=2`,
         const repo = written.repo;
         const head = yield repo.getHeadCommit();
         const changes = yield getCommitChanges(repo, head);
+        const whitelist = new Set();
         const stitch = yield StitchUtil.writeStitchedCommit(repo,
                                                             head,
                                                             changes,
                                                             [],
                                                             () => false,
                                                             (x) => x,
-                                                            false);
+                                                            false,
+                                                            whitelist);
         const expected = StitchUtil.makeStitchCommitMessage(head,
                                                             stitch.subCommits);
         const stitchedCommit = stitch.stitchedCommit;
