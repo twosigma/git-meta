@@ -944,6 +944,8 @@ exports.stitch = co.wrap(function *(repoPath,
     const commitsToStitch =
              yield exports.listCommitsToStitch(repo, commit, convertedCommits);
 
+    console.log("listing submodule changes");
+
     const changes = yield exports.listSubmoduleChanges(repo, commitsToStitch);
 
     const adjustPath = exports.makeAdjustPathFunction(joinRoot);
