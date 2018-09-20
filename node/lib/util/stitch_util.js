@@ -217,6 +217,9 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
             messageText = "\n" + message;
         }
         if ("" !== authorText || "" !== whenText || "" !== messageText) {
+            if (!result.endsWith("\n")) {
+                result += "\n";
+            }
             result += "\n";
             result += `From '${subName}'\n`;
             result += authorText;
