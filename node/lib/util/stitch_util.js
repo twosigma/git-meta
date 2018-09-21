@@ -649,6 +649,37 @@ exports.listFetches = co.wrap(function *(repo,
 });
 
 /**
+ * Return true if any parent of the specified `commit` other than the first has
+ * the specified `sha` for the submodule having the specified `name` in the
+ * specified repo.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodEGit.Commit}     commit
+ * @param {String}             name
+ * @param {String}             sha
+ */
+exports.sameInAnyOtherParent = co.wrap(function *(repo, commit, name, sha) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isString(name);
+    assert.isString(sha);
+
+    const parents = yield commit.getParents();
+    for (const parent of parents.slice(1)) {
+        const tree = yield parent.getTree();
+        try {
+            const entry = yield tree.entryByPath(name);
+            if (entry.sha() === sha) {
+                return true;
+            }
+        } catch (e) {
+            // missing in parent
+        }
+    }
+    return false;
+});
+
+/**
  * Write and return a new "stitched" commit for the specified `commit` in the
  * specified `repo`.  If the specified `keepAsSubmodule` function returns true
  * for the path of a submodule, continue to treat it as a submodule in the new
@@ -702,7 +733,7 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
     let updateModules = false;  // if any kept subs added or removed
     const changes = {};         // changes and additions
     let subCommits = {};        // included submodule commits
-    const stitchSub = co.wrap(function *(name, sha) {
+    const stitchSub = co.wrap(function *(name, oldName, sha) {
         let subCommit;
         try {
             subCommit = yield repo.getCommit(sha);
@@ -719,7 +750,16 @@ git notes --ref ${exports.whitelistNoteRef} add -m skip ${metaSha}`);
         }
         const subTreeId = subCommit.treeId();
         changes[name] = new TreeUtil.Change(subTreeId, FILEMODE.TREE);
-        subCommits[name] = subCommit;
+
+        // Now, record this submodule change as introduced by this commit,
+        // unless it already existed in another of its parents, i.e., it was
+        // merged in.
+
+        const alreadyExisted =
+                yield exports.sameInAnyOtherParent(repo, commit, oldName, sha);
+        if (!alreadyExisted) {
+            subCommits[name] = subCommit;
+        }
     });
 
     function changeKept(name, newSha) {
@@ -741,7 +781,7 @@ git notes --ref ${exports.whitelistNoteRef} add -m skip ${metaSha}`);
                 changeKept(name, newSha);
             }
         } else if (null !== newSha) {
-            yield stitchSub(mapped, newSha);
+            yield stitchSub(mapped, name, newSha);
         }
     }
 

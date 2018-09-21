@@ -899,6 +899,42 @@ describe("readSubmoduleChangeCache", function () {
         assert.deepEqual(read, expected);
     }));
 });
+describe("sameInAnyOtherParent", function () {
+    const cases  = {
+        "no other parents": {
+            state: "B:Ca;C2-1 s=S.:a;Ba=a;Bmaster=2",
+            expected: false,
+        },
+        "missing in other parent": {
+            state: "B:Ca;C3-1,2 s=S.:a;C2-1 foo=bar;Ba=a;Bmaster=3",
+            expected: false,
+        },
+        "different in other parent": {
+            state: `
+B:Ca;Cb;C3-1,2 s=S.:a;C2-1 s=S.:b;Ba=a;Bmaster=3;Bb=b`,
+            expected: false,
+        },
+        "same in other parent": {
+            state: "B:Ca;C3-1,2 s=S.:a;C2-1 s=S.:a;Ba=a;Bmaster=3",
+            expected: true,
+        },
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo(c.state);
+            const repo = written.repo;
+            const head = yield repo.getHeadCommit();
+            const a = yield repo.getBranchCommit("a");
+            const aSha = a.id().tostrS();
+            const result = yield StitchUtil.sameInAnyOtherParent(repo,
+                                                                 head,
+                                                                 "s",
+                                                                 aSha);
+            assert.equal(result, c.expected);
+        }));
+    });
+});
 describe("writeStitchedCommit", function () {
     const cases = {
         "trivial, no subs": {
@@ -1046,6 +1082,16 @@ a=B|b=B:Cb-1;Bb=b|x=U:C3-2 s=Sa:b;H=3`,
             whitelist: ["3"],
             subCommits: {},
             expected: `x=E:Cs ;Bstitched=s`,
+        },
+        "omit, from subCommits, non-new commits (existed in one parent)": {
+            input: `
+a=B:Ca a=a;Ba=a|
+x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
+            commit: "4",
+            parents: [],
+            keepAsSubmodule: () => false,
+            subCommits: { "u": "a" },
+            expected: `x=E:C*#s u/a=a,t/a=a;Bstitched=s`,
         },
     };
     Object.keys(cases).forEach(caseName => {
