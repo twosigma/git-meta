@@ -1093,6 +1093,17 @@ x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
             subCommits: { "u": "a" },
             expected: `x=E:C*#s u/a=a,t/a=a;Bstitched=s`,
         },
+        "omit, from subCommits, with adjusted path": {
+            input: `
+a=B:Ca a=a;Ba=a|
+x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
+            commit: "4",
+            parents: [],
+            keepAsSubmodule: () => false,
+            subCommits: { "foo/bar/u": "a" },
+            adjustPath: (path) => `foo/bar/${path}`,
+            expected: `x=E:C*#s foo/bar/u/a=a,foo/bar/t/a=a;Bstitched=s`,
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
