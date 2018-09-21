@@ -34,6 +34,7 @@ const ArgumentParser = require("argparse").ArgumentParser;
 const co             = require("co");
 
 const StitchUtil = require("./util/stitch_util");
+const UserError  = require("./util/user_error");
 
 const description = `Stitch together the specified meta-repo commitish in \
 the specified repo.`;
@@ -142,7 +143,11 @@ co(function *() {
                                 options);
     }
     catch (e) {
-        console.error(e.stack);
+        if (e instanceof UserError) {
+            console.error(e.message);
+        } else {
+            console.error(e.stack);
+        }
         process.exit(-1);
     }
 });
