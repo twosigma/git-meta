@@ -38,7 +38,6 @@ const Commit              = require("./commit");
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
-const SubmoduleChange     = require("./submodule_change");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
@@ -476,7 +475,7 @@ exports.writeSubmoduleChangeCache = co.wrap(function *(repo, changes) {
  * `repo`.
  *
  * @param {NodeGit.Repository} repo
- * @return {Object}   sha to path to SubmoduleChange
+ * @return {Object}   sha to path to SubmoduleChange-like object
  */
 exports.readSubmoduleChangeCache = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
@@ -484,13 +483,11 @@ exports.readSubmoduleChangeCache = co.wrap(function *(repo) {
     const cached = yield exports.readNotes(repo, exports.changeCacheRef);
     const result = {};
     for (let sha in cached) {
-        const data = JSON.parse(cached[sha]);
-        const changes = {};
-        for (let path in data) {
-            const change = data[path];
-            changes[path] = new SubmoduleChange(change.oldSha, change.newSha);
-        }
-        result[sha] = changes;
+        // We are cheating here in not constructing a real `SubmoduleChange`
+        // object, but that is wasteful (e.g., in terms of memory) and not
+        // really necessary.
+
+        result[sha] = JSON.parse(cached[sha]);
     }
     return result;
 });

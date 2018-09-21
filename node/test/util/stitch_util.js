@@ -883,7 +883,20 @@ describe("readSubmoduleChangeCache", function () {
         };
         yield StitchUtil.writeSubmoduleChangeCache(repo, changes);
         const read = yield StitchUtil.readSubmoduleChangeCache(repo);
-        assert.deepEqual(read, changes);
+        const expected = {};
+        expected[headSha] = {
+            "foo/bar": {
+                oldSha: "1",
+                newSha: "2",
+            },
+        };
+        expected[nextSha] = {
+            "baz/bam": {
+                oldSha: "3",
+                newSha: "4",
+            },
+        };
+        assert.deepEqual(read, expected);
     }));
 });
 describe("writeStitchedCommit", function () {
