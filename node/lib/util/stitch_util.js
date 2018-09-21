@@ -1033,9 +1033,8 @@ ${name}`;
             convertedNotes[sha] =
                                  exports.makeConvertedNoteContent(stitchedSha);
             if (null !== stitchedSha) {
-                referenceNotes[sha] = exports.makeReferenceNoteContent(
-                                                            stitchedSha,
-                                                            record.subCommits);
+                referenceNotes[stitchedSha] =
+                      exports.makeReferenceNoteContent(sha, record.subCommits);
             }
         }
         yield exports.writeNotes(repo,
