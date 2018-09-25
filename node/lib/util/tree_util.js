@@ -174,10 +174,11 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
     // This method does the real work, but assumes an already aggregated
     // directory structure.
 
-    const writeSubtree = co.wrap(function *(parentTree, subDir) {
+    const writeSubtree = co.wrap(function *(parentTree, subDir, basePath) {
         const builder = yield NodeGit.Treebuilder.create(repo, parentTree);
         for (let filename in subDir) {
             const entry = subDir[filename];
+            const fullPath = path.join(basePath, filename);
 
             if (null === entry) {
                 // Null means the entry was deleted.
@@ -192,7 +193,11 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
             else {
                 let subtree;
                 let treeEntry = null;
-                if (null !== parentTree) {
+
+                // If we have a directory that was removed in `changes`, we do
+                // not want to base it on the original parent tree.
+
+                if (null !== changes[fullPath] && null !== parentTree) {
                     try {
                         treeEntry = yield parentTree.entryByPath(filename);
                     }
@@ -204,10 +209,10 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                     treeEntries.push(treeEntry);
                     const treeId = treeEntry.id();
                     const curTree = yield repo.getTree(treeId);
-                    subtree = yield writeSubtree(curTree, entry);
+                    subtree = yield writeSubtree(curTree, entry, fullPath);
                 }
                 else {
-                    subtree = yield writeSubtree(null, entry);
+                    subtree = yield writeSubtree(null, entry, fullPath);
                 }
                 if (0 === subtree.entryCount()) {
                     builder.remove(filename);
@@ -224,7 +229,7 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
         const id = builder.write();
         return yield repo.getTree(id);
     });
-    return yield writeSubtree(baseTree, directory);
+    return yield writeSubtree(baseTree, directory, "");
 });
 
 /**

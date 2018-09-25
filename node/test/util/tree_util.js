@@ -328,6 +328,24 @@ describe("TreeUtil", function () {
             const entry = yield secondTree.entryByPath("foo");
             assert.equal(entry.id().tostrS(), id.tostrS());
         }));
+        it("rm directory but add new content", co.wrap(function *() {
+            const repo = yield makeRepo();
+            const id = yield hashObject(repo, "xxxxxxxh");
+            const firstTree = yield TreeUtil.writeTree(repo, null, {
+                "foo/bam": new Change(id, FILEMODE.BLOB),
+            });
+            const secondTree = yield TreeUtil.writeTree(repo, firstTree, {
+                "foo": null,
+                "foo/bar/baz": new Change(id, FILEMODE.BLOB),
+            });
+            let failed = false;
+            try {
+                yield secondTree.entryByPath("foo/bam");
+            } catch (e) {
+                failed = true;
+            }
+            assert(failed, "it's there");
+        }));
         it("implicitly overwrite blob with directory", co.wrap(function *() {
             const repo = yield makeRepo();
             const blobAId = yield hashObject(repo, "xxxxxxxh");
