@@ -34,6 +34,7 @@ const ArgumentParser = require("argparse").ArgumentParser;
 const co             = require("co");
 
 const StitchUtil = require("./util/stitch_util");
+const UserError  = require("./util/user_error");
 
 const description = `Stitch together the specified meta-repo commitish in \
 the specified repo.`;
@@ -110,6 +111,17 @@ In this history those paths will be relative to 'root', i.e., they will not \
 be prefixed by it. This option implies '--skip-empty'.",
 });
 
+parser.addArgument(["--preload-cache"], {
+    required: false,
+    action: "storeConst",
+    constant: true,
+    defaultValue: false,
+    help: "Load, in one shot, information about previously converted commits \
+and submodule changes.  Use this option when processing many commits to \
+avoid many individual note reads.  Do not use this option when doing \
+incremental updates as the initial load time will be very slow.",
+});
+
 co(function *() {
     const args = parser.parseArgs();
     const keepRegex = (null === args.keep_as_submodule) ?
@@ -123,6 +135,7 @@ co(function *() {
         keepAsSubmodule: keep,
         fetch: !args.no_fetch,
         skipEmpty: args.skip_empty || (null !== args.root),
+        preloadCache: args.preload_cache,
     };
     if (!args.no_fetch && null === args.url) {
         console.error("URL is required unless '--no-fetch'");
@@ -142,7 +155,11 @@ co(function *() {
                                 options);
     }
     catch (e) {
-        console.error(e.stack);
+        if (e instanceof UserError) {
+            console.error(e.message);
+        } else {
+            console.error(e.stack);
+        }
         process.exit(-1);
     }
 });

@@ -42,29 +42,120 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const TreeUtil            = require("./tree_util");
+const UserError           = require("./user_error");
 
 const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
 
-// This constant defines the maximum number of simple, multi-threaded parallel
-// operations we'll perform.  We allow the user to configure the number of
-// parallel operations that we must shell out for, but this value is just to
-// prevent us from running out of JavaScript heap.
-
-const maxParallel = 1000;
+// TODO: the `writeNotes` and `readNotes` methods should be moved to a utility
+// for notes, if they're needed elsewhwere.
 
 /**
- * Return a string having the value of the specified `sha` with the "/"
- * character inserted between the second and third characters of `sha`.  The
- * behavior is undefined unless `sha` is at least three characters long.
+ * Write the specified `contents` to the note having the specified `refName` in
+ * the specified `repo`.
  *
- * @param {String} sha
- * @return {String}
+ * Writing notes oneo-at-a-time is slow.  This method let's you write them in
+ * bulk, far more efficiently.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             refName
+ * @param {Object}             contents    SHA to data
  */
-exports.splitSha = function (sha) {
-    const pre = sha.slice(0, 2);
-    const post = sha.slice(2);
-    return `${pre}/${post}`;
-};
+exports.writeNotes = co.wrap(function *(repo, refName, contents) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(refName);
+    assert.isObject(contents);
+
+    if (0 === Object.keys(contents).length) {
+        // Nothing to do if no contents; no point in making an empty commit or
+        // in making clients check themselves.
+        return;                                                       // RETURN
+    }
+
+    // We're going to directly write the tree/commit for a new note containing
+    // `contents`.
+
+    let currentCommit = null;
+    let currentTree = null;
+    const parents = [];
+    const ref = yield GitUtil.getReference(repo, refName);
+    if (null !== ref) {
+        currentCommit = yield repo.getCommit(ref.target());
+        parents.push(currentCommit);
+        currentTree = yield currentCommit.getTree();
+    }
+    const odb = yield repo.odb();
+    const changes = {};
+    const ODB_BLOB = 3;
+    const BLOB = NodeGit.TreeEntry.FILEMODE.BLOB;
+    const writeBlob = co.wrap(function *(sha) {
+        const content = contents[sha];
+        const blobId = yield odb.write(content, content.length, ODB_BLOB);
+        changes[sha] = new TreeUtil.Change(blobId, BLOB);
+    });
+    yield DoWorkQueue.doInParallel(Object.keys(contents), writeBlob);
+
+    const newTree = yield TreeUtil.writeTree(repo, currentTree, changes);
+    const sig = yield ConfigUtil.defaultSignature(repo);
+    const commit = yield NodeGit.Commit.create(repo,
+                                               null,
+                                               sig,
+                                               sig,
+                                               null,
+                                               "git-meta updating notes",
+                                               newTree,
+                                               parents.length,
+                                               parents);
+    yield NodeGit.Reference.create(repo, refName, commit, 1, "updated");
+});
+
+/**
+ * Return the contents of the note having the specified `refName` in the
+ * specified `repo` or an empty object if no such note exists.
+ *
+ * Reading notes one-at-a-time is slow.  This method let's you read them all at
+ * once for a given ref.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             refName
+ * @return {Object} sha to content
+ */
+exports.readNotes = co.wrap(function *(repo, refName) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(refName);
+
+    const ref = yield GitUtil.getReference(repo, refName);
+    if (null === ref) {
+        return {};
+    }
+    const result = {};
+    const commit = yield repo.getCommit(ref.target());
+    const tree = yield commit.getTree();
+    const entries = tree.entries();
+    const processEntry = co.wrap(function *(e) {
+        const blob = yield e.getBlob();
+        result[e.name()] = blob.toString();
+    });
+    yield DoWorkQueue.doInParallel(entries, processEntry);
+    return result;
+});
+
+/**
+ * @property {String}
+ */
+exports.whitelistNoteRef = "refs/notes/stitched/whitelist";
+
+/**
+ * Return a set of meta-repo commits that are allowed to fail.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {Set}
+ */
+exports.readWhitelist = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const notes = yield exports.readNotes(repo, exports.whitelistNoteRef);
+    return new Set(Object.keys(notes));
+});
 
 /**
  * The name of the note used to record conversion information.
@@ -74,33 +165,18 @@ exports.splitSha = function (sha) {
 exports.convertedNoteRef = "refs/notes/stitched/converted";
 
 /**
- * Write a note in the specified `repo` indicating that the commit having the
- * specified `originalSha` was stitched into the specified `stitchedSha`, if
- * provided, or that it was not processed (it's in completely skipped history)
- * otherwise.
+ * Return the content of the note used to record that a commit was stitched
+ * into the specified `stitchedSha`, or, if `null === stitchedSha`, that the
+ * commit could not be stitched.
  *
- * @param {NodeGit.Repository} repo
- * @param {String}             originalSha
- * @param {String|null}        stitchedSha
+ * @param {String|null} stitchedSha
  */
-exports.writeConvertedNote = co.wrap(function *(repo,
-                                                originalSha,
-                                                stitchedSha) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(originalSha);
+exports.makeConvertedNoteContent = function (stitchedSha) {
     if (null !== stitchedSha) {
         assert.isString(stitchedSha);
     }
-    const content = null === stitchedSha ? "" : stitchedSha;
-    const sig = yield ConfigUtil.defaultSignature(repo);
-    yield NodeGit.Note.create(repo,
-                              exports.convertedNoteRef,
-                              sig,
-                              sig,
-                              NodeGit.Oid.fromString(originalSha),
-                              content,
-                              1);
-});
+    return null === stitchedSha ? "" : stitchedSha;
+};
 
 /**
  * Return the commit message to use for a stitch commit coming from the
@@ -120,7 +196,11 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
     const metaWhen = metaAuthor.when();
     const metaTime = metaWhen.time();
     const metaOffset = metaWhen.offset();
-    const metaMessage = metaCommit.message();
+
+    // Sometimes (I don't know if this is libgit2 vs. git or what) otherwise
+    // matching messages may be missing line endings.
+
+    const metaMessage = Commit.ensureEolOnLastLine(metaCommit.message());
     let result = metaCommit.message();
 
     // Add information from submodule commits that differs from the the
@@ -141,12 +221,15 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
         if (when.time() !== metaTime || when.offset() !== metaOffset) {
             whenText = `Date:   ${Commit.formatCommitTime(when)}\n`;
         }
-        const message = commit.message();
+        const message = Commit.ensureEolOnLastLine(commit.message());
         let messageText = "";
         if (message !== metaMessage) {
             messageText = "\n" + message;
         }
         if ("" !== authorText || "" !== whenText || "" !== messageText) {
+            if (!result.endsWith("\n")) {
+                result += "\n";
+            }
             result += "\n";
             result += `From '${subName}'\n`;
             result += authorText;
@@ -164,23 +247,15 @@ exports.makeStitchCommitMessage = function (metaCommit, subCommits) {
  */
 exports.referenceNoteRef = "refs/notes/stitched/reference";
 
-
 /**
- * Write a note recording the specified originating `metaRepoSha` and
- * `subCommits` for the stitched commit having the specified
- * `stitchedCommitSha` in the specified `repo`.
+ * Return the content to be used for a note indicating that a stitched commit
+ * originated from the specified `metaRepoSha` and `subCommits`.
  *
  * @param {NodeGit.Repository} repo
- * @param {String}             stitchedCommitSha
  * @param {String}             metaRepoSha
  * @param {Object}             subCommits     name to NodeGit.Commit
  */
-exports.writeReferenceNote = co.wrap(function *(repo,
-                                                stitchedCommitSha,
-                                                metaRepoSha,
-                                                subCommits) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(stitchedCommitSha);
+exports.makeReferenceNoteContent = function (metaRepoSha, subCommits) {
     assert.isString(metaRepoSha);
     assert.isObject(subCommits);
     const object = {
@@ -190,36 +265,7 @@ exports.writeReferenceNote = co.wrap(function *(repo,
     Object.keys(subCommits).forEach(name => {
         object.submoduleCommits[name] = subCommits[name].id().tostrS();
     });
-    const content = JSON.stringify(object, null, 4);
-    const sig = yield ConfigUtil.defaultSignature(repo);
-    yield NodeGit.Note.create(repo,
-                              exports.referenceNoteRef,
-                              sig,
-                              sig,
-                              NodeGit.Oid.fromString(stitchedCommitSha),
-                              content,
-                              1);
-});
-
-/**
- * Return true if the specified `newTree` and `originalTree` represent the same
- * value and false otherwise.  `newTree` represents the same value as
- * `originalTree` if they have the same id, or if `null === originalTree` and
- * `newTree` has no entries.
- *
- * @param {NodeGit.Tree}      newTree
- * @param {NodeGit.Tree|null} originalTree
- * @return {Bool}
- */
-exports.isTreeUnchanged = function (newTree, originalTree) {
-    assert.instanceOf(newTree, NodeGit.Tree);
-    if (null !== originalTree) {
-        assert.instanceOf(originalTree, NodeGit.Tree);
-    }
-    if (null === originalTree) {
-        return 0 === newTree.entries().length;
-    }
-    return newTree.id().tostrS() === originalTree.id().tostrS();
+    return JSON.stringify(object, null, 4);
 };
 
 /**
@@ -296,84 +342,6 @@ exports.listCommitsInOrder = function (entry, parentMap) {
 };
 
 /**
- * Return a map containing all converted SHAs in the specified `repo`.
- */
-exports.listConvertedCommits = co.wrap(function *(repo) {
-    assert.instanceOf(repo, NodeGit.Repository);
-
-    let ref;
-    try {
-        ref = yield NodeGit.Reference.lookup(repo, exports.convertedNoteRef);
-    } catch (e) {
-        // unfortunately, this is the only way to know the ref doesn't exist
-        return {};
-    }
-    const result = {};
-    const commit = yield repo.getCommit(ref.target());
-    const tree = yield commit.getTree();
-    const entries = tree.entries();
-    const processEntry = co.wrap(function *(e) {
-        const blob = yield e.getBlob();
-        const text = blob.toString();
-        result[e.name()] = text === "" ? null : text;
-    });
-    yield DoWorkQueue.doInParallel(entries, processEntry, maxParallel);
-    return result;
-});
-
-/**
- * List, in order of least to most dependent, the specified `commit` and its
- * ancestors in the specified `repo`.
- *
- * @param {NodeGit.Repository} repo
- * @param {NodeGit.Commit}     commit
- * @param {Object}             convertedCommits     map from sha to converted
- * @return {[NodeGit.Commit]}
- */
-exports.listCommitsToStitch = co.wrap(function *(repo,
-                                                 commit,
-                                                 convertedCommits) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(commit, NodeGit.Commit);
-    assert.isObject(convertedCommits);
-
-    const toList = [commit];
-    const allParents = {};
-    const commitMap = {};
-
-    while (0 !== toList.length) {
-        const next = toList[toList.length - 1];
-        const nextSha = next.id().tostrS();
-        toList.pop();
-
-        // Skip processing commits we've seen.
-
-        if (nextSha in allParents) {
-            continue;                                               // CONTINUE
-        }
-
-        // If it's converted, so, implicitly, are its parents.
-
-        const converted = convertedCommits[nextSha];
-        if (undefined !== converted) {
-            continue;                                               // CONTINUE
-        }
-        const parents = yield next.getParents();
-        const parentShas = [];
-        for (const parent of parents) {
-            toList.push(parent);
-            const parentSha = parent.id().tostrS();
-            parentShas.push(parentSha);
-        }
-        allParents[nextSha] = parentShas;
-        commitMap[nextSha] = next;
-    }
-    const commitShas = exports.listCommitsInOrder(commit.id().tostrS(),
-                                                  allParents);
-    return commitShas.map(sha => commitMap[sha]);
-});
-
-/**
  * Return the `TreeUtilChange` object corresponding to the `.gitmodules` file
  * synthesized in the specified `repo` from an original commit that had the
  * specified `urls`; this modules will will contain only those urls that are
@@ -409,6 +377,133 @@ exports.computeModulesFile = co.wrap(function *(repo,
     return new TreeUtil.Change(id, FILEMODE.BLOB);
 });
 
+exports.changeCacheRef = "refs/notes/stitched/submodule-change-cache";
+
+/**
+ * Add the specified `submoduleChanges` to the changed cache in the specified
+ * `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {Object}             changes    from sha to path to SubmoduleChange
+ */
+exports.writeSubmoduleChangeCache = co.wrap(function *(repo, changes) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isObject(changes);
+
+    const cache = {};
+    for (let sha in changes) {
+        const shaChanges = changes[sha];
+        const cachedChanges = {};
+        for (let path in shaChanges) {
+            const change = shaChanges[path];
+            cachedChanges[path] = {
+                oldSha: change.oldSha,
+                newSha: change.newSha
+            };
+        }
+        cache[sha] = JSON.stringify(cachedChanges, null, 4);
+    }
+    yield exports.writeNotes(repo, exports.changeCacheRef, cache);
+});
+
+/**
+ * Return the result of transforming the specified `map` so that each of the
+ * (string) values are replaced by the result of JSON parsing them.
+ *
+ * @param {Object} map     string to string
+ * @return {Object} map    string to object
+ */
+exports.parseNotes = function (map) {
+    const result = {};
+    for (let key in map) {
+        result[key] = JSON.parse(map[key]);
+    }
+    return result;
+};
+
+/**
+ * Read the cached list of submodule changes per commit in the specified
+ * `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @return {Object}   sha to path to SubmoduleChange-like object
+ */
+exports.readSubmoduleChangeCache = co.wrap(function *(repo) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    const cached = yield exports.readNotes(repo, exports.changeCacheRef);
+    return exports.parseNotes(cached);
+});
+
+/**
+ * Return a map of the submodule changes for the specified `commits` in the
+ * specified `repo`.
+ *
+ * @param {[NodeGit.Commit]} commits
+ * @return {Object}     sha -> name -> SubmoduleChange
+ */
+exports.listSubmoduleChanges = co.wrap(function *(repo, commits) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isArray(commits);
+
+    const result = yield exports.readSubmoduleChangeCache(repo);
+    let numListed = Object.keys(result).length;
+    console.log("Loaded", numListed, "from cache");
+
+    console.log("Listing submodule changes");
+
+    let toCache = {};     // bulk up changes that we'll write out periodically
+    let caching = false;  // true if we're in the middle of writing the cache
+    const writeCache = co.wrap(function *() {
+
+        // This code is reentrant, so we skip out if we're already writing some
+        // notes.  Also, we don't want to write tiny note changes, so we
+        // arbitrarily wait until we've got 1,000 changes.
+
+        if (caching || 1000 > Object.keys(toCache).length) {
+            return;                                                   // RETURN
+        }
+
+
+        caching = true;
+        const oldCache = toCache;
+        toCache = {};
+        yield exports.writeSubmoduleChangeCache(repo, oldCache);
+        caching = false;
+    });
+
+    const listForCommit = co.wrap(function *(commit) {
+        const sha = commit.id().tostrS();
+        if (sha in result) {
+            // was cached
+            return;                                                   // RETURN
+        }
+        const parents = yield commit.getParents();
+        let parentCommit = null;
+        if (0 !== parents.length) {
+            parentCommit = parents[0];
+        }
+        const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
+                                                                commit,
+                                                                parentCommit,
+                                                                true);
+        result[sha] = changes;
+        toCache[sha] = changes;
+        ++numListed;
+        if (0 === numListed % 100) {
+            console.log("Listed", numListed, "of", commits.length);
+        }
+        yield writeCache();
+    });
+    yield DoWorkQueue.doInParallel(commits, listForCommit);
+
+    // If there's anything left in the cache, write it out now.
+
+    yield exports.writeSubmoduleChangeCache(repo, toCache);
+
+    return result;
+});
+
 /**
  * Return a map from submodule name to shas to list of objects containing the
  * fields:
@@ -424,6 +519,7 @@ exports.computeModulesFile = co.wrap(function *(repo,
  *
  * @param {NodeGit.Repository}      repo
  * @param {[NodeGit.Commit]}        toFetch
+ * @param {Object}                  commitChanges    sha->name->SubmoduleChange
  * @param {(String) => Boolean}     keepAsSubmodule
  * @param {(String) => String|null} adjustPath
  * @param {Number}                  numParallel
@@ -431,11 +527,13 @@ exports.computeModulesFile = co.wrap(function *(repo,
  */
 exports.listFetches = co.wrap(function *(repo,
                                          toFetch,
+                                         commitChanges,
                                          keepAsSubmodule,
                                          adjustPath,
                                          numParallel) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isArray(toFetch);
+    assert.isObject(commitChanges);
     assert.isFunction(keepAsSubmodule);
     assert.isFunction(adjustPath);
     assert.isNumber(numParallel);
@@ -460,32 +558,6 @@ exports.listFetches = co.wrap(function *(repo,
     });
 
     const result = {};
-
-    const commitChanges = {};
-
-    let numListed = 0;
-
-    // This bit is pretty slow, but we run it on only unconverted commits.  If
-    // necessary, we could cache the submodule changes in a note.
-
-    const listChanges = co.wrap(function *(commit) {
-        const parents = yield commit.getParents();
-        let parentCommit = null;
-        if (0 !== parents.length) {
-            parentCommit = parents[0];
-        }
-        const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
-                                                                commit,
-                                                                parentCommit,
-                                                                true);
-        commitChanges[commit.id().tostrS()] = changes;
-        ++numListed;
-        if (0 === numListed % 100) {
-            console.log("Listed", numListed, "of", toFetch.length);
-        }
-    });
-
-    yield DoWorkQueue.doInParallel(toFetch, listChanges, maxParallel);
 
     const addTodo = co.wrap(function *(commit, subName, sha) {
         let subTodos = result[subName];
@@ -520,6 +592,37 @@ exports.listFetches = co.wrap(function *(repo,
 });
 
 /**
+ * Return true if any parent of the specified `commit` other than the first has
+ * the specified `sha` for the submodule having the specified `name` in the
+ * specified repo.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodEGit.Commit}     commit
+ * @param {String}             name
+ * @param {String}             sha
+ */
+exports.sameInAnyOtherParent = co.wrap(function *(repo, commit, name, sha) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isString(name);
+    assert.isString(sha);
+
+    const parents = yield commit.getParents();
+    for (const parent of parents.slice(1)) {
+        const tree = yield parent.getTree();
+        try {
+            const entry = yield tree.entryByPath(name);
+            if (entry.sha() === sha) {
+                return true;
+            }
+        } catch (e) {
+            // missing in parent
+        }
+    }
+    return false;
+});
+
+/**
  * Write and return a new "stitched" commit for the specified `commit` in the
  * specified `repo`.  If the specified `keepAsSubmodule` function returns true
  * for the path of a submodule, continue to treat it as a submodule in the new
@@ -529,76 +632,77 @@ exports.listFetches = co.wrap(function *(repo,
  * applied to the paths of submodules that are stitched and those that are kept
  * as submodules.
  *
- * Once the commit has been written, record a reference indicating the mapping
- * from the originally to new commit in the form of
- * `refs/stitched/converted/${sha}`, and clean the refs created in
- * `refs/stitched/fetched` for this commit.
- *
  * If the specified `skipEmpty` is true and the generated commit would be empty
  * because either:
  *
  * 1. It would have an empty tree and no parents
  * 2. It would have the same tree as its first parent
  *
- * Then do not generate a commit; instead, return null.  In this case, we
- * record that the commit maps to its first (mapped) parent; if it has no
- * parents we do not record a mapping.
+ * Then do not generate a commit; instead, return the first parent (and an
+ * empty `subCommits` map), or null if there are no parents.
+ *
+ * Allow commits in the specified `whitelist` to reference invalid submodule
+ * commits; skip those (submodule) commits.
  *
  * @param {NodeGit.Repository}      repo
  * @param {NodeGit.Commit}          commit
+ * @param {Object}                  subChanges   path to SubmoduleChange
  * @param {[NodeGit.Commit]}        parents
  * @param {(String) => Boolean}     keepAsSubmodule
  * @param {(String) => String|null} adjustPath
  * @param {Bool}                    skipEmpty
- * @return {NodeGit.Commit}
+ * @param {Set of String}           whitelist
+ * @return {Object}
+ * @return {NodeGit.Commit} [return.stitchedCommit]
+ * @return {Object}         return.subCommits       path to NodeGit.Commit
  */
 exports.writeStitchedCommit = co.wrap(function *(repo,
                                                  commit,
+                                                 subChanges,
                                                  parents,
                                                  keepAsSubmodule,
                                                  adjustPath,
-                                                 skipEmpty) {
+                                                 skipEmpty,
+                                                 whitelist) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+    assert.isObject(subChanges);
     assert.isArray(parents);
     assert.isFunction(keepAsSubmodule);
     assert.isFunction(adjustPath);
     assert.isBoolean(skipEmpty);
-
-    let parentTree = null;
-    if (0 !== parents.length) {
-        const parentCommit = parents[0];
-        parentTree = yield parentCommit.getTree();
-    }
-
-    let originalParent = null;
-    const originalParents = yield commit.getParents();
-    if (0 !== originalParents.length) {
-        originalParent = originalParents[0];
-    }
-    const subChanges = yield SubmoduleUtil.getSubmoduleChanges(repo,
-                                                               commit,
-                                                               originalParent,
-                                                               true);
-
-    // changes and additions
+    assert.instanceOf(whitelist, Set);
 
     let updateModules = false;  // if any kept subs added or removed
-    const changes = {};
-    const subCommits = {};
-    const stitchSub = co.wrap(function *(name, sha) {
+    const changes = {};         // changes and additions
+    let subCommits = {};        // included submodule commits
+    const stitchSub = co.wrap(function *(name, oldName, sha) {
         let subCommit;
         try {
             subCommit = yield repo.getCommit(sha);
         }
         catch (e) {
-            console.error("On meta-commit", commit.id().tostrS(),
-                          name, "is missing", sha);
-            throw e;
+            const metaSha = commit.id().tostrS();
+            if (whitelist.has(metaSha)) {
+                return;                                               // RETURN
+            }
+            throw new UserError(`\
+On meta-commit ${metaSha}, ${name} is missing ${sha}.
+To add to allow this submodule change to be skipped, run:
+git notes --ref ${exports.whitelistNoteRef} add -m skip ${metaSha}`);
         }
         const subTreeId = subCommit.treeId();
         changes[name] = new TreeUtil.Change(subTreeId, FILEMODE.TREE);
-        subCommits[name] = subCommit;
+
+        // Now, record this submodule change as introduced by this commit,
+        // unless it already existed in another of its parents, i.e., it was
+        // merged in.
+
+        const alreadyExisted =
+                yield exports.sameInAnyOtherParent(repo, commit, oldName, sha);
+        if (!alreadyExisted) {
+            subCommits[name] = subCommit;
+        }
     });
 
     function changeKept(name, newSha) {
@@ -606,19 +710,21 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         changes[name] = new TreeUtil.Change(id, FILEMODE.COMMIT);
     }
 
-    const synthetics = [];  // list of submodules whose refs need cleaned up
-
     for (let name in subChanges) {
+        const mapped = adjustPath(name);
+        if (null === mapped) {
+            continue;                                               // CONTINUE
+        }
         const newSha = subChanges[name].newSha;
-        changes[name] = null;
+        changes[mapped] = null;
+
         if (keepAsSubmodule(name)) {
             updateModules = true;
             if (null !== newSha) {
                 changeKept(name, newSha);
             }
-        } else if (null !== newSha && null !== adjustPath(name)) {
-            synthetics.push(name);
-            yield stitchSub(name, newSha);
+        } else if (null !== newSha) {
+            yield stitchSub(mapped, name, newSha);
         }
     }
 
@@ -634,26 +740,19 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         changes[SubmoduleConfigUtil.modulesFileName] = content;
     }
 
-    // Adjust paths using the provided `adjustPath` function.
-
-    const mappedChanges = {};
-
-    for (let name in changes) {
-        const mapped = adjustPath(name);
-        if (null !== mapped) {
-            mappedChanges[mapped] = changes[name];
-        }
-    }
-
-    const newTree = yield TreeUtil.writeTree(repo, parentTree, mappedChanges);
-
     let newCommit = null;
-    let mappedSha = null;
-    if (skipEmpty && exports.isTreeUnchanged(newTree, parentTree)) {
+
+    if (!skipEmpty || 0 !== Object.keys(changes).length) {
+        // If we've got changes or are not skipping commits, we make one.
+
+        let parentTree = null;
         if (0 !== parents.length) {
-            mappedSha = parents[0].id().tostrS();
+            const parentCommit = parents[0];
+            parentTree = yield parentCommit.getTree();
         }
-    } else {
+
+        const newTree = yield TreeUtil.writeTree(repo, parentTree, changes);
+
         const commitMessage = exports.makeStitchCommitMessage(commit,
                                                               subCommits);
         const newCommitId = yield NodeGit.Commit.create(
@@ -667,14 +766,17 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
                                                       parents.length,
                                                       parents);
         newCommit = yield repo.getCommit(newCommitId);
-        mappedSha = newCommit.id().tostrS();
-        yield exports.writeReferenceNote(repo,
-                                         mappedSha,
-                                         commit.id().tostrS(),
-                                         subCommits);
+    } else if (0 !== parents.length) {
+        // If we skip this commit, map to its parent to indicate that whenever
+        // we see this commit in the future, substitute its parent.
+
+        newCommit = parents[0];
+        subCommits = {};
     }
-    yield exports.writeConvertedNote(repo, commit.id().tostrS(), mappedSha);
-    return newCommit;
+    return {
+        stitchedCommit: newCommit,
+        subCommits: subCommits,
+    };
 });
 
 /**
@@ -745,6 +847,129 @@ exports.makeAdjustPathFunction = function (root) {
         return null;
     };
 };
+
+/**
+ * Return the SHA in the specified `content` or null if it represents no sha.
+ *
+ * @param {String} content
+ * @retiurm {String|null}
+ */
+exports.readConvertedContent = function (content) {
+    assert.isString(content);
+    return content === "" ? null : content;
+};
+
+/**
+ * Return the converted commit for the specified `sha` in the specified `repo`,
+ * null if it could not be converted, or undefined if it has not been
+ * attempted.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             sha
+ * @return {String|null|undefined}
+ */
+exports.readConvertedCommit = co.wrap(function *(repo, sha) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(sha);
+    const result = yield GitUtil.readNote(repo, exports.convertedNoteRef, sha);
+    return result === null ? 
+        undefined :
+        exports.readConvertedContent(result.message());
+});
+
+/**
+ * Return the previously converted commits in the specified `repo`.
+ *
+ * @param {Repo}
+ * @return {Object} map from string to string or null
+ */
+exports.readConvertedCommits = co.wrap(function *(repo) {
+
+    // We use "" to indicate that a commit could not be converted.
+
+    const result = yield exports.readNotes(repo, exports.convertedNoteRef);
+    for (let key in result) {
+        result[key] = exports.readConvertedContent(result[key]);
+    }
+    return result;
+});
+
+/**
+ * Return a function that can return the result of previous attempts to convert
+ * the specified `commit` in the specified `repo`.  If there is a value in
+ * `cache`, return it, otherwise try to read the note and then cache that
+ * result.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {Object}             cache
+ * @return {(String) => Promise}
+ */
+exports.makeGetConvertedCommit = function (repo, cache) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isObject(cache);
+    return co.wrap(function *(sha) {
+        assert.isString(sha);
+
+        if (sha in cache) {
+            return cache[sha];
+        }
+        const result = yield exports.readConvertedCommit(repo, sha);
+        cache[sha] = result;
+        return result;
+    });
+};
+
+/**
+ * List, in order of least to most dependent, the specified `commit` and its
+ * ancestors in the specified `repo`.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit}     commit
+ * @param {(String) => Promise(String|null|undefined)}
+ * @return {[NodeGit.Commit]}
+ */
+exports.listCommitsToStitch = co.wrap(function *(repo,
+                                                 commit,
+                                                 getConvertedCommit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(commit, NodeGit.Commit);
+    assert.isFunction(getConvertedCommit);
+
+    const toList = [commit];
+    const allParents = {};
+    const commitMap = {};
+
+    while (0 !== toList.length) {
+        const next = toList[toList.length - 1];
+        const nextSha = next.id().tostrS();
+        toList.pop();
+
+        // Skip processing commits we've seen.
+
+        if (nextSha in allParents) {
+            continue;                                               // CONTINUE
+        }
+
+        // If it's converted, so, implicitly, are its parents.
+
+        const converted = yield getConvertedCommit(nextSha);
+        if (undefined !== converted) {
+            continue;                                               // CONTINUE
+        }
+        const parents = yield next.getParents();
+        const parentShas = [];
+        for (const parent of parents) {
+            toList.push(parent);
+            const parentSha = parent.id().tostrS();
+            parentShas.push(parentSha);
+        }
+        allParents[nextSha] = parentShas;
+        commitMap[nextSha] = next;
+    }
+    const commitShas = exports.listCommitsInOrder(commit.id().tostrS(),
+                                                  allParents);
+    return commitShas.map(sha => commitMap[sha]);
+});
 
 /**
  * Stitch the repository at the specified `repoPath` starting with the
@@ -818,12 +1043,21 @@ exports.stitch = co.wrap(function *(repoPath,
 
     console.log("Listing previously converted commits.");
 
-    const convertedCommits = yield exports.listConvertedCommits(repo);
+    let convertedCommits = {};
+    if (options.preloadCache) {
+        convertedCommits = yield exports.readConvertedCommits(repo);
+    }
+    const getConverted = exports.makeGetConvertedCommit(repo,
+                                                        convertedCommits);
 
     console.log("listing unconverted ancestors of", commit.id().tostrS());
 
     const commitsToStitch =
-             yield exports.listCommitsToStitch(repo, commit, convertedCommits);
+                 yield exports.listCommitsToStitch(repo, commit, getConverted);
+
+    console.log("listing submodule changes");
+
+    const changes = yield exports.listSubmoduleChanges(repo, commitsToStitch);
 
     const adjustPath = exports.makeAdjustPathFunction(joinRoot);
 
@@ -833,6 +1067,7 @@ exports.stitch = co.wrap(function *(repoPath,
         console.log("listing fetches");
         const fetches = yield exports.listFetches(repo,
                                                   commitsToStitch,
+                                                  changes,
                                                   options.keepAsSubmodule,
                                                   adjustPath,
                                                   options.numParallel);
@@ -853,6 +1088,36 @@ ${name}`;
     console.log("Now stitching");
     let lastCommit = null;
 
+    let records = {};
+
+    const writeNotes = co.wrap(function *() {
+        console.log(
+                  `Writing notes for ${Object.keys(records).length} commits.`);
+        const convertedNotes = {};
+        const referenceNotes = {};
+        for (let sha in records) {
+            const record = records[sha];
+            const stitchedCommit = record.stitchedCommit;
+            const stitchedSha =
+                 null === stitchedCommit ? null : stitchedCommit.id().tostrS();
+            convertedNotes[sha] =
+                                 exports.makeConvertedNoteContent(stitchedSha);
+            if (null !== stitchedSha) {
+                referenceNotes[stitchedSha] =
+                      exports.makeReferenceNoteContent(sha, record.subCommits);
+            }
+        }
+        yield exports.writeNotes(repo,
+                                 exports.referenceNoteRef,
+                                 referenceNotes);
+        yield exports.writeNotes(repo,
+                                 exports.convertedNoteRef,
+                                 convertedNotes);
+        records = {};
+    });
+
+    const whitelist = yield exports.readWhitelist(repo);
+
     for (let i = 0; i < commitsToStitch.length; ++i) {
         const next = commitsToStitch[i];
 
@@ -860,26 +1125,34 @@ ${name}`;
         const parents = yield next.getParents();
         const newParents = [];
         for (const parent of parents) {
-            const newParentSha = convertedCommits[parent.id().tostrS()];
+            const newParentSha = yield getConverted(parent.id().tostrS());
             if (null !== newParentSha && undefined !== newParentSha) {
                 const newParent = yield repo.getCommit(newParentSha);
                 newParents.push(newParent);
             }
         }
 
-        const newCommit = yield exports.writeStitchedCommit(
+        const result = yield exports.writeStitchedCommit(
                                                        repo,
                                                        next,
+                                                       changes[nextSha],
                                                        newParents,
                                                        options.keepAsSubmodule,
                                                        adjustPath,
-                                                       skipEmpty);
+                                                       skipEmpty,
+                                                       whitelist);
+        records[nextSha] = result;
+        const newCommit = result.stitchedCommit;
         const newSha = null === newCommit ? null : newCommit.id().tostrS();
         convertedCommits[nextSha] = newSha;
         const desc = null === newCommit ? "skipped" : newCommit.id().tostrS();
         const log = `\
 Of [${commitsToStitch.length}] done [${i + 1}] : ${nextSha} -> ${desc}`;
-            console.log(log);
+        console.log(log);
+
+        if (10000 <= Object.keys(records).length) {
+            yield writeNotes();
+        }
 
         // If `writeStitchedCommit` returned null to indicate that it did not
         // make a commit (because it would have been empty), leave `lastCommit`
@@ -887,6 +1160,15 @@ Of [${commitsToStitch.length}] done [${i + 1}] : ${nextSha} -> ${desc}`;
 
         lastCommit = newCommit || lastCommit;
     }
+    yield writeNotes();
+
+    // Delete submodule change cache if we succeeded; we won't need these
+    // submodules again.
+
+    if (0 !== Object.keys(changes)) {
+        NodeGit.Reference.remove(repo, exports.changeCacheRef);
+    }
+
     if (null !== lastCommit) {
         console.log(
                `Updating ${targetBranchName} to ${lastCommit.id().tostrS()}.`);
