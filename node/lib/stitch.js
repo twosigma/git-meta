@@ -160,6 +160,6 @@ co(function *() {
         } else {
             console.error(e.stack);
         }
-        process.exit(-1);
+        process.exit(1);
     }
 });

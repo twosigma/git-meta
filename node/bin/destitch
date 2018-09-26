@@ -30,54 +30,5 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-const ArgumentParser = require("argparse").ArgumentParser;
-const co             = require("co");
+require("./../lib/destitch.js");
 
-const DestitchUtil = require("./util/destitch_util");
-const GitUtil      = require("./util/git_util");
-const UserError    = require("./util/user_error");
-
-const description = `\
-Create a meta-repo commit from a stitched history and print its SHA.`;
-
-const parser = new ArgumentParser({
-    addHelp: true,
-    description: description
-});
-
-parser.addArgument(["-r", "--remote"], {
-    required: true,
-    type: "string",
-    help: `The name of the remote for the meta-repo`,
-});
-
-parser.addArgument(["-b", "--branch"], {
-    required: true,
-    type: "string",
-    help: "If set BRANCH to the destitched commit",
-});
-
-parser.addArgument(["commitish"], {
-    type: "string",
-    help: "the commit to destitch",
-});
-
-co(function *() {
-    const args = parser.parseArgs();
-    try {
-        const repo = yield GitUtil.getCurrentRepo();
-        yield DestitchUtil.destitch(repo,
-                                    args.commitish,
-                                    args.remote,
-                                    `refs/heads/${args.branch}`);
-
-    }
-    catch (e) {
-        if (e instanceof UserError) {
-            console.error(e.message);
-        } else {
-            console.error(e.stack);
-        }
-        process.exit(1);
-    }
-});
