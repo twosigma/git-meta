@@ -1280,4 +1280,20 @@ describe("GitUtil", function () {
             }));
         });
     });
+    describe("getReference", function () {
+        it("good", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo("S");
+            const repo = written.repo;
+            const result = yield GitUtil.getReference(repo,
+                                                      "refs/heads/master");
+            assert.instanceOf(result, NodeGit.Reference);
+            assert.equal(result.name(), "refs/heads/master");
+        }));
+        it("bad", co.wrap(function *() {
+            const written = yield RepoASTTestUtil.createRepo("S");
+            const repo = written.repo;
+            const result = yield GitUtil.getReference(repo, "refs/foo");
+            assert.isNull(result);
+        }));
+    });
 });
