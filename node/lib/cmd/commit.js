@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const Hook     = require("../util/hook");
 
 /**
  * this module is the entrypoint for the `commit` command.
@@ -119,6 +120,7 @@ const doCommit = co.wrap(function *(args) {
                                  args.file,
                                  args.interactive,
                                  GitUtil.editMessage);
+    yield Hook.execHook(repo, "post-commit");
 });
 
 const doAmend = co.wrap(function *(args) {
@@ -140,6 +142,7 @@ const doAmend = co.wrap(function *(args) {
                                 args.all,
                                 args.interactive,
                                 args.no_edit ? null : GitUtil.editMessage);
+    yield Hook.execHook(repo, "post-commit");
 });
 
 /**
