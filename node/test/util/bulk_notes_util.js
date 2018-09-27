@@ -33,11 +33,18 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const BulkNotesUtil       = require("../../lib/util/bulk_notes_util");
 
 describe("BulkNotesUtil", function () {
+describe("shardSha", function () {
+    it("breathing", function () {
+        assert.equal(BulkNotesUtil.shardSha("aabbbb"),
+                     path.join("aa", "bb", "bb"));
+    });
+});
 describe("writeNotes", function () {
     it("with a parent", co.wrap(function *() {
         const ref = "refs/notes/foo/bar";
@@ -113,6 +120,21 @@ describe("readNotes", function () {
         expected[fooSha] = "foo";
         expected[headSha] = "bar";
         assert.deepEqual(result, expected);
+    }));
+    it("sharded, from `writeNotes`", co.wrap(function *() {
+        const ref = "refs/notes/foo/bar";
+        const written = yield RepoASTTestUtil.createRepo("S:C2-1;H=2");
+        const repo = written.repo;
+        const foo = yield repo.getHeadCommit();
+        const fooSha = foo.id().tostrS();
+        const first = (yield foo.getParents())[0];
+        const firstSha = first.id().tostrS();
+        const newNotes = {};
+        newNotes[firstSha] = "hello";
+        newNotes[fooSha] = "foobar";
+        yield BulkNotesUtil.writeNotes(repo, ref, newNotes);
+        const result = yield BulkNotesUtil.readNotes(repo, ref);
+        assert.deepEqual(result, newNotes);
     }));
 });
 describe("parseNotes", function () {

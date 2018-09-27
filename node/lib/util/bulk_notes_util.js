@@ -33,18 +33,34 @@
 const assert         = require("chai").assert;
 const co             = require("co");
 const NodeGit        = require("nodegit");
+const path           = require("path");
 
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const TreeUtil            = require("./tree_util");
 
-// This constant defines the maximum number of simple, multi-threaded parallel
-// operations we'll perform.  We allow the user to configure the number of
-// parallel operations that we must shell out for, but this value is just to
-// prevent us from running out of JavaScript heap.
-
-const maxParallel = 1000;
+/**
+ * Return a sharded path for the specified `sha`, inserting a "/" between every
+ * second character.
+ *
+ * @param {String} sha
+ * @return {String}
+ */
+exports.shardSha = function (sha) {
+    const size = 2;
+    let result = "";
+    while ("" !== sha) {
+        const next = sha.substr(0, size);
+        if ("" !== result) {
+            result = path.join(result, next);
+        } else {
+            result = next;
+        }
+        sha = sha.substr(size);
+    }
+    return result;
+};
 
 /**
  * Write the specified `contents` to the note having the specified `refName` in
@@ -71,12 +87,11 @@ exports.writeNotes = co.wrap(function *(repo, refName, contents) {
     // We're going to directly write the tree/commit for a new note containing
     // `contents`.
 
-    let currentCommit = null;
     let currentTree = null;
     const parents = [];
     const ref = yield GitUtil.getReference(repo, refName);
     if (null !== ref) {
-        currentCommit = yield repo.getCommit(ref.target());
+        const currentCommit = yield repo.getCommit(ref.target());
         parents.push(currentCommit);
         currentTree = yield currentCommit.getTree();
     }
@@ -87,7 +102,8 @@ exports.writeNotes = co.wrap(function *(repo, refName, contents) {
     const writeBlob = co.wrap(function *(sha) {
         const content = contents[sha];
         const blobId = yield odb.write(content, content.length, ODB_BLOB);
-        changes[sha] = new TreeUtil.Change(blobId, BLOB);
+        const sharded = exports.shardSha(sha);
+        changes[sharded] = new TreeUtil.Change(blobId, BLOB);
     });
     yield DoWorkQueue.doInParallel(Object.keys(contents), writeBlob);
 
@@ -155,12 +171,7 @@ exports.readNotes = co.wrap(function *(repo, refName) {
     const result = {};
     const commit = yield repo.getCommit(ref.target());
     const tree = yield commit.getTree();
-    const entries = tree.entries();
-    const processEntry = co.wrap(function *(e) {
-        const blob = yield e.getBlob();
-        result[e.name()] = blob.toString();
-    });
-    yield DoWorkQueue.doInParallel(entries, processEntry, maxParallel);
+    yield processTree(result, repo, tree, "");
     return result;
 });
 
