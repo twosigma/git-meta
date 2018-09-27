@@ -41,25 +41,15 @@ const GitUtil             = require("./git_util");
 const TreeUtil            = require("./tree_util");
 
 /**
- * Return a sharded path for the specified `sha`, inserting a "/" between every
- * second character.
+ * Return a sharded path for the specified `sha`, e.g.
+ * "aabbffffffffffffffff" becomes: "aa/bb/ffffffffffffffff".  The behavior is
+ * undefined unless `sha` contains at least five characters.
  *
  * @param {String} sha
  * @return {String}
  */
 exports.shardSha = function (sha) {
-    const size = 2;
-    let result = "";
-    while ("" !== sha) {
-        const next = sha.substr(0, size);
-        if ("" !== result) {
-            result = path.join(result, next);
-        } else {
-            result = next;
-        }
-        sha = sha.substr(size);
-    }
-    return result;
+    return path.join(sha.substr(0, 2), sha.substr(2, 2), sha.substr(4));
 };
 
 /**
