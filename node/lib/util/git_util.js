@@ -1069,3 +1069,19 @@ git -C '${repo.path()}' merge-base ${id1} ${id2}`;
     }
     return result.stdout.split("\n").filter(x => x);
 });
+
+/**
+ * Return the `Reference` object having the specified `name` in the specified
+ * `repo`, or null if no such reference exists.
+ */
+exports.getReference = co.wrap(function *(repo, name) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(name);
+
+    try {
+        return yield NodeGit.Reference.lookup(repo, name);
+    } catch (e) {
+        // only way to tell `name` doesn't exist.
+    }
+    return null;
+});
