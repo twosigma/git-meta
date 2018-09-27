@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const BulkNotesUtil       = require("../../lib/util/bulk_notes_util");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const RepoASTUtil         = require("../../lib/util/repo_ast_util");
@@ -131,57 +132,6 @@ const getCommitChanges = co.wrap(function *(repo, commit) {
 });
 
 describe("StitchUtil", function () {
-describe("writeNotes", function () {
-    it("with a parent", co.wrap(function *() {
-        const ref = "refs/notes/foo/bar";
-        const written = yield RepoASTTestUtil.createRepo(`
-S:C2-1;H=2;N ${ref} 1=hello`);
-        const repo = written.repo;
-        const foo = yield repo.getHeadCommit();
-        const fooSha = foo.id().tostrS();
-        const first = (yield foo.getParents())[0];
-        const firstSha = first.id().tostrS();
-        const newNotes = {};
-        newNotes[fooSha] = "foobar";
-        yield StitchUtil.writeNotes(repo, ref, newNotes);
-        const result = {};
-        const shas = [];
-        yield NodeGit.Note.foreach(repo, ref, (_, sha) => {
-            shas.push(sha);
-        });
-        yield shas.map(co.wrap(function *(sha) {
-            const note = yield NodeGit.Note.read(repo, ref, sha);
-            result[sha] = note.message();
-        }));
-        const expected = newNotes;
-        newNotes[firstSha] = "hello";
-        assert.deepEqual(result, expected);
-    }));
-    it("no parents", co.wrap(function *() {
-        const ref = "refs/notes/foo/bar";
-        const written = yield RepoASTTestUtil.createRepo("S:C2-1;H=2");
-        const repo = written.repo;
-        const foo = yield repo.getHeadCommit();
-        const fooSha = foo.id().tostrS();
-        const first = (yield foo.getParents())[0];
-        const firstSha = first.id().tostrS();
-        const newNotes = {};
-        newNotes[firstSha] = "hello";
-        newNotes[fooSha] = "foobar";
-        yield StitchUtil.writeNotes(repo, ref, newNotes);
-        const result = {};
-        const shas = [];
-        yield NodeGit.Note.foreach(repo, ref, (_, sha) => {
-            shas.push(sha);
-        });
-        yield shas.map(co.wrap(function *(sha) {
-            const note = yield NodeGit.Note.read(repo, ref, sha);
-            result[sha] = note.message();
-        }));
-        const expected = newNotes;
-        assert.deepEqual(result, expected);
-    }));
-});
 describe("readWhitelist", function () {
     it("breathing", co.wrap(function *() {
         const written = yield RepoASTTestUtil.createRepo(`
@@ -523,32 +473,6 @@ describe("listCommitsInOrder", function () {
         });
     });
 });
-describe("readNotes", function () {
-    it("empty", co.wrap(function *() {
-        const written = yield RepoASTTestUtil.createRepo("S:C2-1;Bfoo=2");
-        const repo = written.repo;
-        const refName = "refs/notes/foo/bar";
-        const result = yield StitchUtil.readNotes(repo, refName);
-        assert.deepEqual(result, {});
-    }));
-    it("breathing", co.wrap(function *() {
-        const written = yield RepoASTTestUtil.createRepo("S:C2-1;Bfoo=2");
-        const repo = written.repo;
-        const head = yield repo.getHeadCommit();
-        const headSha = head.id().tostrS();
-        const foo = yield repo.getBranchCommit("foo");
-        const fooSha = foo.id().tostrS();
-        const refName = "refs/notes/foo/bar";
-        const sig = repo.defaultSignature();
-        yield NodeGit.Note.create(repo, refName, sig, sig, fooSha, "foo", 1);
-        yield NodeGit.Note.create(repo, refName, sig, sig, headSha, "bar", 1);
-        const result = yield StitchUtil.readNotes(repo, refName);
-        const expected = {};
-        expected[fooSha] = "foo";
-        expected[headSha] = "bar";
-        assert.deepEqual(result, expected);
-    }));
-});
 describe("refMapper", function () {
     const Commit    = RepoAST.Commit;
     const cases = {
@@ -789,15 +713,6 @@ describe("writeSubmoduleChangeCache", function () {
             "baz/bam": { oldSha: "3", newSha: "4" },
         });
     }));
-});
-describe("parseNotes", function () {
-    it("breathing", function () {
-        const obj = { foo: "bar" };
-        const str = JSON.stringify(obj, null, 4);
-        const input = { yay: str };
-        const result = StitchUtil.parseNotes(input);
-        assert.deepEqual(result, { yay: obj });
-    });
 });
 describe("readSubmoduleChangeCache", function () {
     it("breathing", co.wrap(function *() {
@@ -1485,7 +1400,9 @@ describe("listCommitsToStitch", function () {
         const headSha = head.id().tostrS();
         const notes = {};
         notes[headSha] = StitchUtil.makeConvertedNoteContent(null);
-        yield StitchUtil.writeNotes(repo, StitchUtil.convertedNoteRef, notes);
+        yield BulkNotesUtil.writeNotes(repo,
+                                       StitchUtil.convertedNoteRef,
+                                       notes);
         const getConv = StitchUtil.makeGetConvertedCommit(repo, {});
         const result =
                      yield StitchUtil.listCommitsToStitch(repo, head, getConv);
@@ -1517,7 +1434,9 @@ describe("listCommitsToStitch", function () {
         const twoSha = written.oldCommitMap["2"];
         const notes = {};
         notes[twoSha] = StitchUtil.makeConvertedNoteContent(twoSha);
-        yield StitchUtil.writeNotes(repo, StitchUtil.convertedNoteRef, notes);
+        yield BulkNotesUtil.writeNotes(repo,
+                                       StitchUtil.convertedNoteRef,
+                                       notes);
         const getConv = StitchUtil.makeGetConvertedCommit(repo, {});
         const result =
                      yield StitchUtil.listCommitsToStitch(repo, head, getConv);

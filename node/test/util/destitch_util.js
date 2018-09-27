@@ -34,6 +34,7 @@ const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
 
+const BulkNotesUtil       = require("../../lib/util/bulk_notes_util");
 const DestitchUtil        = require("../../lib/util/destitch_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const StitchUtil          = require("../../lib/util/stitch_util");
@@ -428,9 +429,9 @@ x=E:Cs.y.s-a a=baz;Cd.y-2 s=Sa:s.y.s;Bs.y.s=s.y.s;Bd.y=d.y;
             for (let sha in already) {
                 already[sha] = JSON.stringify(already[sha], null, 4);
             }
-            yield StitchUtil.writeNotes(repo,
-                                        StitchUtil.referenceNoteRef,
-                                        already);
+            yield BulkNotesUtil.writeNotes(repo,
+                                           StitchUtil.referenceNoteRef,
+                                           already);
             const originalNewly = mapDestitched(revMap, c.newly);
             const newly = Object.assign({}, originalNewly);
             const result = yield DestitchUtil.destitchChain(repo,
@@ -638,7 +639,7 @@ describe("recordLocalNotes", function () {
             subCommits: { s: headSha },
         };
         yield DestitchUtil.recordLocalNotes(repo, newCommits);
-        const notes = yield StitchUtil.readNotes(
+        const notes = yield BulkNotesUtil.readNotes(
                                            repo,
                                            DestitchUtil.localReferenceNoteRef);
         const expected = {};
@@ -708,9 +709,9 @@ b=E:Fcommits/s.x.s=s.x.s`,
             // can exercise this capability, but we'll remove them afterwards
             // so that we don't see a state change.
 
-            yield StitchUtil.writeNotes(repo,
-                                        StitchUtil.referenceNoteRef,
-                                        alreadyContent);
+            yield BulkNotesUtil.writeNotes(repo,
+                                           StitchUtil.referenceNoteRef,
+                                           alreadyContent);
             yield DestitchUtil.destitch(repo,
                                         c.commitish,
                                         c.remote,
@@ -719,8 +720,9 @@ b=E:Fcommits/s.x.s=s.x.s`,
 
             // At this point, the only stored ones are those newly created.
             const localNotesRef = DestitchUtil.localReferenceNoteRef;
-            const localNotes = yield StitchUtil.readNotes(repo, localNotesRef);
-            const notes = StitchUtil.parseNotes(localNotes);
+            const localNotes =
+                            yield BulkNotesUtil.readNotes(repo, localNotesRef);
+            const notes = BulkNotesUtil.parseNotes(localNotes);
             const commits = {};
             for (let stitchedSha in notes) {
                 const data = notes[stitchedSha];

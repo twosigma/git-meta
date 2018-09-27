@@ -35,6 +35,7 @@ const co             = require("co");
 const NodeGit        = require("nodegit");
 const path           = require("path");
 
+const BulkNotesUtil       = require("./bulk_notes_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const StitchUtil          = require("./stitch_util");
@@ -422,7 +423,9 @@ exports.recordLocalNotes = co.wrap(function *(repo, newCommits) {
     Object.keys(newCommits).forEach(sha => {
         content[sha] = JSON.stringify(newCommits[sha], null, 4);
     });
-    yield StitchUtil.writeNotes(repo, exports.localReferenceNoteRef, content);
+    yield BulkNotesUtil.writeNotes(repo,
+                                   exports.localReferenceNoteRef,
+                                   content);
 });
 
 /**

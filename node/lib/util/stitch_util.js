@@ -34,8 +34,8 @@ const assert         = require("chai").assert;
 const co             = require("co");
 const NodeGit        = require("nodegit");
 
+const BulkNotesUtil       = require("./bulk_notes_util");
 const Commit              = require("./commit");
-const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -45,99 +45,6 @@ const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
 const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
-
-// TODO: the `writeNotes` and `readNotes` methods should be moved to a utility
-// for notes, if they're needed elsewhwere.
-
-/**
- * Write the specified `contents` to the note having the specified `refName` in
- * the specified `repo`.
- *
- * Writing notes oneo-at-a-time is slow.  This method let's you write them in
- * bulk, far more efficiently.
- *
- * @param {NodeGit.Repository} repo
- * @param {String}             refName
- * @param {Object}             contents    SHA to data
- */
-exports.writeNotes = co.wrap(function *(repo, refName, contents) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(refName);
-    assert.isObject(contents);
-
-    if (0 === Object.keys(contents).length) {
-        // Nothing to do if no contents; no point in making an empty commit or
-        // in making clients check themselves.
-        return;                                                       // RETURN
-    }
-
-    // We're going to directly write the tree/commit for a new note containing
-    // `contents`.
-
-    let currentCommit = null;
-    let currentTree = null;
-    const parents = [];
-    const ref = yield GitUtil.getReference(repo, refName);
-    if (null !== ref) {
-        currentCommit = yield repo.getCommit(ref.target());
-        parents.push(currentCommit);
-        currentTree = yield currentCommit.getTree();
-    }
-    const odb = yield repo.odb();
-    const changes = {};
-    const ODB_BLOB = 3;
-    const BLOB = NodeGit.TreeEntry.FILEMODE.BLOB;
-    const writeBlob = co.wrap(function *(sha) {
-        const content = contents[sha];
-        const blobId = yield odb.write(content, content.length, ODB_BLOB);
-        changes[sha] = new TreeUtil.Change(blobId, BLOB);
-    });
-    yield DoWorkQueue.doInParallel(Object.keys(contents), writeBlob);
-
-    const newTree = yield TreeUtil.writeTree(repo, currentTree, changes);
-    const sig = yield ConfigUtil.defaultSignature(repo);
-    const commit = yield NodeGit.Commit.create(repo,
-                                               null,
-                                               sig,
-                                               sig,
-                                               null,
-                                               "git-meta updating notes",
-                                               newTree,
-                                               parents.length,
-                                               parents);
-    yield NodeGit.Reference.create(repo, refName, commit, 1, "updated");
-});
-
-/**
- * Return the contents of the note having the specified `refName` in the
- * specified `repo` or an empty object if no such note exists.
- *
- * Reading notes one-at-a-time is slow.  This method let's you read them all at
- * once for a given ref.
- *
- * @param {NodeGit.Repository} repo
- * @param {String}             refName
- * @return {Object} sha to content
- */
-exports.readNotes = co.wrap(function *(repo, refName) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(refName);
-
-    const ref = yield GitUtil.getReference(repo, refName);
-    if (null === ref) {
-        return {};
-    }
-    const result = {};
-    const commit = yield repo.getCommit(ref.target());
-    const tree = yield commit.getTree();
-    const entries = tree.entries();
-    const processEntry = co.wrap(function *(e) {
-        const blob = yield e.getBlob();
-        result[e.name()] = blob.toString();
-    });
-    yield DoWorkQueue.doInParallel(entries, processEntry);
-    return result;
-});
 
 /**
  * @property {String}
@@ -153,7 +60,8 @@ exports.whitelistNoteRef = "refs/notes/stitched/whitelist";
 exports.readWhitelist = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const notes = yield exports.readNotes(repo, exports.whitelistNoteRef);
+    const notes =
+                 yield BulkNotesUtil.readNotes(repo, exports.whitelistNoteRef);
     return new Set(Object.keys(notes));
 });
 
@@ -403,23 +311,8 @@ exports.writeSubmoduleChangeCache = co.wrap(function *(repo, changes) {
         }
         cache[sha] = JSON.stringify(cachedChanges, null, 4);
     }
-    yield exports.writeNotes(repo, exports.changeCacheRef, cache);
+    yield BulkNotesUtil.writeNotes(repo, exports.changeCacheRef, cache);
 });
-
-/**
- * Return the result of transforming the specified `map` so that each of the
- * (string) values are replaced by the result of JSON parsing them.
- *
- * @param {Object} map     string to string
- * @return {Object} map    string to object
- */
-exports.parseNotes = function (map) {
-    const result = {};
-    for (let key in map) {
-        result[key] = JSON.parse(map[key]);
-    }
-    return result;
-};
 
 /**
  * Read the cached list of submodule changes per commit in the specified
@@ -431,8 +324,8 @@ exports.parseNotes = function (map) {
 exports.readSubmoduleChangeCache = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
-    const cached = yield exports.readNotes(repo, exports.changeCacheRef);
-    return exports.parseNotes(cached);
+    const cached = yield BulkNotesUtil.readNotes(repo, exports.changeCacheRef);
+    return BulkNotesUtil.parseNotes(cached);
 });
 
 /**
@@ -887,7 +780,8 @@ exports.readConvertedCommits = co.wrap(function *(repo) {
 
     // We use "" to indicate that a commit could not be converted.
 
-    const result = yield exports.readNotes(repo, exports.convertedNoteRef);
+    const result =
+                 yield BulkNotesUtil.readNotes(repo, exports.convertedNoteRef);
     for (let key in result) {
         result[key] = exports.readConvertedContent(result[key]);
     }
@@ -1107,12 +1001,12 @@ ${name}`;
                       exports.makeReferenceNoteContent(sha, record.subCommits);
             }
         }
-        yield exports.writeNotes(repo,
-                                 exports.referenceNoteRef,
-                                 referenceNotes);
-        yield exports.writeNotes(repo,
-                                 exports.convertedNoteRef,
-                                 convertedNotes);
+        yield BulkNotesUtil.writeNotes(repo,
+                                       exports.referenceNoteRef,
+                                       referenceNotes);
+        yield BulkNotesUtil.writeNotes(repo,
+                                       exports.convertedNoteRef,
+                                       convertedNotes);
         records = {};
     });
 
