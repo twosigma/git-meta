@@ -239,18 +239,11 @@ describe("getPushMap", function () {
                 d : "7",
             },
         },
-        "origin has a child (which we know is a child)" : {
-            initial: `sub=S:C7-1;C8-7;Bmaster=8|
-                      x=S:C2-1 d=Ssub:8;C3-1 d=Ssub:7;Bmaster=3;
-                      Rorigin=foo target=2;
-                      Od`,
-            extraFetch: {
-                "d" : {
-                    sub: "sub",
-                    commits: ["8"],
-                },
-            },
-            source: "3",
+        "origin has different commit, but we didn't change anything": {
+            initial: `
+a=B:B3=3;C3-2 s=Sa:z;Cz-1;Bz=z|b=B|
+x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
+            source: "refs/heads/master",
             expectedPushMap: {},
         },
         "origin is equal" : {
@@ -276,7 +269,7 @@ describe("getPushMap", function () {
             if (parseInt(source) > 0) {
                 sha = commitMap.reverseCommitMap[source];
             } else {
-                sha = yield repo.getReference(source).target();
+                sha = (yield repo.getReference(source)).target();
             }
 
             const commit = yield repo.getCommit(sha);

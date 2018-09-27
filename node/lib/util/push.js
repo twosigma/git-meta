@@ -51,21 +51,12 @@ const UserError           = require("./user_error");
  * For a given proposed push, return a map from submodule to sha,
  * excluding any submodules that the server likely already has.
  *
- * Start with the set of submodules that are either open, or that
- * exist in .git/modules. Populate a pushMap from submodule name to
- * commit (SHA) registered in the meta-commit being pushed.
+ * Create a list of relevant branches, including any tracking branches
+ * associated with the one being pushed and the target branch.
  *
- * If the push target exists in remotes/$remote/$branch, remove from
- * pushMap, any entry where the commit for a submodule already exists
- * in the target.
- *
- * Note that for "exists" we mean the target points to exactly the
- * commit needed or a descendant of that commit.
- *
- * If the user is pushing a branch, B, further reduce the size of
- * pushMap by removing commits referenced in the branches that B pulls
- * from and/or pushes to by default, if they exist and are different
- * from the target branch.
+ * Return in the map only those submodules that (1) exist locally, in
+ * `.git/modules` and (2) are changed between `commit` and the merge base of
+ * `commit` and each relevant branch.
  *
  * @async
  * @param {NodeGit.Repository} repo
@@ -110,7 +101,7 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
     if (tracking !== null) {
         if (tracking.remoteName !== null) {
             trackingBranches.add(
-                `refs/remotes/${tracking.remoteName}/${target}`);
+                `refs/remotes/${tracking.remoteName}/${tracking.branchName}`);
         }
         if (tracking.pushRemoteName !== null) {
             trackingBranches.add(
@@ -118,68 +109,52 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
         }
     }
 
-    let anyTrackingBranches = false;
-    for (const branch of trackingBranches) {
+    // List all the merge bases for all tracking branches.
+
+    const bases = [];
+
+    yield Array.from(trackingBranches).map(co.wrap(function *(branch) {
         let reference = null;
         try {
             reference = yield NodeGit.Reference.lookup(repo, branch);
         } catch (e) {
             // if this ref doesn't exist, OK
-            continue;
+            return;
         }
-        anyTrackingBranches = true;
         const id = reference.target();
-        const trackingCommit = yield NodeGit.Commit.lookup(
-            repo, id);
-        const getter = SubmoduleUtil.getSubmoduleShasForCommit;
-        const submoduleShasForCommit = yield getter(repo, Object.keys(pushMap),
-                                                    trackingCommit);
-        for (const sub of Object.keys(pushMap)) {
-            const sha = submoduleShasForCommit[sub];
-            const subRepo = bareRepos[sub];
-            if (sha === pushMap[sub]) {
-                delete pushMap[sub];
-                continue;
-            }
-            let commitToPush;
-            try {
-                commitToPush = yield subRepo.getCommit(pushMap[sub]);
-            } catch (e) {
-                // We haven't fetched this commit in this submodule,
-                // so we can't push
-                delete pushMap[sub];
-                continue;
-            }
-            let trackingCommit;
-            try {
-                trackingCommit = yield subRepo.getCommit(sha);
-            } catch (e) {
-                // We haven't fetched this commit in this submodule,
-                // so we can't do an ancestry check
-                continue;
-            }
-            const descendantCheck = NodeGit.Graph.descendantOf;
-            const isDescendant = yield descendantCheck(subRepo,
-                                                       trackingCommit,
-                                                       commitToPush);
-            if (isDescendant) {
-                delete pushMap[sub];
+        const trackingCommit = yield NodeGit.Commit.lookup(repo, id);
+        const branchBases = yield GitUtil.mergeBases(repo,
+                                                     trackingCommit,
+                                                     commit);
+        bases.push(...branchBases);
+    }));
+
+    // Then clear out all entries that weren't changed in each merge base.
+
+    yield bases.map(co.wrap(function *(baseCommitSha) {
+        const baseCommit = yield repo.getCommit(baseCommitSha);
+        const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
+                                                                commit,
+                                                                baseCommit,
+                                                                true);
+        // Remove any entry in `pushMap` that wasn't changed between `commit`
+        // and this merge base.
+
+        for (let name in pushMap) {
+            if (!(name in changes)) {
+                delete pushMap[name];
             }
         }
-    }
+    }));
 
-    if (!anyTrackingBranches) {
-        // We make sure we actually locally have the commits we want
-        // to push.  If there were any tracking branches, this would
-        // have been handled above, but since there aren't, we've got
-        // to do it here.
-        for (const sub of Object.keys(pushMap)) {
-            const subRepo = bareRepos[sub];
-            try {
-                yield subRepo.getCommit(pushMap[sub]);
-            } catch (e) {
-                delete pushMap[sub];
-            }
+    // Make sure we have the commits we want to push.
+
+    for (const sub of Object.keys(pushMap)) {
+        const subRepo = bareRepos[sub];
+        try {
+            yield subRepo.getCommit(pushMap[sub]);
+        } catch (e) {
+            delete pushMap[sub];
         }
     }
     return pushMap;
