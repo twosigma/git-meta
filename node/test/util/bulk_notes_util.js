@@ -41,8 +41,8 @@ const BulkNotesUtil       = require("../../lib/util/bulk_notes_util");
 describe("BulkNotesUtil", function () {
 describe("shardSha", function () {
     it("breathing", function () {
-        assert.equal(BulkNotesUtil.shardSha("aabbbb"),
-                     path.join("aa", "bb", "bb"));
+        assert.equal(BulkNotesUtil.shardSha("aabbffffffffffffffff"),
+                     path.join("aa", "bb", "ffffffffffffffff"));
     });
 });
 describe("writeNotes", function () {
