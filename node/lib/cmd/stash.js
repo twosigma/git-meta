@@ -64,8 +64,8 @@ exports.configureParser = function (parser) {
     parser.addArgument("type", {
         help: `
 'save' to save a stash, 'pop' to restore, 'list' to show stashes, 'drop' to \
-discard a stash; 'save' is
-default`,
+discard a stash, 'apply' to apply a change without popping from stashes; \
+'save' is default`,
         type: "string",
         nargs: "?",
         defaultValue: "save",
