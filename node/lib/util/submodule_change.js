@@ -81,6 +81,13 @@ class SubmoduleChange {
     get newSha() {
         return this.d_newSha;
     }
+
+    /**
+     * True if the submodule has been deleted in this change.
+     */
+    get deleted() {
+        return this.d_newSha === null;
+    }
 }
 
 module.exports = SubmoduleChange;
