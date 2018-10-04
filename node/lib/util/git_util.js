@@ -57,9 +57,21 @@ const UserError           = require("./user_error");
  * @return {String}
  */
 function getContainingGitDir(dir) {
-    const gitDir = path.join(dir, ".git");
-    if (fs.existsSync(gitDir) && fs.statSync(gitDir).isDirectory()) {
-        return dir;                                                   // RETURN
+    const gitPath = path.join(dir, ".git");
+    if (fs.existsSync(gitPath)) {
+        if (fs.statSync(gitPath).isDirectory()) {
+            return dir;                                               // RETURN
+        }
+
+        // If `.git` is a file, it is a git link. If the link is to a submodule
+        // it will be relative.  If it's not relative, and therefore not a
+        // submodule, we stop with this directory.
+
+        const content = fs.readFileSync(gitPath, "utf8");
+        const parts = content.split(" ");
+        if (1 < parts.length && parts[1].startsWith("/")) {
+            return dir;
+        }
     }
 
     const base = path.dirname(dir);
