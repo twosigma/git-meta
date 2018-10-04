@@ -157,6 +157,28 @@ function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url) {
     }
 }
 
+/**
+ * Return a list of submodules changed or added in between `commit`
+ * and `parent`.  Exclude deleted submodules.
+ *
+ * If parent is null, return null.
+ */
+function* computeChangedSubmodules(repo, commit, parent) {
+    if (parent === null) {
+        return null;
+    }
+    const changed = [];
+    const changes = yield SubmoduleUtil.getSubmoduleChanges(repo, commit,
+                                                            parent, true);
+    for (const sub of Object.keys(changes)) {
+        const change = changes[sub];
+        if (!change.deleted) {
+            changed.push(sub);
+        }
+    }
+    return changed;
+}
+
 function* checkSubmodules(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
@@ -166,9 +188,15 @@ function* checkSubmodules(repo, commit) {
         yield ConfigUtil.getConfigString(
             config, "gitmeta.skipsyntheticrefpattern")) || "";
     const cfg = new SyntheticBranchConfig(whitelistPattern);
+
+    const parent = yield GitUtil.getParentCommit(repo, commit);
+    const names = yield computeChangedSubmodules(repo,
+                                                 commit,
+                                                 parent);
+
     const submodules = yield SubmoduleUtil.getSubmodulesForCommit(repo,
                                                                   commit,
-                                                                  null);
+                                                                  names);
     const getChanges = SubmoduleUtil.getSubmoduleChanges;
     const changes = yield getChanges(repo, commit, null, true);
     const allChanges = [
