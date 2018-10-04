@@ -35,7 +35,6 @@ const co      = require("co");
 const fs      = require("fs-promise");
 const mkdirp  = require("mkdirp");
 const NodeGit = require("nodegit");
-const os      = require("os");
 const path    = require("path");
 
 const GitUtil             = require("../../lib/util/git_util");
@@ -402,12 +401,12 @@ describe("GitUtil", function () {
         // - simple case
         // - one deep
 
-        it("failure", function () {
-            const tempdir = os.tmpdir();
+        it("failure", co.wrap(function *() {
+            const tempdir = yield TestUtil.makeTempDir();
             process.chdir(tempdir);
             const result = GitUtil.getRootGitDirectory();
             assert.isNull(result);
-        });
+        }));
 
         it("successes", co.wrap(function *() {
             const repo = yield TestUtil.createSimpleRepository();
@@ -421,6 +420,15 @@ describe("GitUtil", function () {
             process.chdir(subdir);
             const subRoot = GitUtil.getRootGitDirectory(workdir);
             assert(yield TestUtil.isSameRealPath(workdir, subRoot), "trivial");
+        }));
+        it("with a non-submodule link", co.wrap(function *() {
+            const tempdir = yield TestUtil.makeTempDir();
+            process.chdir(tempdir);
+            const gitLink = path.join(tempdir, ".git");
+            yield fs.writeFile(gitLink, "gitdir: /foo/bar");
+            const result = GitUtil.getRootGitDirectory();
+            assert.isNotNull(result);
+            assert(yield TestUtil.isSameRealPath(tempdir, result), result);
         }));
     });
 
