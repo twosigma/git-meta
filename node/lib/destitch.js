@@ -32,9 +32,9 @@
 
 const ArgumentParser = require("argparse").ArgumentParser;
 const co             = require("co");
+const NodeGit        = require("nodegit");
 
 const DestitchUtil = require("./util/destitch_util");
-const GitUtil      = require("./util/git_util");
 const UserError    = require("./util/user_error");
 
 const description = `\
@@ -65,7 +65,8 @@ parser.addArgument(["commitish"], {
 co(function *() {
     const args = parser.parseArgs();
     try {
-        const repo = yield GitUtil.getCurrentRepo();
+        const location = yield NodeGit.Repository.discover(".", 0, "");
+        const repo = yield NodeGit.Repository.open(location);
         yield DestitchUtil.destitch(repo,
                                     args.commitish,
                                     args.remote,
