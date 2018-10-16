@@ -31,7 +31,6 @@
 "use strict";
 
 const co = require("co");
-const Hook     = require("../util/hook");
 
 /**
  * this module is the entrypoint for the `commit` command.
@@ -109,6 +108,7 @@ the URL of submodules).`,
 const doCommit = co.wrap(function *(args) {
     const Commit  = require("../util/commit");
     const GitUtil = require("../util/git_util");
+    const Hook    = require("../util/hook");
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
@@ -126,6 +126,7 @@ const doCommit = co.wrap(function *(args) {
 const doAmend = co.wrap(function *(args) {
     const Commit          = require("../util/commit");
     const GitUtil         = require("../util/git_util");
+    const Hook            = require("../util/hook");
     const UserError       = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;

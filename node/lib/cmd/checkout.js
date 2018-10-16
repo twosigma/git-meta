@@ -30,8 +30,6 @@
  */
 
 const co = require("co");
-const Hook = require("../util/hook");
-const UserError = require("../../lib/util/user_error");
 
 /**
  * This module contains the entrypoint for the `checkout` command.
@@ -131,6 +129,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const Checkout  = require("../util/checkout");
     const GitUtil   = require("../util/git_util");
+    const Hook      = require("../util/hook");
+    const UserError = require("../../lib/util/user_error");
     let newBranch = null;
 
     const newBranchNameArr = args["new branch name"];

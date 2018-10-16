@@ -30,9 +30,7 @@
  */
 "use strict";
 
-const ArgParse = require("argparse");
-const assert   = require("chai").assert;
-const co       = require("co");
+const co = require("co");
 
 /**
  * Return an object to be used in configuring the help of the main git-meta
@@ -46,6 +44,8 @@ const co       = require("co");
  * @return {Function} executeableSubcommand function to invoke command
  */
 exports.makeModule = function (name) {
+    const ArgParse = require("argparse");
+    const assert   = require("chai").assert;
 
     function configureParser(parser) {
         parser.addArgument(["args"], {

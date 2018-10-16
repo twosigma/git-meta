@@ -31,7 +31,6 @@
 "use strict";
 
 const co = require("co");
-const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `new` command.
@@ -79,8 +78,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const fs     = require("fs-promise");
     const path   = require("path");
 
-    const GitUtil      = require("../util/git_util");
     const AddSubmodule = require("../util/add_submodule");
+    const GitUtil      = require("../util/git_util");
+    const Hook         = require("../util/hook");
     const UserError    = require("../util/user_error");
 
     if (null !== args.branch && null === args.import_from) {
