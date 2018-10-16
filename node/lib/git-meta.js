@@ -36,7 +36,6 @@
  */
 
 const ArgumentParser = require("argparse").ArgumentParser;
-const NodeGit = require("nodegit");
 
 const add          = require("./cmd/add");
 const addSubmodule = require("./cmd/add_submodule");
@@ -63,11 +62,6 @@ const submodule    = require("./cmd/submodule");
 const UserError    = require("./util/user_error");
 const version      = require("./cmd/version");
 
-// see https://github.com/nodegit/nodegit/issues/827 -- this is required
-// to prevent random hard crashes with e.g. parallelism in index operations.
-// Eventually, this will be nodegit's default.
-NodeGit.setThreadSafetyStatus(NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
-
 /**
  * Configure the specified `parser` to include the command having the specified
  * `commandName` implemented in the specified `module`.
@@ -87,6 +81,12 @@ function configureSubcommand(parser, commandName, module) {
     module.configureParser(subParser);
     subParser.setDefaults({
         func: function (args) {
+            const NodeGit = require("nodegit");
+            // see https://github.com/nodegit/nodegit/issues/827 -- this is required
+            // to prevent random hard crashes with e.g. parallelism in index operations.
+            // Eventually, this will be nodegit's default.
+            NodeGit.setThreadSafetyStatus(NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
+
             module.executeableSubcommand(args)
             .catch(function (error) {
 
