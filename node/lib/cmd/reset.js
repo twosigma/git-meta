@@ -32,7 +32,6 @@
 
 const ArgParse = require("argparse");
 const co       = require("co");
-const Hook     = require("../util/hook");
 
 /**
  * This submodule provides the entrypoint for the `reset` command.
@@ -131,6 +130,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const path   = require("path");
 
     const GitUtil         = require("../util/git_util");
+    const Hook            = require("../util/hook");
     const Reset           = require("../util/reset");
     const UserError       = require("../util/user_error");
     const StatusUtil      = require("../util/status_util");

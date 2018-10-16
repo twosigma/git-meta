@@ -31,7 +31,8 @@
 "use strict";
 
 /**
- * This module contains common git utility methods.
+ * This module contains common git utility methods that require NodeGit.
+ * Otherwise, put them in git_util_fast to optimize their load time.
  */
 
 const assert       = require("chai").assert;
@@ -45,43 +46,8 @@ const path         = require("path");
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const Hook                = require("./hook");
+const GitUtilFast         = require("./git_util_fast");
 const UserError           = require("./user_error");
-
-/**
- * If the directory identified by the specified `dir` contains a ".git"
- * directory, return it.  Otherwise, return the first parent directory of `dir`
- * containing a `.git` directory.  If no such directory exists, return `None`.
- *
- * @private
- * @param {String} dir
- * @return {String}
- */
-function getContainingGitDir(dir) {
-    const gitPath = path.join(dir, ".git");
-    if (fs.existsSync(gitPath)) {
-        if (fs.statSync(gitPath).isDirectory()) {
-            return dir;                                               // RETURN
-        }
-
-        // If `.git` is a file, it is a git link. If the link is to a submodule
-        // it will be relative.  If it's not relative, and therefore not a
-        // submodule, we stop with this directory.
-
-        const content = fs.readFileSync(gitPath, "utf8");
-        const parts = content.split(" ");
-        if (1 < parts.length && parts[1].startsWith("/")) {
-            return dir;
-        }
-    }
-
-    const base = path.dirname(dir);
-
-    if ("" === base || "/" === base) {
-        return null;                                                  // RETURN
-    }
-
-    return getContainingGitDir(base);
-}
 
 /**
  * Create a branch having the specified `branchName` in the specified `repo`
@@ -330,17 +296,6 @@ exports.findRemoteBranch = co.wrap(function *(repo, remoteName, branchName) {
     return yield exports.findBranch(repo, shorthand);
 });
 
-
-/**
- * Return the root of the repository in which the current working directory
- * resides, or null if the working directory contains no git repository.
- *
- * @return {String|null}
- */
-exports.getRootGitDirectory = function () {
-    return getContainingGitDir(process.cwd());
-};
-
 /**
  * Return the current repository (as located from the current working
  * directory) or throw a `UserError` exception if no git repository can be
@@ -350,7 +305,7 @@ exports.getRootGitDirectory = function () {
  * @return {NodeGit.Repository}
  */
 exports.getCurrentRepo = function () {
-    const path = exports.getRootGitDirectory();
+    const path = GitUtilFast.getRootGitDirectory();
     if (null === path) {
         throw new UserError(
             `Could not find Git directory from ${colors.red(process.cwd())}.`);

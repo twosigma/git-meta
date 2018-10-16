@@ -387,51 +387,6 @@ describe("GitUtil", function () {
         });
     });
 
-    describe("getRootGitDirectory", function () {
-        let cwd;
-        before(function () {
-            cwd = process.cwd();
-        });
-        after(function () {
-            process.chdir(cwd);
-        });
-
-        // This method is recursive, so we will check just three cases:
-        // - failure case
-        // - simple case
-        // - one deep
-
-        it("failure", co.wrap(function *() {
-            const tempdir = yield TestUtil.makeTempDir();
-            process.chdir(tempdir);
-            const result = GitUtil.getRootGitDirectory();
-            assert.isNull(result);
-        }));
-
-        it("successes", co.wrap(function *() {
-            const repo = yield TestUtil.createSimpleRepository();
-            const workdir = repo.workdir();
-            process.chdir(workdir);
-            const repoRoot = GitUtil.getRootGitDirectory(workdir);
-            assert(yield TestUtil.isSameRealPath(workdir, repoRoot),
-                   "trivial");
-            const subdir = path.join(workdir, "sub");
-            yield fs.mkdir(subdir);
-            process.chdir(subdir);
-            const subRoot = GitUtil.getRootGitDirectory(workdir);
-            assert(yield TestUtil.isSameRealPath(workdir, subRoot), "trivial");
-        }));
-        it("with a non-submodule link", co.wrap(function *() {
-            const tempdir = yield TestUtil.makeTempDir();
-            process.chdir(tempdir);
-            const gitLink = path.join(tempdir, ".git");
-            yield fs.writeFile(gitLink, "gitdir: /foo/bar");
-            const result = GitUtil.getRootGitDirectory();
-            assert.isNotNull(result);
-            assert(yield TestUtil.isSameRealPath(tempdir, result), result);
-        }));
-    });
-
     describe("getCurrentRepo", function () {
 
         let cwd;

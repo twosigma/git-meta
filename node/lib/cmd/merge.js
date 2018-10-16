@@ -31,7 +31,6 @@
 "use strict";
 
 const co = require("co");
-const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `merge` command.
@@ -110,6 +109,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const MergeUtil  = require("../util/merge_util");
     const GitUtil    = require("../util/git_util");
+    const Hook       = require("../util/hook");
     const UserError  = require("../util/user_error");
 
     const MODE = MergeUtil.MODE;

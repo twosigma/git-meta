@@ -35,7 +35,6 @@
  */
 
 const co = require("co");
-const Hook = require("../util/hook");
 
 /**
  * help text for the `open` command
@@ -81,6 +80,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const DoWorkQueue         = require("../util/do_work_queue");
     const GitUtil             = require("../util/git_util");
+    const Hook                = require("../util/hook");
     const Open                = require("../util/open");
     const SparseCheckoutUtil  = require("../util/sparse_checkout_util");
     const SubmoduleConfigUtil = require("../util/submodule_config_util");

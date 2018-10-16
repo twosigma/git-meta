@@ -36,7 +36,6 @@
  */
 
 const ArgumentParser = require("argparse").ArgumentParser;
-const NodeGit = require("nodegit");
 
 const add          = require("./cmd/add");
 const addSubmodule = require("./cmd/add_submodule");
@@ -63,11 +62,6 @@ const submodule    = require("./cmd/submodule");
 const UserError    = require("./util/user_error");
 const version      = require("./cmd/version");
 
-// see https://github.com/nodegit/nodegit/issues/827 -- this is required
-// to prevent random hard crashes with e.g. parallelism in index operations.
-// Eventually, this will be nodegit's default.
-NodeGit.setThreadSafetyStatus(NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
-
 /**
  * Configure the specified `parser` to include the command having the specified
  * `commandName` implemented in the specified `module`.
@@ -75,11 +69,9 @@ NodeGit.setThreadSafetyStatus(NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
  * @param {ArgumentParser} parser
  * @param {String}         commandName
  * @param {Object}         module
- * @param {Function}       module.configureParser
- * @param {Function}       module.executeableSubcommand
- * @param {String}         module.helpText
+ * @param {Boolean}        skipNodeGit
  */
-function configureSubcommand(parser, commandName, module) {
+function configureSubcommand(parser, commandName, module, skipNodeGit) {
     const subParser = parser.addParser(commandName, {
         help: module.helpText,
         description: module.description,
@@ -87,6 +79,18 @@ function configureSubcommand(parser, commandName, module) {
     module.configureParser(subParser);
     subParser.setDefaults({
         func: function (args) {
+            // This optimization allows to skip importing NodeGit
+            // if not required (eg. version).
+            if (!skipNodeGit) {
+                const NodeGit = require("nodegit");
+                // see https://github.com/nodegit/nodegit/issues/827 -- this is
+                // required to prevent random hard crashes with e.g.
+                // parallelism  in index operations. Eventually, this will be
+                // nodegit's default.
+                NodeGit.setThreadSafetyStatus(
+                    NodeGit.THREAD_SAFETY.ENABLED_FOR_ASYNC_ONLY);
+            }
+
             module.executeableSubcommand(args)
             .catch(function (error) {
 
@@ -147,11 +151,17 @@ const commands = {
     "version": version,
 };
 
+// These optimized commands do not require NodeGit, and can skip importing it.
+const optimized = {
+    "root": true,
+    "version": true,
+};
+
 // Configure the parser with commands in alphabetical order.
 
 Object.keys(commands).sort().forEach(name => {
     const cmd = commands[name];
-    configureSubcommand(subParser, name, cmd);
+    configureSubcommand(subParser, name, cmd, (null !== optimized[name]));
 });
 
 const blacklist = new Set([

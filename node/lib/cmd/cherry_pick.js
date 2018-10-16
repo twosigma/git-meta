@@ -31,7 +31,6 @@
 "use strict";
 
 const co = require("co");
-const Hook = require("../util/hook");
 
 /**
  * This module contains methods for implementing the `cherry-pick` command.
@@ -89,6 +88,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const CherryPickUtil  = require("../util/cherry_pick_util");
     const GitUtil         = require("../util/git_util");
+    const Hook            = require("../util/hook");
     const UserError       = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();

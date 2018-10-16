@@ -67,10 +67,10 @@ Print the relative path between current directory and root.  E.g., \
 exports.executeableSubcommand = co.wrap(function *(args) {
     const path    = require("path");
 
-    const GitUtil   = require("../util/git_util");
-    const UserError = require("../util/user_error");
+    const GitUtilFast = require("../util/git_util_fast");
+    const UserError   = require("../util/user_error");
 
-    const root = GitUtil.getRootGitDirectory();
+    const root = GitUtilFast.getRootGitDirectory();
     if (null === root) {
         throw new UserError("No root repo found.");
     }

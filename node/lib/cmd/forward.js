@@ -30,43 +30,7 @@
  */
 "use strict";
 
-const ArgParse = require("argparse");
-const assert   = require("chai").assert;
-const co       = require("co");
-
-/**
- * Return an object to be used in configuring the help of the main git-meta
- * parwser.
- * 
- * @param {String} name
- * @return {Object}
- * @return {String}   return.helpText       help description
- * @return {String}   return.description    detailed description
- * @return {Function} configureParser       set up parser for this command
- * @return {Function} executeableSubcommand function to invoke command
- */
-exports.makeModule = function (name) {
-
-    function configureParser(parser) {
-        parser.addArgument(["args"], {
-            type: "string",
-            help: `Arguments to pass to 'git ${name}'.`,
-            nargs: ArgParse.Const.REMAINDER,
-        });
-    }
-
-    const helpText = `\
-Invoke 'git -C $(git meta root) ${name}' with all arguments.`;
-    return {
-        helpText: helpText,
-        description: `\
-${helpText}  See 'git ${name} --help' for more information.`,
-        configureParser: configureParser,
-        executeableSubcommand: function () {
-            assert(false, "should never get here");
-        },
-    };
-};
+const co = require("co");
 
 /**
  * Forward the specified `args` to the Git command having the specified `name`.
@@ -77,14 +41,14 @@ ${helpText}  See 'git ${name} --help' for more information.`,
 exports.execute = co.wrap(function *(name, args) {
     const ChildProcess = require("child-process-promise");
 
-    const GitUtil = require("../util/git_util");
+    const GitUtilFast = require("../util/git_util_fast");
 
     if (name === "diff") {
         args.splice(0, 0, "--submodule=diff");
     }
     const gitArgs = [
         "-C",
-        GitUtil.getRootGitDirectory(),
+        GitUtilFast.getRootGitDirectory(),
         name,
     ].concat(args);
     try {
