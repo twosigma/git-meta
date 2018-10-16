@@ -77,14 +77,14 @@ ${helpText}  See 'git ${name} --help' for more information.`,
 exports.execute = co.wrap(function *(name, args) {
     const ChildProcess = require("child-process-promise");
 
-    const GitUtil = require("../util/git_util");
+    const GitUtilFast = require("../util/git_util_fast");
 
     if (name === "diff") {
         args.splice(0, 0, "--submodule=diff");
     }
     const gitArgs = [
         "-C",
-        GitUtil.getRootGitDirectory(),
+        GitUtilFast.getRootGitDirectory(),
         name,
     ].concat(args);
     try {

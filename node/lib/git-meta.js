@@ -153,6 +153,7 @@ const commands = {
 
 // These optimized commands do not require NodeGit, and can skip importing it.
 const optimized = {
+    "root": true,
     "version": true,
 };
 
