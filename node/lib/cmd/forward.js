@@ -46,11 +46,15 @@ exports.execute = co.wrap(function *(name, args) {
     if (name === "diff") {
         args.splice(0, 0, "--submodule=diff");
     }
-    const gitArgs = [
-        "-C",
-        GitUtilFast.getRootGitDirectory(),
-        name,
-    ].concat(args);
+    const gitArgs = [];
+
+    const rootDir = GitUtilFast.getRootGitDirectory();
+    if (rootDir) {
+        gitArgs.push("-C", rootDir);
+    }
+    gitArgs.push(name);
+    gitArgs.concat(args);
+
     try {
         yield ChildProcess.spawn("git", gitArgs, {
             stdio: "inherit",
