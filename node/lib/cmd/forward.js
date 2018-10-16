@@ -33,42 +33,6 @@
 const co = require("co");
 
 /**
- * Return an object to be used in configuring the help of the main git-meta
- * parwser.
- * 
- * @param {String} name
- * @return {Object}
- * @return {String}   return.helpText       help description
- * @return {String}   return.description    detailed description
- * @return {Function} configureParser       set up parser for this command
- * @return {Function} executeableSubcommand function to invoke command
- */
-exports.makeModule = function (name) {
-    const ArgParse = require("argparse");
-    const assert   = require("chai").assert;
-
-    function configureParser(parser) {
-        parser.addArgument(["args"], {
-            type: "string",
-            help: `Arguments to pass to 'git ${name}'.`,
-            nargs: ArgParse.Const.REMAINDER,
-        });
-    }
-
-    const helpText = `\
-Invoke 'git -C $(git meta root) ${name}' with all arguments.`;
-    return {
-        helpText: helpText,
-        description: `\
-${helpText}  See 'git ${name} --help' for more information.`,
-        configureParser: configureParser,
-        executeableSubcommand: function () {
-            assert(false, "should never get here");
-        },
-    };
-};
-
-/**
  * Forward the specified `args` to the Git command having the specified `name`.
  *
  * @param {String}    name
