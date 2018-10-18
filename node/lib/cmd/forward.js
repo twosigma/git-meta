@@ -53,10 +53,9 @@ exports.execute = co.wrap(function *(name, args) {
         gitArgs.push("-C", rootDir);
     }
     gitArgs.push(name);
-    gitArgs.concat(args);
 
     try {
-        yield ChildProcess.spawn("git", gitArgs, {
+        yield ChildProcess.spawn("git", gitArgs.concat(args), {
             stdio: "inherit",
         });
     }
