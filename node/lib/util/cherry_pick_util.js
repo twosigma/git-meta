@@ -370,6 +370,7 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
  * @return {Object}
  * @return {Object} return.commits    map from name to map from new to old ids
  * @return {Object} return.conflicts  map from name to commit causing conflict
+ * @returns {Object} return.ffwds     map from name to if ffwd happend
  */
 exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
@@ -379,6 +380,7 @@ exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
     const result = {
         commits: {},
         conflicts: {},
+        ffwds: {},
     };
     const fetcher = yield opener.fetcher();
     const pickSub = co.wrap(function *(name) {
@@ -400,6 +402,7 @@ ${colors.green(commitText)}.`);
                                                                     newCommit,
                                                                     oldCommit);
         result.commits[name] = rewriteResult.commits;
+        result.ffwds[name] = rewriteResult.ffwd;
         yield metaIndex.addByPath(name);
         if (null !== rewriteResult.conflictedCommit) {
             result.conflicts[name] = rewriteResult.conflictedCommit;
@@ -544,9 +547,12 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         newMetaCommit: null,
     };
     yield SparseCheckoutUtil.writeMetaIndex(repo, index);
-    if ("" === errorMessage &&
-        (0 !== Object.keys(changes.simpleChanges).length ||
-                                    0 !== Object.keys(picks.commits).length)) {
+    const nChanges = Object.keys(picks.commits)
+        .map(name => Object.keys(
+            picks.commits[name]).length + picks.ffwds[name] ? 1 : 0
+        ).reduce((acc, len) => acc+len, 0);
+        if ("" === errorMessage &&
+        (0 !== Object.keys(changes.simpleChanges).length || 0 !== nChanges)) {
         result.newMetaCommit =
                             yield SubmoduleRebaseUtil.makeCommit(repo, commit);
     }
