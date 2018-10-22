@@ -790,6 +790,13 @@ a=Ax:Cz-y;Cy-x;Bfoo=z|
 x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os H=x`,
             expected: "x=E:C9-2 s=Sa:zs;Bmaster=9;Os Czs-x z=z!H=zs",
         },
+        "skip duplicated cherry picks": {
+            input: `
+a=Ax:Cz-y;Cy-x;Bfoo=z|
+x=S:C8-3 s=Sa:z;C3-2 s=Sa:y;C2-1 s=Sa:x;Bfoo=8;Bmaster=2;Os H=x`,
+            expected: "x=E:C9-2 s=Sa:zs;Bmaster=9;Os Czs-x z=z!H=zs",
+            duplicate: true,
+        },
         "nothing to commit": {
             input: "a=B|x=S:C2-1;C8-1 ;Bmaster=2;B8=8",
         },
@@ -834,6 +841,10 @@ Submodule ${colors.red("s")} is conflicted.
             const eightCommit = yield x.getCommit(eightCommitSha);
             const result  = yield CherryPickUtil.cherryPick(x, eightCommit);
 
+            if (c.duplicate) {
+                const res = yield CherryPickUtil.cherryPick(x, eightCommit);
+                assert.isNull(res.newMetaCommit);
+            }
             assert.equal(result.errorMessage, c.errorMessage || null);
 
             return mapCommits(maps, result);

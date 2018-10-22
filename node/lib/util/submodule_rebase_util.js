@@ -157,6 +157,7 @@ exports.callNext = co.wrap(function *(rebase) {
  * @return {Object}
  * @return {Object} return.commits
  * @return {String|null} return.conflictedCommit
+ * @returns {Boolean} return.ffwd
  */
 exports.processRebase = co.wrap(function *(repo, rebase, op) {
     assert.instanceOf(repo, NodeGit.Repository);
@@ -167,6 +168,7 @@ exports.processRebase = co.wrap(function *(repo, rebase, op) {
     const result = {
         commits: {},
         conflictedCommit: null,
+        ffwd: false,
     };
     const signature = yield ConfigUtil.defaultSignature(repo);
     while (null !== op) {
@@ -206,6 +208,7 @@ exports.processRebase = co.wrap(function *(repo, rebase, op) {
  * @return {Object}
  * @return {Object}      return.commits           new sha to original sha
  * @return {String|null} return.conflictedCommit  error message if failed
+ * @return {Boolean}     return.ffwd              true if fast-forwarded
  */
 exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     assert.instanceOf(repo, NodeGit.Repository);
@@ -221,6 +224,7 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     const result = {
         commits: {},
         conflictedCommit: null,
+        ffwd: false,
     };
 
     // If we're up-to-date with the commit to be rebased onto, return
@@ -252,6 +256,7 @@ exports.rewriteCommits = co.wrap(function *(repo, branch, upstream) {
     if (null === upstream) {
         if (yield NodeGit.Graph.descendantOf(repo, branchSha, headSha)) {
             yield GitUtil.setHeadHard(repo, branch);
+            result.ffwd = true;
             return result;                                            // RETURN
         }
     }
