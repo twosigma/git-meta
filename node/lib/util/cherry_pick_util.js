@@ -550,7 +550,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     const nChanges = Object.keys(picks.commits)
         .map(name => Object.keys(
             picks.commits[name]).length + picks.ffwds[name] ? 1 : 0
-        ).reduce((acc, len) => acc+len, 0);
+        ).reduce((acc, len) => acc + len, 0);
         if ("" === errorMessage &&
         (0 !== Object.keys(changes.simpleChanges).length || 0 !== nChanges)) {
         result.newMetaCommit =

@@ -841,7 +841,7 @@ Submodule ${colors.red("s")} is conflicted.
             const eightCommit = yield x.getCommit(eightCommitSha);
             const result  = yield CherryPickUtil.cherryPick(x, eightCommit);
 
-            if(c.duplicate) {
+            if (c.duplicate) {
                 const res = yield CherryPickUtil.cherryPick(x, eightCommit);
                 assert.isNull(res.newMetaCommit);
             }
