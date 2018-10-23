@@ -441,7 +441,7 @@ Modification to meta-repo file ${colors.red(path)} is not supported.`);
                                                        newFile.id().tostrS());
                 } else if (!allowMetaChanges && path !== modulesFileName) {
                     throw new UserError(`\
-Addtion to meta-repo of file ${colors.red(path)} is not supported.`);
+Addition to meta-repo of file ${colors.red(path)} is not supported.`);
                 }
             } break;
             case DELTA.DELETED: {
