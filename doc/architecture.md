@@ -131,7 +131,7 @@ XML file.  It does not generally try to provide a full suite of
 cross-repository operations (such as `rebase`, `cherry-pick`, etc.) and assumes
 the use of the Gerrit code review tool.
 
-Git submodules come the close: they do provide the technical ability to solve
+Git submodules come the closest: they do provide the technical ability to solve
 the problem, but are very difficult to use and lack some of the desired
 features.  With git-meta, we build on top of Git submodules to provide the
 desired functionality by leveraging only existing Git commands.
