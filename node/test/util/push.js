@@ -30,8 +30,9 @@
  */
 "use strict";
 
-const assert = require("chai").assert;
-const co     = require("co");
+const assert  = require("chai").assert;
+const co      = require("co");
+const NodeGit = require("nodegit");
 
 const GitUtil             = require("../../lib/util/git_util");
 const Push                = require("../../lib/util/push");
@@ -298,7 +299,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
                 }
 
                 const pushMap = yield Push.getPushMap(repo, "origin", source,
-                                                      "target", commit);
+                                                      commit);
                 const mappedPushMap = {};
                 for (const sub of Object.keys(pushMap)) {
                     mappedPushMap[sub] = commitMap.commitMap[pushMap[sub]];
@@ -350,7 +351,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
         const sha = theirCommitMap["2"];
         const commit = yield ourRepo.getCommit(sha);
         const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
-                                              "target", commit);
+                                              commit);
         assert.deepEqual({}, pushMap);
     }));
 });
@@ -461,6 +462,132 @@ x=E:Rorigin=a foo=2`,
                                                            c.fails, {
                 expectedTransformer: refMapper,
             });
+        }));
+    });
+});
+
+describe("getClosePushedCommit", function () {
+    // 5 -> 4 -> 3 -> 1
+    //        -> 2 ->
+    const baseRepo = "x=S:C2-1;C3-1;C4-3,2;C5-4;Bmaster=5";
+
+    const cases = {
+        "no refs, no close pushed commit": {
+            source: "5",
+            remote: "origin",
+            refs: {
+            },
+            expectedCommit: null,
+        },
+        "no refs, with wildcard": {
+            source: "5",
+            remote: "*",
+            refs: {
+            },
+            expectedCommit: null,
+        },
+        "one refs, commit is pushed": {
+            source: "5",
+            remote: "*",
+            refs: {
+                "refs/remotes/origin/1": "5",
+            },
+            expectedCommit: "5",
+        },
+        "one refs, far commit": {
+            source: "5",
+            remote: "*",
+            refs: {
+                "refs/remotes/origin/1": "1",
+            },
+            expectedCommit: "1",
+        },
+        "one refs, close commit": {
+            source: "5",
+            remote: "*",
+            refs: {
+                "refs/remotes/origin/1": "2",
+            },
+            expectedCommit: "1",
+        },
+        "lots of refs, none matching": {
+            source: "5",
+            remote: "origin",
+            refs: {
+                "refs/remotes/foo/1": "1",
+                "refs/remotes/foo/2": "2",
+                "refs/remotes/bar/3": "3",
+                "refs/remotes/bar/4": "4",
+            },
+            expectedCommit: null,
+        },
+        "lots of refs, something matching": {
+            source: "5",
+            remote: "origin",
+            refs: {
+                "refs/remotes/origin/1": "1",
+                "refs/remotes/foo/2": "2",
+                "refs/remotes/bar/3": "3",
+                "refs/remotes/bar/4": "4",
+            },
+            expectedCommit: "1",
+        },
+        "lots of refs, something matching 2": {
+            source: "5",
+            remote: "origin",
+            refs: {
+                "refs/remotes/foo/1": "1",
+                "refs/remotes/foo/2": "2",
+                "refs/remotes/bar/3": "3",
+                "refs/remotes/origin/4": "4",
+            },
+            expectedCommit: "4",
+        },
+        "lots of refs, all matching": {
+            source: "5",
+            remote: "*",
+            refs: {
+                "refs/remotes/origin/1": "1",
+                "refs/remotes/origin/2": "2",
+                "refs/remotes/bar/3": "3",
+                "refs/remotes/bar/4": "4",
+            },
+            expectedCommit: "4",
+        },
+        "lots of refs, commit is pushed": {
+            source: "5",
+            remote: "*",
+            refs: {
+                "refs/remotes/origin/1": "1",
+                "refs/remotes/origin/2": "2",
+                "refs/remotes/bar/3": "3",
+                "refs/remotes/bar/4": "5",
+            },
+            expectedCommit: "5",
+        },
+    };
+
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            const repos = yield RepoASTTestUtil.createMultiRepos(baseRepo);
+            const repo = repos.repos.x;
+
+            for (const ref of Object.keys(c.refs)) {
+                yield NodeGit.Reference.create(
+                    repo, ref, repos.reverseCommitMap[c.refs[ref]], 1, "");
+            }
+
+            const commit = yield repo.getCommit(
+                repos.reverseCommitMap[c.source]);
+            const actualCommit = yield Push.getClosePushedCommit(
+                repo, c.remote, commit);
+            if (null !== c.expectedCommit) {
+                assert.deepEqual(repos.reverseCommitMap[c.expectedCommit], 
+                                 actualCommit.id().tostrS());
+            } else {
+                assert.deepEqual(null, actualCommit);
+            }
         }));
     });
 });
