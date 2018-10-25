@@ -744,53 +744,6 @@ describe("GitUtil", function () {
         }));
     });
 
-    describe("listUnpushedCommits", function () {
-        const cases = {
-            "no branches": {
-                input: "S:Rorigin=foo",
-                from: "1",
-                remote: "origin",
-                expected: ["1"],
-            },
-            "up to date": {
-                input: "S:Rorigin=foo moo=1",
-                from: "1",
-                remote: "origin",
-                expected: [],
-            },
-            "one not pushed": {
-                input: "S:C2-1;Bmaster=2;Rorigin=foo moo=1",
-                from: "2",
-                remote: "origin",
-                expected: ["2"],
-            },
-            "two not pushed": {
-                input: "S:C3-2;C2-1;Bmaster=3;Rorigin=foo moo=1",
-                from: "3",
-                remote: "origin",
-                expected: ["2","3"],
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            it(caseName, co.wrap(function *() {
-                const ast = ShorthandParserUtil.parseRepoShorthand(c.input);
-                const path = yield TestUtil.makeTempDir();
-                const written = yield WriteRepoASTUtil.writeRAST(ast, path);
-                const fromSha = written.oldCommitMap[c.from];
-                const unpushed = yield GitUtil.listUnpushedCommits(
-                                                                  written.repo,
-                                                                  c.remote,
-                                                                  fromSha);
-                const unpushedShas = unpushed.map(id => {
-                    assert.instanceOf(id, NodeGit.Oid);
-                    return written.commitMap[id.tostrS()];
-                });
-                assert.sameMembers(unpushedShas, c.expected);
-            }));
-        });
-    });
-
     describe("isUpToDate", function () {
         const cases = {
             "trivial": {

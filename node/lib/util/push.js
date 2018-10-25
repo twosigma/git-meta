@@ -46,13 +46,73 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError           = require("./user_error");
 
+// This magic SHA represents an empty tree in Git.
+
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/**
+ * For a given commit and remote, determine a reasonably close oid that has
+ * already been pushed. This does *not* do a fetch, but rather just compares
+ * against all available remote refs. To compare against all remotes, simply
+ * pass a "*" wildcard.
+ *
+ * This works by building a revwalk and removing all ancestors of remote refs
+ * for the given remote. It then reverses the result, and returns the first
+ * parent of the oldest, unpushed commit. This is not an absolute last pushed
+ * oid, but is a very good proxy to determine what to push.
+ *
+ * Returns a commit that exists in a remote ref, or null if no such commit
+ * exists. If the given commit exists in a remote ref, will return itself.
+ *
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {String}             remoteName
+ * @param {NodeGit.Commit}     commit
+ */
+exports.getClosePushedCommit = co.wrap(function*(repo, remoteName, commit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(remoteName);
+    assert.instanceOf(commit, NodeGit.Commit);
+
+    // Search for the first commit that is not an ancestor of a remote ref, ie.
+    // the first commit that is unpushed. First by topological, then resolving
+    // by timestamp.
+
+    const walk = NodeGit.Revwalk.create(repo);
+    walk.sorting(NodeGit.Revwalk.SORT.TOPOLOGICAL,
+                 NodeGit.Revwalk.SORT.TIME,
+                 NodeGit.Revwalk.SORT.REVERSE);
+    walk.hideGlob(`refs/remotes/${remoteName}`);
+    walk.push(commit);
+
+    // This occurs when walk.next() has no commits left -- in this case,
+    // when there are no unpushed commits. Return the passed commit as the
+    // last pushed commit.
+
+    let firstNewOid;
+    try {
+        firstNewOid = yield walk.next();
+    } catch (err) {
+        if (NodeGit.Error.CODE.ITEROVER === err.errno)  {
+            return commit;
+        }
+        throw err;
+    }
+
+    const firstNewCommit = yield repo.getCommit(firstNewOid);
+
+    // If the first unpushed commit has no parents, then the entire set of
+    // commits to push is new.
+
+    if (0 === firstNewCommit.parentcount()) {
+        return null;
+    }
+    return yield repo.getCommit(firstNewCommit.parentId(0));
+});
 
 /**
  * For a given proposed push, return a map from submodule to sha,
  * excluding any submodules that the server likely already has.
- *
- * Create a list of relevant branches, including any tracking branches
- * associated with the one being pushed and the target branch.
  *
  * Return in the map only those submodules that (1) exist locally, in
  * `.git/modules` and (2) are changed between `commit` and the merge base of
@@ -62,101 +122,46 @@ const UserError           = require("./user_error");
  * @param {NodeGit.Repository} repo
  * @param {String}             remoteName
  * @param {String}             source
- * @param {String}             target
  * @param {NodeGit.Commit}     commit
  */
-exports.getPushMap = co.wrap(function*(repo, remoteName, source, target,
+exports.getPushMap = co.wrap(function*(repo, remoteName, source,
                                        commit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(remoteName);
     assert.isString(source);
-    assert.isString(target);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const submoduleSet = new Set(yield SubmoduleUtil.listOpenSubmodules(repo));
-    for (const s of yield SubmoduleUtil.listAbsorbedSubmodules(repo)) {
-        submoduleSet.add(s);
-    }
-    const submodules = [...submoduleSet];
-    const pushMap = yield SubmoduleUtil.getSubmoduleShasForCommit(repo,
-                                                                  submodules,
-                                                                  commit);
-    const bareRepos = {};
-    for (const sub of Object.keys(pushMap)) {
-        const subBareRepo = yield SubmoduleUtil.getBareRepo(repo, sub);
-        bareRepos[sub] = subBareRepo;
+    const baseCommit = yield exports.getClosePushedCommit(repo, remoteName,
+                                                          commit);
+    let baseTree;
+    if (null !== baseCommit) {
+        baseTree = yield baseCommit.getTree();
+    } else {
+        baseTree = EMPTY_TREE;
     }
 
-    const trackingBranches = new Set();
-    trackingBranches.add(`refs/remotes/${remoteName}/${target}`);
-    let tracking;
-    try {
-        const sourceBranch = yield repo.getReference(source);
-        tracking = yield GitUtil.getTrackingInfo(repo, sourceBranch);
-    } catch (e) {
-        // we have no local branch? maybe source is a sha.
-        tracking = null;
-    }
+    const tree = yield commit.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo, baseTree, tree, null);
+    const changes = SubmoduleUtil.getSubmoduleChangesFromDiff(diff, true);
 
-    if (tracking !== null) {
-        if (tracking.remoteName !== null) {
-            trackingBranches.add(
-                `refs/remotes/${tracking.remoteName}/${tracking.branchName}`);
-        }
-        if (tracking.pushRemoteName !== null) {
-            trackingBranches.add(
-                `refs/remotes/${tracking.pushRemoteName}/${target}`);
+    const pushMap = {};
+    for (const path of Object.keys(changes)) {
+        const change = changes[path];
+        if (!change.deleted) {
+            pushMap[path] = change.newSha;
         }
     }
-
-    // List all the merge bases for all tracking branches.
-
-    const bases = [];
-
-    yield Array.from(trackingBranches).map(co.wrap(function *(branch) {
-        let reference = null;
-        try {
-            reference = yield NodeGit.Reference.lookup(repo, branch);
-        } catch (e) {
-            // if this ref doesn't exist, OK
-            return;
-        }
-        const id = reference.target();
-        const trackingCommit = yield NodeGit.Commit.lookup(repo, id);
-        const branchBases = yield GitUtil.mergeBases(repo,
-                                                     trackingCommit,
-                                                     commit);
-        bases.push(...branchBases);
-    }));
-
-    // Then clear out all entries that weren't changed in each merge base.
-
-    yield bases.map(co.wrap(function *(baseCommitSha) {
-        const baseCommit = yield repo.getCommit(baseCommitSha);
-        const changes = yield SubmoduleUtil.getSubmoduleChanges(repo,
-                                                                commit,
-                                                                baseCommit,
-                                                                true);
-        // Remove any entry in `pushMap` that wasn't changed between `commit`
-        // and this merge base.
-
-        for (let name in pushMap) {
-            if (!(name in changes)) {
-                delete pushMap[name];
-            }
-        }
-    }));
 
     // Make sure we have the commits we want to push.
-
     for (const sub of Object.keys(pushMap)) {
-        const subRepo = bareRepos[sub];
+        const subRepo = yield SubmoduleUtil.getBareRepo(repo, sub);
         try {
             yield subRepo.getCommit(pushMap[sub]);
         } catch (e) {
             delete pushMap[sub];
         }
     }
+
     return pushMap;
 });
 
@@ -205,7 +210,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     const commit = yield repo.getCommit(sha);
 
     // First, push the submodules.
-    const pushMap = yield exports.getPushMap(repo, remoteName, source, target,
+    const pushMap = yield exports.getPushMap(repo, `*`, source,
                                             commit);
 
     let errorMessage = "";

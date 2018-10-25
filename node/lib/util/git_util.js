@@ -44,7 +44,6 @@ const NodeGit      = require("nodegit");
 const path         = require("path");
 
 const ConfigUtil          = require("./config_util");
-const DoWorkQueue         = require("./do_work_queue");
 const Hook                = require("./hook");
 const GitUtilFast         = require("./git_util_fast");
 const UserError           = require("./user_error");
@@ -546,102 +545,6 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
         throw new UserError(e.message);
     }
     return true;
-});
-
-
-
-/**
- * Return a list the shas of commits in the history of the specified `commit`
- * not present in the history of the specified `remote` in the specified
- * `repo`.  Note that this command does not do a *fetch*; the check is made
- * against what commits are locally known.
- *
- * async
- * @param {NodeGit.Repository} repo
- * @param {String}             remote
- * @param {String}             commit
- * @return {NodeGit.Oid []}
- */
-exports.listUnpushedCommits = co.wrap(function *(repo, remote, commit) {
-    // I wish there were a simpler way to do this.  Our algorithm:
-    // 1. List all the refs for 'remote'.
-    // 2. Compute the list of different commits between each the head of each
-    //    matching remote ref.
-    // 3. Return the shortest list.
-    // 4. If no matching refs return a list of all commits that are in the
-    //    history of 'commit'.
-
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(remote);
-    assert.isString(commit);
-
-    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
-
-    const commitId = NodeGit.Oid.fromString(commit);
-
-    let bestResult = null;
-
-    const regex = new RegExp(`^refs/remotes/${remote}/`);
-
-    //  The `fastWalk` method takes a max count for the number of items it will
-    //  return.  We should investigate why some time because I don't think it
-    //  should be necessary.  My guess is that they are creating a fixed size
-    //  array to populate with the commits; an exponential growth algorithm
-    //  like that used by `std::vector` would provide the same (amortized)
-    //  performance.  See http://www.nodegit.org/api/revwalk/#fastWalk.
-    //
-    //  For now, I'm choosing the value 1000000 as something not big enough to
-    //  blow out memory but more than large enough for any repo we're likely to
-    //  encounter.
-
-    const MAX_COMMIT_COUNT = 1000000;
-
-    const checkRef = co.wrap(function *(name) {
-
-        // If we've already matched the commit, no need to do any checking.
-
-        if ([] === bestResult) {
-            return;                                                   // RETURN
-        }
-
-        // Check to see if the name of the ref indicates that it is for
-        // 'remote'.
-
-        const nameResult = regex.exec(name);
-        if (!nameResult) {
-            return;                                                   // RETURN
-        }
-
-        const refHeadCommit = yield repo.getReferenceCommit(name);
-        const refHead = refHeadCommit.id();
-
-        // Use 'RevWalk' to generate the list of commits different between the
-        // head of the remote branch and our commit.
-
-        let revWalk = repo.createRevWalk();
-        revWalk.pushRange(`${refHead}..${commit}`);
-        const commitDiff = yield revWalk.fastWalk(MAX_COMMIT_COUNT);
-
-        // If this list is shorter than the current best list (or there is no
-        // current best), store it as the best so far.
-
-        if (null === bestResult || bestResult.length > commitDiff.length) {
-            bestResult = commitDiff;
-        }
-    });
-
-    yield DoWorkQueue.doInParallel(refs, checkRef);
-
-    // If we found no results (no branches for 'remote', return a list
-    // containing 'commit' and all its history.
-
-    if (null === bestResult) {
-        let revWalk = repo.createRevWalk();
-        revWalk.push(commitId);
-        return yield revWalk.fastWalk(MAX_COMMIT_COUNT);              // RETURN
-    }
-
-    return bestResult;
 });
 
 /**
