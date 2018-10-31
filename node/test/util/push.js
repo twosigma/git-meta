@@ -33,6 +33,7 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const NodeGit = require("nodegit");
+const rimraf  = require("rimraf");
 
 const GitUtil             = require("../../lib/util/git_util");
 const Push                = require("../../lib/util/push");
@@ -353,6 +354,45 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
         const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
                                               commit);
         assert.deepEqual({}, pushMap);
+    }));
+
+    it("local clone is missing directory", co.wrap(function*() {
+        const them = "sub=S:C8-1;Bmaster=8|x=S:C2-1 d=Ssub:8;Bmaster=2";
+        const our = "sub=S:C7-1;Bmaster=7|x=S:C3-1 d=Ssub:7;Bmaster=3;Od";
+
+        const theirWritten = yield RepoASTTestUtil.createMultiRepos(them);
+        const theirRepo = theirWritten.repos.x;
+
+        const ourWritten = yield RepoASTTestUtil.createMultiRepos(our);
+        const ourRepo = ourWritten.repos.x;
+        const ourCommitMap = ourWritten.reverseCommitMap;
+
+        const config = yield ourRepo.config();
+        yield config.setString("remote.upstream.url", theirRepo.path());
+
+        const sha = ourCommitMap["3"];
+        const commit = yield ourRepo.getCommit(sha);
+        const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
+                                              commit);
+        assert.deepEqual({"d": ourCommitMap["7"]}, pushMap);
+
+        // "Delete" the codebase, but remain absorbed.
+        yield (new Promise(callback => {
+            return rimraf(ourWritten.repos.x.workdir() + "d", {},
+                callback);
+        }));
+        const pushMapDel = yield Push.getPushMap(ourRepo, "upstream", "2",
+                                              commit);
+        assert.deepEqual({"d": ourCommitMap["7"]}, pushMapDel);
+
+        // Remove the absorbed codebase.
+        yield (new Promise(callback => {
+            return rimraf(ourWritten.repos.x.path() + "modules/d", {},
+                callback);
+        }));
+        const pushMapRm = yield Push.getPushMap(ourRepo, "upstream", "2",
+                                              commit);
+        assert.deepEqual({}, pushMapRm);
     }));
 });
 
