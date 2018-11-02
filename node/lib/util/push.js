@@ -152,8 +152,20 @@ exports.getPushMap = co.wrap(function*(repo, remoteName, source,
         }
     }
 
-    // Make sure we have the commits we want to push.
+    const openSubmodules = yield SubmoduleUtil.listOpenSubmodules(repo);
+    const absorbedSubmodules = 
+        yield SubmoduleUtil.listAbsorbedSubmodules(repo);
+
+    const availableSubmodules = new Set([...openSubmodules, 
+                                        ...absorbedSubmodules]);
+
+    // Make sure we have the repositories and commits we want to push.
     for (const sub of Object.keys(pushMap)) {
+        if (!availableSubmodules.has(sub)) {
+            delete pushMap[sub];
+            continue;
+        }
+
         const subRepo = yield SubmoduleUtil.getBareRepo(repo, sub);
         try {
             yield subRepo.getCommit(pushMap[sub]);
