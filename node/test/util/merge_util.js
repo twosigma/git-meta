@@ -67,36 +67,25 @@ function mapReturnedCommits(result, maps) {
 
 describe("MergeUtil", function () {
     describe("fastForwardMerge", function () {
-        const MODE = MergeUtil.MODE;
         const cases = {
             "simple": {
                 initial: "a=B|x=S:C2-1 q=Sa:1;Bfoo=2",
                 commit: "2",
-                mode: MODE.NORMAL,
-                expected: "x=E:Bmaster=2",
-            },
-            "simple, FF_ONLY": {
-                initial: "a=B|x=S:C2-1 t/y=Sa:1;Bfoo=2",
-                commit: "2",
-                mode: MODE.FF_ONLY,
                 expected: "x=E:Bmaster=2",
             },
             "simple detached": {
                 initial: "a=B|x=S:C2-1 u=Sa:1;Bfoo=2;*=",
                 commit: "2",
-                mode: MODE.NORMAL,
                 expected: "x=E:H=2",
             },
             "with submodule": {
                 initial: "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3",
                 commit: "3",
-                mode: MODE.NORMAL,
                 expected: "x=E:Bmaster=3",
             },
             "with open submodule": {
                 initial: "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3;Os",
                 commit: "3",
-                mode: MODE.NORMAL,
                 expected: "x=E:Bmaster=3;Os H=a",
             },
             "with open submodule and change": {
@@ -104,7 +93,6 @@ describe("MergeUtil", function () {
 a=B:Ca-1;Ba=a|
 x=U:C3-2 s=Sa:a;Bfoo=3;Os W README.md=3`,
                 commit: "3",
-                mode: MODE.NORMAL,
                 expected: "x=E:Bmaster=3;Os H=a!W README.md=3",
             },
             "with open submodule and conflict": {
@@ -112,22 +100,7 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W README.md=3`,
 a=B:Ca-1;Ba=a|
 x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 commit: "3",
-                mode: MODE.NORMAL,
                 fails: true,
-            },
-            "force commit": {
-                initial: "a=B|x=S:C2-1 z=Sa:1;Bfoo=2",
-                commit: "2",
-                mode: MODE.FORCE_COMMIT,
-                expected: "x=E:Chahaha\n#x-1,2 z=Sa:1;Bmaster=x",
-                message: "hahaha",
-            },
-            "force commit, detached": {
-                initial: "a=B|x=S:C2-1 y=Sa:1;Bfoo=2;*=",
-                commit: "2",
-                mode: MODE.FORCE_COMMIT,
-                expected: "x=E:Chahaha\n#x-1,2 y=Sa:1;H=x",
-                message: "hahaha",
             },
             "ff merge adding submodule": {
                 initial: "a=S|x=U:Bfoo=1;*=foo",
@@ -144,20 +117,11 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 const physicalCommit = reverseCommitMap[c.commit];
                 const commit = yield x.getCommit(physicalCommit);
                 const message = c.message || "message\n";
-                const mode = c.mode || MODE.NORMAL;
-                const result = yield MergeUtil.fastForwardMerge(x,
-                                                                mode,
-                                                                commit,
-                                                                message);
-                let newCommitMap = {};
-                if (null !== result) {
-                    assert.isString(result);
-                    // If a new commit was generated, map it to "x".
-
-                    newCommitMap[result] = "x";
-                }
+                yield MergeUtil.fastForwardMerge(x,
+                                                 commit,
+                                                 message);
                 return {
-                    commitMap: newCommitMap,
+                    commitMap: {},
                 };
             });
             it(caseName, co.wrap(function *() {
