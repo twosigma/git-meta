@@ -98,77 +98,35 @@ const MODE = {
 exports.MODE = MODE;
 
 /**
- * Perform a fast-forward merge in the specified `repo` to the specified
- * `commit`.  If `MODE.FORCE_COMMIT === mode`, generate a merge commit.  When
- * generating a merge commit, use the optionally specified `message`.  The
- * behavior is undefined unless `commit` is different from but descendant of
- * the HEAD commit in `repo`.  If a commit is generated, return its sha;
- * otherwise, return null.
+ * Perform a fast-forward merge in the specified `repo` to the
+ * specified `commit`.  When generating a merge commit, use the
+ * optionally specified `message`.  The behavior is undefined unless
+ * `commit` is different from but descendant of the HEAD commit in
+ * `repo`.
  *
  * @param {NodeGit.Repository}    repo
  * @param {MODE}                  mode
  * @param {NodeGit.Commit}        commit
  * @param {String|null}           message
- * @return {String|null}
+
  */
-exports.fastForwardMerge = co.wrap(function *(repo, mode, commit, message) {
+exports.fastForwardMerge = co.wrap(function *(repo, commit, message) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isNumber(mode);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isString(message);
 
     // Remember the current branch; the checkoutCommit function will move it.
 
     const branch = yield repo.getCurrentBranch();
-    let result = null;
-    let newHead;
-    if (MODE.FORCE_COMMIT !== mode) {
-        // If we're not generating a commit, we just need to checkout the one
-        // we're fast-forwarding to.
 
-        yield Checkout.checkoutCommit(repo, commit, false);
-        newHead = commit;
-    }
-    else {
-        // Checkout the commit we're fast-forwarding to.
-
-        const head = yield repo.getHeadCommit();
-        yield Checkout.checkoutCommit(repo, commit, false);
-
-        // Then, generate a new commit that has the previous HEAD and commit to
-        // merge as children.
-
-        const sig = yield ConfigUtil.defaultSignature(repo);
-        const tree = yield commit.getTree();
-        const id = yield NodeGit.Commit.create(
-                                           repo,
-                                           0,
-                                           sig,
-                                           sig,
-                                           null,
-                                           Commit.ensureEolOnLastLine(message),
-                                           tree,
-                                           2,
-                                           [head, commit]);
-        newHead = yield repo.getCommit(id);
-        result = newHead.id().tostrS();
-
-        // Move HEAD to point to the new commit.
-
-        yield NodeGit.Reset.reset(repo,
-                                  newHead,
-                                  NodeGit.Reset.TYPE.HARD,
-                                  null,
-                                  branch.name());
-    }
+    yield Checkout.checkoutCommit(repo, commit, false);
 
     // If we were on a branch, make it current again.
 
     if (branch.isBranch()) {
-        yield branch.setTarget(newHead, "ffwd merge");
+        yield branch.setTarget(commit, "ffwd merge");
         yield repo.setHead(branch.name());
     }
-    return result;
 });
 
 /**
@@ -382,15 +340,13 @@ running merge.`);
         throw new UserError(`The meta-repository cannot be fast-forwarded to \
 ${colors.red(commitSha)}.`);
     }
-    else if (canFF) {
+    else if (canFF && MODE.FORCE_COMMIT !== mode) {
         console.log(`Fast-forwarding meta-repo to ${colors.green(commitSha)}.`);
 
-
-        const sha = yield exports.fastForwardMerge(repo,
-                                                   mode,
-                                                   commit,
-                                                   message);
-        result.metaCommit = sha;
+        result.metaCommit = commitSha;
+        yield exports.fastForwardMerge(repo,
+                                       commit,
+                                       message);
         return result;
     }
 
