@@ -161,7 +161,7 @@ const optimized = {
 
 Object.keys(commands).sort().forEach(name => {
     const cmd = commands[name];
-    configureSubcommand(subParser, name, cmd, (null !== optimized[name]));
+    configureSubcommand(subParser, name, cmd, (undefined !== optimized[name]));
 });
 
 const blacklist = new Set([
