@@ -564,7 +564,7 @@ exports.getSubmodulesInPath = function (dir, indexSubNames) {
     const isParentDir = (short, long) => {
         return long.startsWith(short) && (
             short[short.length-1] === "/" ||
-            long.replace(short, "")[0] === "/"
+            long[short.length] === "/"
         );
     };
     const result = [];
