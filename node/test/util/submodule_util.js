@@ -781,6 +781,11 @@ describe("SubmoduleUtil", function () {
                 indexSubNames: ["q/r", "q/s", "q/t/v", "z"],
                 expected: ["q/r", "q/s", "q/t/v"],
             },
+            "does not overmatch": {
+                dir: "q",
+                indexSubNames: ["q/r", "qr", "qr/"],
+                expected: ["q/r"],
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

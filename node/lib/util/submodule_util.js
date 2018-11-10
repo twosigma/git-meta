@@ -559,11 +559,19 @@ exports.getSubmodulesInPath = function (dir, indexSubNames) {
     if ("" === dir) {
         return indexSubNames;
     }
+
+    // test if the short path a parent dir of the long path
+    const isParentDir = (short, long) => {
+        return long.startsWith(short) && (
+            short[short.length-1] === "/" ||
+            long[short.length] === "/"
+        );
+    };
     const result = [];
     for (const subPath of indexSubNames) {
         if (subPath === dir) {
             return [dir];                                             // RETURN
-        } else if (subPath.startsWith(dir)) {
+        } else if (isParentDir(dir, subPath)) {
             result.push(subPath);
         }
     }

@@ -38,7 +38,6 @@ const NodeGit      = require("nodegit");
 
 const Checkout            = require("./checkout");
 const CherryPickUtil      = require("./cherry_pick_util");
-const Commit              = require("./commit");
 const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
