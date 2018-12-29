@@ -1021,7 +1021,7 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
                 old = new Submodule(commit.url, commit.sha);
             }
         }
-        const getRepo = () => opener.getSubrepo(name);
+        const getRepo = () => opener.getSubrepo(name, false);
 
         const result = yield exports.getSubmoduleAmendStatus(currentSub,
                                                              old,

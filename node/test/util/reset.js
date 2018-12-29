@@ -155,7 +155,7 @@ describe("reset", function () {
             const index = yield repo.index();
             const commit = yield repo.getCommit(rev["3"]);
             const changes = {
-                s: new SubmoduleChange(rev["1"], null),
+                s: new SubmoduleChange(rev["1"], null, null),
             };
             yield Reset.resetMetaRepo(repo, index, commit, changes);
             let exists = true;
@@ -175,7 +175,7 @@ describe("reset", function () {
             const index = yield repo.index();
             const commit = yield repo.getCommit(rev["2"]);
             const changes = {
-                s: new SubmoduleChange(null, rev["1"]),
+                s: new SubmoduleChange(null, rev["1"], null),
             };
             yield Reset.resetMetaRepo(repo, index, commit, changes);
             let exists = true;

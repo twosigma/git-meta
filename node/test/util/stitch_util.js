@@ -695,10 +695,10 @@ describe("writeSubmoduleChangeCache", function () {
         const nextSha = next.id().tostrS();
         const changes = {};
         changes[headSha] = {
-            "foo/bar": new SubmoduleChange("1", "2")
+            "foo/bar": new SubmoduleChange("1", "2", null)
         };
         changes[nextSha] = {
-            "baz/bam": new SubmoduleChange("3", "4")
+            "baz/bam": new SubmoduleChange("3", "4", null)
         };
         yield StitchUtil.writeSubmoduleChangeCache(repo, changes);
         const refName = StitchUtil.changeCacheRef;
@@ -724,10 +724,10 @@ describe("readSubmoduleChangeCache", function () {
         const nextSha = next.id().tostrS();
         const changes = {};
         changes[headSha] = {
-            "foo/bar": new SubmoduleChange("1", "2")
+            "foo/bar": new SubmoduleChange("1", "2", null)
         };
         changes[nextSha] = {
-            "baz/bam": new SubmoduleChange("3", "4")
+            "baz/bam": new SubmoduleChange("3", "4", null)
         };
         yield StitchUtil.writeSubmoduleChangeCache(repo, changes);
         const read = yield StitchUtil.readSubmoduleChangeCache(repo);
@@ -1090,7 +1090,7 @@ describe("listSubmoduleChanges", function () {
         const parent = parents[0];
         const firstSha = parent.id().tostrS();
         expected[head.id().tostrS()] = {
-            "s": new SubmoduleChange(null, firstSha),
+            "s": new SubmoduleChange(null, firstSha, null),
         };
         expected[firstSha] = {};
         const result =

@@ -83,7 +83,8 @@ describe("openOnCommit", function () {
                 const result = yield Open.openOnCommit(fetcher,
                                                        c.subName,
                                                        commit,
-                                                       null);
+                                                       null,
+                                                       false);
                 assert.instanceOf(result, NodeGit.Repository);
             });
             yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
@@ -103,8 +104,8 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U:Os");
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s1 = yield opener.getSubrepo("s");
-            const s2 = yield opener.getSubrepo("s");
+            const s1 = yield opener.getSubrepo("s", false);
+            const s2 = yield opener.getSubrepo("s", false);
             const base = yield SubmoduleUtil.getRepo(repo, "s");
             assert.equal(s1, s2, "not re-opened");
             assert.equal(s1.workdir(), base.workdir(), "right path");
@@ -113,8 +114,8 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U");
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s1 = yield opener.getSubrepo("s");
-            const s2 = yield opener.getSubrepo("s");
+            const s1 = yield opener.getSubrepo("s", false);
+            const s2 = yield opener.getSubrepo("s", false);
             const base = yield SubmoduleUtil.getRepo(repo, "s");
             assert.equal(s1, s2, "not re-opened");
             assert.equal(s1.workdir(), base.workdir(), "right path");
@@ -132,7 +133,7 @@ describe("openOnCommit", function () {
             const repo = w.repos.x;
             const commit = yield repo.getCommit(baseSha);
             const opener = new Open.Opener(repo, commit);
-            const s = yield opener.getSubrepo("s");
+            const s = yield opener.getSubrepo("s", false);
             const head = yield s.getHeadCommit();
             assert.equal(head.id().tostrS(), subSha);
         }));
@@ -157,7 +158,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s");
+            yield opener.getSubrepo("s", false);
             const open = yield opener.getOpenSubs();
             assert.deepEqual(Array.from(open), []);
         }));
@@ -182,7 +183,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s");
+            yield opener.getSubrepo("s", false);
             const opened = yield opener.getOpenedSubs();
             assert.deepEqual(opened, []);
         }));
@@ -191,7 +192,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s");
+            yield opener.getSubrepo("s", false);
             const opened = yield opener.getOpenedSubs();
             assert.deepEqual(opened, ["s"]);
         }));
@@ -208,7 +209,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s = yield opener.getSubrepo("s");
+            const s = yield opener.getSubrepo("s", false);
             const result = yield opener.isOpen("s");
             assert.equal(true, result);
             const config = yield s.config();

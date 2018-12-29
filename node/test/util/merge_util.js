@@ -133,7 +133,7 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
         });
     });
 
-    describe("merge", function () {
+    describe("merge_xxx", function () {
         // Will do merge from repo `x`.  A merge commit in the meta-repo will
         // be named `x`; any merge commits in the sub-repos will be given the
         // name of the sub-repo in which they are made.  TODO: test for changes

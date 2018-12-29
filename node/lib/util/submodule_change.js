@@ -45,11 +45,16 @@ class SubmoduleChange {
      * null `oldSha` implies that the submodule was added, a null `newSha`
      * implies that it was removed, and if neither is null, the submodule was
      * changed.
+     * 
+     * UPDATE: the change used to contain only their sha, because default our
+     * sha can be obtained from head commit. An explicit field is added for
+     * cases when our sha is not necessarily the same as the head.
      *
      * @param {String | null} oldSha
      * @param {String | null} newSha
+     * @param {String | null} ourSha
      */
-    constructor(oldSha, newSha) {
+    constructor(oldSha, newSha, ourSha) {
         assert.notEqual(oldSha, newSha);
         if (null !== oldSha) {
             assert.isString(oldSha);
@@ -57,8 +62,14 @@ class SubmoduleChange {
         if (null !== newSha) {
             assert.isString(newSha);
         }
+
+        if (null !== ourSha) {
+            assert.isString(ourSha);
+        }
+
         this.d_oldSha = oldSha;
         this.d_newSha = newSha;
+        this.d_ourSha = ourSha;
         Object.freeze(this);
     }
 
@@ -80,6 +91,18 @@ class SubmoduleChange {
      */
     get newSha() {
         return this.d_newSha;
+    }
+
+    /**
+     * This property represents the value of a sha to which a submodule change 
+     * is applying. If it is null, then the change can only be applied to the 
+     * current head. If it not null, it depends on users to choose to its value
+     * or head sha to apply submodule changes.
+     *
+     * @property {String | null} ourSha
+     */
+    get ourSha() {
+        return this.d_ourSha;
     }
 
     /**

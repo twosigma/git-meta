@@ -160,7 +160,7 @@ const mergeSubmodules = co.wrap(function *(repo,
     const sig = yield ConfigUtil.defaultSignature(repo);
     const fetcher = yield opener.fetcher();
     const mergeSubmodule = co.wrap(function *(name) {
-        const subRepo = yield opener.getSubrepo(name);
+        const subRepo = yield opener.getSubrepo(name, false);
         const change = subs[name];
 
         const fromSha = change.newSha;

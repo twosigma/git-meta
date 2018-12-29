@@ -60,15 +60,18 @@ const SubmoduleFetcher    = require("./submodule_fetcher");
  * @param {String}           submoduleName
  * @param {String}           submoduleSha
  * @param {String|null}      templatePath
+ * @param {boolean}          bare
  * @return {NodeGit.Repository}
  */
 exports.openOnCommit = co.wrap(function *(fetcher,
                                           submoduleName,
                                           submoduleSha,
-                                          templatePath) {
+                                          templatePath, 
+                                          bare) {
     assert.instanceOf(fetcher, SubmoduleFetcher);
     assert.isString(submoduleName);
     assert.isString(submoduleSha);
+    assert.isBoolean(bare);
     if (null !== templatePath) {
         assert.isString(templatePath);
     }
@@ -83,12 +86,16 @@ exports.openOnCommit = co.wrap(function *(fetcher,
                                                                 metaRepo,
                                                                 submoduleName,
                                                                 submoduleUrl,
-                                                                templatePath);
+                                                                templatePath, 
+                                                                bare);
 
     // Turn off GC for the submodule
     const config = yield submoduleRepo.config();
     config.setInt64("gc.auto", 0);
 
+    if (bare) {
+        return submoduleRepo;                                        // RETURN
+    }
     // Fetch the needed sha.  Close if the fetch fails; otherwise, the
     // repository ends up in a state where it things the submodule is open, but
     // it's actually not.
@@ -151,10 +158,16 @@ Opener.prototype._initialize = co.wrap(function *() {
         this.d_commit = yield this.d_repo.getHeadCommit();
     }
     this.d_subRepos = {};
-    const openSubsList = yield SubmoduleUtil.listOpenSubmodules(this.d_repo);
-    this.d_openSubs = new Set(openSubsList);
+    if (!this.d_repo.isBare()) {
+        const openSubsList
+            = yield SubmoduleUtil.listOpenSubmodules(this.d_repo);
+        this.d_openSubs = new Set(openSubsList);    
+    }
+    const absorbedSubsList 
+        = yield SubmoduleUtil.listAbsorbedSubmodules(this.d_repo);
+    this.d_absorbedSubs = new Set(absorbedSubsList);
     this.d_templatePath =
-                        yield SubmoduleConfigUtil.getTemplatePath(this.d_repo);
+        yield SubmoduleConfigUtil.getTemplatePath(this.d_repo);
     this.d_fetcher = new SubmoduleFetcher(this.d_repo, this.d_commit);
     this.d_initialized = true;
     this.d_tree = yield this.d_commit.getTree();
@@ -208,6 +221,21 @@ Opener.prototype.isOpen = co.wrap(function *(subName) {
 });
 
 /**
+ * Return true if the submodule is neither opened nor half opened.
+ *
+ * @param {String} subName
+ * @return {Boolean}
+ */
+Opener.prototype.isClose = co.wrap(function *(subName) {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    return !this.d_absorbedSubs.has(subName) &&
+        !this.d_openSubs.has(subName) &&
+        !(subName in this.d_subRepos);
+});
+
+/**
  * Return the repository for the specified `submoduleName`, opening it if
  * necessary.
  *
@@ -216,10 +244,11 @@ Opener.prototype.isOpen = co.wrap(function *(subName) {
  * is *unset*; since this operation is expensive, we cannot do it automatically
  * each time a submodule is opened.
  *
- * @param {String} subName
+ * @param {String}  subName
+ * @param {boolean} bare
  * @return {NodeGit.Repository}
  */
-Opener.prototype.getSubrepo = co.wrap(function *(subName) {
+Opener.prototype.getSubrepo = co.wrap(function *(subName, bare) {
     if (!this.d_initialized) {
         yield this._initialize();
     }
@@ -227,7 +256,18 @@ Opener.prototype.getSubrepo = co.wrap(function *(subName) {
     if (undefined !== subRepo) {
         return subRepo;  // it was found
     }
-    if (this.d_openSubs.has(subName)) {
+    if (bare) {
+        if (this.d_absorbedSubs.has(subName)) {
+            subRepo = yield SubmoduleUtil.getBareRepo(this.d_repo, subName);
+        } else {
+            subRepo = yield exports.openOnCommit(this.d_fetcher,
+                                                 subName,
+                                                 "",
+                                                 this.d_templatePath, 
+                                                 true);
+        }
+    }
+    else if (this.d_openSubs.has(subName)) {
         subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
     }
     else {
@@ -238,7 +278,8 @@ Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
         subRepo = yield exports.openOnCommit(this.d_fetcher,
                                              subName,
                                              sha,
-                                             this.d_templatePath);
+                                             this.d_templatePath, 
+                                             false);
     }
     this.d_subRepos[subName] = subRepo;
     return subRepo;

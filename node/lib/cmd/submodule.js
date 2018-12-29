@@ -236,7 +236,7 @@ Could not find ${colors.red(metaCommittish)} in the meta-repo.`);
 
     const subName = paths[0];
     const opener = new Open.Opener(repo, null);
-    const subRepo = yield opener.getSubrepo(subName);
+    const subRepo = yield opener.getSubrepo(subName, false);
     const metaCommit = yield repo.getCommit(metaAnnotated.id());
 
     // Now that we have an open submodule, we can attempt to resolve

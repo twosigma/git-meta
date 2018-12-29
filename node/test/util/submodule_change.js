@@ -36,7 +36,7 @@ const SubmoduleChange = require("../../lib/util/submodule_change");
 
 describe("SubmoduleChange", function () {
     it("breathing", function () {
-        const change = new SubmoduleChange("old", "new");
+        const change = new SubmoduleChange("old", "new", null);
         assert.equal(change.oldSha, "old");
         assert.equal(change.newSha, "new");
     });

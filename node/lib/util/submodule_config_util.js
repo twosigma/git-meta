@@ -514,26 +514,31 @@ exports.getTemplatePath = co.wrap(function *(repo) {
  * @param {String}             name
  * @param {String}             url
  * @param {String|null}        templatePath
+ * @param {Boolean}            bare
  * @return {NodeGit.Repository}
  */
 exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
                                                   metaRepo,
                                                   name,
                                                   url,
-                                                  templatePath) {
+                                                  templatePath, 
+                                                  bare=false) {
     if (null !== repoUrl) {
         assert.isString(repoUrl);
     }
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isString(name);
     assert.isString(url);
+    assert.isBoolean(bare);
     if (null !== templatePath) {
         assert.isString(templatePath);
     }
 
     // Update the `.git/config` file.
 
-    const repoPath = metaRepo.workdir();
+    const repoPath = metaRepo.isBare ?
+        path.dirname(metaRepo.path()) :
+        metaRepo.workdir();
     yield exports.initSubmodule(metaRepo.path(), name, url);
 
     // Then, initialize the repository.  We pass `initExt` the right set of
@@ -544,15 +549,17 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
     const FLAGS = NodeGit.Repository.INIT_FLAG;
 
     // See if modules repo exists.
-
+    let subRepo = null;
     try {
-        yield NodeGit.Repository.open(subRepoDir);
+        subRepo = bare ?
+            yield NodeGit.Repository.openBare(subRepoDir) :
+            yield NodeGit.Repository.open(subRepoDir);
     }
     catch (e) {
         // Or, make it if not.
 
-        yield NodeGit.Repository.initExt(subRepoDir, {
-            workdirPath: exports.computeRelativeWorkDir(name),
+        subRepo = yield NodeGit.Repository.initExt(subRepoDir, {
+            workdirPath: bare ? null : exports.computeRelativeWorkDir(name),
             flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH |
                 FLAGS.RELATIVE_GITLINK |
                 (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
@@ -560,6 +567,9 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
         });
     }
 
+    if (bare)  {
+        return subRepo;
+    }
 
     // Write out the .git file.  Note that `initExt` configured to write a
     // relative .git directory will not write this file successfully if the
@@ -635,7 +645,10 @@ exports.writeUrls = co.wrap(function *(repo, index, urls, cached) {
         assert.isBoolean(cached);
     }
 
-    const modulesPath = path.join(repo.workdir(),
+    const repoPath = repo.isBare ?
+        path.dirname(repo.path()) :
+        repo.workdir();
+    const modulesPath = path.join(repoPath,
                                   exports.modulesFileName);
     const newConf = exports.writeConfigText(urls);
     if (newConf.length === 0) {
