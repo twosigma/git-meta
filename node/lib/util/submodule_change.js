@@ -44,11 +44,10 @@ class SubmoduleChange {
      * values.  The behavior is undefined if `oldSha === newSha`.  Note that a
      * null `oldSha` implies that the submodule was added, a null `newSha`
      * implies that it was removed, and if neither is null, the submodule was
-     * changed.
-     * 
-     * UPDATE: the change used to contain only their sha, because default our
-     * sha can be obtained from head commit. An explicit field is added for
-     * cases when our sha is not necessarily the same as the head.
+     * changed. In a 3 way merge, `oldSha` tracks the merge base, `newSha` 
+     * points to their commit and `ourSha` is usually the same as the HEAD.
+     * In case it is not or the HEAD sha is unavailable, we can explicitly
+     * point `ourSha` to a perticular target commit.
      *
      * @param {String | null} oldSha
      * @param {String | null} newSha
