@@ -221,18 +221,18 @@ Opener.prototype.isOpen = co.wrap(function *(subName) {
 });
 
 /**
- * Return true if the submodule is neither opened nor half opened.
+ * Return true if the submodule is opened nor half opened.
  *
  * @param {String} subName
  * @return {Boolean}
  */
-Opener.prototype.isClose = co.wrap(function *(subName) {
+Opener.prototype.isAtLeastHalfOpen = co.wrap(function *(subName) {
     if (!this.d_initialized) {
         yield this._initialize();
     }
-    return !this.d_absorbedSubs.has(subName) &&
-        !this.d_openSubs.has(subName) &&
-        !(subName in this.d_subRepos);
+    return this.d_absorbedSubs.has(subName) ||
+        this.d_openSubs.has(subName) ||
+        (subName in this.d_subRepos);
 });
 
 /**

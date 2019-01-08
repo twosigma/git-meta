@@ -269,7 +269,6 @@ exports.merge = co.wrap(function *(repo,
 
 
     yield CherryPickUtil.changeSubmodulesBare(repo,
-                                              opener,
                                               changeIndex,
                                               changes.simpleChanges);
     const merges = yield exports.mergeSubmoduleBare(repo, 

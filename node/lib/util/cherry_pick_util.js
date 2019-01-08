@@ -140,16 +140,13 @@ exports.changeSubmodules = co.wrap(function *(repo,
 /**
  * Similar to exports.changeSubmodules, but operates in bare repo.
  * @param {NodeGit.Repository} repo
- * @param {Open.Opener}        opener
- * @param {NodeGit.Index}      index
+ * @param {NodeGit.Index}      index         meta repo's change index
  * @param {Object}             submodules    name to Submodule
  */
 exports.changeSubmodulesBare = co.wrap(function *(repo,
-                                                  opener,
                                                   index,
                                                   submodules) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(opener, Open.Opener);
     assert.instanceOf(index, NodeGit.Index);
     assert.isObject(submodules);
     if (0 === Object.keys(submodules).count) {
@@ -157,26 +154,24 @@ exports.changeSubmodulesBare = co.wrap(function *(repo,
     }
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
     const changes = {};
-    const fetcher = yield opener.fetcher();
     for (let name in submodules) {
+        // Each sub object is either a {Submodule} object or null, it covers
+        // three types of change: addition, deletions and fast-forwards.
+        // (see {computeChangesBetweenTwoCommits})
+        // In case of deletion, we remove its url from the urls array, update
+        //  the .gitmodule file with `writeUrls` and skip adding the submodule
+        //  to the meta index.
+        // In other case we bump the submodule sha to `sub.sha` by adding a
+        //  new index entry to the meta index and add `sub.url` for updates.
         const sub = submodules[name];
         if (null === sub) {
             changes[name] = null;
             delete urls[name];
+            continue;
         }
-        else if (!(yield opener.isClose(name))) {
-            const subRepo = yield opener.getSubrepo(name, true);
-            yield fetcher.fetchSha(subRepo, name, sub.sha);
-            const commit = yield subRepo.getCommit(sub.sha);
-            changes[name] = new TreeUtil.Change(
-                                            commit.id(),
+        changes[name] = new TreeUtil.Change(NodeGit.Oid.fromString(sub.sha),
                                             NodeGit.TreeEntry.FILEMODE.COMMIT);
-        } else {
-            changes[name] = new TreeUtil.Change(
-                                            NodeGit.Oid.fromString(sub.sha),
-                                            NodeGit.TreeEntry.FILEMODE.COMMIT);
-            urls[name] = sub.url;
-        }
+        urls[name] = sub.url;
     }
     for (let name in changes) {
         const change = changes[name];
