@@ -44,24 +44,15 @@ const UserError           = require("./user_error");
 
 
 /**
- * Update meta repo index and point the submodule to a commit sha
- * 
- * @param {NodeGit.Index} index
- * @param {String} subName
- * @param {String} sha
+ * @enum {MODE}
+ * Flags to describe what type of merge to do.
  */
-const addSubmoduleCommit = co.wrap(function *(index, subName, sha) {
-    assert.instanceOf(index, NodeGit.Index);
-    assert.isString(subName);
-    assert.isString(sha);
+const MODE = {
+    NORMAL      : 0,  // will do a fast-forward merge when possible
+    FORCE_COMMIT: 1,  // will generate merge commit even could fast-forward
+};
 
-    const entry = new NodeGit.IndexEntry();
-    entry.path = subName;
-    entry.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
-    entry.id = NodeGit.Oid.fromString(sha);
-    entry.flags = entry.flagsExtended = 0;
-    yield index.add(entry);
-});
+exports.MODE = MODE;
 
 /**
  * Merge in each submodule and update in memory index accordingly.
@@ -101,14 +92,9 @@ exports.mergeSubmoduleBare = co.wrap(function *(repo,
         const theirCommit = yield subRepo.getCommit(theirSha);
         const ourCommit = yield subRepo.getCommit(ourSha);
 
-        // No change if ours is up-to-date
-        if (yield NodeGit.Graph.descendantOf(subRepo, ourSha, theirSha)) {
-            return result;                                            // RETURN
-        }
-
-        // use their sha if it is a fast forward merge
-        if (yield NodeGit.Graph.descendantOf(subRepo, theirSha, ourSha)) {
-            yield addSubmoduleCommit(mergeIndex, name, theirSha);
+        // Commit forwards or backwards are handled at meta repo level.
+        if ((yield NodeGit.Graph.descendantOf(subRepo, ourSha, theirSha)) ||
+            (yield NodeGit.Graph.descendantOf(subRepo, theirSha, ourSha))) {
             return result;                                            // RETURN
         }
 
@@ -138,7 +124,7 @@ exports.mergeSubmoduleBare = co.wrap(function *(repo,
                                          [ourCommit, theirCommit]);
         const mergeSha = mergeCommit.tostrS();
         result.commits[name] = mergeSha;
-        yield addSubmoduleCommit(mergeIndex, name, mergeSha);
+        yield CherryPickUtil.addSubmoduleCommit(mergeIndex, name, mergeSha);
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), mergeSubmodule);
     return result;
@@ -172,6 +158,7 @@ function formatConflictsMessage(conflicts) {
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     ourCommit
  * @param {NodeGit.Commit}     theirCommit
+ * @param {MODE}               mode
  * @param {String}             commitMessage
  * @return {Object}
  * @return {String|null} return.metaCommit
@@ -181,16 +168,18 @@ function formatConflictsMessage(conflicts) {
 exports.merge = co.wrap(function *(repo,
                                    ourCommit,
                                    theirCommit,
+                                   mode,
                                    commitMessage) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(ourCommit, NodeGit.Commit);
     assert.instanceOf(theirCommit, NodeGit.Commit);
+    assert.isNumber(mode);
     assert.isString(commitMessage);
 
     const baseCommit = yield GitUtil.getMergeBase(repo, ourCommit, theirCommit);
 
     if (null === baseCommit) {
-        throw new UserError(`No commits in common with `+
+        throw new UserError(`No commits in common between `+
             `${colors.red(GitUtil.shortSha(ourCommit.id().tostrS()))} and ` +
             `${colors.red(GitUtil.shortSha(theirCommit.id().tostrS()))}`);
     }
@@ -226,7 +215,7 @@ exports.merge = co.wrap(function *(repo,
                                                     theirCommitSha,
                                                     ourCommitSha);
 
-    if (canFF) {
+    if (canFF && MODE.FORCE_COMMIT !== mode) {
         console.log(`Fast-forward merge: `+
             `${colors.green(theirCommitSha)} is a descendant of `+
             `${colors.green(ourCommitSha)}`);

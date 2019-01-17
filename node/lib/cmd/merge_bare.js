@@ -33,7 +33,7 @@
 const co = require("co");
 
 /**
- * This module contains methods for implementing the `merge` command.
+ * This module contains methods for implementing the `merge-bare` command.
  */
 
 /**
@@ -69,6 +69,12 @@ exports.configureParser = function (parser) {
         help: "their side commitish to merge",
         nargs: 1,
     });
+
+    parser.addArgument(["--no-ff"], {
+        help: "create a merge commit even if fast-forwarding is possible",
+        action: "storeConst",
+        constant: true,
+    });
 };
 
 /**
@@ -79,9 +85,6 @@ exports.configureParser = function (parser) {
  * @param {String} args.commit
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    // TODO: add applicable `git merge` options.
-    // TODO: For now, we will always create a merge commit.  We should be able
-    // to control whether FF is allowed/required for meta and sub repos.
 
     const colors = require("colors");
 
@@ -91,11 +94,13 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const UserError      = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
-
+    const mode = args.no_ff ?
+        MergeBareUtil.MODE.NORMAL :
+        MergeBareUtil.MODE.FORCE_COMMIT;
     let ourCommitName = args.ourCommit;
     let theirCommitName = args.theirCommit;
     if (null === ourCommitName || null === theirCommitName) {
-        throw new UserError("Both two merge commits must be given.");
+        throw new UserError("Two commits must be given.");
     }
     const ourCommitish = yield GitUtil.resolveCommitish(repo, ourCommitName);
     if (null === ourCommitish) {
@@ -115,6 +120,7 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
     const result = yield MergeBareUtil.merge(repo, 
                                              ourCommit,
                                              theirCommit,
+                                             mode,
                                              args.message);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);

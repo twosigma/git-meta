@@ -35,7 +35,8 @@ const assert  = require("chai").assert;
 /**
  * @class SubmoduleChanges.Change
  *
- * This class represents a sha change to a submodule.
+ * This class describes the changes from `oldSha` to `newSha` as well as
+ * the destination that the changes will be appliedd: `ourSha`
  */
 class SubmoduleChange {
 
@@ -44,14 +45,12 @@ class SubmoduleChange {
      * values.  The behavior is undefined if `oldSha === newSha`.  Note that a
      * null `oldSha` implies that the submodule was added, a null `newSha`
      * implies that it was removed, and if neither is null, the submodule was
-     * changed. In a 3 way merge, `oldSha` tracks the merge base, `newSha` 
-     * points to their commit and `ourSha` is usually the same as the HEAD.
-     * In case it is not or the HEAD sha is unavailable, we can explicitly
-     * point `ourSha` to a perticular target commit.
+     * changed. In a 3 way merge, `oldSha` is the merge base, `newSha` is the 
+     * right side of the merge and `ourSha` is the left side.
      *
-     * @param {String | null} oldSha
-     * @param {String | null} newSha
-     * @param {String | null} ourSha
+     * @param {String | null} oldSha sha from which changes are computed
+     * @param {String | null} newSha sha to which changes are computed
+     * @param {String | null} ourSha sha against which changes will be applied
      */
     constructor(oldSha, newSha, ourSha) {
         assert.notEqual(oldSha, newSha);

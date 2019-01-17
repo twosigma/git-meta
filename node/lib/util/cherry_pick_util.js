@@ -138,7 +138,32 @@ exports.changeSubmodules = co.wrap(function *(repo,
 });
 
 /**
- * Similar to exports.changeSubmodules, but operates in bare repo.
+* Update meta repo index and point the submodule to a commit sha
+* 
+* @param {NodeGit.Index} index
+* @param {String} subName
+* @param {String} sha
+*/
+exports.addSubmoduleCommit = co.wrap(function *(index, subName, sha) {
+   assert.instanceOf(index, NodeGit.Index);
+   assert.isString(subName);
+   assert.isString(sha);
+
+   const entry = new NodeGit.IndexEntry();
+   entry.path = subName;
+   entry.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
+   entry.id = NodeGit.Oid.fromString(sha);
+   entry.flags = entry.flagsExtended = 0;
+   yield index.add(entry);
+});
+
+/**
+ * Similar to exports.changeSubmodules, but it:
+ * 1. operates in bare repo
+ * 2. does not make any changes to the working directory
+ * 3. only deals with simple changes like addition, deletions 
+ * and fast-forwards
+ * 
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index         meta repo's change index
  * @param {Object}             submodules    name to Submodule
@@ -153,7 +178,6 @@ exports.changeSubmodulesBare = co.wrap(function *(repo,
         return;                                                       // RETURN
     }
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
-    const changes = {};
     for (let name in submodules) {
         // Each sub object is either a {Submodule} object or null, it covers
         // three types of change: addition, deletions and fast-forwards.
@@ -165,24 +189,11 @@ exports.changeSubmodulesBare = co.wrap(function *(repo,
         //  new index entry to the meta index and add `sub.url` for updates.
         const sub = submodules[name];
         if (null === sub) {
-            changes[name] = null;
             delete urls[name];
             continue;
         }
-        changes[name] = new TreeUtil.Change(NodeGit.Oid.fromString(sub.sha),
-                                            NodeGit.TreeEntry.FILEMODE.COMMIT);
+        yield exports.addSubmoduleCommit(index, name, sub.sha);
         urls[name] = sub.url;
-    }
-    for (let name in changes) {
-        const change = changes[name];
-        if (change !== null) {
-            const entry = new NodeGit.IndexEntry();
-            entry.path = name;
-            entry.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
-            entry.id = change.id;
-            entry.flags = entry.flagsExtended = 0;
-            yield index.add(entry);    
-        }
     }
     // write urls to the in-memory index
     yield SubmoduleConfigUtil.writeUrls(repo, index, urls, true);
@@ -304,7 +315,7 @@ const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
 exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo, 
                                                              index, 
                                                              srcCommit, 
-                                                             targetCommit){
+                                                             targetCommit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
     assert.instanceOf(srcCommit, NodeGit.Commit);
