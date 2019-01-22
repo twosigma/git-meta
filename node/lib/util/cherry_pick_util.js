@@ -116,7 +116,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
             yield rmrf(name);
         }
         else if (yield opener.isOpen(name)) {
-            const subRepo = yield opener.getSubrepo(name);
+            const subRepo = yield opener.getSubrepo(name, false);
             yield fetcher.fetchSha(subRepo, name, sub.sha);
             const commit = yield subRepo.getCommit(sub.sha);
             yield GitUtil.setHeadHard(subRepo, commit);
@@ -135,6 +135,68 @@ exports.changeSubmodules = co.wrap(function *(repo,
     const newTree = yield TreeUtil.writeTree(repo, parentTree, changes);
     yield index.readTree(newTree);
     yield SubmoduleConfigUtil.writeUrls(repo, index, urls);
+});
+
+/**
+* Update meta repo index and point the submodule to a commit sha
+* 
+* @param {NodeGit.Index} index
+* @param {String} subName
+* @param {String} sha
+*/
+exports.addSubmoduleCommit = co.wrap(function *(index, subName, sha) {
+   assert.instanceOf(index, NodeGit.Index);
+   assert.isString(subName);
+   assert.isString(sha);
+
+   const entry = new NodeGit.IndexEntry();
+   entry.path = subName;
+   entry.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
+   entry.id = NodeGit.Oid.fromString(sha);
+   entry.flags = entry.flagsExtended = 0;
+   yield index.add(entry);
+});
+
+/**
+ * Similar to exports.changeSubmodules, but it:
+ * 1. operates in bare repo
+ * 2. does not make any changes to the working directory
+ * 3. only deals with simple changes like addition, deletions 
+ * and fast-forwards
+ * 
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index         meta repo's change index
+ * @param {Object}             submodules    name to Submodule
+ */
+exports.changeSubmodulesBare = co.wrap(function *(repo,
+                                                  index,
+                                                  submodules) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.isObject(submodules);
+    if (0 === Object.keys(submodules).count) {
+        return;                                                       // RETURN
+    }
+    const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+    for (let name in submodules) {
+        // Each sub object is either a {Submodule} object or null, it covers
+        // three types of change: addition, deletions and fast-forwards.
+        // (see {computeChangesBetweenTwoCommits})
+        // In case of deletion, we remove its url from the urls array, update
+        //  the .gitmodule file with `writeUrls` and skip adding the submodule
+        //  to the meta index.
+        // In other case we bump the submodule sha to `sub.sha` by adding a
+        //  new index entry to the meta index and add `sub.url` for updates.
+        const sub = submodules[name];
+        if (null === sub) {
+            delete urls[name];
+            continue;
+        }
+        yield exports.addSubmoduleCommit(index, name, sub.sha);
+        urls[name] = sub.url;
+    }
+    // write urls to the in-memory index
+    yield SubmoduleConfigUtil.writeUrls(repo, index, urls, true);
 });
 
 /**
@@ -234,37 +296,36 @@ const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
 
 /**
  * Determine how to apply the submodule changes introduced in the
- * specified `targetCommit` to the commit on the head of the specified `repo`
+ * specified `srcCommit` to the commit `targetCommit` of the specified repo
  * as described in the specified in-memory `index`.  Return an object
  * describing what changes to make, including which submodules cannot be
  * updated at all due to a conflicts, such as a change being introduced to a
  * submodule that does not exist in HEAD.  Throw a `UserError` if non-submodule
  * changes are detected.  The behavior is undefined if there is no merge base
- * between HEAD and `commit`.
- *
- * Note that this method will cause conflicts in `index` to be cleaned up.
- *
+ * between `srcCommit` and the `targetCommit`.
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index
+ * @param {NodeGit.Commit}     srcCommit
  * @param {NodeGit.Commit}     targetCommit
  * @return {Object} return
  * @return {Object} return.changes        from sub name to `SubmoduleChange`
  * @return {Object} return.simpleChanges  from sub name to `Submodule` or null
  * @return {Object} return.conflicts      from sub name to `Conflict`
- */
-exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
+ * */
+exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo, 
+                                                             index, 
+                                                             srcCommit, 
+                                                             targetCommit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
+    assert.instanceOf(srcCommit, NodeGit.Commit);
     assert.instanceOf(targetCommit, NodeGit.Commit);
-
-    const head = yield repo.getHeadCommit();
     const conflicts = {};
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
                                                                  repo,
                                                                  targetCommit);
 
     // Group together all parts of conflicted entries.
-
     const conflictEntries = new Map();  // name -> normal, ours, theirs
     const entries = index.entries();
     for (const entry of entries) {
@@ -297,7 +358,7 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
     }
 
     const libgit2MergeBugData = {
-        head: head,
+        head: srcCommit,
         targetCommit: targetCommit
     };
     for (const [name, entries] of conflictEntries) {
@@ -312,7 +373,8 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
             COMMIT === ours.mode &&
             COMMIT === theirs.mode) {
             changes[name] = new SubmoduleChange(ancestor.id.tostrS(),
-                                                theirs.id.tostrS());
+                                                theirs.id.tostrS(),
+                                                ours.id.tostrS());
         } else if (SubmoduleConfigUtil.modulesFileName !== name) {
             conflicts[name] = new Conflict(makeConflict(ancestor),
                                            makeConflict(ours),
@@ -330,8 +392,8 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
     const simpleChanges = {};
     const treeId = yield index.writeTreeTo(repo);
     const tree = yield NodeGit.Tree.lookup(repo, treeId);
-    const headTree = yield head.getTree();
-    const diff = yield NodeGit.Diff.treeToTree(repo, headTree, tree, null);
+    const srcTree = yield srcCommit.getTree();
+    const diff = yield NodeGit.Diff.treeToTree(repo, srcTree, tree, null);
     const treeChanges =
                   yield SubmoduleUtil.getSubmoduleChangesFromDiff(diff, false);
     for (let name in treeChanges) {
@@ -384,7 +446,7 @@ exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
     };
     const fetcher = yield opener.fetcher();
     const pickSub = co.wrap(function *(name) {
-        const repo = yield opener.getSubrepo(name);
+        const repo = yield opener.getSubrepo(name, false);
         const change = subs[name];
         const commitText = "(" + GitUtil.shortSha(change.oldSha) + ".." +
             GitUtil.shortSha(change.newSha) + "]";
@@ -409,6 +471,39 @@ ${colors.green(commitText)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), pickSub);
+    return result;
+});
+
+/**
+ * Determine how to apply the submodule changes introduced in the
+ * specified `targetCommit` to the commit on the head of the specified `repo`
+ * as described in the specified in-memory `index`.  Return an object
+ * describing what changes to make, including which submodules cannot be
+ * updated at all due to a conflicts, such as a change being introduced to a
+ * submodule that does not exist in HEAD.  Throw a `UserError` if non-submodule
+ * changes are detected.  The behavior is undefined if there is no merge base
+ * between HEAD and `targetCommit`.
+ *
+ * Note that this method will cause conflicts in `index` to be cleaned up.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Index}      index
+ * @param {NodeGit.Commit}     targetCommit
+ * @return {Object} return
+ * @return {Object} return.changes        from sub name to `SubmoduleChange`
+ * @return {Object} return.simpleChanges  from sub name to `Submodule` or null
+ * @return {Object} return.conflicts      from sub name to `Conflict`
+ */
+exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(index, NodeGit.Index);
+    assert.instanceOf(targetCommit, NodeGit.Commit);
+
+    const head = yield repo.getHeadCommit();
+    const result = yield exports.computeChangesBetweenTwoCommits(repo,
+                                                                 index,
+                                                                 head,
+                                                                 targetCommit);
     return result;
 });
 

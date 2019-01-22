@@ -427,7 +427,8 @@ exports.getSubmoduleChangesFromDiff = function (diff, allowMetaChanges) {
                 if (COMMIT === newFile.mode()) {
                     result[path] = new SubmoduleChange(
                                                  delta.oldFile().id().tostrS(),
-                                                 newFile.id().tostrS());
+                                                 newFile.id().tostrS(), 
+                                                 null);
                 } else if (!allowMetaChanges && path !== modulesFileName) {
                     throw new UserError(`\
 Modification to meta-repo file ${colors.red(path)} is not supported.`);
@@ -438,7 +439,8 @@ Modification to meta-repo file ${colors.red(path)} is not supported.`);
                 const path = newFile.path();
                 if (COMMIT === newFile.mode()) {
                     result[path] = new SubmoduleChange(null,
-                                                       newFile.id().tostrS());
+                                                       newFile.id().tostrS(),
+                                                       null);
                 } else if (!allowMetaChanges && path !== modulesFileName) {
                     throw new UserError(`\
 Addition to meta-repo of file ${colors.red(path)} is not supported.`);
@@ -449,6 +451,7 @@ Addition to meta-repo of file ${colors.red(path)} is not supported.`);
                 const path = oldFile.path();
                 if (COMMIT === oldFile.mode()) {
                     result[path] = new SubmoduleChange(oldFile.id().tostrS(),
+                                                       null,
                                                        null);
                 } else if (!allowMetaChanges && path !== modulesFileName) {
                     throw new UserError(`\

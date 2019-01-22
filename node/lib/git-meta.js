@@ -47,6 +47,7 @@ const Forward      = require("./cmd/forward");
 const include      = require("./cmd/include");
 const listFiles    = require("./cmd/list_files");
 const merge        = require("./cmd/merge");
+const mergeBare    = require("./cmd/merge_bare");
 const open         = require("./cmd/open");
 const pull         = require("./cmd/pull");
 const push         = require("./cmd/push");
@@ -135,6 +136,7 @@ const commands = {
     "include": include,
     "ls-files": listFiles,
     "merge": merge,
+    "merge-bare": mergeBare,
     "add-submodule": addSubmodule,
     "open": open,
     "pull": pull,

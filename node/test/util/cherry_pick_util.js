@@ -252,7 +252,7 @@ describe("computeChangesFromIndex", function () {
 a=B:Ca-1;Cb-1;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;Ct-2 s=Sa:b;Bt=t;Bmaster=3`,
             changes: {
-                "s": new SubmoduleChange("1", "b"),
+                "s": new SubmoduleChange("1", "b", null),
             },
         },
         "addition": {
@@ -360,7 +360,8 @@ x=U:C3-2 s=Sa:a;Ct-2 s;Bt=t;Bmaster=3`,
             for (let name in result.changes) {
                 const change = result.changes[name];
                 changes[name] = new SubmoduleChange(commitMap[change.oldSha],
-                                                    commitMap[change.newSha]);
+                                                    commitMap[change.newSha],
+                                                    null);
             }
             assert.deepEqual(changes, c.changes || {});
 
@@ -419,7 +420,8 @@ x=S:C2-1 s=Sa:1;C3-2 s=Sa:a;Ct-2 s=Sa:b;Bmaster=3;Bt=t`
 
         const change = result.changes.s;
         const expect = new SubmoduleChange(reverseCommitMap["1"],
-                                           reverseCommitMap.b);
+                                           reverseCommitMap.b,
+                                           reverseCommitMap.a);
         assert.deepEqual(expect, change);
     }));
 });
@@ -437,7 +439,7 @@ describe("pickSubs", function () {
         "pick a sub": {
             state: `a=B:Ca-1;Cb-1;Ba=a;Bb=b|x=U:C3-2 s=Sa:a;H=3`,
             subs: {
-                "s": new SubmoduleChange("1", "b"),
+                "s": new SubmoduleChange("1", "b", null),
             },
             expected: `x=E:Os Cbs-a b=b!H=bs;I s=Sa:bs`,
         },
@@ -447,8 +449,8 @@ a=B:Ca-1;Caa-1;Cb-1;Cc-b;Ba=a;Bb=b;Bc=c;Baa=aa|
 x=U:C3-2 s=Sa:a,t/u=Sa:a;H=3
 `,
             subs: {
-                "s": new SubmoduleChange("1", "aa"),
-                "t/u": new SubmoduleChange("1", "c"),
+                "s": new SubmoduleChange("1", "aa", null),
+                "t/u": new SubmoduleChange("1", "c", null),
             },
             expected: `
 x=E:Os Caas-a aa=aa!H=aas;Ot/u Cct/u-bt/u c=c!Cbt/u-a b=b!H=ct/u;
@@ -457,7 +459,7 @@ x=E:Os Caas-a aa=aa!H=aas;Ot/u Cct/u-bt/u c=c!Cbt/u-a b=b!H=ct/u;
         "a conflict": {
             state: `a=B:Ca-1;Cb-1 a=foo;Ba=a;Bb=b|x=U:C3-2 s=Sa:a;H=3`,
             subs: {
-                "s": new SubmoduleChange("1", "b"),
+                "s": new SubmoduleChange("1", "b", null),
             },
             conflicts: {
                 "s": "b",
@@ -475,7 +477,7 @@ foo
 a=B:Ca-1;Cb-1;Cc-b a=foo;Ba=a;Bb=b;Bc=c|
 x=U:C3-2 s=Sa:a;H=3`,
             subs: {
-                "s": new SubmoduleChange("1", "c"),
+                "s": new SubmoduleChange("1", "c", null),
             },
             conflicts: {
                 "s": "c",
@@ -501,7 +503,8 @@ foo
             Object.keys(c.subs).forEach(name => {
                 const change = c.subs[name];
                 subs[name] = new SubmoduleChange(reverseMap[change.oldSha],
-                                                 reverseMap[change.newSha]);
+                                                 reverseMap[change.newSha],
+                                                 null);
             });
             const opener = new Open.Opener(repo, null);
             const result = yield CherryPickUtil.pickSubs(repo,

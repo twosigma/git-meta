@@ -456,7 +456,7 @@ describe("SubmoduleUtil", function () {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "2",
                 result: {
-                    "x": new SubmoduleChange(null, "1"),
+                    "x": new SubmoduleChange(null, "1", null),
                 },
                 allowMetaChanges: false,
             },
@@ -464,8 +464,8 @@ describe("SubmoduleUtil", function () {
                 state: "S:C2-1 a=Sa:1,x=Sa:1;H=2",
                 from: "2",
                 result: {
-                    a: new SubmoduleChange(null, "1"),
-                    x: new SubmoduleChange(null, "1"),
+                    a: new SubmoduleChange(null, "1", null),
+                    x: new SubmoduleChange(null, "1", null),
                 },
                 allowMetaChanges: true,
             },
@@ -473,7 +473,7 @@ describe("SubmoduleUtil", function () {
                 state: "S:C3-2 a=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {
-                    a: new SubmoduleChange("1", "2"),
+                    a: new SubmoduleChange("1", "2", null),
                 },
                 allowMetaChanges: true,
             },
@@ -487,8 +487,8 @@ describe("SubmoduleUtil", function () {
                 state: "S:C3-2 a=Sa:2,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {
-                    a: new SubmoduleChange("1", "2"),
-                    c: new SubmoduleChange(null, "2"),
+                    a: new SubmoduleChange("1", "2", null),
+                    c: new SubmoduleChange(null, "2", null),
                 },
                 allowMetaChanges: true,
             },
@@ -496,7 +496,7 @@ describe("SubmoduleUtil", function () {
                 state: "S:C3-2 a;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {
-                    a: new SubmoduleChange("1", null),
+                    a: new SubmoduleChange("1", null, null),
                 },
                 allowMetaChanges: false,
             },
@@ -504,8 +504,8 @@ describe("SubmoduleUtil", function () {
                 state: "S:C3-2 a,c=Sa:2;C2-1 a=Sa:1,x=Sa:1;H=3",
                 from: "3",
                 result: {
-                    c: new SubmoduleChange(null, "2"),
-                    a: new SubmoduleChange("1", null),
+                    c: new SubmoduleChange(null, "2", null),
+                    a: new SubmoduleChange("1", null, null),
                 },
                 allowMetaChanges: true,
             },
@@ -560,7 +560,7 @@ describe("SubmoduleUtil", function () {
                     assert.instanceOf(change, SubmoduleChange);
                     const oldSha = change.oldSha && commitMap[change.oldSha];
                     const newSha = change.newSha && commitMap[change.newSha];
-                    changes[name] = new SubmoduleChange(oldSha, newSha);
+                    changes[name] = new SubmoduleChange(oldSha, newSha, null);
                 });
                 assert.deepEqual(changes, c.result);
             }));
@@ -583,7 +583,7 @@ describe("SubmoduleUtil", function () {
                 state: "S:C2-1 x=Sa:1;H=2",
                 from: "2",
                 result: {
-                    "x": new SubmoduleChange(null, "1"),
+                    "x": new SubmoduleChange(null, "1", null),
                 },
                 allowMetaChanges: false,
             },
@@ -591,7 +591,7 @@ describe("SubmoduleUtil", function () {
                 state: "S:C3-2 w=Sa:1;C2-1 x=Sa:1;H=3",
                 from: "3",
                 result: {
-                    "w": new SubmoduleChange(null, "1"),
+                    "w": new SubmoduleChange(null, "1", null),
                 },
                 allowMetaChanges: false,
             },
@@ -600,8 +600,8 @@ describe("SubmoduleUtil", function () {
                 from: "3",
                 base: "1",
                 result: {
-                    "x": new SubmoduleChange(null, "1"),
-                    "w": new SubmoduleChange(null, "1"),
+                    "x": new SubmoduleChange(null, "1", null),
+                    "w": new SubmoduleChange(null, "1", null),
                 },
                 allowMetaChanges: false,
             },
@@ -652,7 +652,7 @@ describe("SubmoduleUtil", function () {
                     assert.instanceOf(change, SubmoduleChange);
                     const oldSha = change.oldSha && commitMap[change.oldSha];
                     const newSha = change.newSha && commitMap[change.newSha];
-                    changes[name] = new SubmoduleChange(oldSha, newSha);
+                    changes[name] = new SubmoduleChange(oldSha, newSha, null);
                 });
                 assert.deepEqual(changes, c.result);
             }));
@@ -663,15 +663,15 @@ describe("SubmoduleUtil", function () {
             "one": {
                 state: "S:C2-1 foo=Sa:1;H=2",
                 commit: "2",
-                expected: { foo: new Submodule("a", "1") },
+                expected: { foo: new Submodule("a", "1", null) },
                 names: null,
             },
             "two": {
                 state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
                 commit: "2",
                 expected: {
-                    foo: new Submodule("a", "1"),
-                    bar: new Submodule("a", "1"),
+                    foo: new Submodule("a", "1", null),
+                    bar: new Submodule("a", "1", null),
                 },
                 names: null,
             },
@@ -691,14 +691,14 @@ describe("SubmoduleUtil", function () {
                 state: "S:C2-1 foo=Sa:1,bar=Sa:1;H=2",
                 commit: "2",
                 expected: {
-                    bar: new Submodule("a", "1"),
+                    bar: new Submodule("a", "1", null),
                 },
                 names: ["bar"],
             },
             "from later commit": {
                 state: "S:C2-1 x=S/a:1;C3-2 x=S/a:2;H=3",
                 commit: "3",
-                expected: { x: new Submodule("/a", "2") },
+                expected: { x: new Submodule("/a", "2", null) },
                 names: null,
             },
              "none": {
@@ -723,7 +723,9 @@ describe("SubmoduleUtil", function () {
                 Object.keys(result).forEach((name) => {
                     const resultSub = result[name];
                     const commit = written.commitMap[resultSub.sha];
-                    mappedResult[name] = new Submodule(resultSub.url, commit);
+                    mappedResult[name] = new Submodule(resultSub.url,
+                                                       commit,
+                                                       null);
                 });
                 assert.deepEqual(mappedResult, c.expected);
             }));

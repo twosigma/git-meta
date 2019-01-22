@@ -127,7 +127,11 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         // to open other (probably unaffected) repositories.
 
         try {
-            yield Open.openOnCommit(fetcher, name, shas[index], templatePath);
+            yield Open.openOnCommit(fetcher,
+                                    name,
+                                    shas[index],
+                                    templatePath,
+                                    false);
             subsOpenSuccessfully.push(name);
         }
         catch (e) {
