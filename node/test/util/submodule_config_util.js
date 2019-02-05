@@ -672,7 +672,8 @@ foo
                                                                      repo,
                                                                      subName,
                                                                      url,
-                                                                     null);
+                                                                     null,
+                                                                     false);
             assert.instanceOf(result, NodeGit.Repository);
             assert(TestUtil.isSameRealPath(result.workdir(),
                                            path.join(repoPath, subName)));
@@ -714,7 +715,8 @@ foo
                                                                repo,
                                                                "foo",
                                                                url,
-                                                               null);
+                                                               null,
+                                                               false);
             const remote = yield newSub.getRemote("origin");
             const newUrl = remote.url();
             assert.equal(newUrl, url);
@@ -789,7 +791,8 @@ foo
                                                            repo,
                                                            "foo",
                                                            url,
-                                                           templateDir);
+                                                           templateDir,
+                                                           false);
 
             const copiedPath = path.join(repo.path(),
                                          "modules",

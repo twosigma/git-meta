@@ -317,7 +317,9 @@ exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
 
             return;                                                   // RETURN
         }
-        const subRepo = yield opener.getSubrepo(name, false);
+        const subRepo =
+            yield opener.getSubrepo(name,
+                                    Open.SUB_OPEN_OPTION.FORCE_OPEN);
 
         // Try to get the comit for the stash; if it's missing, fail.
 

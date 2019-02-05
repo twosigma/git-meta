@@ -219,7 +219,9 @@ exports.reset = co.wrap(function *(repo, commit, type) {
         // Open the submodule and fetch the sha of the commit to which we're
         // resetting in case we don't have it.
 
-        const subRepo = yield opener.getSubrepo(name, false);
+        const subRepo =
+            yield opener.getSubrepo(name,
+                                    Open.SUB_OPEN_OPTION.FORCE_OPEN);
 
         let subCommitSha;
 

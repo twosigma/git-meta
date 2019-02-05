@@ -34,13 +34,15 @@ const assert       = require("chai").assert;
 const co           = require("co");
 const colors       = require("colors");
 
-const MergeBareUtil     = require("../../lib//util/merge_bare_util");
+const MergeUtil         = require("../../lib/util/merge_util");
+const Open              = require("../../lib/util/open");
+const MergeCommon       = require("../../lib//util/merge_common");
 const RepoASTTestUtil   = require("../../lib/util/repo_ast_test_util");
 
 describe("MergeBareUtil", function () {
     describe("merge_with_all_cases", function () {
         // Similar to tests of merge, but with no need for a working directory.
-        const MODE = MergeBareUtil.MODE;
+        const MODE = MergeCommon.MODE;
         const cases = {
             "3 way merge in bare": {
                 initial: `
@@ -207,6 +209,7 @@ a=B:Ca-1;Cb-1;Ba=a;Bb=b|
 x=S:C2-1 s=Sa:a;C3-1 s=Sa:b;Bmaster=2;Bfoo=3`,
                 theirCommit: "3",
                 ourCommit: "2",
+                fails: true,
                 errorMessage: `\
 CONFLICT (content): 
 Conflicting entries for submodule: ${colors.red("s")}
@@ -219,6 +222,7 @@ a=B:Ca-1 README.md=8;Cb-1 README.md=9;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 theirCommit: "4",
                 ourCommit: "3",
+                fails: true,
                 errorMessage: `\
 CONFLICT (content): 
 Conflicting entries for submodule: ${colors.red("s")}
@@ -288,11 +292,15 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                         message = "message\n";
                     }
                     const mode = !("mode" in c) ? MODE.FORCE_COMMIT : c.mode;
-                    const result = yield MergeBareUtil.merge(x,
-                                                             ourCommit,
-                                                             theirCommit,
-                                                             mode,
-                                                             message);
+                    const openOption = Open.SUB_OPEN_OPTION.FORCE_BARE;
+                    const defaultEditor = function () {};
+                    const result = yield MergeUtil.merge(x,
+                                                        ourCommit,
+                                                        theirCommit,
+                                                        mode,
+                                                        openOption,
+                                                        message,
+                                                        defaultEditor);
                     const errorMessage = c.errorMessage || null;
                     assert.equal(result.errorMessage, errorMessage);
                     if (upToDate) {

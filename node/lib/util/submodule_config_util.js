@@ -522,7 +522,7 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
                                                   name,
                                                   url,
                                                   templatePath, 
-                                                  bare=false) {
+                                                  bare) {
     if (null !== repoUrl) {
         assert.isString(repoUrl);
     }

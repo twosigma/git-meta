@@ -88,17 +88,19 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const MergeBareUtil  = require("../util/merge_bare_util");
+    const MergeUtil      = require("../util/merge_util");
+    const MergeCommon    = require("../util/merge_common");
     const GitUtil        = require("../util/git_util");
     const Hook           = require("../util/hook");
+    const Open           = require("../util/open");
     const UserError      = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
     const mode = args.no_ff ?
-        MergeBareUtil.MODE.NORMAL :
-        MergeBareUtil.MODE.FORCE_COMMIT;
-    let ourCommitName = args.ourCommit;
-    let theirCommitName = args.theirCommit;
+        MergeCommon.MODE.NORMAL :
+        MergeCommon.MODE.FORCE_COMMIT;
+    let ourCommitName = args.ourCommit[0];
+    let theirCommitName = args.theirCommit[0];
     if (null === ourCommitName || null === theirCommitName) {
         throw new UserError("Two commits must be given.");
     }
@@ -117,11 +119,12 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
 
     const ourCommit = yield repo.getCommit(ourCommitish.id());
     const theirCommit = yield repo.getCommit(theirCommitish.id());
-    const result = yield MergeBareUtil.merge(repo, 
-                                             ourCommit,
-                                             theirCommit,
-                                             mode,
-                                             args.message);
+    const result = yield MergeUtil.merge(repo,
+                                         ourCommit,
+                                         theirCommit,
+                                         mode,
+                                         Open.SUB_OPEN_OPTION.FORCE_BARE,
+                                         args.message);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
     }

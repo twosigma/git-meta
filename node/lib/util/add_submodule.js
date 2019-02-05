@@ -75,7 +75,8 @@ exports.addSubmodule = co.wrap(function *(repo, url, filename, importArg) {
                                                                  repo,
                                                                  filename,
                                                                  url,
-                                                                 templatePath);
+                                                                 templatePath,
+                                                                 false);
     if (null === importArg) {
         return subRepo;                                               // RETURN
     }
