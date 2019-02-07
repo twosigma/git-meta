@@ -107,12 +107,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const colors = require("colors");
 
-    const MergeUtil  = require("../util/merge_util");
-    const GitUtil    = require("../util/git_util");
-    const Hook       = require("../util/hook");
-    const UserError  = require("../util/user_error");
+    const MergeUtil   = require("../util/merge_util");
+    const MergeCommon = require("../util/merge_common");
+    const GitUtil     = require("../util/git_util");
+    const Hook        = require("../util/hook");
+    const Open        = require("../util/open");
+    const UserError   = require("../util/user_error");
 
-    const MODE = MergeUtil.MODE;
+    const MODE = MergeCommon.MODE;
     let mode = MODE.NORMAL;
 
     if (args.ff + args.continue + args.abort + args.no_ff + args.ff_only > 1) {
@@ -167,8 +169,12 @@ Merge of '${commitName}'
         return GitUtil.editMessage(repo, message);
     };
     const commit = yield repo.getCommit(commitish.id());
-    const result =
-          yield MergeUtil.merge(repo, commit, mode, args.message, editMessage);
+    const result = yield MergeUtil.merge(repo,
+                                         commit,
+                                         mode,
+                                         Open.SUB_OPEN_OPTION.ALLOW_BARE,
+                                         args.message,
+                                         editMessage);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
     }

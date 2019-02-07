@@ -40,6 +40,7 @@ const RepoASTTestUtil  = require("../../lib/util/repo_ast_test_util");
 const SubmoduleFetcher = require("../../lib/util/submodule_fetcher");
 const SubmoduleUtil    = require("../../lib/util/submodule_util");
 
+const FORCE_OPEN = Open.SUB_OPEN_OPTION.FORCE_OPEN;
 describe("openOnCommit", function () {
     // Assumption is that 'x' is the target repo.
     // TODO: test for template path usage.  We're just passing it through but
@@ -104,8 +105,8 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U:Os");
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s1 = yield opener.getSubrepo("s", false);
-            const s2 = yield opener.getSubrepo("s", false);
+            const s1 = yield opener.getSubrepo("s", FORCE_OPEN);
+            const s2 = yield opener.getSubrepo("s", FORCE_OPEN);
             const base = yield SubmoduleUtil.getRepo(repo, "s");
             assert.equal(s1, s2, "not re-opened");
             assert.equal(s1.workdir(), base.workdir(), "right path");
@@ -114,8 +115,8 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos("a=B|x=U");
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s1 = yield opener.getSubrepo("s", false);
-            const s2 = yield opener.getSubrepo("s", false);
+            const s1 = yield opener.getSubrepo("s", FORCE_OPEN);
+            const s2 = yield opener.getSubrepo("s", FORCE_OPEN);
             const base = yield SubmoduleUtil.getRepo(repo, "s");
             assert.equal(s1, s2, "not re-opened");
             assert.equal(s1.workdir(), base.workdir(), "right path");
@@ -133,7 +134,7 @@ describe("openOnCommit", function () {
             const repo = w.repos.x;
             const commit = yield repo.getCommit(baseSha);
             const opener = new Open.Opener(repo, commit);
-            const s = yield opener.getSubrepo("s", false);
+            const s = yield opener.getSubrepo("s", FORCE_OPEN);
             const head = yield s.getHeadCommit();
             assert.equal(head.id().tostrS(), subSha);
         }));
@@ -158,7 +159,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s", false);
+            yield opener.getSubrepo("s", FORCE_OPEN);
             const open = yield opener.getOpenSubs();
             assert.deepEqual(Array.from(open), []);
         }));
@@ -183,7 +184,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s", false);
+            yield opener.getSubrepo("s", FORCE_OPEN);
             const opened = yield opener.getOpenedSubs();
             assert.deepEqual(opened, []);
         }));
@@ -192,7 +193,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            yield opener.getSubrepo("s", false);
+            yield opener.getSubrepo("s", FORCE_OPEN);
             const opened = yield opener.getOpenedSubs();
             assert.deepEqual(opened, ["s"]);
         }));
@@ -209,7 +210,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const s = yield opener.getSubrepo("s", false);
+            const s = yield opener.getSubrepo("s", FORCE_OPEN);
             const result = yield opener.isOpen("s");
             assert.equal(true, result);
             const config = yield s.config();

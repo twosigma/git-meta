@@ -44,6 +44,17 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 
 /**
+ * @enum {SUB_OPEN_OPTION}
+ * Flags that describe whether to open a submodule if it is part of a merge.
+ */
+const SUB_OPEN_OPTION = {
+    FORCE_OPEN    : 0, // non-bare repo and open sub if it is part of a merge
+    ALLOW_BARE    : 1, // non-bare repo, do not open submodule unless have to
+    FORCE_BARE    : 2, // bare repo, open submodule is not allowed
+};
+exports.SUB_OPEN_OPTION = SUB_OPEN_OPTION;
+
+/**
  * Open the submodule having the specified `submoduleName` in the meta-repo
  * associated with the specified `fetcher`; fetch the specified `submoduleSha`
  * using `fetcher` and set HEAD to point to it.  Configure the "origin" remote
@@ -157,7 +168,14 @@ Opener.prototype._initialize = co.wrap(function *() {
     if (null === this.d_commit) {
         this.d_commit = yield this.d_repo.getHeadCommit();
     }
-    this.d_subRepos = {};
+
+    // d_cachedSubs: normal subrepo opened and cached by this object
+    // d_cachedAbsorbedSubs: absorbed subrepo opened and cached by this object
+    // d_openSubs: subs that were open when this object was created
+    // d_absorbedSubs: subs that were half open when this object was created
+    this.d_cachedSubs = {};
+    this.d_cachedAbsorbedSubs = {};
+    this.d_openSubs = new Set();
     if (!this.d_repo.isBare()) {
         const openSubsList
             = yield SubmoduleUtil.listOpenSubmodules(this.d_repo);
@@ -202,13 +220,25 @@ Opener.prototype.getOpenedSubs = co.wrap(function*() {
     if (!this.d_initialized) {
         yield this._initialize();
     }
-    const subs = Object.keys(this.d_subRepos);
+    const subs = Object.keys(this.d_cachedSubs);
     return subs.filter(name => !this.d_openSubs.has(name));
 });
 
 /**
- * Return true if the submodule having the specified `subName` is open and
- * false otherwise.
+ * Opener caches all repos that have previously been gotten, this method
+ * removes the sub repo from the absorbed cache given its name. Useful when
+ * the repo was previously opened as bare repo, and later need to be
+ * opened as a normal submodule.
+ * 
+ * @param subName
+ */
+Opener.prototype.clearAbsorbedCache = function (subName) {
+    delete this.d_cachedAbsorbedSubs[subName];
+};
+
+/**
+ * Return true if the submodule having the specified `subName` is fully 
+ * openable, return false otherwise.
  *
  * @param {String} subName
  * @return {Boolean}
@@ -217,12 +247,13 @@ Opener.prototype.isOpen = co.wrap(function *(subName) {
     if (!this.d_initialized) {
         yield this._initialize();
     }
-    return this.d_openSubs.has(subName) || (subName in this.d_subRepos);
+    return this.d_openSubs.has(subName) || (subName in this.d_cachedSubs);
 });
 
 /**
  * Return true if the submodule is opened nor half opened.
  *
+ * @async
  * @param {String} subName
  * @return {Boolean}
  */
@@ -232,12 +263,55 @@ Opener.prototype.isAtLeastHalfOpen = co.wrap(function *(subName) {
     }
     return this.d_absorbedSubs.has(subName) ||
         this.d_openSubs.has(subName) ||
-        (subName in this.d_subRepos);
+        (subName in this.d_cachedSubs) ||
+        (subName in this.d_cachedAbsorbedSubs);
+});
+
+/**
+ * Return true if the submodule is opened as a bare or absorbed repo.
+ * 
+ * @async
+ * @param {String} subName
+ * @return {Boolean}
+ */
+Opener.prototype.isHalfOpened = co.wrap(function *(subName) {
+    if (!this.d_initialized) {
+        yield this._initialize();
+    }
+    return (subName in this.d_cachedAbsorbedSubs);
+});
+
+/**
+ * Get sha of a submodule and open the submodule on that sha
+ * 
+ * @param {String} subName
+ * @returns {NodeGit.Repository} sub repo that is opened.
+ */
+Opener.prototype.fullOpen = co.wrap(function *(subName) {
+    const entry = yield this.d_tree.entryByPath(subName);
+    const sha = entry.sha();
+    console.log(`\
+Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
+    return yield exports.openOnCommit(this.d_fetcher,
+                                      subName,
+                                      sha,
+                                      this.d_templatePath, 
+                                      false);
 });
 
 /**
  * Return the repository for the specified `submoduleName`, opening it if
- * necessary.
+ * necessary based on the expected working directory type:
+ *  1. FORCE_BARE
+ *      - directly return opened absorbed sub if there is one
+ *      - open bare repo otherwise
+ *  2. ALLOW_BARE
+ *      - directly return opened sub if there is one
+ *      - directly return opened absorbed sub if there is one
+ *      - open absorbed sub
+ *  3. FORCE_OPEN
+ *      - directly return opened sub if there is one
+ *      - open normal repo otherwise
  *
  * Note that after opening one or more submodules,
  * `SparseCheckoutUtil.writeMetaIndex` must be called so that `SKIP_WORKTREE`
@@ -245,43 +319,59 @@ Opener.prototype.isAtLeastHalfOpen = co.wrap(function *(subName) {
  * each time a submodule is opened.
  *
  * @param {String}  subName
- * @param {boolean} bare
+ * @param {SUB_OPEN_OPTION}  openOption
  * @return {NodeGit.Repository}
  */
-Opener.prototype.getSubrepo = co.wrap(function *(subName, bare) {
+Opener.prototype.getSubrepo = co.wrap(function *(subName, openOption) {
     if (!this.d_initialized) {
         yield this._initialize();
     }
-    let subRepo = this.d_subRepos[subName];
+    let subRepo = this.d_cachedSubs[subName];
     if (undefined !== subRepo) {
         return subRepo;  // it was found
     }
-    if (bare) {
-        if (this.d_absorbedSubs.has(subName)) {
-            subRepo = yield SubmoduleUtil.getBareRepo(this.d_repo, subName);
-        } else {
-            subRepo = yield exports.openOnCommit(this.d_fetcher,
-                                                 subName,
-                                                 "",
-                                                 this.d_templatePath, 
-                                                 true);
+    if (SUB_OPEN_OPTION.FORCE_OPEN !== openOption) {
+        subRepo = this.d_cachedAbsorbedSubs[subName];
+        if (undefined !== subRepo) {
+            return subRepo;
         }
     }
-    else if (this.d_openSubs.has(subName)) {
-        subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
+    const openable = yield this.isOpen(subName);
+    const halfOpenable = yield this.isAtLeastHalfOpen(subName);
+
+    switch (openOption) {
+        case SUB_OPEN_OPTION.FORCE_BARE:
+            subRepo = halfOpenable ?
+                yield SubmoduleUtil.getBareRepo(this.d_repo, subName) :
+                yield exports.openOnCommit(this.d_fetcher,
+                                           subName,
+                                           "",
+                                           this.d_templatePath, 
+                                           true);
+            this.d_cachedAbsorbedSubs[subName] = subRepo;
+            break;
+        case SUB_OPEN_OPTION.ALLOW_BARE:
+            if (openable) {
+                subRepo = yield SubmoduleUtil.getRepo(this.d_repo, subName);
+                this.d_cachedSubs[subName] = subRepo;
+            } else {
+                subRepo = halfOpenable ?
+                    yield SubmoduleUtil.getBareRepo(this.d_repo, subName) :
+                    yield exports.openOnCommit(this.d_fetcher,
+                                              subName,
+                                               "",
+                                               this.d_templatePath, 
+                                               true);
+                this.d_cachedAbsorbedSubs[subName] = subRepo;
+            }
+            break;
+        default:
+            subRepo = openable ? 
+                yield SubmoduleUtil.getRepo(this.d_repo, subName) :
+                yield this.fullOpen(subName);
+            this.d_cachedSubs[subName] = subRepo;
+            break;
     }
-    else {
-        const entry = yield this.d_tree.entryByPath(subName);
-        const sha = entry.sha();
-        console.log(`\
-Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
-        subRepo = yield exports.openOnCommit(this.d_fetcher,
-                                             subName,
-                                             sha,
-                                             this.d_templatePath, 
-                                             false);
-    }
-    this.d_subRepos[subName] = subRepo;
     return subRepo;
 });
 exports.Opener = Opener;

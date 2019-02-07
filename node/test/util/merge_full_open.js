@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Two Sigma Open Source
+ * Copyright (c) 2019, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,74 +67,7 @@ function mapReturnedCommits(result, maps) {
     };
 }
 
-describe("MergeUtil", function () {
-    describe("fastForwardMerge", function () {
-        const cases = {
-            "simple": {
-                initial: "a=B|x=S:C2-1 q=Sa:1;Bfoo=2",
-                commit: "2",
-                expected: "x=E:Bmaster=2",
-            },
-            "simple detached": {
-                initial: "a=B|x=S:C2-1 u=Sa:1;Bfoo=2;*=",
-                commit: "2",
-                expected: "x=E:H=2",
-            },
-            "with submodule": {
-                initial: "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3",
-                commit: "3",
-                expected: "x=E:Bmaster=3",
-            },
-            "with open submodule": {
-                initial: "a=B:Ca-1;Ba=a|x=U:C3-2 s=Sa:a;Bfoo=3;Os",
-                commit: "3",
-                expected: "x=E:Bmaster=3;Os H=a",
-            },
-            "with open submodule and change": {
-                initial: `
-a=B:Ca-1;Ba=a|
-x=U:C3-2 s=Sa:a;Bfoo=3;Os W README.md=3`,
-                commit: "3",
-                expected: "x=E:Bmaster=3;Os H=a!W README.md=3",
-            },
-            "with open submodule and conflict": {
-                initial: `
-a=B:Ca-1;Ba=a|
-x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
-                commit: "3",
-                fails: true,
-            },
-            "ff merge adding submodule": {
-                initial: "a=S|x=U:Bfoo=1;*=foo",
-                commit: "2",
-                expected: "x=E:Bfoo=2",
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            const ffwd = co.wrap(function *(repos, maps) {
-                const x = repos.x;
-                const reverseCommitMap = maps.reverseCommitMap;
-                assert.property(reverseCommitMap, c.commit);
-                const physicalCommit = reverseCommitMap[c.commit];
-                const commit = yield x.getCommit(physicalCommit);
-                const message = c.message || "message\n";
-                yield MergeUtil.fastForwardMerge(x,
-                                                 commit,
-                                                 message);
-                return {
-                    commitMap: {},
-                };
-            });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
-                                                               c.expected,
-                                                               ffwd,
-                                                               c.fails);
-            }));
-        });
-    });
-
+describe("MergeFullOpen", function () {
     describe("merge", function () {
         // Will do merge from repo `x`.  A merge commit in the meta-repo will
         // be named `x`; any merge commits in the sub-repos will be given the
@@ -183,7 +116,7 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
                 fromCommit: "3",
                 fails: true,
             },
-            "trivial -- nothing to do": {
+            "trivial -- nothing to do xxxx": {
                 initial: "x=S",
                 fromCommit: "1",
             },
@@ -226,7 +159,7 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
 a=B:Ca-1;Cb-1;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 s=Sa:s;Bmaster=x",
+                expected: "x=E:Cx-3,4 s=Sa:s;Bmaster=x;Os Cs-a,b b=b",
             },
             "one merge, but ff only": {
                 initial: `
@@ -242,7 +175,7 @@ a=B:Ca-1;Cb-1;Ba=a;Bb=b|
 x=U:C3-2 s=Sa:a;C5-4 t=Sa:b;C4-2 s=Sa:b;Bmaster=3;Bfoo=5`,
                 fromCommit: "5",
                 expected: `
-x=E:Cx-3,5 t=Sa:b,s=Sa:s;Bmaster=x`,
+x=E:Cx-3,5 t=Sa:b,s=Sa:s;Bmaster=x;Os Cs-a,b b=b`,
             },
             "one merge with editor": {
                 initial: `
@@ -251,7 +184,7 @@ x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
                 editMessage: () => Promise.resolve("foo\nbar\n# baz\n"),
                 expected: `
-x=E:Cfoo\nbar\n#x-3,4 s=Sa:s;Bmaster=x`,
+x=E:Cfoo\nbar\n#x-3,4 s=Sa:s;Bmaster=x;Os Cfoo\nbar\n#s-a,b b=b`,
                 message: null,
             },
             "one merge with empty message": {
@@ -330,7 +263,7 @@ x=U:C3-2 s=Sa:b;C4-2 q=Sa:a;Bmaster=3;Bfoo=4`,
 a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|
 x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
-                expected: "x=E:Cx-3,4 s=Sa:s;Bmaster=x",
+                expected: "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
             },
             "non-ffmerge with non-ffwd submodule change, sub already open": {
                 initial: `
@@ -379,8 +312,8 @@ x=S:C2-1 s=Sa:1;C3-1 t=Sa:1;Bmaster=2;Bfoo=3`,
 a=B:Ca-1;Cb-1;Ba=a;Bb=b|
 x=S:C2-1 s=Sa:a;C3-1 s=Sa:b;Bmaster=2;Bfoo=3`,
                 fromCommit: "3",
-                expected: `x=E:Qmessage\n#M 2: 3: 0 3;I *s=~*S:a*S:b`,
                 fails: true,
+                expected: `x=E:Qmessage\n#M 2: 3: 0 3;I *s=~*S:a*S:b`,
                 errorMessage: `\
 Conflicting entries for submodule ${colors.red("s")}
 `,
@@ -468,8 +401,7 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                     }
                     const defaultEditor = function () {};
                     const editMessage = c.editMessage || defaultEditor;
-                    const openOption = Open.SUB_OPEN_OPTION.ALLOW_BARE;
-
+                    const openOption = Open.SUB_OPEN_OPTION.FORCE_OPEN;
                     const result = yield MergeUtil.merge(x,
                                                          null,
                                                          commit,
@@ -479,121 +411,15 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                                                          editMessage);
                     const errorMessage = c.errorMessage || null;
                     assert.equal(result.errorMessage, errorMessage);
-                    
                     if (upToDate) {
                         assert.isNull(result.metaCommit);
                         return;                                       // RETURN
-                    }
-
-                    if (!result.metaCommit) {
-                        return;
                     }
                     return mapReturnedCommits(result, maps);
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
                                                                expected || {},
                                                                doMerge,
-                                                               c.fails);
-            }));
-        });
-    });
-    describe("continue", function () {
-        const cases = {
-            "no merge": {
-                initial: "x=S",
-                fails: true,
-            },
-            "continue in meta": {
-                initial: `
-x=S:C2-1;C3-1;Bmaster=2;I baz=bam;Qhi\n#M 2: 3: 0 3;Bfoo=3`,
-                expected: "x=E:Chi\n#x-2,3 baz=bam;Bmaster=x;Q;I baz=~",
-            },
-            "cheap continue in meta": {
-                initial: "x=S:C2;Qhi\n#M 1: 2: 0 2;B2=2",
-                expected: "x=E:Chi\n#x-1,2 ;Bmaster=x;Q",
-            },
-            "continue with extra in non-continue sub": {
-                initial: `
-a=B|
-x=U:C3-1;Qhi\n#M 2: 3: 0 3;B3=3;Os I README.md=8`,
-                expected: `
-x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;Q;Os Chi\n#s-1 README.md=8!H=s`,
-            },
-            "continue in a sub": {
-                initial: `
-a=B:Ca;Ba=a|
-x=U:C3-1;Qhi\n#M 2: 3: 0 3;B3=3;Os I README.md=8!Qyo\n#M 1: a: 0 a!Ba=a`,
-                expected: `
-x=E:Chi\n#x-2,3 s=Sa:s;Bmaster=x;Q;Os Cyo\n#s-1,a README.md=8!H=s!Ba=a`,
-            },
-            "continue in one sub, done in another": {
-                initial: `
-a=B:Ca-1;Cac-1 a=2;Cb-1;Cmab-a,b b=b;Bmab=mab;Bb=b;Ba=a;Bac=ac|
-x=S:C2-1 s=Sa:1,t=Sa:1;
-    C3-2 s=Sa:a,t=Sa:a;
-    C4-2 s=Sa:ac,t=Sa:b;
-    Bmaster=3;Bfoo=4;
-    Qhi\n#M 3: 4: 0 4;
-    Os I a=foo!Qyou\n#M a: ac: 0 ac!Bac=ac;
-    Ot H=mab`,
-                expected: `
-x=E:Chi\n#x-3,4 s=Sa:s,t=Sa:mab;Bmaster=x;Q;
-  Os Cyou\n#s-a,ac a=foo!H=s!Bac=ac;
-  Ot`,
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            const doContinue = co.wrap(function *(repos, maps) {
-                const repo = repos.x;
-                const result = yield MergeUtil.continue(repo);
-                return mapReturnedCommits(result, maps);
-            });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
-                                                               c.expected,
-                                                               doContinue,
-                                                               c.fails);
-            }));
-        });
-    });
-    describe("abort", function() {
-        const cases = {
-            "no merge": {
-                initial: "x=S",
-                fails: true,
-            },
-            "noop": {
-                initial: "x=S:Qfoo#M 1: 1: 0 1",
-                expected: "x=E:Q",
-            },
-            "noop with sub": {
-                initial: "a=B|x=U:Qfoo#M 1: 1: 0 1;Os Qfoo#M 1: 1: 0 1",
-                expected: "x=E:Q;Os Q",
-            },
-            "moved back a sub": {
-                initial: `
-a=B|
-x=U:Qx#M 1: 1: 0 1;Os Cs-1!H=s!Bs=s`,
-                expected: `x=E:Q;Os H=1!Cs-1!Bs=s`,
-            },
-            "from conflicts": {
-                initial: `
-a=B|
-x=U:Qx#M 1: 1: 0 1;Os Cs-1!H=s!Bs=s!I *README.md=a*b*c`,
-                expected: `x=E:Q;Os H=1!Cs-1!Bs=s`,
-            },
-        };
-        Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            const doAbort = co.wrap(function *(repos) {
-                const repo = repos.x;
-                yield MergeUtil.abort(repo);
-            });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
-                                                               c.expected,
-                                                               doAbort,
                                                                c.fails);
             }));
         });

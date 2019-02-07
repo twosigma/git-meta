@@ -1580,7 +1580,8 @@ describe("readRAST", function () {
                                                        r,
                                                        "x",
                                                        "foo",
-                                                       null);
+                                                       null,
+                                                       false);
 
         const ast = yield ReadRepoASTUtil.readRAST(r);
         const headId = yield r.getHeadCommit();
@@ -1626,7 +1627,8 @@ describe("readRAST", function () {
                                                          r,
                                                          "x",
                                                          "foo",
-                                                         null);
+                                                         null,
+                                                         false);
         const subCommit = yield TestUtil.generateCommit(subRepo);
         yield NodeGit.Checkout.tree(subRepo, subCommit, {
             checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,

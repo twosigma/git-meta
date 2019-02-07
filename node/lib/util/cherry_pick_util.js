@@ -116,7 +116,9 @@ exports.changeSubmodules = co.wrap(function *(repo,
             yield rmrf(name);
         }
         else if (yield opener.isOpen(name)) {
-            const subRepo = yield opener.getSubrepo(name, false);
+            const subRepo =
+                yield opener.getSubrepo(name,
+                                        Open.SUB_OPEN_OPTION.FORCE_OPEN);
             yield fetcher.fetchSha(subRepo, name, sub.sha);
             const commit = yield subRepo.getCommit(sub.sha);
             yield GitUtil.setHeadHard(subRepo, commit);
@@ -446,7 +448,8 @@ exports.pickSubs = co.wrap(function *(metaRepo, opener, metaIndex, subs) {
     };
     const fetcher = yield opener.fetcher();
     const pickSub = co.wrap(function *(name) {
-        const repo = yield opener.getSubrepo(name, false);
+        const repo = yield opener.getSubrepo(name,
+                                             Open.SUB_OPEN_OPTION.FORCE_OPEN);
         const change = subs[name];
         const commitText = "(" + GitUtil.shortSha(change.oldSha) + ".." +
             GitUtil.shortSha(change.newSha) + "]";

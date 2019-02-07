@@ -583,33 +583,50 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
 });
 
 /**
- * Throw a `UserError` unless the specified `status` reflects a repository in a
+ * Wrapper around `checkReadiness` and throw a `UserError` if the repo
+ * is not in anormal, ready state.
+ * @see {checkReadiness}
+ * @param {RepoStatus} status
+ * @throws {UserError}
+ */
+exports.ensureReady = function (status) {
+    const errorMessage = exports.checkReadiness(status);
+    if (null !== errorMessage) {
+        throw new UserError(errorMessage);
+    }
+};
+
+/**
+ * Return an error message if the specified `status` of a repository isn't in a
  * normal, ready state, that is, it does not have any conflicts or in-progress
  * operations from the sequencer.  Adjust output paths to be relative to the
  * specified `cwd`.
  *
  * @param {RepoStatus} status
+ * @returns {String | null} if not null, the return implies that the repo is
+ * not ready.
  */
-exports.ensureReady = function (status) {
+exports.checkReadiness = function (status) {
     assert.instanceOf(status, RepoStatus);
 
     if (null !== status.rebase) {
-        throw new UserError(`\
+        return (`\
 Before proceeding, you must complete the rebase in progress (by running
 'git meta rebase --continue') or abort it (by running
 'git meta rebase --abort').`);
     }
     if (status.isConflicted()) {
-        throw new UserError(`\
+        return (`\
 Please resolve outstanding conflicts before proceeding:
 ${PrintStatusUtil.printRepoStatus(status, "")}`);
     }
     if (null !== status.sequencerState) {
         const command =
                PrintStatusUtil.getSequencerCommand(status.sequencerState.type);
-        throw new UserError(`\
+        return (`\
 Before proceeding, you must complete the ${command} in progress (by running
 'git meta ${command} --continue') or abort it (by running
 'git meta ${command} --abort').`);
     }
+    return null;
 };
