@@ -119,12 +119,14 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
 
     const ourCommit = yield repo.getCommit(ourCommitish.id());
     const theirCommit = yield repo.getCommit(theirCommitish.id());
+    const noopEditor = function() {};
     const result = yield MergeUtil.merge(repo,
                                          ourCommit,
                                          theirCommit,
                                          mode,
                                          Open.SUB_OPEN_OPTION.FORCE_BARE,
-                                         args.message);
+                                         args.message,
+                                         noopEditor);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
     }

@@ -170,6 +170,7 @@ Merge of '${commitName}'
     };
     const commit = yield repo.getCommit(commitish.id());
     const result = yield MergeUtil.merge(repo,
+                                         null,
                                          commit,
                                          mode,
                                          Open.SUB_OPEN_OPTION.ALLOW_BARE,
