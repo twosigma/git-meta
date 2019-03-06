@@ -100,7 +100,7 @@ ${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
  * @return bool
  */
 exports.userWantsRebase = co.wrap(function*(args, repo, branch) {
-    if (args.rebase !== undefined) {
+    if (args.rebase !== undefined && args.rebase !== null) {
         return args.rebase;
     }
 
