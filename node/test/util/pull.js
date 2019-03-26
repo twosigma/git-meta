@@ -132,6 +132,10 @@ describe("userWantsRebase", function () {
                                                       null,
                                                       null));
 
+        assert.equal(false, yield Pull.userWantsRebase({"rebase": null},
+                                                       repo,
+                                                       master));
+
         assert.equal(false, yield Pull.userWantsRebase({},
                                                        repo,
                                                        master));
