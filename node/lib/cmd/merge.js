@@ -173,7 +173,7 @@ Merge of '${commitName}'
                                          null,
                                          commit,
                                          mode,
-                                         Open.SUB_OPEN_OPTION.ALLOW_BARE,
+                                         Open.SUB_OPEN_OPTION.FORCE_OPEN,
                                          args.message,
                                          editMessage);
     if (null !== result.errorMessage) {
