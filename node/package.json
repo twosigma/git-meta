@@ -36,7 +36,7 @@
     "deeper": "",
     "fs-promise": "",
     "group-by": "",
-    "nodegit": "^0.21.1",
+    "nodegit": "^0.23.0",
     "rimraf": "",
     "split": "",
     "walk": ""
@@ -45,9 +45,9 @@
     "deepcopy": "",
     "istanbul": "",
     "mkdirp": "",
-    "mocha": "^3.1.2",
+    "mocha": "^6.1.4",
     "mocha-jshint": "",
-    "mocha-parallel-tests": "^1.2.3",
+    "mocha-parallel-tests": "^2.1.2",
     "temp": ""
   }
 }

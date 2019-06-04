@@ -226,7 +226,7 @@ exports.writeTree = co.wrap(function *(repo, baseTree, changes) {
                 }
             }
         }
-        const id = builder.write();
+        const id = yield builder.write();
         return yield repo.getTree(id);
     });
     return yield writeSubtree(baseTree, directory, "");

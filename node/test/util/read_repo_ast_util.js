@@ -410,7 +410,7 @@ describe("readRAST", function () {
         const r = yield NodeGit.Repository.init(path, 1);
         const sig = r.defaultSignature();
         const builder = yield NodeGit.Treebuilder.create(r, null);
-        const treeObj = builder.write();
+        const treeObj = yield builder.write();
         const tree = yield r.getTree(treeObj.tostrS());
         const commitId = yield NodeGit.Commit.create(r,
                                                      0,
