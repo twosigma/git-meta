@@ -548,23 +548,31 @@ exports.initSubmoduleAndRepo = co.wrap(function *(repoUrl,
 
     const FLAGS = NodeGit.Repository.INIT_FLAG;
 
+    const initRepo = co.wrap(function *() {
+        return bare ?
+            yield NodeGit.Repository.init(subRepoDir, 1) :
+            yield NodeGit.Repository.initExt(subRepoDir, {
+                workdirPath: exports.computeRelativeWorkDir(name),
+                flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH |
+                    FLAGS.RELATIVE_GITLINK |
+                    (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
+                templatePath: templatePath
+            });
+    });
     // See if modules repo exists.
     let subRepo = null;
     try {
         subRepo = bare ?
             yield NodeGit.Repository.openBare(subRepoDir) :
             yield NodeGit.Repository.open(subRepoDir);
+        // re-init if previously opened as bare
+        if (!bare && subRepo.isBare()) {
+            subRepo = yield initRepo();
+        }
     }
     catch (e) {
         // Or, make it if not.
-
-        subRepo = yield NodeGit.Repository.initExt(subRepoDir, {
-            workdirPath: bare ? null : exports.computeRelativeWorkDir(name),
-            flags: FLAGS.NO_DOTGIT_DIR | FLAGS.MKPATH |
-                FLAGS.RELATIVE_GITLINK |
-                (null === templatePath ? 0 : FLAGS.EXTERNAL_TEMPLATE),
-            templatePath: templatePath
-        });
+        subRepo = yield initRepo();
     }
 
     if (bare)  {

@@ -639,19 +639,11 @@ foo
 
     describe("initSubmoduleAndRepo", function () {
 
-        const runTest = co.wrap(function *(repo,
-                                           subRootRepo,
-                                           url,
-                                           subName,
-                                           originUrl) {
-            if (undefined === originUrl) {
-                originUrl = "";
-            }
+        /** Setup a simple meta repo with one submodule (not opened). */
+        const setupMeta = co.wrap(function *(subRootRepo, repo, url, subName) {
             const subHead = yield subRootRepo.getHeadCommit();
-            const submodule   = yield NodeGit.Submodule.addSetup(repo,
-                                                                 url,
-                                                                 subName,
-                                                                 1);
+            const submodule =
+                yield NodeGit.Submodule.addSetup(repo,url, subName, 1);
             const subRepo = yield submodule.open();
             yield subRepo.fetchAll();
             subRepo.setHeadDetached(subHead.id());
@@ -666,14 +658,26 @@ foo
                                           sig,
                                           "my message");
             yield SubmoduleConfigUtil.deinit(repo, [subName]);
+            return subHead;
+        });
+
+        const runTest = co.wrap(function *(repo,
+                                           subRootRepo,
+                                           url,
+                                           subName,
+                                           originUrl) {
+            if (undefined === originUrl) {
+                originUrl = "";
+            }
+            const subHead = yield setupMeta(subRootRepo, repo, url, subName);
             const repoPath = repo.workdir();
-            const result = yield SubmoduleConfigUtil.initSubmoduleAndRepo(
-                                                                     originUrl,
-                                                                     repo,
-                                                                     subName,
-                                                                     url,
-                                                                     null,
-                                                                     false);
+            const result =
+                yield SubmoduleConfigUtil.initSubmoduleAndRepo(originUrl,
+                                                               repo,
+                                                               subName,
+                                                               url,
+                                                               null,
+                                                               false);
             assert.instanceOf(result, NodeGit.Repository);
             assert(TestUtil.isSameRealPath(result.workdir(),
                                            path.join(repoPath, subName)));
@@ -720,6 +724,32 @@ foo
             const remote = yield newSub.getRemote("origin");
             const newUrl = remote.url();
             assert.equal(newUrl, url);
+        }));
+
+        it("reset workdir if open in bare first", co.wrap(function *() {
+            const repo        = yield TestUtil.createSimpleRepository();
+            const subRootRepo = yield TestUtil.createSimpleRepository();
+            const url = subRootRepo.workdir();
+            const originUrl = "";
+            const subName = "foo";
+            yield setupMeta(subRootRepo, repo, url, subName);
+            const newSub1 =
+                yield SubmoduleConfigUtil.initSubmoduleAndRepo(originUrl,
+                                                           repo,
+                                                           subName,
+                                                           url,
+                                                           null,
+                                                           true);
+            assert.notExists(newSub1.workdir());
+            const newSub2 =
+                yield SubmoduleConfigUtil.initSubmoduleAndRepo(originUrl,
+                                                               repo,
+                                                               subName,
+                                                               url,
+                                                               null,
+                                                               false);
+            assert.equal(path.relative(repo.workdir(), newSub2.workdir()),
+                         subName);
         }));
 
         it("deep name", co.wrap(function *() {
