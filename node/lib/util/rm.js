@@ -194,8 +194,13 @@ const checkCleanliness = co.wrap(function *(repo, headTree, index, pathname,
         return yield checkIndexIsHeadOrWorkdir(repo, headTree, entry,
                                                pathname, displayPath);
     }
-
-    const status = yield NodeGit.Status.file(repo, pathname);
+    let status;
+    try {
+        // Status.file throws errors after 0.22.0
+        status = yield NodeGit.Status.file(repo, pathname); 
+    } catch (err) {
+        return null;
+    }
 
     if (status === 0 || status & STATUS.WT_DELETED !== 0) {
         //git considers these OK regardless
