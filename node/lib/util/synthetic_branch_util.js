@@ -250,6 +250,11 @@ function* parentLoop(repo, commit, oldSha, handled) {
     assert.isString(oldSha);
     assert.isObject(handled);
 
+    // deleting is OK
+    if (commit === "0000000000000000000000000000000000000000") {
+        return true;
+    }
+
     if (commit.id() in handled)  {
         return handled[commit.id()];
     }
