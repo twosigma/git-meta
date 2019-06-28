@@ -260,7 +260,7 @@ function* parentLoop(repo, commit, oldSha, handled) {
     }
 
     const ok = yield GitUtil.readNote(repo, NOTES_REF, commit.id());
-    if (ok !== null && ok.message() === "ok") {
+    if (ok !== null && (ok.message() === "ok" || ok.message() === "ok\n")) {
         handled[commit.id()] = true;
         return true;
     }
