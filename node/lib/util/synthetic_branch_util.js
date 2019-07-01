@@ -239,12 +239,14 @@ function* checkSubmodules(repo, commit) {
  *
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
+ * @param {NodeGit.Repostory} notesRepo The repo to store notes for already
+                              checked shas
  * @param {NodeGit.Commit} commit The meta branch's commit to check
  * @param {String} oldSha the previous (known-good) value of this ref
  * @param {Object} handled the commit ids that have been already
  * processed (and the result of processing them).
  */
-function* parentLoop(repo, commit, oldSha, handled) {
+function* parentLoop(repo, notesRepo, commit, oldSha, handled) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isString(oldSha);
@@ -264,7 +266,7 @@ function* parentLoop(repo, commit, oldSha, handled) {
         return true;
     }
 
-    const ok = yield GitUtil.readNote(repo, NOTES_REF, commit.id());
+    const ok = yield GitUtil.readNote(notesRepo, NOTES_REF, commit.id());
     if (ok !== null && (ok.message() === "ok" || ok.message() === "ok\n")) {
         handled[commit.id()] = true;
         return true;
@@ -283,7 +285,7 @@ function* parentLoop(repo, commit, oldSha, handled) {
 
     const parents = yield commit.getParents(commit.parentcount());
     const parentChecks = yield parents.map(function *(parent) {
-        return yield *parentLoop(repo, parent, oldSha, handled);
+        return yield *parentLoop(repo, notesRepo, parent, oldSha, handled);
     });
     const result = parentChecks.every(identity);
     handled[commit.id()] = result;
@@ -303,8 +305,9 @@ function* parentLoop(repo, commit, oldSha, handled) {
  * @param {String} newSha the new value of this ref
  */
 
-function* checkUpdate(repo, oldSha, newSha, handled) {
+function* checkUpdate(repo, notesRepo, oldSha, newSha, handled) {
     assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(notesRepo, NodeGit.Repository);
     assert.isString(oldSha);
     assert.isString(newSha);
     assert.isObject(handled);
@@ -317,10 +320,10 @@ function* checkUpdate(repo, oldSha, newSha, handled) {
     }
 
     const newCommit = yield repo.getCommit(newAnnotated.id());
-    const success = yield parentLoop(repo, newCommit, oldSha,
+    const success = yield parentLoop(repo, notesRepo, newCommit, oldSha,
                                      handled);
     if (success) {
-        yield NodeGit.Note.create(repo, NOTES_REF, newCommit.committer(),
+        yield NodeGit.Note.create(notesRepo, NOTES_REF, newCommit.committer(),
                                   newCommit.committer(), newAnnotated.id(),
                                   "ok", 1);
     }
@@ -333,18 +336,20 @@ function* checkUpdate(repo, oldSha, newSha, handled) {
  *
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
+ * @param {NodeGit.Repostory} notesRepo The repo to store notes for already
+                              checked shas
  * @param [{Object}] updates. Each object has fields oldSha, newSha, and ref,
 *  @return true if the update should be rejected.
  * all strings.
  */
-function* metaUpdateIsBad(repo, updates) {
+function* metaUpdateIsBad(repo, notesRepo, updates) {
     const handled = {};
     const checkFailures = updates.map(function*(update) {
         if (!update.ref.startsWith("refs/heads/")) {
             return false;
         }
-        const ok = yield checkUpdate(repo, update.oldSha, update.newSha,
-                                     handled);
+        const ok = yield checkUpdate(repo, notesRepo, update.oldSha,
+                                     update.newSha, handled);
         if (!ok) {
             console.error(
                 "Ref update failed synthetic branch check for " +
@@ -363,11 +368,12 @@ function* metaUpdateIsBad(repo, updates) {
  *
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
+ * @param {NodeGit.Repostory} repo ignored
  * @param [{Object}] updates. Each object has fields oldSha, newSha, and ref,
  * all strings.
  * @return true if the submodule update should be rejected
  */
-function* submoduleIsBad(repo, updates) {
+function* submoduleIsBad(repo, notesRepo, updates) {
     const checkFailures = updates.map(function*(update) {
         /*jshint noyield:true*/
         if (!update.ref.startsWith(SYNTHETIC_BRANCH_BASE)) {
@@ -397,6 +403,11 @@ function* initAltOdb(repo) {
     }
 }
 
+function* getNotesRepoPath(config) {
+    const configVar = "gitmeta.syntheticrefnotesrepopath";
+    return (yield ConfigUtil.getConfigString(config, configVar)) || ".";
+}
+
 /**
  * A git pre-receive hook, which reads from stdin and checks
  * each updated ref.
@@ -421,8 +432,19 @@ function doPreReceive(check) {
     }).on("end", function() {
         co(function *() {
             const repo = yield NodeGit.Repository.open(".");
+
+            // To avoid processing the same metadata commits over and over
+            // again when the hook is used in multiple forks of the same
+            // repo, we want to store notes in the "base fork", wich
+            // is determined by a config setting.  If no such setting exists,
+            // we fall back to using the current repo.
+            const config = yield repo.config();
+            const notesRepoPath = yield getNotesRepoPath(config);
+
+            const notesRepo = yield NodeGit.Repository.open(notesRepoPath);
+
             yield initAltOdb(repo);
-            return yield check(repo, updates);
+            return yield check(repo, notesRepo, updates);
         }).then(function(res) {
             process.exit(+res);
         }, function(e) {

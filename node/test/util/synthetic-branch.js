@@ -43,6 +43,7 @@ const TestUtil        = require("../../lib/util/test_util");
 describe("synthetic-branch", function () {
     const syntheticBranch = co.wrap(function *(repos) {
         const x = repos.x;
+        const notesRepo = repos.n || repos.x;
         const config = yield x.config();
         yield config.setString("gitmeta.subreporootpath", "../../");
         yield config.setString("gitmeta.skipsyntheticrefpattern",
@@ -61,7 +62,8 @@ describe("synthetic-branch", function () {
                value. */
         }
         const headId = head.id().toString();
-        const pass = yield SyntheticBranch.checkUpdate(x, old, headId, {});
+        const pass = yield SyntheticBranch.checkUpdate(x, notesRepo, old,
+                                                       headId, {});
         if (!pass) {
             throw new UserError("fail");
         }
@@ -187,6 +189,28 @@ describe("synthetic-branch", function () {
                                                            c.expected,
                                                            syntheticBranch,
                                                            c.fails);
+
+            // Test with notes in a separate repo -- we need to create
+            // that repo, and make sure it's the one that gets written to and
+            // read from.
+
+            let input;
+            if (c.input.includes("N")) {
+                input = c.input.replace(/N[^|]* /, "|n=B:C5-1;Bmaster=5;$&");
+            } else {
+                input = c.input + "|n=B:C5-1;Bmaster=5";
+            }
+
+            let expected = c.expected;
+            if (c.expected.includes("N")) {
+                expected = expected.replace(/N[^|]*/,
+                                            "|n=B:C5-1;Bmaster=5;$&");
+            } // else it's a failure and won't change the notes repo
+
+            yield RepoASTTestUtil.testMultiRepoManipulator(input,
+                                                           expected,
+                                                           syntheticBranch,
+                                                           c.fails);
         }));
     });
 });
@@ -214,11 +238,11 @@ describe("synthetic-branch-submodule-pre-receive", function () {
         const oid = yield createCommit(repo, addFile);
 
         // an empty push succeeds
-        let fail = yield SyntheticBranch.submoduleIsBad(repo, []);
+        let fail = yield SyntheticBranch.submoduleIsBad(repo, repo, []);
         assert(!fail);
 
         // a push with f to a correct branch succeeds
-        fail = yield SyntheticBranch.submoduleIsBad(repo, [{
+        fail = yield SyntheticBranch.submoduleIsBad(repo, repo, [{
             oldSha: "0000000000000000000000000000000000000000",
             newSha: oid.toString(),
             ref: "refs/commits/" + oid.toString(),
@@ -226,7 +250,7 @@ describe("synthetic-branch-submodule-pre-receive", function () {
         assert(!fail);
 
         // a push with f to a bogus branch fails
-        fail = yield SyntheticBranch.submoduleIsBad(repo, [{
+        fail = yield SyntheticBranch.submoduleIsBad(repo, repo, [{
             oldSha: "0000000000000000000000000000000000000000",
             newSha: oid.toString(),
             ref: "refs/commits/0000000000000000000000000000000000000000",
@@ -308,7 +332,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
         process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = metaObjects;
 
         //fail: no synthetic ref
-        let fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
+        let fail = yield SyntheticBranch.metaUpdateIsBad(repo, repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
@@ -320,7 +344,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
                                        subOid, 0, "create synthetic ref");
 
         //fail: no alt odb
-        fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
+        fail = yield SyntheticBranch.metaUpdateIsBad(repo, repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
@@ -329,7 +353,7 @@ describe("synthetic-branch-meta-pre-receive", function () {
 
         //pass
         yield SyntheticBranch.initAltOdb(repo);
-        fail = yield SyntheticBranch.metaUpdateIsBad(repo, [{
+        fail = yield SyntheticBranch.metaUpdateIsBad(repo, repo, [{
             ref: "refs/heads/example",
             oldSha: "0000000000000000000000000000000000000000",
             newSha: metaOid.toString()
