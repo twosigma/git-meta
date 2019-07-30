@@ -358,7 +358,7 @@ exports.formatEditorPrompt  = function (status, cwd) {
  * `index`.  We need to do this whenever generating a meta-repo commit because
  * otherwise, we could commit a staged commit in a submodule that would have
  * been reverted in its open repo.
- * 
+ *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index
  * @param {Object}             submodules name -> RepoStatus.Submodule
@@ -1467,7 +1467,7 @@ exports.calculatePathCommitStatus = function (current, requested) {
  * impossible to ignore or target those commits.  We can't use them with
  * configuration changes due to the complexity of manipulating the
  * `.gitmodules` file.
- * 
+ *
  * TODO:
  *   (a) Consider allowing previously-staged commits to be included with a
  *       flag.
@@ -1631,7 +1631,7 @@ exports.calculateAllRepoStatus = function (normalStatus, toWorkdirStatus) {
  * provided (default false).  Restrict status to the specified `paths` if
  * nonempty (default []), using the specified `cwd` to resolve their meaning.
  * The behavior undefined unless `0 === paths.length || !all`.
- * 
+ *
  * @param {NodeGit.Repository} repo
  * @param {String}             cwd
  * @param {Object}             [options]
@@ -2221,4 +2221,115 @@ it empty. You can remove the commit entirely with "git meta reset HEAD^".`);
                                        all,
                                        message,
                                        subMessages);
+});
+
+const submoduleHasChangesToCommit = function(status, submoduleName) {
+    const submodule = status.submodules[submoduleName];
+    if (!submodule) {
+        return false;
+    }
+    const { workdir } = submodule;
+    return null !== workdir && !workdir.status.isIndexClean();
+};
+
+const submoduleHasPrecommitHook = co.wrap(function *(repo, submoduleName) {
+    const Hook          = require("../util/hook");
+    const SubmoduleUtil = require("../util/submodule_util");
+
+    const subRepo = yield SubmoduleUtil.getRepo(repo, submoduleName);
+    return Hook.hasHook(subRepo, "pre-commit");
+});
+
+const filterInParallel = co.wrap(function *(collection, asyncPredicate) {
+    const DoWorkQueue = require("../util/do_work_queue");
+
+    const booleans = yield DoWorkQueue.doInParallel(collection,
+        asyncPredicate);
+    return collection.filter((item, index) => booleans[index]);
+});
+
+/**
+ * Get the names of submodules that should run 'pre-commit' hook against.
+ * This means the submodule must have a 'pre-commit' hook as well as have
+ * changes to commit
+ *
+ * @async
+ * @param {NodeGit.Repository}             repo
+ * @param {RepoStatus}                     repoStatus
+ * @return {String[]}
+ */
+exports.getSubmoduleNamesForPrecommitCheck = co.wrap(function *(repo,
+                                                                repoStatus) {
+    const SubmoduleUtil = require("../util/submodule_util");
+
+    const allSubmoduleNames = yield SubmoduleUtil.getSubmoduleNames(repo);
+    return yield filterInParallel(
+        allSubmoduleNames,
+        co.wrap(function *(submoduleName) {
+            return submoduleHasChangesToCommit(repoStatus, submoduleName) &&
+                (yield submoduleHasPrecommitHook(repo, submoduleName));
+        })
+    );
+});
+
+/**
+ * Execute 'pre-commit' hooks of submodules. Only execute when a submodule
+ * has the hook and has changes to commit.
+ * If there is an error occurred, throw an error
+ * If there are hooks to be run and interactive mode is on, a warning will be
+ * raised to communicate that 'pre-commit' hooks were skipped.
+ *
+ * @async
+ * @param {NodeGit.Repository}             repo
+ * @param {String}                         cwd
+ * @param {Boolean}                        all
+ * @param {String[]}                       paths
+ * @param {Boolean}                        interactive
+ * @return {void}
+ */
+exports.execSubmodulePrecommitHooks = co.wrap(function *(repo,
+                                                         cwd,
+                                                         all,
+                                                         paths,
+                                                         interactive) {
+    const Hook          = require("../util/hook");
+    const SubmoduleUtil = require("../util/submodule_util");
+
+    const repoStatus = yield exports.getCommitStatus(repo, cwd, {
+        all,
+        paths,
+    });
+
+    const submoduleNames = yield exports.getSubmoduleNamesForPrecommitCheck(
+        repo,
+        repoStatus
+    );
+
+    if (submoduleNames.length > 0) {
+        if (interactive) {
+            // "interactive mode is not supported because pre-commit hooks
+            // happen before we offer the commit message for editing,
+            // and in interactive mode, we don't know which hooks actually
+            // need to be run until the editing is done."
+            console.warn(
+                "Warning. pre-commit hooks skipped when using option [-i]"
+            );
+        } else {
+            // execute pre-commit hook for each submodule
+            for (const submoduleName of submoduleNames) {
+                const subRepo = yield SubmoduleUtil.getRepo(
+                    repo,
+                    submoduleName
+                );
+                const isOk = yield Hook.execHook(subRepo, "pre-commit");
+                if (!isOk) {
+                    throw new Error(
+                        "Error occurred when running pre-commit hook of " +
+                        "submodule: " +
+                        submoduleName
+                    );
+                }
+            }
+        }
+    }
 });

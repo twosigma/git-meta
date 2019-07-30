@@ -38,12 +38,28 @@ const process   = require("process");
 const fs        = require("fs");
 
 /**
+ * Check if git-meta hook with given hook name exists
+ * Return true if hook exists.
+ * @param {String} name
+ * @return {Boolean}
+ */
+exports.hasHook = function (repo, name) {
+    assert.isString(name);
+
+    const rootDirectory = repo.path();
+    const hookPath = path.join(rootDirectory, "hooks");
+    const absPath = path.resolve(hookPath, name);
+
+    return fs.existsSync(absPath);
+};
+
+/**
  * Run git-meta hook with given hook name.
- * Return 0 on success, non-zero status otherwise.
+ * Return true on success or hook does not exist, false otherwise.
  * @async
  * @param {String} name
  * @param {String[]} args
- * @return {int}
+ * @return {Boolean}
  */
 exports.execHook = co.wrap(function*(repo, name, args=[]) {
     assert.isString(name);
@@ -53,20 +69,19 @@ exports.execHook = co.wrap(function*(repo, name, args=[]) {
     const absPath = path.resolve(hookPath, name);
 
     if (!fs.existsSync(absPath)) {
-        return -1;
+        return true;
     }
 
     try {
         process.chdir(repo.workdir());
-        const result = yield spawn(absPath, args, { stdio: "inherit" });
-        return result.status;
+        yield spawn(absPath, args, { stdio: "inherit" });
+        return true;
     } catch (e) {
         if (e.code === "EACCES") {
             console.log("EACCES: Cannot execute: " + absPath);
-            return e.stderr;
         } else if (e.stdout) {
             console.log(e.stdout);
-            return e.stdout;
         }
+        return false;
     }
 });

@@ -32,6 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
+const sinon   = require("sinon");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -43,6 +44,7 @@ const StatusUtil      = require("../../lib/util/status_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
+const Hook            = require("../../lib/util/hook");
 
 
 function mapCommitResult(commitResult) {
@@ -3282,6 +3284,120 @@ x=U:Cbar\n#x-2 s=Sa:s;Bmaster=x;Os Cbar\n#s-1 README.md=foo, a=b`,
                                                                doAmend,
                                                                c.fails);
             }));
+        });
+    });
+
+    describe("execSubmodulePrecommitHooks", () => {
+        let sandbox;
+        const noop = () => Promise.resolve();
+        const repoMap = {
+            a: "submodule-a",
+            b: "submodule-b"
+        };
+
+        beforeEach(() => {
+            sandbox = sinon.createSandbox();
+        });
+
+        afterEach(() => {
+            sandbox.restore();
+        });
+
+        it(
+            "should run 'pre-commit' hooks of submodules",
+            co.wrap(function*() {
+                sandbox
+                    .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
+                    .callsFake(() => ["a", "b"]);
+                sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
+                sandbox
+                    .stub(SubmoduleUtil, "getRepo")
+                    .callsFake((repo, submoduleName) =>
+                        Promise.resolve(repoMap[submoduleName])
+                    );
+
+                const execHookSpy = sandbox
+                    .stub(Hook, "execHook")
+                    .callsFake(() => Promise.resolve(true));
+                yield Commit.execSubmodulePrecommitHooks();
+                assert.isTrue(execHookSpy.calledWith(repoMap.a));
+                assert.isTrue(execHookSpy.calledWith(repoMap.b));
+            })
+        );
+        it("should throw if execHook return false", function() {
+            sandbox
+                .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
+                .callsFake(() => ["a", "b"]);
+            sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
+            sandbox
+                .stub(SubmoduleUtil, "getRepo")
+                .callsFake((repo, submoduleName) =>
+                    Promise.resolve(repoMap[submoduleName])
+                );
+
+            sandbox.stub(Hook, "execHook").callsFake((repo, name) => {
+                assert.isTrue("pre-commit" === name);
+                return Promise.resolve(repo !== repoMap.b); // fail on 'b'
+            });
+
+            return Commit.execSubmodulePrecommitHooks().catch(err => {
+                assert.instanceOf(err, Error);
+                assert(
+                    err.message,
+                    "Error occurred when running pre-commit hook of " +
+                    "submodule: b"
+                );
+            });
+        });
+
+        describe("interactive mode", () => {
+            const execSubmodulePrecommitHooksInteractive = () =>
+                Commit.execSubmodulePrecommitHooks(
+                    null,
+                    null,
+                    null,
+                    null,
+                    true
+                );
+            it(
+                "should warn if there are hooks to run but skipped",
+                co.wrap(function*() {
+                    sandbox
+                        .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
+                        .callsFake(() => ["a", "b"]);
+                    sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
+                    sandbox
+                        .stub(SubmoduleUtil, "getRepo")
+                        .callsFake((repo, submoduleName) =>
+                            Promise.resolve(repoMap[submoduleName])
+                        );
+
+                    const consoleWarnSpy = sandbox
+                        .stub(console, "warn")
+                        .callsFake(noop);
+                    yield execSubmodulePrecommitHooksInteractive();
+                    assert.isTrue(
+                        consoleWarnSpy.calledWith(
+                            "Warning. pre-commit hooks skipped when using " +
+                            "option [-i]"
+                        )
+                    );
+                })
+            );
+            it(
+                "should not warn if there is no hooks",
+                co.wrap(function*() {
+                    sandbox
+                        .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
+                        .callsFake(() => []);
+                    sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
+                    const consoleWarnSpy = sandbox
+                        .stub(console, "warn")
+                        .callsFake(noop);
+                    yield execSubmodulePrecommitHooksInteractive();
+                    assert.isFalse(consoleWarnSpy.called);
+                })
+            );
         });
     });
 });
