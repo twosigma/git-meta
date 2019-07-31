@@ -360,7 +360,13 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     const execString = `\
 git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
-        const result = yield ChildProcess.exec(execString, {env : environ});
+        let result = yield ChildProcess.exec(execString, {env : environ});
+        if (result.error &&
+            result.stderr.indexOf("reference already exists") !== -1) {
+            // GitLab has a race condition that somehow causes this to
+            // happen spuriously -- let's retry.
+            result = yield ChildProcess.exec(execString, {env : environ});
+        }
         if (result.error || !quiet) {
             if (result.stdout) {
                 console.log(result.stdout);
