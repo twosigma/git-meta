@@ -84,6 +84,13 @@ have matching commits and have no new commits.`,
         constant: true,
         help: `When amending, reuse previous messages without editing.`,
     });
+    parser.addArgument(["--no-verify"], {
+        required: false,
+        action: "storeConst",
+        defaultValue: false,
+        constant: true,
+        help: `This option bypasses the pre-commit hooks.`,
+    });
     parser.addArgument(["-i", "--interactive"], {
         required: false,
         action: "storeConst",
@@ -108,10 +115,23 @@ the URL of submodules).`,
 const doCommit = co.wrap(function *(args) {
     const Commit  = require("../util/commit");
     const GitUtil = require("../util/git_util");
-    const Hook    = require("../util/hook");
+    const Hook = require("../util/hook");
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
+
+    if (!args.no_verify) {
+        try {
+            yield Commit.execSubmodulePrecommitHooks(repo,
+                                                     cwd,
+                                                     args.all,
+                                                     args.file,
+                                                     args.interactive);
+        } catch (e) {
+            console.error("Failed to commit. \n" + e.message);
+            process.exit(1);
+        }
+    }
 
     yield Commit.doCommitCommand(repo,
                                  cwd,
@@ -124,10 +144,10 @@ const doCommit = co.wrap(function *(args) {
 });
 
 const doAmend = co.wrap(function *(args) {
-    const Commit          = require("../util/commit");
-    const GitUtil         = require("../util/git_util");
-    const Hook            = require("../util/hook");
-    const UserError       = require("../util/user_error");
+    const Commit        = require("../util/commit");
+    const GitUtil       = require("../util/git_util");
+    const Hook          = require("../util/hook");
+    const UserError     = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;
 
@@ -136,9 +156,23 @@ const doAmend = co.wrap(function *(args) {
     }
 
     const repo = yield GitUtil.getCurrentRepo();
+    const cwd = process.cwd();
+
+    if (!args.no_verify) {
+        try {
+            yield Commit.execSubmodulePrecommitHooks(repo,
+                                                     cwd,
+                                                     args.all,
+                                                     args.file,
+                                                     args.interactive);
+        } catch (e) {
+            console.error("Failed to commit. \n" + e.message);
+            process.exit(1);
+        }
+    }
 
     yield Commit.doAmendCommand(repo,
-                                process.cwd(),
+                                cwd,
                                 args.message,
                                 args.all,
                                 args.interactive,
