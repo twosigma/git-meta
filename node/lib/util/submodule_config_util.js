@@ -255,7 +255,16 @@ exports.resolveUrl = function (baseUrl, relativeUrl) {
     if (!baseUrl.endsWith("/")) {
         baseUrl += "/";
     }
-    const res = url.resolve(baseUrl, relativeUrl);
+
+    // Handle prefixed urls like cache::https://...
+    const prefixStart = baseUrl.lastIndexOf("::");
+    let prefix = "";
+    if (prefixStart !== -1) {
+        prefix = baseUrl.substring(0, prefixStart + 2);
+        baseUrl = baseUrl.substring(prefixStart + 2);
+    }
+
+    const res = prefix + url.resolve(baseUrl, relativeUrl);
 
     // Trim trailing "/" which will stick around in some situations (e.g., "."
     // for relativeUrl) but not others, to give uniform results.
