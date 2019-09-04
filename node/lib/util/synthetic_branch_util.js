@@ -54,14 +54,23 @@ function identity(v) {
     return v;
 }
 
-function SyntheticBranchConfig(whitelistPattern) {
-    if (whitelistPattern.length > 0) {
-        const whitelistRE = new RegExp(whitelistPattern);
-        this.whitelistTest = function(url) {
-            return whitelistRE.test(url);
+function SyntheticBranchConfig(urlWhitelistPattern, pathWhitelistPattern) {
+    if (urlWhitelistPattern.length > 0) {
+        const urlWhitelistRE = new RegExp(urlWhitelistPattern);
+        this.urlWhitelistTest = function(url) {
+            return urlWhitelistRE.test(url);
         };
     } else {
-        this.whitelistTest = function() { return false; };
+        this.urlWhitelistTest = function() { return false; };
+    }
+
+    if (pathWhitelistPattern.length > 0) {
+        const pathWhitelistRE = new RegExp(pathWhitelistPattern);
+        this.pathWhitelistTest = function(path) {
+            return pathWhitelistRE.test(path);
+        };
+    } else {
+        this.pathWhitelistTest = function() { return false; };
     }
 }
 
@@ -108,6 +117,21 @@ exports.urlToLocalPath = function *(repo, url) {
 };
 
 /**
+ * Check that a given path is on the path synthetic-ref-check whitelist, if
+ * such a whitelist exists.
+ * @async
+ * @param {SyntheticBranchConfig} cfg The configuration for
+ * synthetic_branch_util
+ * @param {String}                url The path of the submodule
+ * in the meta tree.
+ */
+function skipCheckForPath(cfg, path) {
+    assert.instanceOf(cfg, SyntheticBranchConfig);
+    assert.isString(path);
+    return cfg.pathWhitelistTest(path);
+}
+
+/**
  * Check that a given URL is on the URLs synthetic-ref-check whitelist, if
  * such a whitelist exists.
  * @async
@@ -119,7 +143,7 @@ exports.urlToLocalPath = function *(repo, url) {
 function skipCheckForURL(cfg, url) {
     assert.instanceOf(cfg, SyntheticBranchConfig);
     assert.isString(url);
-    return cfg.whitelistTest(url);
+    return cfg.urlWhitelistTest(url);
 }
 
 /**
@@ -133,12 +157,16 @@ function skipCheckForURL(cfg, url) {
  * @param {String}                url the configured URL of the submodule
  * in the meta tree.
  */
-function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url) {
+function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url, path) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(cfg, SyntheticBranchConfig);
     assert.instanceOf(submoduleEntry, NodeGit.TreeEntry);
 
     if (skipCheckForURL(cfg,  url)) {
+        return true;
+    }
+
+    if (skipCheckForPath(cfg, path)) {
         return true;
     }
 
@@ -184,10 +212,15 @@ function* checkSubmodules(repo, commit) {
     assert.instanceOf(commit, NodeGit.Commit);
 
     const config = yield repo.config();
-    const whitelistPattern = (
+    const urlWhitelistPattern = (
         yield ConfigUtil.getConfigString(
             config, "gitmeta.skipsyntheticrefpattern")) || "";
-    const cfg = new SyntheticBranchConfig(whitelistPattern);
+    const pathWhitelistPattern = (
+        yield ConfigUtil.getConfigString(
+            config, "gitmeta.skipsyntheticrefpathpattern")) || "";
+
+    const cfg = new SyntheticBranchConfig(urlWhitelistPattern,
+                                          pathWhitelistPattern);
 
     const parent = yield GitUtil.getParentCommit(repo, commit);
     const names = yield computeChangedSubmodules(repo,
@@ -222,7 +255,8 @@ function* checkSubmodules(repo, commit) {
                 return false;
             }
             const url = submodule.url;
-            return yield *checkSubmodule(repo, cfg, commit, entry, url);
+            return yield *checkSubmodule(repo, cfg, commit, entry, url,
+                                         submodulePath);
         });
         return (yield result).every(identity);
     });
