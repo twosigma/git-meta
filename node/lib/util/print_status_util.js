@@ -387,6 +387,9 @@ exports.printCurrentBranch = function (status) {
     if (null !== status.currentBranchName) {
         return `On branch ${colors.green(status.currentBranchName)}.\n`;
     }
+    if (status.headCommit === null) {
+        return `No commits yet\n`;
+    }
     return `\
 On detached head ${colors.red(GitUtil.shortSha(status.headCommit))}.\n`;
 };
