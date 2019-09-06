@@ -338,12 +338,20 @@ x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3`,
             expected: `
 x=E:C3M-4 s=Sa:j;Bmaster=3M`,
         },
-        "adding subs on both": {
+        "adding unrelated subs on both": {
             initial: `
 q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3`,
             onto: "4",
             expected: `
 x=E:C3M-4 q=Sq:1;Bmaster=3M`,
+        },
+        "adding same sub on both": {
+            initial: `
+q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 r=Sr:1,s=Ss:2;C4-2 r=Sr:1,q=Sq:1;Bmaster=3;
+Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 s=Ss:2;Bmaster=3M`,
         },
         "open sub ffwd'd": {
             initial: `
