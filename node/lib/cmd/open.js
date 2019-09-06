@@ -118,6 +118,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             return;                                                   // RETURN
         }
 
+        if (shas[index] === null) {
+            console.warn(`Skipping unmerged submodule ${colors.cyan(name)}`);
+            return;                                                   // RETURN
+        }
+
         console.log(`\
 Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
 

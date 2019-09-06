@@ -196,7 +196,8 @@ exports.getCurrentSubmoduleShas = function (index, submoduleNames) {
         if (entry) {
             result.push(entry.id.tostrS());
         } else {
-            result.push(`${colors.red("missing entry")}`);
+            // Probably a merge conflict
+            result.push(null);
         }
     }
     return result;
