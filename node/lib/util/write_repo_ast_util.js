@@ -77,12 +77,10 @@ const configRepo = co.wrap(function *(repo) {
  * Return the tree and a map of associated subtrees corresponding to the
  * specified `changes` in the specified `repo`, and based on the optionally
  * specified `parent`.  Use the specified `shaMap` to resolve logical shas to
- * actual written shas (such as for submodule heads).  Use the specified `db`
- * to write objects.
+ * actual written shas (such as for submodule heads).
  *
  * @async
  * @param {NodeGit.Repository}    repo
- * @param {NodeGit.Odb}           db
  * @param {Object}                shaMap maps logical to physical ID
  * @param {Object}                changes map of changes
  * @param {Object}                [parent]
