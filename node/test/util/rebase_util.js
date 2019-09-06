@@ -353,6 +353,20 @@ Bfoo=4;Bold=3`,
             expected: `
 x=E:C3M-4 s=Ss:2;Bmaster=3M`,
         },
+        "add/add conflict": {
+            initial: `
+q=B|r=B:C5-1;C6-5;Bother=6|
+s=B|
+x=S:C2-1 s=Ss:1;C3-2 r=Sr:6,s=Ss:2;C4-2 r=Sr:5,q=Sq:1;
+Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            errorMessage:
+            "Conflicting entries for submodule \u001b[31mr\u001b[39m\n",
+            expected: `
+            x=E:H=4;QR 3:refs/heads/master 4: 0 3;
+            I s=Ss:2,
+            *r=~*S:5*S:6`,
+        },
         "open sub ffwd'd": {
             initial: `
 a=B:CX-1;Bmaster=X|
