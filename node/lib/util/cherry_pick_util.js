@@ -515,6 +515,9 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
  * `repo`.  If `conflicts` is non-empty, return a non-empty string desribing
  * them.  Otherwise, return the empty string.
  *
+ * Half-open the conflicting repos and fetch all commits that are in the
+ * conflict; this will make it easier for users to resolve the conflict.
+ *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index
  * @param {Object}             conflicts  from sub name to `Conflict`
@@ -523,11 +526,47 @@ exports.computeChanges = co.wrap(function *(repo, index, targetCommit) {
 exports.writeConflicts = co.wrap(function *(repo, index, conflicts) {
     let errorMessage = "";
     const names = Object.keys(conflicts).sort();
+    const opener = new Open.Opener(repo, null);
+    const fetcher = yield opener.fetcher();
     for (let name of names) {
-        yield ConflictUtil.addConflict(index, name, conflicts[name]);
+        let conflict = conflicts[name];
+        let configured = false;
+        try {
+            // We just want to see if it's configured
+            const url = yield fetcher.getSubmoduleUrl(name);
+            configured = true;
+        } catch (e) {
+            // nope, so we cannot fetch
+        }
+        if (configured) {
+            const bare = Open.SUB_OPEN_OPTION.FORCE_BARE;
+            const subRepo = yield opener.getSubrepo(name, bare);
+
+            for (const stage of [conflict.ancestor, conflict.our,
+                                 conflict.their]) {
+                if (stage !== null) {
+                    yield fetcher.fetchSha(subRepo, name, stage.id);
+                }
+            }
+        }
+        yield ConflictUtil.addConflict(index, name, conflict);
         errorMessage += `\
-Conflicting entries for submodule ${colors.red(name)}
+Conflicting entries for submodule ${colors.red(name)}.
 `;
+        if (conflict.our !== null && conflict.their !== null) {
+            // add-add
+            const root = repo.workdir();
+            const our = conflict.our.id;
+            const their = conflict.their.id;
+            errorMessage += `
+To choose your version of the ${name}, use the following magic:
+            git -C ${root} update-index --cache-info 160000,${our},${name}
+To choose their version of the ${name}, use the following magic:
+            git -C ${root} update-index --cache-info 160000,${their},${name}
+To compare, try:
+            git -C ${root}${name} diff ${their} ${our}
+`;
+        }
     }
     return errorMessage;
 });
