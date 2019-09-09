@@ -112,14 +112,19 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const templatePath = yield SubmoduleConfigUtil.getTemplatePath(repo);
 
-    const opener = co.wrap(function *(name, index) {
+    const opener = co.wrap(function *(name, idx) {
         if (openSubs.has(name)) {
             console.warn(`Submodule ${colors.cyan(name)} is already open.`);
             return;                                                   // RETURN
         }
 
+        if (shas[idx] === null) {
+            console.warn(`Skipping unmerged submodule ${colors.cyan(name)}`);
+            return;                                                   // RETURN
+        }
+
         console.log(`\
-Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
+Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
 
         // If we fail to open due to an expected condition, indicated by
         // the throwing of a `UserError` object, catch and log the error,
@@ -129,7 +134,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[index])}.`);
         try {
             yield Open.openOnCommit(fetcher,
                                     name,
-                                    shas[index],
+                                    shas[idx],
                                     templatePath,
                                     false);
             subsOpenSuccessfully.push(name);
