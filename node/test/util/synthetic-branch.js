@@ -73,7 +73,8 @@ describe("synthetic-branch", function () {
         "simplest": {
             input: "x=S:C8-2;C2-1;Bmaster=8",
             expected: "x=S:C8-2;C2-1;Bmaster=8;" +
-                "N refs/notes/git-meta/subrepo-check 8=ok",
+                "N refs/notes/git-meta/subrepo-check 8=ok;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok",
         },
         "read a note, do nothing": {
             input: "x=S:C8-2;C2-1;Bmaster=8;" +
@@ -136,6 +137,7 @@ describe("synthetic-branch", function () {
             input: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3|" +
                 "y=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
                 "y=S:C4-1;Bmaster=4",
         },
@@ -156,6 +158,7 @@ describe("synthetic-branch", function () {
                 "|y=S:C4-1;Bmaster=4" +
                 "|u=S:C7-1;Bmaster=7",
             expected: "x=S:C2-1;C3-2 y=S/whitelisted:7;Bmaster=3;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok" +
                 "|y=S:C4-1;Bmaster=4|u=S:C7-1;Bmaster=7"
         },
@@ -163,6 +166,7 @@ describe("synthetic-branch", function () {
             input: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3|" +
                 "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1;C3-2 y/z=S/z:4;Bmaster=3;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
                 "z=S:C4-1;Bmaster=4",
         },
@@ -170,6 +174,7 @@ describe("synthetic-branch", function () {
             input: "x=S:C2-1 y/z=S/z:4;C3-2;Bmaster=3|" +
                 "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1 y/z=S/z:4;C3-2;Bmaster=3;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
                 "z=S:C4-1;Bmaster=4",
         },
@@ -177,6 +182,7 @@ describe("synthetic-branch", function () {
             input: "x=S:C2-1 y/z=S/z:4;C3-2 y/foo=bar;Bmaster=3|" +
                 "z=S:C4-1;Bmaster=4",
             expected: "x=S:C2-1 y/z=S/z:4;C3-2 y/foo=bar;Bmaster=3;" +
+                "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok|" +
                 "z=S:C4-1;Bmaster=4",
         },

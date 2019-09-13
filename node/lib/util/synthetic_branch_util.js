@@ -271,6 +271,9 @@ function* checkSubmodules(repo, commit) {
  * Returns true if the check passes on all branches; false if any
  * fail.
  *
+ * On success, create a note reflecting the work done to save time
+ * on future updates.
+
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
  * @param {NodeGit.Repostory} notesRepo The repo to store notes for already
@@ -318,20 +321,25 @@ function* parentLoop(repo, notesRepo, commit, oldSha, handled) {
     }
 
     const parents = yield commit.getParents(commit.parentcount());
-    const parentChecks = yield parents.map(function *(parent) {
-        return yield *parentLoop(repo, notesRepo, parent, oldSha, handled);
-    });
-    const result = parentChecks.every(identity);
-    handled[commit.id()] = result;
-    return result;
+    let success = true;
+    for (const parent of parents) {
+        if (!(yield *parentLoop(repo, notesRepo, parent, oldSha, handled))) {
+            success = false;
+            break;
+        }
+    }
+    if (success) {
+        yield NodeGit.Note.create(notesRepo, NOTES_REF, commit.committer(),
+                                  commit.committer(), commit.id(),
+                                  "ok", 1);
+    }
+    handled[commit.id()] = success;
+    return success;
 }
 
 /**
  * Main entry point.  Check that a proposed ref update from oldSha
  * to newSha has synthetic branches for all submodule updates.
- *
- * On success, create a note reflecting the work done to save time
- * on future updates.
  *
  * @async
  * @param {NodeGit.Repostory} repo The meta repository
@@ -354,14 +362,8 @@ function* checkUpdate(repo, notesRepo, oldSha, newSha, handled) {
     }
 
     const newCommit = yield repo.getCommit(newAnnotated.id());
-    const success = yield parentLoop(repo, notesRepo, newCommit, oldSha,
-                                     handled);
-    if (success) {
-        yield NodeGit.Note.create(notesRepo, NOTES_REF, newCommit.committer(),
-                                  newCommit.committer(), newAnnotated.id(),
-                                  "ok", 1);
-    }
-    return success;
+    return yield parentLoop(repo, notesRepo, newCommit, oldSha,
+                            handled);
 }
 
 /**
