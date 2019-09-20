@@ -289,11 +289,6 @@ function* parentLoop(repo, notesRepo, commit, oldSha, handled) {
     assert.isString(oldSha);
     assert.isObject(handled);
 
-    // deleting is OK
-    if (commit === "0000000000000000000000000000000000000000") {
-        return true;
-    }
-
     if (commit.id() in handled)  {
         return handled[commit.id()];
     }
@@ -353,6 +348,11 @@ function* checkUpdate(repo, notesRepo, oldSha, newSha, handled) {
     assert.isString(oldSha);
     assert.isString(newSha);
     assert.isObject(handled);
+
+    // deleting is OK
+    if (newSha === "0000000000000000000000000000000000000000") {
+        return true;
+    }
 
     const newAnnotated = yield GitUtil.resolveCommitish(repo, newSha);
 
