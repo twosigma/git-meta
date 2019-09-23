@@ -751,7 +751,9 @@ exports.continue = co.wrap(function *(repo) {
 const resetMerge = co.wrap(function *(repo) {
     // TODO: add this to libgit2
     const execString = `git -C '${repo.workdir()}' reset --merge`;
-    yield ChildProcess.exec(execString);
+    yield ChildProcess.exec(execString, {
+        maxBuffer: 1024*1024*100
+    });
 });
 
 /**
