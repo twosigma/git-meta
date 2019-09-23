@@ -48,6 +48,8 @@ const Hook                = require("./hook");
 const GitUtilFast         = require("./git_util_fast");
 const UserError           = require("./user_error");
 
+const EXEC_BUFFER = 1024*1024*100;
+
 /**
  * Create a branch having the specified `branchName` in the specified `repo`
  * pointing to the current head.
@@ -360,12 +362,18 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     const execString = `\
 git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`;
     try {
-        let result = yield ChildProcess.exec(execString, {env : environ});
+        let result = yield ChildProcess.exec(execString, {
+            env : environ,
+            maxBuffer: EXEC_BUFFER
+        });
         if (result.error &&
             result.stderr.indexOf("reference already exists") !== -1) {
             // GitLab has a race condition that somehow causes this to
             // happen spuriously -- let's retry.
-            result = yield ChildProcess.exec(execString, {env : environ});
+            result = yield ChildProcess.exec(execString, {
+                env : environ,
+                maxBuffer: EXEC_BUFFER
+            });
         }
         if (result.error || !quiet) {
             if (result.stdout) {
@@ -481,7 +489,9 @@ exports.fetch = co.wrap(function *(repo, remoteName) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${remoteName}'`;
     try {
-        return yield ChildProcess.exec(execString);
+        return yield ChildProcess.exec(execString, {
+            maxBuffer: EXEC_BUFFER
+        });
     }
     catch (e) {
         throw new UserError(e.message);
@@ -510,7 +520,9 @@ exports.fetchBranch = co.wrap(function *(repo, remoteName, branch) {
     const execString = `\
 git -C '${repo.path()}' fetch -q '${remoteName}' '${branch}'`;
     try {
-        return yield ChildProcess.exec(execString);
+        return yield ChildProcess.exec(execString, {
+            maxBuffer: EXEC_BUFFER
+        });
     }
     catch (e) {
         throw new UserError(e.message);
@@ -544,7 +556,9 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
 
     const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
     try {
-        yield ChildProcess.exec(execString);
+        yield ChildProcess.exec(execString, {
+            maxBuffer: EXEC_BUFFER
+        });
         yield repo.getCommit(sha);
     }
     catch (e) {
@@ -712,7 +726,8 @@ exports.getEditorCommand = co.wrap(function *(repo) {
     // `git`.
 
     const result =
-             yield ChildProcess.exec(`git -C '${repo.path()}' var GIT_EDITOR`);
+             yield ChildProcess.exec(`git -C '${repo.path()}' var GIT_EDITOR`,
+                                     {maxBuffer: EXEC_BUFFER});
     return result.stdout.split("\n")[0];
 });
 
@@ -938,7 +953,9 @@ exports.mergeBases = co.wrap(function *(repo, commit1, commit2) {
     const id2 = commit2.id().tostrS();
     const execString = `\
 git -C '${repo.path()}' merge-base ${id1} ${id2}`;
-    const result = yield ChildProcess.exec(execString);
+    const result = yield ChildProcess.exec(execString, {
+        maxBuffer: EXEC_BUFFER
+    });
     if (result.error) {
         throw new UserError("Couldn't run git merge-base: " +
                             result.stderr);
