@@ -236,7 +236,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
         const sha = pushMap[subName];
         const syntheticName =
                           SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-        const subRepo = yield SubmoduleUtil.getBareRepo(repo, subName);
+        const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
 
         // Resolve the submodule's URL against the URL of the meta-repo,
         // ignoring the remote that is configured in the open submodule.
