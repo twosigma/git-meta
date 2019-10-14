@@ -353,14 +353,29 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
         forceStr = "-f";
     }
 
-    const environ = Object.assign({}, process.env);
-    // Hack: set a fake work-tree because the repo's core.worktree might
-    // be set to a directory that, due to sparseness, doesn't exist, and
-    // git push has a bug which requires it to have a worktree.
-    environ.GIT_WORK_TREE = repo.path();
+    const { execString, environ } = (() => {
+        if (repo.workdir()) {
+            return {
+                execString: `\
+git -C '${repo.workdir()}' push ${forceStr} ${remote} ${source}:${target}`,
+                environ: Object.assign({}, process.env)
+            };
+        }
 
-    const execString = `\
-git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`;
+        // Hack: set a fake work-tree because the repo's core.worktree might
+        // be set to a directory that, due to sparseness, doesn't exist, and
+        // git push has a bug which requires it to have a worktree.
+        return {
+            execString: `\
+git -C '${repo.path()}' push ${forceStr} ${remote} ${source}:${target}`,
+            environ: Object.assign(
+                {},
+                process.env,
+                { GIT_WORK_TREE: repo.path() }
+            )
+        };
+    })();
+
     try {
         let result = yield ChildProcess.exec(execString, {
             env : environ,
