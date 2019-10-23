@@ -78,6 +78,24 @@ describe("close_util", function () {
                 paths: ["s","t"],
                 expected: "x=S:C2-1 s=Sa:1,t=Sa:1;Bmaster=2",
             },
+            // This tests something only triggered by a race condition, so
+            // it might be hard to trigger a failure
+            "multiple, in a subdir": {
+                state: `a=B|x=S:C2-1 a/b/c/d/e/s1=Sa:1,
+a/b/c/d/e/s2=Sa:1,
+a/b/c/d/e/s3=Sa:1,
+a/b/c/d/e/s4=Sa:1;
+Bmaster=2;
+Oa/b/c/d/e/s1;
+Oa/b/c/d/e/s2;
+Oa/b/c/d/e/s3;
+Oa/b/c/d/e/s4`,
+                paths: ["a"],
+                expected: `x=S:C2-1 a/b/c/d/e/s1=Sa:1,
+a/b/c/d/e/s2=Sa:1,
+a/b/c/d/e/s3=Sa:1,
+a/b/c/d/e/s4=Sa:1;Bmaster=2`,
+            },
             "dirty fail staged": {
                 state: "a=B|x=U:Os I a=b",
                 paths: ["s"],
@@ -102,22 +120,32 @@ describe("close_util", function () {
             },
         };
         Object.keys(cases).forEach(caseName => {
-            const c = cases[caseName];
-            const closer = co.wrap(function *(repos) {
-                const x = repos.x;
-                let cwd = x.workdir();
-                if (undefined !== c.cwd) {
-                    cwd = path.join(cwd, c.cwd);
-                }
-                yield CloseUtil.close(x, cwd, c.paths, c.force || false);
-            });
-            it(caseName, co.wrap(function *() {
-                yield RepoASTTestUtil.testMultiRepoManipulator(c.state,
-                                                               c.expected,
-                                                               closer,
-                                                               c.fails);
+            for (const sparse of [true, false]) {
+                const c = cases[caseName];
+                const closer = co.wrap(function *(repos) {
+                    const x = repos.x;
+                    let cwd = x.workdir();
+                    if (undefined !== c.cwd) {
+                        cwd = path.join(cwd, c.cwd);
+                    }
+                    yield CloseUtil.close(x, cwd, c.paths, c.force || false);
+                });
+                it(caseName, co.wrap(function *() {
+                    let state = c.state;
+                    let expected = c.expected;
+                    if (sparse) {
+                        state = state.replace("x=S", "x=%S");
+                        if (expected !== undefined) {
+                            expected = expected.replace("x=S", "x=%S");
+                        }
+                    }
+                    yield RepoASTTestUtil.testMultiRepoManipulator(state,
+                                                                   expected,
+                                                                   closer,
+                                                                   c.fails);
 
-            }));
+                }));
+            }
         });
     });
 });
