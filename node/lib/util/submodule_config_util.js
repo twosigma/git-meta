@@ -191,7 +191,10 @@ exports.deinit = co.wrap(function *(repo, submoduleNames) {
                     next = path.dirname(next);
                 }
             } catch (e) {
-                if ("ENOTEMPTY" !== e.code) {
+                // It's possible that we're closing d/x and d/y, and
+                // that in doing so, we end up trying to delete d
+                // twice, which would give ENOENT.
+                if ("ENOTEMPTY" !== e.code && "ENOENT" !== e.code) {
                     throw e;
                 }
             }
