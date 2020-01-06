@@ -48,7 +48,7 @@ print resulting merged commit sha`;
  * @property {String}
  */
 exports.description =` Merge changes from two commits.  This command
-can work with or without a working tree, resulting a dangling merged commit  
+can work with or without a working tree, resulting a dangling merged commit
 that is not pointed by any refs. It will also abort if there are merge conflicts
  between two commits.`;
 
@@ -97,8 +97,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const mode = args.no_ff ?
-        MergeCommon.MODE.NORMAL :
-        MergeCommon.MODE.FORCE_COMMIT;
+        MergeCommon.MODE.FORCE_COMMIT :
+        MergeCommon.MODE.NORMAL;
     let ourCommitName = args.ourCommit[0];
     let theirCommitName = args.theirCommit[0];
     if (null === ourCommitName || null === theirCommitName) {
@@ -110,7 +110,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 Could not resolve ${colors.red(ourCommitName)} to a commit.`);
     }
 
-    const theirCommitish 
+    const theirCommitish
         = yield GitUtil.resolveCommitish(repo, theirCommitName);
     if (null === theirCommitish) {
         throw new UserError(`\
