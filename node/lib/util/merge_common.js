@@ -90,7 +90,7 @@ class MergeContext {
         this.d_openOption = openOption;
         this.d_commitMessage = commitMessage;
         this.d_editMessage = editMessage;
-        this.d_opener = new Open.Opener(metaRepo, null);
+        this.d_opener = new Open.Opener(metaRepo, ourCommit);
         this.d_changeIndex = null;
         this.d_changes = null;
         this.d_conflictsMessage = "";
@@ -166,7 +166,7 @@ MergeContext.prototype.getChanges = co.wrap(function *() {
     return this.d_changes;
 });
 
-/** 
+/**
  * @async
  * @return {NodeGit.Commit} return left side merge commit
  */
@@ -185,7 +185,7 @@ MergeContext.prototype.getOurCommit = co.wrap(function *() {
  * return an index object that contains the merge changes and whose tree
  * representation will be flushed to disk.
  * @async
- * @return {NodeGit.Index} 
+ * @return {NodeGit.Index}
  */
 MergeContext.prototype.getIndexToWrite = co.wrap(function *() {
     return this.forceBare ?
@@ -194,7 +194,7 @@ MergeContext.prototype.getIndexToWrite = co.wrap(function *() {
 });
 
 /**
- * in memeory index object by merging `ourCommit` and `theirCommit` 
+ * in memeory index object by merging `ourCommit` and `theirCommit`
  * @return {NodeGit.Index}
  */
 MergeContext.prototype.getChangeIndex = co.wrap(function *() {
@@ -202,8 +202,8 @@ MergeContext.prototype.getChangeIndex = co.wrap(function *() {
         return this.d_changeIndex;
     }
     this.d_changeIndex = yield NodeGit.Merge.commits(this.d_metaRepo,
-        yield this.getOurCommit(), 
-        this.d_theirCommit, 
+        yield this.getOurCommit(),
+        this.d_theirCommit,
         []);
     return this.d_changeIndex;
 });
@@ -211,12 +211,12 @@ MergeContext.prototype.getChangeIndex = co.wrap(function *() {
 /**
  * Return the previously set/built commit message, or use the callback to
  * build commit messsage. Once built, the commit message will be cached.
- * 
+ *
  * @async
  * @return {String} commit message
  */
 MergeContext.prototype.getCommitMessage = co.wrap(function *() {
-    const message = (null === this.d_commitMessage) ? 
+    const message = (null === this.d_commitMessage) ?
         GitUtil.stripMessage(yield this.d_editMessage()) :
         this.d_commitMessage;
     if ("" === message) {
@@ -302,7 +302,7 @@ class MergeStepResult {
 
     /**
      * A merge result that signifies we need to abort current merging process.
-     * 
+     *
      * @static
      * @param {MergeStepResult} msg error message
      */
@@ -312,9 +312,9 @@ class MergeStepResult {
     /**
      * A merge result that does not have any submodule commit. Only a finishing
      * sha at the meta repo level will be returned.
-     * 
+     *
      * @static
-     * @param {String} infoMessage 
+     * @param {String} infoMessage
      * @param {String} finishSha meta repo commit sha
      */
     static justMeta(infoMessage, finishSha) {
