@@ -151,7 +151,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
         }
         console.log(`Finished opening ${colors.blue(name)}.`);
     });
-    yield DoWorkQueue.doInParallel(subsToOpen, opener);
+    yield DoWorkQueue.doInParallel(subsToOpen, opener, 10);
 
     // Make sure the index entries are updated in case we're in sparse mode.
 
