@@ -694,6 +694,11 @@ A merge is in progress.
                 }),
                 check: /aaaa/,
             },
+            "no-commits": {
+                input: new RepoStatus({
+                }),
+                check: /No commits yet/,
+            },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];

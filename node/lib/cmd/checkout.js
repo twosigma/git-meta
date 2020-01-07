@@ -139,7 +139,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
     const repo = yield GitUtil.getCurrentRepo();
     const headId = yield repo.getHeadCommit();
-    const oldHead = headId.id().tostrS();
+    const zeroSha = "0000000000000000000000000000000000000000";
+    const oldHead =  headId === null ? zeroSha : headId.id().tostrS();
 
     // Validate and determine what operation we're actually doing.
 
