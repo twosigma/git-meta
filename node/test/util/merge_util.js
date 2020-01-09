@@ -476,7 +476,11 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                                                          mode,
                                                          openOption,
                                                          message,
-                                                         editMessage);
+                                                         editMessage,
+                                                         null,
+                                                         null,
+                                                         null,
+                                                         null);
                     const errorMessage = c.errorMessage || null;
                     assert.equal(result.errorMessage, errorMessage);
                     
@@ -484,7 +488,6 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                         assert.isNull(result.metaCommit);
                         return;                                       // RETURN
                     }
-
                     if (!result.metaCommit) {
                         return;
                     }

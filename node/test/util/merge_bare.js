@@ -78,6 +78,26 @@ x=U:C3-2 s=Sa:a;C5-4 t=Sa:b;C4-2 s=Sa:b;Bmaster=3;Bfoo=5`,
                 theirCommit: "5",
                 ourCommit: "3",
             },
+            "one merge with author and committer": {
+                initial: `
+a=B:Ca-1;Cb-1;Ba=a;Bb=b|
+x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
+                theirCommit: "4",
+                ourCommit: "3",
+                authorName: "alice",
+                authorEmail: "alice@example.com",
+                committerName: "bob",
+                committerEmail: "bob@example.com",
+                verify: co.wrap(function *(repo, result) {
+                    const commit = yield repo.getCommit(result.metaCommit);
+                    const author = commit.author();
+                    const committer = commit.committer();
+                    assert.equal(author.name(), "alice");
+                    assert.equal(author.email(), "alice@example.com");
+                    assert.equal(committer.name(), "bob");
+                    assert.equal(committer.email(), "bob@example.com");
+                }),
+            },
             "non-ffmerge with trivial ffwd submodule change": {
                 initial: `
 a=Aa:Cb-a;Bb=b|
@@ -273,6 +293,31 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
+            let authorName, authorEmail, committerName, committerEmail;
+            this.beforeEach(function () {
+                if (c.authorName && c.authorEmail) {
+                    authorName = process.env.GIT_AUTHOR_NAME;
+                    authorEmail = process.env.GIT_AUTHOR_EMAIL;
+                    process.env.GIT_AUTHOR_NAME = c.authorName;
+                    process.env.GIT_AUTHOR_EMAIL = c.authorEmail;
+                }
+                if (c.committerName && c.committerEmail) {
+                    committerName = process.env.GIT_COMMITTER_NAME;
+                    committerEmail = process.env.GIT_COMMITTER_EMAIL;
+                    process.env.GIT_COMMITTER_NAME = c.committerName;
+                    process.env.GIT_COMMITTER_EMAIL = c.committerEmail;
+                }
+            });
+            this.afterEach(function () {
+                if (authorName && authorEmail) {
+                    process.env.GIT_AUTHOR_NAME = authorName;
+                    process.env.GIT_AUTHOR_EMAIL = authorEmail;
+                }
+                if (committerName && committerEmail) {
+                    process.env.GIT_AUTHOR_NAME = committerName;
+                    process.env.GIT_AUTHOR_EMAIL = committerEmail;
+                }
+            });
             it(caseName, co.wrap(function *() {
                 // expect no changes to the repo
                 const expected = "x=E"; 
@@ -307,7 +352,9 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                         assert.isNull(result.metaCommit);
                         return;                                       // RETURN
                     }
-
+                    if (c.verify) {
+                        yield c.verify(x, result);
+                    }
                     if (result.metaCommit) {
                         const parents = c.parents ?
                             c.parents.map(v => reverseCommitMap[v]) :
