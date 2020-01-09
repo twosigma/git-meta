@@ -62,12 +62,10 @@ exports.configureParser = function (parser) {
     parser.addArgument(["ourCommit"], {
         type: "string",
         help: "our side commitish to merge",
-        nargs: 1,
     });
     parser.addArgument(["theirCommit"], {
         type: "string",
         help: "their side commitish to merge",
-        nargs: 1,
     });
 
     parser.addArgument(["--no-ff"], {
@@ -99,8 +97,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const mode = args.no_ff ?
         MergeCommon.MODE.FORCE_COMMIT :
         MergeCommon.MODE.NORMAL;
-    let ourCommitName = args.ourCommit[0];
-    let theirCommitName = args.theirCommit[0];
+    let ourCommitName = args.ourCommit;
+    let theirCommitName = args.theirCommit;
     if (null === ourCommitName || null === theirCommitName) {
         throw new UserError("Two commits must be given.");
     }
@@ -130,7 +128,9 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
     }
-
+    if (null !== result.metaCommit) {
+        console.log(result.metaCommit);
+    }
     // Run post-merge hook if merge successfully.
     // Fixme: --squash is not supported yet, once supported, need to parse 0/1
     // as arg into the post-merge hook, 1 means it is a squash merge, 0 means

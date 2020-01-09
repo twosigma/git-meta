@@ -98,17 +98,23 @@ const checkForMerge = co.wrap(function *(path) {
  * @param {Object} conflicts map from name to commit causing conflict
  * @return {String} conflict message
  */
-exports.formatConflictsMessage = function(conflicts) {
+const getBareMergeConflictsMessage = function(conflicts) {
     if (0 === Object.keys(conflicts).length) {
         return "";
     }
     let errorMessage = "CONFLICT (content): \n";
     const names = Object.keys(conflicts).sort();
     for (let name of names) {
-        errorMessage += `Conflicting entries for submodule: ` + 
-            `${colors.red(name)}\n`;
+        const conflict = conflicts[name];
+        if (Array.isArray(conflict)) {
+            for (const path of conflict) {
+                errorMessage += `\tconflicted:  ${name}/${path}\n`;
+            }
+        } else {
+            errorMessage += `Merge conflict in submodule '${name}':\n`;
+        }
     }
-    errorMessage += "Automatic merge failed\n";
+    errorMessage += "\nAutomatic merge failed\n";
     return errorMessage;
 };
 
@@ -197,6 +203,7 @@ exports.makeMetaCommit = co.wrap(function *(repo,
  * @return {Object}
  * @return {String|null} return.mergeSha
  * @return {String|null} return.conflictSha
+ * @return {String []}   return.conflictPaths
  */
 exports.mergeSubmodule = co.wrap(function *(metaIndex,
                                             subName,
@@ -234,6 +241,7 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
     const result = {
         mergeSha: null,
         conflictSha: null,
+        conflictPaths: [],
     };
 
     // See if up-to-date
@@ -254,7 +262,7 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
         return result;                                                // RETURN
     }
 
-    console.log(`Submodule ${colors.blue(subName)}: merging commit \
+    console.error(`Submodule ${colors.blue(subName)}: merging commit \
 ${colors.green(theirSha)}.`);
 
     // Start the merge.
@@ -274,6 +282,8 @@ ${colors.green(theirSha)}.`);
     //    record conflicts and then bubble up the conflicts.
     // 3. if bare is not allowed, record conflicts and bubble up conflicts
     if (subIndex.hasConflicts()) {
+        result.conflictPaths =
+            Object.keys(StatusUtil.readConflicts(subIndex, []));
         if (forceBare) {
             result.conflictSha = theirSha;
             return result;
@@ -460,7 +470,7 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
     let conflictMessage = "";
     // abort merge if conflicted under FROCE_BARE mode
     if (forceBare && Object.keys(changes.conflicts).length > 0) {
-        conflictMessage = exports.formatConflictsMessage(changes.conflicts);
+        conflictMessage = getBareMergeConflictsMessage(changes.conflicts);
         return MergeStepResult.error(conflictMessage);                // RETURN
     }
 
@@ -483,6 +493,7 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
 
     const merges = {
         conflicts: {},
+        conflictPaths: {},
         commits: {},
     };
     const mergeSubmoduleRunner = co.wrap(function *(subName) {
@@ -501,13 +512,14 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
         }
         if (null !== subResult.conflictSha) {
             merges.conflicts[subName] = subResult.conflictSha;
+            merges.conflictPaths[subName] = subResult.conflictPaths;
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(changes.changes),
                                    mergeSubmoduleRunner);
     // Render any conflicts 
     if (forceBare) {
-        conflictMessage = exports.formatConflictsMessage(merges.conflicts);
+        conflictMessage = getBareMergeConflictsMessage(merges.conflictPaths);
     } else {
         conflictMessage =
             yield CherryPickUtil.writeConflicts(repo,
@@ -630,7 +642,7 @@ exports.merge = co.wrap(function *(repo,
     for (const asyncStep of mergeAsyncSteps) {
         const ret = yield asyncStep(context);
         if (null !== ret.infoMessage) {
-            console.log(ret.infoMessage);
+            console.error(ret.infoMessage);
         }
         if (null !== ret.errorMessage) {
             throw new UserError(ret.errorMessage);
