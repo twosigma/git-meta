@@ -71,7 +71,11 @@ class MergeContext {
                 mode,
                 openOption,
                 commitMessage,
-                editMessage) {
+                editMessage,
+                authorName,
+                authorEmail,
+                committerName,
+                committerEmail) {
         assert.instanceOf(metaRepo, NodeGit.Repository);
         if (null !== ourCommit) {
             assert.instanceOf(ourCommit, NodeGit.Commit);
@@ -94,6 +98,10 @@ class MergeContext {
         this.d_changeIndex = null;
         this.d_changes = null;
         this.d_conflictsMessage = "";
+        this.d_authorName = authorName;
+        this.d_authorEmail = authorEmail;
+        this.d_committerName = committerName;
+        this.d_committerEmail = committerEmail;
     }
 
     /**
@@ -230,6 +238,32 @@ MergeContext.prototype.getCommitMessage = co.wrap(function *() {
  * @returns {NodeGit.Signature}
  */
 MergeContext.prototype.getSig = co.wrap(function *() {
+    return yield ConfigUtil.defaultSignature(this.d_metaRepo);
+});
+
+/**
+ * @async
+ * @returns {NodeGit.Signature} author to be set with merge commit
+ */
+MergeContext.prototype.getAuthor = co.wrap(function *() {
+    if (this.d_authorName && this.d_authorEmail) {
+        return NodeGit.Signature.now(
+            this.d_authorName,
+            this.d_authorEmail);
+    }
+    return yield ConfigUtil.defaultSignature(this.d_metaRepo);
+});
+
+/**
+ * @async
+ * @returns {NodeGit.Signature} committer to be set with merge commit
+ */
+MergeContext.prototype.getCommitter = co.wrap(function *() {
+    if (this.d_committerName && this.d_committerEmail) {
+        return NodeGit.Signature.now(
+            this.d_committerName,
+            this.d_committerEmail);
+    }
     return yield ConfigUtil.defaultSignature(this.d_metaRepo);
 });
 

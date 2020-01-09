@@ -151,6 +151,8 @@ exports.fastForwardMerge = co.wrap(function *(repo, commit) {
  * @param {NodeGit.Commit}          theirCommit
  * @param {String}                  commitMessage
  * @param {String | null}           refToUpdate
+ * @param {NodeGit.Signature}       author
+ * @param {NodeGit.Signature}       committer
  * @return {Object}
  * @return {String|null} return.infoMessage informative message
  * @return {String|null} return.metaCommit in case no further merge operation
@@ -161,13 +163,13 @@ exports.makeMetaCommit = co.wrap(function *(repo,
                                             ourCommit,
                                             theirCommit,
                                             commitMessage,
-                                            refToUpdate) {
+                                            refToUpdate,
+                                            author,
+                                            committer) {
     const id = yield indexToWrite.writeTreeTo(repo);
-    const sig = yield ConfigUtil.defaultSignature(repo);
-
     const metaCommit = yield repo.createCommit(refToUpdate,
-                                                sig,
-                                                sig,
+                                                author,
+                                                committer,
                                                 commitMessage,
                                                 id,
                                                 [ourCommit, theirCommit]);
@@ -188,7 +190,8 @@ exports.makeMetaCommit = co.wrap(function *(repo,
  * @param {SubmoduleChange}    change specifies the commits to merge
  * @param {String}             message commit message
  * @param {SubmoduleFetcher}   fetcher helper to fetch commits in the sub
- * @param {NodeGit.Signature}  sig default signature
+ * @param {NodeGit.Signature}  author author signature
+ * @param {NodeGit.Signature}  author committer signature
  * @param {Open.Opener}        opener helper to open a sub
  * @param {SUB_OPEN_OPTION}    openOption option to open a sub
  * @return {Object}
@@ -201,7 +204,8 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
                                             message,
                                             opener,
                                             fetcher,
-                                            sig,
+                                            author,
+                                            committer,
                                             openOption) {
     assert.instanceOf(metaIndex, NodeGit.Index);
     assert.isString(subName);
@@ -209,7 +213,8 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
     assert.isString(message);
     assert.instanceOf(opener, Open.Opener);
     assert.instanceOf(fetcher, SubmoduleFetcher);
-    assert.instanceOf(sig, NodeGit.Signature);
+    assert.instanceOf(author, NodeGit.Signature);
+    assert.instanceOf(committer, NodeGit.Signature);
     assert.isNumber(openOption);
 
     let subRepo = yield opener.getSubrepo(subName, openOption);
@@ -303,8 +308,8 @@ ${colors.green(theirSha)}.`);
     const refToUpdate = isHalfOpened ? null : "HEAD";
     const treeId = yield subIndex.writeTreeTo(subRepo);
     const mergeCommit = yield subRepo.createCommit(refToUpdate,
-                                                   sig,
-                                                   sig,
+                                                   author,
+                                                   committer,
                                                    message,
                                                    treeId,
                                                    [ourCommit, theirCommit]);
@@ -447,7 +452,8 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
     const ourCommitSha   = ourCommit.id().tostrS();
     const refToUpdate    = context.refToUpdate;
     const repo           = context.metaRepo;
-    const sig            = yield context.getSig();
+    const author         = yield context.getAuthor();
+    const committer      = yield context.getCommitter();
     const theirCommit    = context.theirCommit;
     const theirCommitSha = theirCommit.id().tostrS();
 
@@ -487,7 +493,8 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
                                          message,
                                          opener,
                                          fetcher,
-                                         sig,
+                                         author,
+                                         committer,
                                          openOption);
         if (null !== subResult.mergeSha) {
             merges.commits[subName] = subResult.mergeSha;
@@ -547,7 +554,9 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
                                                        ourCommit,
                                                        theirCommit,
                                                        message,
-                                                       refToUpdate);
+                                                       refToUpdate,
+                                                       author,
+                                                       committer);
     infoMessage += "\n" + metaCommitRet.infoMessage;
     return new MergeStepResult(infoMessage,
                                null,
@@ -601,7 +610,11 @@ exports.merge = co.wrap(function *(repo,
                                     mode,
                                     openOption,
                                     commitMessage,
-                                    editMessage);
+                                    editMessage,
+                                    process.env.GIT_AUTHOR_NAME,
+                                    process.env.GIT_AUTHOR_EMAIL,
+                                    process.env.GIT_COMMITTER_NAME,
+                                    process.env.GIT_COMMITTER_EMAIL);
     // 
     const result = {
         metaCommit: null,
