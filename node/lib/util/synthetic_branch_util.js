@@ -395,7 +395,12 @@ function* metaUpdateIsBad(repo, notesRepo, updates) {
     });
 
     const resolved = yield checkFailures;
-    return resolved.some(identity);
+    const isBad = resolved.some(identity);
+    if (isBad) {
+        console.error("\nPush to meta repository is incomplete, " +
+            "did you forget to use git meta push?\n");
+    }
+    return isBad;
 }
 
 /**
