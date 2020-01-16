@@ -388,19 +388,16 @@ function* metaUpdateIsBad(repo, notesRepo, updates) {
                                      update.newSha, handled);
         if (!ok) {
             console.error(
-                "Ref update failed synthetic branch check for " +
-                    update.ref);
+                "Update to ref '" +
+                    update.ref +
+                    "' failed synthetic branch check. " +
+                    "Did you forget to use `git meta push`?");
         }
         return !ok;
     });
 
     const resolved = yield checkFailures;
-    const isBad = resolved.some(identity);
-    if (isBad) {
-        console.error("\nPush to meta repository is incomplete, " +
-            "did you forget to use git meta push?\n");
-    }
-    return isBad;
+    return resolved.some(identity);
 }
 
 /**
