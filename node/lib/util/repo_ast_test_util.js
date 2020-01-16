@@ -215,6 +215,7 @@ exports.createMultiRepos = co.wrap(function *(input) {
  * @param {Object}         options.expectedTransformer.mapping.reverseCommitMap
  * @param {Object}         options.expectedTransformer.mapping.reverseUrlMap
  * @param {Object}               options.expectedTransformer.return
+ * @param {Boolean}              options.ignoreRefsCommits
  */
 exports.testMultiRepoManipulator =
         co.wrap(function *(input, expected, manipulator, shouldFail, options) {
@@ -245,6 +246,7 @@ exports.testMultiRepoManipulator =
     else {
         assert.isFunction(options.actualTransformer);
     }
+    const includeRefsCommits = options.includeRefsCommits || false;
     const inputASTs = createMultiRepoASTMap(input);
 
     // Write the repos in their initial states.
@@ -344,7 +346,7 @@ exports.testMultiRepoManipulator =
             const path = manipulated.urlMap[repoName];
             repo = yield NodeGit.Repository.open(path);
         }
-        const newAST = yield ReadRepoASTUtil.readRAST(repo);
+        const newAST = yield ReadRepoASTUtil.readRAST(repo, includeRefsCommits);
         const commits = RepoASTUtil.listCommits(newAST);
         Object.keys(commits).forEach(rememberCommit);
         actualASTs[repoName] = RepoASTUtil.mapCommitsAndUrls(newAST,

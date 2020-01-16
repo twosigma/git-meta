@@ -231,17 +231,32 @@ const loadIndexAndWorkdir = co.wrap(function *(repo, headCommit) {
     };
 });
 
+const syntheticRefRegexp = new RegExp("^refs/commits/[0-9a-f]{40}$");
+const isSyntheticRef = function(refName) {
+    return syntheticRefRegexp.test(refName);
+};
+
 /**
  * Return a representation of the specified `repo` encoded in an `AST` object.
  *
  * @async
  * @param {NodeGit.Repository} repo
+ * @param boolean includeRefsCommits if true, refs from the
+ * refs/commits namespace are read.  Ordinarily, these are ignored
+ * because they are created any time a submodule is fetched as part of
+ * a git meta open, which is often to be done as part of repo writing.
+ * But some tests rely on refs in this namespace, and these tests need
+ * to include them.
  * @return {RepoAST}
  */
-exports.readRAST = co.wrap(function *(repo) {
+exports.readRAST = co.wrap(function *(repo, includeRefsCommits) {
     // We're going to list all the branches in `repo`, and walk each of their
     // histories to generate a complete set of commits.
 
+    assert.instanceOf(repo, NodeGit.Repository);
+    if (includeRefsCommits === undefined) {
+        includeRefsCommits = false;
+    }
     assert.instanceOf(repo, NodeGit.Repository);
     const branches = yield repo.getReferences(NodeGit.Reference.TYPE.LISTALL);
     let commits = {};
@@ -399,7 +414,12 @@ exports.readRAST = co.wrap(function *(repo) {
                                      new RepoAST.Branch(id.tostrS(), tracking);
         }
         else if (!branch.isNote()) {
-            refTargets[branch.shorthand()] = id.tostrS();
+            if (includeRefsCommits ||
+                !isSyntheticRef(branch.name())) {
+                refTargets[branch.shorthand()] = id.tostrS();
+            } else {
+                return;
+            }
         }
         else {
             return;                                           // RETURN

@@ -46,6 +46,7 @@ const path         = require("path");
 const ConfigUtil          = require("./config_util");
 const Hook                = require("./hook");
 const GitUtilFast         = require("./git_util_fast");
+const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError           = require("./user_error");
 
 const EXEC_BUFFER = 1024*1024*100;
@@ -569,7 +570,10 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     catch (e) {
     }
 
-    const execString = `git -C '${repo.path()}' fetch -q '${url}' ${sha}`;
+    const syntheticName =
+                      SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
+    const execString = `git -C '${repo.path()}' fetch -q '${url}' \
+${sha}:${syntheticName}`;
     try {
         yield ChildProcess.exec(execString, {
             maxBuffer: EXEC_BUFFER
