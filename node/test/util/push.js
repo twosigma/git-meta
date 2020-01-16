@@ -323,7 +323,9 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
             yield RepoASTTestUtil.testMultiRepoManipulator(
                 c.initial,
                 expected,
-                manipulator);
+                manipulator,
+                false,
+                {includeRefsCommits : true});
         }));
     });
 
@@ -500,6 +502,7 @@ x=E:Rorigin=a foo=2`,
                                                            c.expected,
                                                            c.manipulator,
                                                            c.fails, {
+                includeRefsCommits : true,
                 expectedTransformer: refMapper,
             });
         }));

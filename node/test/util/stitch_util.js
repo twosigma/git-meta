@@ -1256,6 +1256,7 @@ describe("fetchSubCommits", function () {
                                                            c.expected,
                                                            fetcher,
                                                            c.fails, {
+                includeRefsCommits: true,
                 actualTransformer: refMapper,
             });
 

@@ -753,6 +753,7 @@ b=E:Fcommits/s.x.s=s.x.s`,
                                                            c.expected,
                                                            destitcher,
                                                            c.fails, {
+                includeRefsCommits : true,
                 actualTransformer: refMapper,
             });
         }));
