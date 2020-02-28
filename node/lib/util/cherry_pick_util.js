@@ -88,11 +88,13 @@ function ensureCherryInProgress(seq) {
  * @param {Open.Opener}        opener
  * @param {NodeGit.Index}      index
  * @param {Object}             submodules    name to Submodule
+ * @param {(null|Object)}      urlsInIndex   name to sub.url
  */
 exports.changeSubmodules = co.wrap(function *(repo,
                                               opener,
                                               index,
-                                              submodules) {
+                                              submodules,
+                                              urlsInIndex) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(opener, Open.Opener);
     assert.instanceOf(index, NodeGit.Index);
@@ -100,7 +102,9 @@ exports.changeSubmodules = co.wrap(function *(repo,
     if (0 === Object.keys(submodules).count) {
         return;                                                       // RETURN
     }
-    const urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+    const urls = (urlsInIndex === null || urlsInIndex === undefined) ? 
+        (yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index)) :
+        urlsInIndex;
     const changes = {};
     function rmrf(dir) {
         return new Promise(callback => {
@@ -297,6 +301,81 @@ const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
 });
 
 /**
+ * 
+ * @param {Object} ancestorUrls urls from the merge base
+ * @param {Object} ourUrls urls from the left side of a merge
+ * @param {Object} theirUrls urls from the right side
+ * @returns {Object} 
+ * @returns {Object} return.url submodule name to URLs
+ * @returns {Object} return.conflicts: name to a conflict object that contains
+ *                   urls of ancestors, ours and theirs.
+  */
+exports.resolveUrlsConflicts = function(ancestorUrls, ourUrls, theirUrls) {
+    const allSubNames = new Set(Object.keys(ancestorUrls));
+    Object.keys(ourUrls).forEach(x => allSubNames.add(x));
+    Object.keys(theirUrls).forEach(x => allSubNames.add(x));
+
+    const result = {
+        urls: {},
+        conflicts: {},
+    };
+    const addUrl = function(name, url) {
+        if (url) {
+            result.urls[name] = url;
+        }
+    };
+    for (const sub of allSubNames) {
+        const ancestorUrl = ancestorUrls[sub];
+        const ourUrl = ourUrls[sub];
+        const theirUrl = theirUrls[sub];
+        if (ancestorUrl === ourUrl) {
+            addUrl(sub, theirUrl);
+        } else if (ancestorUrl === theirUrl) {
+            addUrl(sub, ourUrl);
+        } else if (ourUrl === theirUrl) {
+            addUrl(sub, ourUrl);
+        } else {
+            result.conflicts[sub] = {
+                ancestor: ancestorUrl,
+                our: ourUrl,
+                their: theirUrl
+            };
+        }
+    }
+    return result;
+};
+
+
+/**
+ * Resolve conflicts to `.gitmodules` file, return the merged list of urls or
+ * a Conflict object indicating the merge cannot be done automatically.
+ * 
+ * @param repo repository where blob of `.gitmodules` can be read
+ * @param {(null|NodeGit.IndexEntry)} ancestorEntry entry of `.gitmodules` 
+ *        from merge base
+ * @param {(null|NodeGit.IndexEntry)} ourEntry entry of `.gitmodules` 
+ *        on the left side
+ * @param {(null|NodeGit.IndexEntry)} theirEntry entry of `.gitmodules` 
+ *        on the right side
+ * @returns {Object} 
+ * @returns {Object} return.urls, list of sub names to urls
+ * @returns {Object} return.conflicts, object describing conflicts
+ */
+exports.resolveModuleFileConflicts = co.wrap(function*(
+    repo,
+    ancestorEntry,
+    ourEntry,
+    theirEntry
+) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    const getUrls = SubmoduleConfigUtil.getSubmodulesFromIndexEntry;
+    const ancestorUrls = yield getUrls(repo, ancestorEntry);
+    const ourUrls = yield getUrls(repo, ourEntry);
+    const theirUrls = yield getUrls(repo, theirEntry);
+    return exports.resolveUrlsConflicts(ancestorUrls, ourUrls, theirUrls);
+});
+
+/**
  * Determine how to apply the submodule changes introduced in the
  * specified `srcCommit` to the commit `targetCommit` of the specified repo
  * as described in the specified in-memory `index`.  Return an object
@@ -323,9 +402,6 @@ exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo,
     assert.instanceOf(srcCommit, NodeGit.Commit);
     assert.instanceOf(targetCommit, NodeGit.Commit);
     const conflicts = {};
-    const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(
-                                                                 repo,
-                                                                 targetCommit);
 
     // Group together all parts of conflicted entries.
     const conflictEntries = new Map();  // name -> normal, ours, theirs
@@ -384,6 +460,27 @@ exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo,
         }
     }
 
+    // Get submodule urls. If there are no merge conflicts to `.gitmodules`,
+    // parse the file and return its list. If there are, best effort merging
+    // the urls. Throw user error if merge conflict cannot be resolved.
+    const modulesFileEntry =
+        conflictEntries.get(SubmoduleConfigUtil.modulesFileName);
+    let urls;
+    if (modulesFileEntry) {
+        const urlsRes = yield exports.resolveModuleFileConflicts(repo,
+            modulesFileEntry[STAGE.ANCESTOR],
+            modulesFileEntry[STAGE.OURS],
+            modulesFileEntry[STAGE.THEIRS]
+        );
+        if (Object.keys(urlsRes.conflicts).length > 0) {
+            let errMsg = "Conflicts to submodule URLs: \n" +
+                JSON.stringify(urlsRes.conflicts);
+            throw new UserError(errMsg);
+        }
+        urls = urlsRes.urls;
+    } else {
+        urls = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+    }
 
     // Now we handle the changes that Git was able to take care of by itself.
     // First, we're going to need to write the index to a tree; this write
@@ -418,6 +515,7 @@ exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo,
         simpleChanges: simpleChanges,
         changes: changes,
         conflicts: conflicts,
+        urls: urls,
     };
 });
 
@@ -621,7 +719,11 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     // and fast-forwards.
 
     const opener = new Open.Opener(repo, null);
-    yield exports.changeSubmodules(repo, opener, index, changes.simpleChanges);
+    yield exports.changeSubmodules(repo,
+                                   opener,
+                                   index,
+                                   changes.simpleChanges,
+                                   null);
 
     // Render any conflicts
 

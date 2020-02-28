@@ -386,6 +386,26 @@ exports.getSubmodulesFromCommit = co.wrap(function *(repo, commit) {
 });
 
 /**
+ * Return a map from submodule name to url in the specified `repo` by parsing
+ * the blob content of `.gitmodules`
+ *
+ * @private
+ * @async
+ * @param {NodeGit.Repository} repo repo where blob can be read
+ * @param {NodeGit.IndexEntry} entry index entry for `.gitmodules`
+ * @return {Object} map from name to url
+ */
+exports.getSubmodulesFromIndexEntry = co.wrap(function *(repo, entry) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    if (!entry) {
+        return {};                                                    // RETURN
+    }
+    assert.instanceOf(entry, NodeGit.IndexEntry);
+    const blob = yield repo.getBlob(entry.id);
+    return  exports.parseSubmoduleConfig(blob.toString());
+});
+
+/**
  * Return a map from submodule name to url in the specified `repo`.
  *
  * @private
@@ -399,13 +419,7 @@ exports.getSubmodulesFromIndex = co.wrap(function *(repo, index) {
     assert.instanceOf(index, NodeGit.Index);
 
     const entry = index.getByPath(exports.modulesFileName);
-    if (undefined === entry) {
-        return {};                                                    // RETURN
-    }
-    const oid = entry.id;
-    const blob = yield repo.getBlob(oid);
-    const data = blob.toString();
-    return  exports.parseSubmoduleConfig(data);
+    return yield exports.getSubmodulesFromIndexEntry(repo, entry);
 });
 
 /**
@@ -639,7 +653,7 @@ exports.writeConfigText = function (urls) {
     for (let i = 0; i < keys.length; ++i) {
         name = keys[i];
         url = urls[name];
-        result += `\
+        result += `\n\
 [submodule "${name}"]
 \tpath = ${name}
 \turl = ${url}
