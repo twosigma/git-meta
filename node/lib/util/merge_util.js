@@ -52,6 +52,7 @@ const SubmoduleChange     = require("./submodule_change");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const SubmoduleUtil       = require("./submodule_util");
+const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
 
 const CommitAndRef    = SequencerState.CommitAndRef;
@@ -370,9 +371,10 @@ const mergeStepPrepare = co.wrap(function *(context) {
         return MergeStepResult.error(errorMessage);                  // RETURN
     }
 
-    yield CherryPickUtil.ensureNoURLChanges(metaRepo, theirCommit, baseCommit);
-
     if (!forceBare) {
+        yield CherryPickUtil.ensureNoURLChanges(metaRepo,
+                                                theirCommit,
+                                                baseCommit);
         const status = yield StatusUtil.getRepoStatus(metaRepo);
         const statusError = StatusUtil.checkReadiness(status);
         if (null !== statusError) {
@@ -476,14 +478,15 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
 
     // deal with simple changes
     if (forceBare) {
-        yield CherryPickUtil.changeSubmodulesBare(repo,
-                                                  index,
-                                                  changes.simpleChanges);
+        // for merge-bare, no need to open or delete submodules, directly
+        // writes the post merge urls to .gitmodules file.
+        yield SubmoduleConfigUtil.writeUrls(repo, index, changes.urls, true);
     } else {
         yield CherryPickUtil.changeSubmodules(repo,
                                               opener,
                                               index,
-                                              changes.simpleChanges);
+                                              changes.simpleChanges,
+                                              changes.urls);
     }
 
     const message = yield context.getCommitMessage();

@@ -967,3 +967,54 @@ a
     });
 });
 });
+
+describe("resolveUrlConflicts", function() {
+    const cases = {
+        "choose our urls": {
+            ancestors: { a: "a", b: "b", c: "c" },
+            ours: { a: "../a", c: "c", d: "d" },
+            theirs: { a: "a", b: "b", c: "c" },
+            expected: { a: "../a", c: "c", d: "d" },
+            numConflict: 0
+        },
+        "choose their urls": {
+            ancestors: { a: "a", b: "b", c: "c" },
+            theirs: { a: "../a", c: "c", d: "d" },
+            ours: { a: "a", b: "b", c: "c" },
+            expected: { a: "../a", c: "c", d: "d" },
+            numConflict: 0
+        },
+        "choose new and consensus": {
+            ancestors: { a: "a", b: "b", c: "c" },
+            ours: { a: "../a", c: "c", d: "d" },
+            theirs: { a: "../a", c: "c", d: "d" },
+            expected: { a: "../a", c: "c", d: "d" },
+            numConflict: 0
+        },
+        conflict: {
+            ancestors: { a: "a" },
+            ours: { a: "x" },
+            theirs: { a: "y" },
+            expected: {},
+            numConflict: 1
+        }
+    };
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(
+            caseName,
+            function() {
+                const result = CherryPickUtil.resolveUrlsConflicts(
+                    c.ancestors,
+                    c.ours,
+                    c.theirs
+                );
+                assert.equal(
+                    Object.keys(result.conflicts).length,
+                    c.numConflict
+                );
+                assert.deepEqual(result.urls, c.expected);
+            }
+        );
+    });
+});
