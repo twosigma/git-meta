@@ -230,9 +230,17 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
     const isHalfOpened = yield opener.isHalfOpened(subName);
     const forceBare = openOption === SUB_OPEN_OPTION.FORCE_BARE;
     const theirSha = change.newSha;
-    yield fetcher.fetchSha(subRepo, subName, theirSha);
-    if (null !== change.ourSha) {
-        yield fetcher.fetchSha(subRepo, subName, change.ourSha);
+    try {
+        yield fetcher.fetchSha(subRepo, subName, theirSha);
+        if (null !== change.ourSha) {
+            yield fetcher.fetchSha(subRepo, subName, change.ourSha);
+        }
+    } catch (e) {
+        console.log(
+            `Unable to fetch changes in submodule '${subName}', ` +
+            "abort merging."
+        );
+        throw e;
     }
     const theirCommit = yield subRepo.getCommit(theirSha);
 
@@ -536,7 +544,7 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
     }
 
     // finishing merge for interactive merges
-    // 1. close unnecessaried opened submodules
+    // 1. close unnecessarily opened submodules
     // 2. write the index to the meta repo or the staging we've done earlier
     //    will go away
     if (!forceBare) {

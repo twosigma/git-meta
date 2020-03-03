@@ -30,6 +30,11 @@
  */
 "use strict";
 
+const ERROR_CODES = Object.freeze({
+    GENERIC: -1,
+    FETCH_ERROR: -128,
+});
+
 /**
  * This module contains the `util.UserError` class.
  */
@@ -44,11 +49,17 @@
  * @class UserError
  */
 class UserError extends Error {
-    constructor(message) {
+    constructor(message, code) {
         super(message);
         this.message = message;
         this.name = "UserError";
+        this.code = code;
+        if (!this.code) {
+            this.code = ERROR_CODES.GENERIC;
+        }
     }
 }
+
+UserError.CODES = ERROR_CODES;
 
 module.exports = UserError;
