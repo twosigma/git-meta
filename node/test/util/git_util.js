@@ -738,6 +738,7 @@ describe("GitUtil", function () {
             }
             catch (e) {
                 assert.instanceOf(e, UserError);
+                assert.equal(e.code, UserError.CODES.FETCH_ERROR);
                 return;
             }
             assert(false, "Bad sha, should have failed");

@@ -581,7 +581,7 @@ ${sha}:${syntheticName}`;
         yield repo.getCommit(sha);
     }
     catch (e) {
-        throw new UserError(e.message);
+        throw new UserError(e.message, UserError.CODES.FETCH_ERROR);
     }
     return true;
 });

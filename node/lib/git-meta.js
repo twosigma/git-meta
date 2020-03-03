@@ -100,6 +100,7 @@ function configureSubcommand(parser, commandName, module, skipNodeGit) {
 
                 if (error instanceof UserError) {
                     console.error(error.message);
+                    process.exit(error.code);
                 }
                 else {
                     console.error(error.stack);
