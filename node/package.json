@@ -44,7 +44,7 @@
   "devDependencies": {
     "deepcopy": "",
     "istanbul": "",
-    "mkdirp": "",
+    "mkdirp": "0.5.1",
     "mocha": "^6.1.4",
     "mocha-jshint": "",
     "mocha-parallel-tests": "^2.1.2",
