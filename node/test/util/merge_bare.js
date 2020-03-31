@@ -344,6 +344,7 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                                                         theirCommit,
                                                         mode,
                                                         openOption,
+                                                        [],
                                                         message,
                                                         defaultEditor);
                     const errorMessage = c.errorMessage || null;

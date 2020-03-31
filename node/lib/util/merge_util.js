@@ -39,6 +39,7 @@ const NodeGit      = require("nodegit");
 const Checkout            = require("./checkout");
 const CherryPickUtil      = require("./cherry_pick_util");
 const ConfigUtil          = require("./config_util");
+const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const MergeCommon         = require("./merge_common");
@@ -56,6 +57,9 @@ const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
 
 const CommitAndRef    = SequencerState.CommitAndRef;
+const Conflict        = ConflictUtil.Conflict;
+const ConflictEntry   = ConflictUtil.ConflictEntry;
+const FILEMODE        = NodeGit.TreeEntry.FILEMODE;
 const MERGE           = SequencerState.TYPE.MERGE;
 const MergeContext    = MergeCommon.MergeContext;
 const MergeStepResult = MergeCommon.MergeStepResult;
@@ -189,7 +193,7 @@ exports.makeMetaCommit = co.wrap(function *(repo,
 });
 
 /**
- * Merge the specified `subName` and update the in memeory `metaindex`.
+ * Merge the specified `subName` and update the in memory `metaindex`.
  * 
  * @async
  * @param {NodeGit.Index}      metaIndex index of the meta repo
@@ -477,9 +481,10 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
     const committer      = yield context.getCommitter();
     const theirCommit    = context.theirCommit;
     const theirCommitSha = theirCommit.id().tostrS();
+    const doNotRecurse   = context.doNotRecurse;
 
     let conflictMessage = "";
-    // abort merge if conflicted under FROCE_BARE mode
+    // abort merge if conflicted under FORCE_BARE mode
     if (forceBare && Object.keys(changes.conflicts).length > 0) {
         conflictMessage = getBareMergeConflictsMessage(changes.conflicts);
         return MergeStepResult.error(conflictMessage);                // RETURN
@@ -509,6 +514,19 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
         commits: {},
     };
     const mergeSubmoduleRunner = co.wrap(function *(subName) {
+        for (const prefix of doNotRecurse) {
+            if (subName.startsWith(prefix + "/") || subName === prefix) {
+                const change = changes.changes[subName];
+                const sha = change.newSha;
+                merges.conflicts[subName] = sha;
+                merges.conflictPaths[subName] = [""];
+                const old = new ConflictEntry(FILEMODE.COMMIT, change.oldSha);
+                const our = new ConflictEntry(FILEMODE.COMMIT, change.ourSha);
+                const new_ = new ConflictEntry(FILEMODE.COMMIT, change.newSha);
+                changes.conflicts[subName] = new Conflict(old, our, new_);
+                return;
+            }
+        }
         const subResult =
             yield exports.mergeSubmodule(index,
                                          subName,
@@ -625,6 +643,7 @@ exports.merge = co.wrap(function *(repo,
                                     theirCommit,
                                     mode,
                                     openOption,
+                                    doNotRecurse,
                                     commitMessage,
                                     editMessage) {
     // pack and validate merging objects
@@ -633,6 +652,7 @@ exports.merge = co.wrap(function *(repo,
                                     theirCommit,
                                     mode,
                                     openOption,
+                                    doNotRecurse,
                                     commitMessage,
                                     editMessage,
                                     process.env.GIT_AUTHOR_NAME,
@@ -681,7 +701,7 @@ const checkForConflicts = function (index) {
         const entry = entries[i];
         const stage = NodeGit.Index.entryStage(entry);
         if (RepoStatus.STAGE.OURS === stage &&
-            NodeGit.TreeEntry.FILEMODE.COMMIT !== entry.mode) {
+            FILEMODE.COMMIT !== entry.mode) {
             throw new UserError("Meta-repo has conflicts.");
         }
     }

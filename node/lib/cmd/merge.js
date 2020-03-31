@@ -75,6 +75,13 @@ exports.configureParser = function (parser) {
         action: "storeConst",
         constant: true,
     });
+    parser.addArgument(["--do-not-recurse"], {
+        action: "append",
+        type: "string",
+        help: "treat all possible conflicts in a dir and its subdirectories" +
+            " as actual, without attempting to recursively merge inside the" +
+            " submodules",
+    });
     parser.addArgument(["commit"], {
         type: "string",
         help: "the commitish to merge",
@@ -168,12 +175,24 @@ Merge of '${commitName}'
 `;
         return GitUtil.editMessage(repo, message);
     };
+    const doNotRecurse = [];
+    for (const prefix of args.do_not_recurse || []) {
+        let noSlashPrefix;
+        if (prefix.endsWith("/")) {
+            noSlashPrefix = prefix.substring(0, prefix.length - 1);
+        } else {
+            noSlashPrefix = prefix;
+        }
+        doNotRecurse.push(noSlashPrefix);
+    }
+
     const commit = yield repo.getCommit(commitish.id());
     const result = yield MergeUtil.merge(repo,
                                          null,
                                          commit,
                                          mode,
                                          Open.SUB_OPEN_OPTION.FORCE_OPEN,
+                                         doNotRecurse,
                                          args.message,
                                          editMessage);
     if (null !== result.errorMessage) {
