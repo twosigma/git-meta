@@ -62,6 +62,7 @@ class MergeContext {
     * @param {NodeGit.Commit}          theirCommit
     * @param {MergeCommon.MODE}        mode
     * @param {Open.SUB_OPEN_OPTION}    openOption
+    * @param {[String]}                doNotRecurse
     * @param {String|null}             commitMessage
     * @param {() -> Promise(String)}   editMessage
     */
@@ -70,6 +71,7 @@ class MergeContext {
                 theirCommit,
                 mode,
                 openOption,
+                doNotRecurse,
                 commitMessage,
                 editMessage,
                 authorName,
@@ -92,6 +94,7 @@ class MergeContext {
         this.d_theirCommit = theirCommit;
         this.d_mode = mode;
         this.d_openOption = openOption;
+        this.d_doNotRecurse = doNotRecurse;
         this.d_commitMessage = commitMessage;
         this.d_editMessage = editMessage;
         this.d_opener = new Open.Opener(metaRepo, ourCommit);
@@ -139,6 +142,14 @@ class MergeContext {
         return this.d_openOption;
     }
 
+
+    /**
+     * @property {[String]}
+     */
+    get doNotRecurse() {
+        return this.d_doNotRecurse;
+    }
+
     /**
      * @property {MODE}
      */
@@ -169,7 +180,8 @@ MergeContext.prototype.getChanges = co.wrap(function *() {
                 this.d_metaRepo,
                 yield this.getChangeIndex(),
                 yield this.getOurCommit(),
-                this.d_theirCommit);
+                this.d_theirCommit,
+                this.d_doNotRecurse);
     }
     return this.d_changes;
 });

@@ -339,6 +339,26 @@ x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
                 fromCommit: "4",
                 expected: "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
             },
+            "non-ffmerge with non-ffwd submodule change, unrelated dnr": {
+                initial: `
+a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
+                fromCommit: "4",
+                doNotRecurse: ["fake"],
+                expected: "x=E:Cx-3,4 s=Sa:s;Os Cs-b,c c=c!H=s;Bmaster=x",
+            },
+            "non-ffmerge with non-ffwd submodule change, sub is dnr": {
+                initial: `
+a=Aa:Cb-a;Cc-a;Bfoo=b;Bbar=c|
+x=U:C3-2 s=Sa:b;C4-2 s=Sa:c;Bmaster=3;Bfoo=4;Os`,
+                fromCommit: "4",
+                doNotRecurse: ["s"],
+                fails: true,
+                errorMessage: `\
+Submodule ${colors.red("s")} is conflicted.
+`,
+                expected: `x=E:Qmessage\n#M 3: 4: 0 4;I *s=S:1*S:b*S:c`
+            },
             "submodule commit is up-to-date": {
                 initial:`
 a=Aa:Cb-a;Cc-b;Bfoo=b;Bbar=c|
@@ -470,17 +490,15 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                     const editMessage = c.editMessage || defaultEditor;
                     const openOption = Open.SUB_OPEN_OPTION.ALLOW_BARE;
 
+                    const doNotRecurse = c.doNotRecurse || [];
                     const result = yield MergeUtil.merge(x,
                                                          null,
                                                          commit,
                                                          mode,
                                                          openOption,
+                                                         doNotRecurse,
                                                          message,
-                                                         editMessage,
-                                                         null,
-                                                         null,
-                                                         null,
-                                                         null);
+                                                         editMessage);
                     const errorMessage = c.errorMessage || null;
                     assert.equal(result.errorMessage, errorMessage);
                     

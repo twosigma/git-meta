@@ -407,12 +407,9 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                                                          commit,
                                                          mode,
                                                          openOption,
+                                                         [],
                                                          message,
-                                                         editMessage,
-                                                         null,
-                                                         null,
-                                                         null,
-                                                         null);
+                                                         editMessage);
                     const errorMessage = c.errorMessage || null;
                     assert.equal(result.errorMessage, errorMessage);
                     if (upToDate) {

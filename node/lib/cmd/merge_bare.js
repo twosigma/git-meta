@@ -73,6 +73,14 @@ exports.configureParser = function (parser) {
         action: "storeConst",
         constant: true,
     });
+
+    parser.addArgument(["--do-not-recurse"], {
+        action: "append",
+        type: "string",
+        help: "treat all possible conflicts in a dir and its subdirectories" +
+            " as actual, without attempting to recursively merge inside the" +
+            " submodules",
+    });
 };
 
 /**
@@ -115,6 +123,17 @@ Could not resolve ${colors.red(ourCommitName)} to a commit.`);
 Could not resolve ${colors.red(theirCommitName)} to a commit.`);
     }
 
+    const doNotRecurse = [];
+    for (const prefix of args.do_not_recurse || []) {
+        let noSlashPrefix;
+        if (prefix.endsWith("/")) {
+            noSlashPrefix = prefix.substring(0, prefix.length - 1);
+        } else {
+            noSlashPrefix = prefix;
+        }
+        doNotRecurse.push(noSlashPrefix);
+    }
+
     const ourCommit = yield repo.getCommit(ourCommitish.id());
     const theirCommit = yield repo.getCommit(theirCommitish.id());
     const noopEditor = function() {};
@@ -123,6 +142,7 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
                                          theirCommit,
                                          mode,
                                          Open.SUB_OPEN_OPTION.FORCE_BARE,
+                                         doNotRecurse,
                                          args.message,
                                          noopEditor);
     if (null !== result.errorMessage) {
