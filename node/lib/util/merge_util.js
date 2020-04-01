@@ -255,6 +255,7 @@ exports.mergeSubmodule = co.wrap(function *(metaIndex,
 
     // See if up-to-date
     if (yield NodeGit.Graph.descendantOf(subRepo, ourSha, theirSha)) {
+        yield CherryPickUtil.addSubmoduleCommit(metaIndex, subName, ourSha);
         return result;                                                // RETURN
     }
 
