@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const fs = require("fs-promise");
 
 /**
  * This module contains methods for implementing the `merge-bare` command.
@@ -56,7 +57,12 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-m", "--message"], {
         type: "string",
         help: "commit message",
-        required: true,
+        required: false,
+    });
+    parser.addArgument(["-F", "--message-file"], {
+        type: "string",
+        help: "commit message file name",
+        required: false,
     });
 
     parser.addArgument(["ourCommit"], {
@@ -97,9 +103,12 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const MergeUtil      = require("../util/merge_util");
     const MergeCommon    = require("../util/merge_common");
     const GitUtil        = require("../util/git_util");
-    const Hook           = require("../util/hook");
     const Open           = require("../util/open");
     const UserError      = require("../util/user_error");
+
+    if (Boolean(args.message) + Boolean(args.message_file) !== 1) {
+        throw new UserError("Use exactly one of -m and -F.");
+    }
 
     const repo = yield GitUtil.getCurrentRepo();
     const mode = args.no_ff ?
@@ -134,6 +143,11 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
         doNotRecurse.push(noSlashPrefix);
     }
 
+    let message = args.message;
+    if (args.message_file) {
+        message = yield fs.readFile(args.message_file, "utf8");
+    }
+
     const ourCommit = yield repo.getCommit(ourCommitish.id());
     const theirCommit = yield repo.getCommit(theirCommitish.id());
     const noopEditor = function() {};
@@ -143,7 +157,7 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
                                          mode,
                                          Open.SUB_OPEN_OPTION.FORCE_BARE,
                                          doNotRecurse,
-                                         args.message,
+                                         message,
                                          noopEditor);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);

@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const fs = require("fs-promise");
 
 /**
  * This module contains methods for implementing the `merge` command.
@@ -58,6 +59,11 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-m", "--message"], {
         type: "string",
         help: "commit message",
+        required: false,
+    });
+    parser.addArgument(["-F", "--message-file"], {
+        type: "string",
+        help: "commit message file name",
         required: false,
     });
     parser.addArgument(["--ff"], {
@@ -124,6 +130,10 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const MODE = MergeCommon.MODE;
     let mode = MODE.NORMAL;
 
+    if (args.message && args.message_file) {
+        throw new UserError("Cannot use -m and -F together.");
+    }
+
     if (args.ff + args.continue + args.abort + args.no_ff + args.ff_only > 1) {
         throw new UserError(
                 "Cannot use ff, no-ff, ff-only, abort, or continue together.");
@@ -186,6 +196,11 @@ Merge of '${commitName}'
         doNotRecurse.push(noSlashPrefix);
     }
 
+    let message = args.message;
+    if (args.message_file) {
+        message = yield fs.readFile(args.message_file, "utf8");
+    }
+
     const commit = yield repo.getCommit(commitish.id());
     const result = yield MergeUtil.merge(repo,
                                          null,
@@ -193,7 +208,7 @@ Merge of '${commitName}'
                                          mode,
                                          Open.SUB_OPEN_OPTION.FORCE_OPEN,
                                          doNotRecurse,
-                                         args.message,
+                                         message,
                                          editMessage);
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
