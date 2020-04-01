@@ -131,9 +131,4 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
     if (null !== result.metaCommit) {
         console.log(result.metaCommit);
     }
-    // Run post-merge hook if merge successfully.
-    // Fixme: --squash is not supported yet, once supported, need to parse 0/1
-    // as arg into the post-merge hook, 1 means it is a squash merge, 0 means
-    // not.
-    yield Hook.execHook(repo, "post-merge", ["0"]);
 });
