@@ -166,12 +166,18 @@ x=U:C3-2 s=Sa:a;Bfoo=3;Os W a=b`,
             "url changes": {
                 initial: "a=B|b=B|x=U:C3-2 s=Sb:1;Bfoo=3",
                 fromCommit: "3",
-                fails: true,
+                expected: "a=B|x=E:Bmaster=3"
             },
             "ancestor url changes": {
                 initial: "a=B|b=B|x=U:C4-3 q=Sa:1;C3-2 s=Sb:1;Bfoo=4",
                 fromCommit: "4",
-                fails: true,
+                expected: "a=B|x=E:Bmaster=4"
+            },
+            "genuine url merge conflicts": {
+                initial: "a=B|b=B|c=B|" + 
+                         "x=U:C3-2 s=Sc:1;C4-2 s=Sb:1;Bmaster=3;Bfoo=4",
+                fromCommit: "4",
+                fails: true
             },
             "dirty": {
                 initial: "a=B|x=U:C3-1 t=Sa:1;Bfoo=3;Os W README.md=8",

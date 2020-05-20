@@ -352,8 +352,7 @@ ${colors.green(theirSha)}.`);
 /**
  * Perform preparation work before merge, including
  * 1. locate merge base
- * 2. ensureNoURLChanges see also {CherryPickUtil.ensureNoURLChanges}
- * 3. check if working dir is clean (non-bare repo)
+ * 2. check if working dir is clean (non-bare repo)
  * 3. check if two merging commits are the same or if their commit
  *    is an ancestor of ours, both cases are no-op.
  * 
@@ -385,9 +384,6 @@ const mergeStepPrepare = co.wrap(function *(context) {
     }
 
     if (!forceBare) {
-        yield CherryPickUtil.ensureNoURLChanges(metaRepo,
-                                                theirCommit,
-                                                baseCommit);
         const status = yield StatusUtil.getRepoStatus(metaRepo);
         const statusError = StatusUtil.checkReadiness(status);
         if (null !== statusError) {
