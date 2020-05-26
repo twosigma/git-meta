@@ -32,7 +32,6 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const ConfigUtil    = require("./config_util");
@@ -61,16 +60,9 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
     // sub-repos.
 
     yield GitUtil.fetchBranch(metaRepo, remoteName, source);
-    const remoteBranch = yield GitUtil.findRemoteBranch(metaRepo,
-                                                        remoteName,
-                                                        source);
-    if (null === remoteBranch) {
-        throw new UserError(`The meta-repo does not have a branch named \
-${colors.red(source)} in the remote ${colors.yellow(remoteName)}.`);
-    }
 
-    const remoteCommitId = remoteBranch.target();
-    const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, remoteCommitId);
+    const ref = yield NodeGit.Reference.lookup(metaRepo, "FETCH_HEAD");
+    const remoteCommit = yield NodeGit.Commit.lookup(metaRepo, ref.target());
 
     const result = yield RebaseUtil.rebase(metaRepo, remoteCommit, status);
     if (null !== result.errorMessage) {
