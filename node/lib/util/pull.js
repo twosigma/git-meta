@@ -55,15 +55,6 @@ exports.pull = co.wrap(function *(metaRepo, remoteName, source) {
     assert.isString(remoteName);
     assert.isString(source);
 
-    // First do some sanity checking on the repos to see if they have a remote
-    // with `remoteName` and are clean.
-
-    const validRemote = yield GitUtil.isValidRemoteName(metaRepo, remoteName);
-
-    if (!validRemote) {
-        throw new UserError(`Invalid remote name ${colors.red(remoteName)}.`);
-    }
-
     const status = yield StatusUtil.getRepoStatus(metaRepo);
 
     // Just fetch the meta-repo; rebase will trigger necessary fetches in
