@@ -3342,11 +3342,8 @@ x=U:Cbar\n#x-2 s=Sa:s;Bmaster=x;Os Cbar\n#s-1 README.md=foo, a=b`,
 
             return Commit.execSubmodulePrecommitHooks().catch(err => {
                 assert.instanceOf(err, Error);
-                assert(
-                    err.message,
-                    "Error occurred when running pre-commit hook of " +
-                    "submodule: b"
-                );
+                // hooks are responsible for printing their own message
+                assert.equal(err.message, "");
             });
         });
 
