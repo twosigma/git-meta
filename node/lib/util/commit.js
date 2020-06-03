@@ -2323,11 +2323,8 @@ exports.execSubmodulePrecommitHooks = co.wrap(function *(repo,
                 );
                 const isOk = yield Hook.execHook(subRepo, "pre-commit");
                 if (!isOk) {
-                    throw new Error(
-                        "Error occurred when running pre-commit hook of " +
-                        "submodule: " +
-                        submoduleName
-                    );
+                    // hooks are responsible for printing their own message
+                    throw new Error("");
                 }
             }
         }
