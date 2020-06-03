@@ -157,8 +157,10 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
 
     yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
-    // Run post-open-submodule hook with submodules which opened successfully.
-    yield Hook.execHook(repo, "post-open-submodule", subsOpenSuccessfully);
+    if (subsOpenSuccessfully.length) {
+        // Run post-open-submodule hook with successfully-opened submodules
+        yield Hook.execHook(repo, "post-open-submodule", subsOpenSuccessfully);
+    }
 
     if (failed) {
         process.exit(1);
