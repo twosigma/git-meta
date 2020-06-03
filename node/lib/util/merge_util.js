@@ -116,7 +116,8 @@ const getBareMergeConflictsMessage = function(conflicts) {
                 errorMessage += `\tconflicted:  ${name}/${path}\n`;
             }
         } else {
-            errorMessage += `Merge conflict in submodule '${name}':\n`;
+            errorMessage += `Merge conflict in submodule '${name}' itself
+(e.g. delete/modify or add/modify)\n`;
         }
     }
     errorMessage += "\nAutomatic merge failed\n";
