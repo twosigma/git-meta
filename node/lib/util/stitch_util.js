@@ -49,7 +49,7 @@ const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
 /**
  * @property {String}
  */
-exports.whitelistNoteRef = "refs/notes/stitched/whitelist";
+exports.allowedToFailNoteRef = "refs/notes/stitched/allowed_to_fail";
 
 /**
  * Return a set of meta-repo commits that are allowed to fail.
@@ -57,11 +57,12 @@ exports.whitelistNoteRef = "refs/notes/stitched/whitelist";
  * @param {NodeGit.Repository} repo
  * @return {Set}
  */
-exports.readWhitelist = co.wrap(function *(repo) {
+exports.readAllowedToFailList = co.wrap(function *(repo) {
     assert.instanceOf(repo, NodeGit.Repository);
 
     const notes =
-                 yield BulkNotesUtil.readNotes(repo, exports.whitelistNoteRef);
+                 yield BulkNotesUtil.readNotes(repo,
+                                               exports.allowedToFailNoteRef);
     return new Set(Object.keys(notes));
 });
 
@@ -534,8 +535,8 @@ exports.sameInAnyOtherParent = co.wrap(function *(repo, commit, name, sha) {
  * Then do not generate a commit; instead, return the first parent (and an
  * empty `subCommits` map), or null if there are no parents.
  *
- * Allow commits in the specified `whitelist` to reference invalid submodule
- * commits; skip those (submodule) commits.
+ * Allow commits in the specified `allowed_to_fail` to reference invalid
+ * submodule commits; skip those (submodule) commits.
  *
  * @param {NodeGit.Repository}      repo
  * @param {NodeGit.Commit}          commit
@@ -544,7 +545,7 @@ exports.sameInAnyOtherParent = co.wrap(function *(repo, commit, name, sha) {
  * @param {(String) => Boolean}     keepAsSubmodule
  * @param {(String) => String|null} adjustPath
  * @param {Bool}                    skipEmpty
- * @param {Set of String}           whitelist
+ * @param {Set of String}           allowed_to_fail
  * @return {Object}
  * @return {NodeGit.Commit} [return.stitchedCommit]
  * @return {Object}         return.subCommits       path to NodeGit.Commit
@@ -556,7 +557,7 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
                                                  keepAsSubmodule,
                                                  adjustPath,
                                                  skipEmpty,
-                                                 whitelist) {
+                                                 allowed_to_fail) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
     assert.isObject(subChanges);
@@ -564,7 +565,7 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
     assert.isFunction(keepAsSubmodule);
     assert.isFunction(adjustPath);
     assert.isBoolean(skipEmpty);
-    assert.instanceOf(whitelist, Set);
+    assert.instanceOf(allowed_to_fail, Set);
 
     let updateModules = false;  // if any kept subs added or removed
     const changes = {};         // changes and additions
@@ -576,13 +577,13 @@ exports.writeStitchedCommit = co.wrap(function *(repo,
         }
         catch (e) {
             const metaSha = commit.id().tostrS();
-            if (whitelist.has(metaSha)) {
+            if (allowed_to_fail.has(metaSha)) {
                 return;                                               // RETURN
             }
             throw new UserError(`\
 On meta-commit ${metaSha}, ${name} is missing ${sha}.
 To add to allow this submodule change to be skipped, run:
-git notes --ref ${exports.whitelistNoteRef} add -m skip ${metaSha}`);
+git notes --ref ${exports.allowedToFailNoteRef} add -m skip ${metaSha}`);
         }
         const subTreeId = subCommit.treeId();
         changes[name] = new TreeUtil.Change(subTreeId, FILEMODE.TREE);
@@ -1010,7 +1011,7 @@ ${name}`;
         records = {};
     });
 
-    const whitelist = yield exports.readWhitelist(repo);
+    const allowed_to_fail = yield exports.readAllowedToFailList(repo);
 
     for (let i = 0; i < commitsToStitch.length; ++i) {
         const next = commitsToStitch[i];
@@ -1034,7 +1035,7 @@ ${name}`;
                                                        options.keepAsSubmodule,
                                                        adjustPath,
                                                        skipEmpty,
-                                                       whitelist);
+                                                       allowed_to_fail);
         records[nextSha] = result;
         const newCommit = result.stitchedCommit;
         const newSha = null === newCommit ? null : newCommit.id().tostrS();

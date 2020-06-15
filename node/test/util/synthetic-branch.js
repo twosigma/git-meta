@@ -47,7 +47,7 @@ describe("synthetic-branch", function () {
         const config = yield x.config();
         yield config.setString("gitmeta.subreporootpath", "../../");
         yield config.setString("gitmeta.skipsyntheticrefpattern",
-                               "whitelisted");
+                               "skip");
 
         const head = yield x.getHeadCommit();
 
@@ -152,12 +152,12 @@ describe("synthetic-branch", function () {
                 "|s=S:C8-7;C7-1;Bmaster=8",
             fails: true
         },
-        // This one should fail, but is in whitelisted URIs, so it passes.
+        // This one should fail, but is in skipped URIs, so it passes.
         "with a submodule but no synthetic branch but ignored": {
-            input: "x=S:C2-1;C3-2 y=S/whitelisted:7;Bmaster=3" +
+            input: "x=S:C2-1;C3-2 y=S/skip:7;Bmaster=3" +
                 "|y=S:C4-1;Bmaster=4" +
                 "|u=S:C7-1;Bmaster=7",
-            expected: "x=S:C2-1;C3-2 y=S/whitelisted:7;Bmaster=3;" +
+            expected: "x=S:C2-1;C3-2 y=S/skip:7;Bmaster=3;" +
                 "N refs/notes/git-meta/subrepo-check 2=ok;" +
                 "N refs/notes/git-meta/subrepo-check 3=ok" +
                 "|y=S:C4-1;Bmaster=4|u=S:C7-1;Bmaster=7"
