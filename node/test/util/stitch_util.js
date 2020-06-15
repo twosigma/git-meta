@@ -132,14 +132,14 @@ const getCommitChanges = co.wrap(function *(repo, commit) {
 });
 
 describe("StitchUtil", function () {
-describe("readWhitelist", function () {
+describe("readAllowedToFailList", function () {
     it("breathing", co.wrap(function *() {
         const written = yield RepoASTTestUtil.createRepo(`
-S:N refs/notes/stitched/whitelist 1=`);
+S:N refs/notes/stitched/allowed_to_fail 1=`);
         const repo = written.repo;
         const head = yield repo.getHeadCommit();
         const headSha = head.id().tostrS();
-        const result = yield StitchUtil.readWhitelist(repo);
+        const result = yield StitchUtil.readAllowedToFailList(repo);
         assert(result.has(headSha));
     }));
 });
@@ -953,13 +953,13 @@ a=B|b=B:Cb-1;Bb=b|x=U:C3-2 s=Sa:b;H=3`,
             keepAsSubmodule: () => false,
             fails: true,
         },
-        "missing commit, whitelisted": {
+        "missing commit, in allowed_to_fail list": {
             input: `
 a=B|b=B:Cb-1;Bb=b|x=U:C3-2 s=Sa:b;H=3`,
             commit: "3",
             parents: [],
             keepAsSubmodule: () => false,
-            whitelist: ["3"],
+            allowed_to_fail: ["3"],
             subCommits: {},
             expected: `x=E:Cs ;Bstitched=s`,
         },
@@ -1000,7 +1000,8 @@ x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
                 const skipEmpty = c.skipEmpty || false;
 
                 const changes = yield getCommitChanges(x, commit);
-                const whitelist = new Set((c.whitelist || []).map(c => {
+                const allowed_list = c.allowed_to_fail || [];
+                const allowed_to_fail = new Set((allowed_list).map(c => {
                     return revMap[c];
                 }));
                 const stitch = yield StitchUtil.writeStitchedCommit(
@@ -1011,7 +1012,7 @@ x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
                                                         c.keepAsSubmodule,
                                                         adjustPath,
                                                         skipEmpty,
-                                                        whitelist);
+                                                        allowed_to_fail);
                 const subCommits = {};
                 for (let path in stitch.subCommits) {
                     const commit = stitch.subCommits[path];
@@ -1055,7 +1056,7 @@ x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
         const repo = written.repo;
         const head = yield repo.getHeadCommit();
         const changes = yield getCommitChanges(repo, head);
-        const whitelist = new Set();
+        const allowed_to_fail = new Set();
         const stitch = yield StitchUtil.writeStitchedCommit(repo,
                                                             head,
                                                             changes,
@@ -1063,7 +1064,7 @@ x=S:C2-1 s=Sa:a;C3-1 t=Sa:a;C4-2,3 t=Sa:a,u=Sa:a;H=4;Ba=a`,
                                                             () => false,
                                                             (x) => x,
                                                             false,
-                                                            whitelist);
+                                                            allowed_to_fail);
         const expected = StitchUtil.makeStitchCommitMessage(head,
                                                             stitch.subCommits);
         const stitchedCommit = stitch.stitchedCommit;

@@ -54,23 +54,23 @@ function identity(v) {
     return v;
 }
 
-function SyntheticBranchConfig(urlWhitelistPattern, pathWhitelistPattern) {
-    if (urlWhitelistPattern.length > 0) {
-        const urlWhitelistRE = new RegExp(urlWhitelistPattern);
-        this.urlWhitelistTest = function(url) {
-            return urlWhitelistRE.test(url);
+function SyntheticBranchConfig(urlSkipPattern, pathSkipPattern) {
+    if (urlSkipPattern.length > 0) {
+        const urlSkipRE = new RegExp(urlSkipPattern);
+        this.urlSkipTest = function(url) {
+            return urlSkipRE.test(url);
         };
     } else {
-        this.urlWhitelistTest = function() { return false; };
+        this.urlSkipTest = function() { return false; };
     }
 
-    if (pathWhitelistPattern.length > 0) {
-        const pathWhitelistRE = new RegExp(pathWhitelistPattern);
-        this.pathWhitelistTest = function(path) {
-            return pathWhitelistRE.test(path);
+    if (pathSkipPattern.length > 0) {
+        const pathSkipRE = new RegExp(pathSkipPattern);
+        this.pathSkipTest = function(path) {
+            return pathSkipRE.test(path);
         };
     } else {
-        this.pathWhitelistTest = function() { return false; };
+        this.pathSkipTest = function() { return false; };
     }
 }
 
@@ -117,8 +117,8 @@ exports.urlToLocalPath = function *(repo, url) {
 };
 
 /**
- * Check that a given path is on the path synthetic-ref-check whitelist, if
- * such a whitelist exists.
+ * Check that a given path is on the path synthetic-ref-check skiplist, if
+ * such a skiplist exists.
  * @async
  * @param {SyntheticBranchConfig} cfg The configuration for
  * synthetic_branch_util
@@ -128,12 +128,12 @@ exports.urlToLocalPath = function *(repo, url) {
 function skipCheckForPath(cfg, path) {
     assert.instanceOf(cfg, SyntheticBranchConfig);
     assert.isString(path);
-    return cfg.pathWhitelistTest(path);
+    return cfg.pathSkipTest(path);
 }
 
 /**
- * Check that a given URL is on the URLs synthetic-ref-check whitelist, if
- * such a whitelist exists.
+ * Check that a given URL is on the URLs synthetic-ref-check skiplist, if
+ * such a skiplist exists.
  * @async
  * @param {SyntheticBranchConfig} cfg The configuration for
  * synthetic_branch_util
@@ -143,7 +143,7 @@ function skipCheckForPath(cfg, path) {
 function skipCheckForURL(cfg, url) {
     assert.instanceOf(cfg, SyntheticBranchConfig);
     assert.isString(url);
-    return cfg.urlWhitelistTest(url);
+    return cfg.urlSkipTest(url);
 }
 
 /**
@@ -212,15 +212,15 @@ function* checkSubmodules(repo, commit) {
     assert.instanceOf(commit, NodeGit.Commit);
 
     const config = yield repo.config();
-    const urlWhitelistPattern = (
+    const urlSkipPattern = (
         yield ConfigUtil.getConfigString(
             config, "gitmeta.skipsyntheticrefpattern")) || "";
-    const pathWhitelistPattern = (
+    const pathSkipPattern = (
         yield ConfigUtil.getConfigString(
             config, "gitmeta.skipsyntheticrefpathpattern")) || "";
 
-    const cfg = new SyntheticBranchConfig(urlWhitelistPattern,
-                                          pathWhitelistPattern);
+    const cfg = new SyntheticBranchConfig(urlSkipPattern,
+                                          pathSkipPattern);
 
     const parent = yield GitUtil.getParentCommit(repo, commit);
     const names = yield computeChangedSubmodules(repo,

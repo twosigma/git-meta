@@ -167,7 +167,7 @@ Object.keys(commands).sort().forEach(name => {
     configureSubcommand(subParser, name, cmd, (undefined !== optimized[name]));
 });
 
-const blacklist = new Set([
+const do_not_forward = new Set([
     "--help",
     "--version",
     "-h",
@@ -204,7 +204,7 @@ const blacklist = new Set([
 // sub-parser level.
 
 if (2 < process.argv.length &&
-    !blacklist.has(process.argv[2]) &&
+    !do_not_forward.has(process.argv[2]) &&
     !(process.argv[2] in commands)) {
     const name = process.argv[2];
     const args = process.argv.slice(3);
