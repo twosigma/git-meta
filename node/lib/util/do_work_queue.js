@@ -36,26 +36,33 @@ const co     = require("co");
 /**
  * Call the specified `getWork` function to create a promise to do work for
  * each element in the specified `queue`, limiting the amount of parallel work
- * to the optionally specified `limit`, if provided, or 20 otherwise.  Return
- * an array containing the result of the work *in the order that it was
+ * to the optionally specified `options.limit`, if provided, or 20 otherwise.  
+ * Return an array containing the result of the work *in the order that it was
  * received*, which may not be the same as the order in which the work was
- * completed.
+ * completed. If `options.failMsg` is provided, it will print an error message
+ * with element name if the work of the element fails.
  *
  * @async
  * @param {Array}                  queue
  * @param {(_, Number) => Promise} getWork
- * @param {Number}                 [limit]
- * @param {Array}
+ * @param {Object}                 [options]
+ * @param {Number}                 options.limit
+ * @param {String}                 options.failMsg
  */
-exports.doInParallel = co.wrap(function *(queue, getWork, limit) {
+exports.doInParallel = co.wrap(function *(queue, getWork, options) {
     assert.isArray(queue);
     assert.isFunction(getWork);
-    if (undefined === limit) {
-        limit = 20;
+    let limit = 20;
+    if (options && options.limit) {
+        assert.isNumber(options.limit);
+        limit = options.limit;
     }
-    else {
-        assert.isNumber(limit);
+    let failMsg = "";
+    if (options && options.failMsg) {
+        assert.isString(options.failMsg);
+        failMsg = options.failMsg;
     }
+
 
     const total = queue.length;
     const result = new Array(total);
@@ -64,8 +71,17 @@ exports.doInParallel = co.wrap(function *(queue, getWork, limit) {
     const doWork = co.wrap(function *() {
         while (next !== total) {
             const current = next++;
-            const currentResult = yield getWork(queue[current], current);
-            result[current] = currentResult;
+            try {
+                const currentResult = yield getWork(queue[current], current);
+                result[current] = currentResult;
+            } catch(err) {
+                if (failMsg) {
+                    console.log(
+                        `'${queue[current]}': ${failMsg}`
+                    );
+                }
+                throw err;
+            }
         }
     });
 
