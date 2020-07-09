@@ -838,6 +838,13 @@ exports.abort = co.wrap(function *(repo) {
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
         yield resetMerge(subRepo);
         const subHead = yield subRepo.getHeadCommit();
+        if (subHead === null) {
+            throw new UserError(
+                `HEAD not found in submodule ${subName}. ` +
+                "It is likely broken, please try to recover it first." +
+                "Hint: try to close and then reopen it."
+            );
+        }
         if (subHead.id().tostrS() !== shas[subName]) {
             const commit = yield subRepo.getCommit(shas[subName]);
             yield NodeGit.Reset.reset(subRepo,
