@@ -778,7 +778,9 @@ exports.continue = co.wrap(function *(repo) {
         yield index.conflictRemove(subPath);
     });
     const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
-    yield DoWorkQueue.doInParallel(openSubs, continueSub);
+    yield DoWorkQueue.doInParallel(openSubs,
+                                   continueSub,
+                                   {failMsg: "Merge in submodule failed."});
     yield SparseCheckoutUtil.writeMetaIndex(repo, index);
 
     if ("" !== errorMessage) {

@@ -81,8 +81,30 @@ describe("DoWorkQueue", function () {
                 return i * 2;
             });
         }
-        const result = yield DoWorkQueue.doInParallel(work, getWork, 1);
+        const result = yield DoWorkQueue.doInParallel(work,
+                                                      getWork,
+                                                      {limit: 1});
         assert.equal(result.length, NUM_TO_DO);
         assert.deepEqual(result, expected);
+    }));
+
+    it("sub work failure", co.wrap(function *() {
+        let work = ["success", "fail"];
+        function getWork(name, index) {
+            if ("fail" === name) {
+                throw new Error("deliberate error");
+            }
+            return waitSomeTime(index);
+        }
+        try {
+            yield DoWorkQueue.doInParallel(
+                work,
+                getWork,
+                {limit: 1, failMsg: "getWork failed"}
+            );
+            assert.fail("should have failed");
+        } catch (error) {
+            assert.equal("deliberate error", error.message);
+        }
     }));
 });

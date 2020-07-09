@@ -977,7 +977,9 @@ ${name}`;
             yield exports.fetchSubCommits(repo, url, subFetches);
             console.timeEnd(fetchTimeMessage);
         });
-        yield DoWorkQueue.doInParallel(subNames, doFetch, options.numParallel);
+        yield DoWorkQueue.doInParallel(subNames,
+                                       doFetch,
+                                       {limit: options.numParallel});
     }
 
     console.log("Now stitching");
