@@ -402,13 +402,6 @@ const mergeStepPrepare = co.wrap(function *(context) {
         return MergeStepResult.justMeta(infoMessage, theirCommit);    // RETURN
     }
 
-    const upToDate  = yield NodeGit.Graph.descendantOf(metaRepo,
-                                                       ourCommitSha,
-                                                       theirCommitSha);
-
-    if (upToDate) {
-        return MergeStepResult.justMeta(infoMessage, ourCommitSha);    // RETURN
-    }
     return MergeStepResult.empty();
 });
 
@@ -436,22 +429,45 @@ const mergeStepFF = co.wrap(function *(context) {
 
     let errorMessage     = null;
     let infoMessage      = null;
+    let descendantCommit = null;
+    let descendantSha    = null;
+    let ancestorSha      = null;
 
-    const canFF  = yield NodeGit.Graph.descendantOf(metaRepo,
-                                                    theirCommitSha,
-                                                    ourCommitSha);
+    let canFF  = yield NodeGit.Graph.descendantOf(metaRepo,
+                                                  theirCommitSha,
+                                                  ourCommitSha);
+    if (canFF) {
+        descendantCommit = theirCommit;
+        descendantSha = theirCommitSha;
+        ancestorSha = ourCommitSha;
+    } else {
+        canFF = yield NodeGit.Graph.descendantOf(metaRepo,
+                                                 ourCommitSha,
+                                                 theirCommitSha);
+        if (canFF) {
+            descendantCommit = ourCommit;
+            descendantSha = ourCommitSha;
+            ancestorSha = theirCommitSha;
+        }
+    }
     if (MODE.FF_ONLY === mode && !canFF) {
-        errorMessage = "The meta-repository cannot be fast-forwarded " +
-            `to ${colors.red(theirCommitSha)}.`;
+        errorMessage = "The meta-repository cannot be fast-forwarded to " +
+            `${colors.red(theirCommitSha)} or ${colors.red(ourCommitSha)}.`;
         return MergeStepResult.error(errorMessage);                   // RETURN
     } else if (canFF && MODE.FORCE_COMMIT !== mode) {
         infoMessage = `Fast-forwarding meta repo from `+
-            `${colors.green(ourCommitSha)} to `+
-            `${colors.green(theirCommitSha)}`;
+            `${colors.green(ancestorSha)} to `+
+            `${colors.green(descendantSha)}`;
         if (!forceBare) {
-            yield exports.fastForwardMerge(metaRepo, theirCommit);
+            if (descendantSha === ourCommitSha) {
+                // up-to-date
+                console.log("Up-to-date.");
+            } else {
+                // fast-forward and update HEAD
+                yield exports.fastForwardMerge(metaRepo, descendantCommit);
+            }
         }
-        return MergeStepResult.justMeta(infoMessage, theirCommitSha); // RETURN
+        return MergeStepResult.justMeta(infoMessage, descendantSha);  // RETURN
     }
     return MergeStepResult.empty();
 });

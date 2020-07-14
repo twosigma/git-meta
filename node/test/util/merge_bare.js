@@ -58,10 +58,16 @@ x=B:C2-1 s=Sa:1;C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 mode: MODE.NORMAL,
                 parents: ["1"],
             },
-            "fast forward in no-ff mode": {
+            "fast forward in no-ff mode, theirs are newer": {
                 initial: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
                 theirCommit: "2",
                 ourCommit: "1",
+                parents: ["1", "2"],
+            },
+            "fast forward in no-ff mode, ours are newer": {
+                initial: "a=B|x=S:C2-1 s=Sa:1;Bfoo=2",
+                theirCommit: "1",
+                ourCommit: "2",
                 parents: ["1", "2"],
             },
             "one merge": {
