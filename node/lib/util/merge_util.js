@@ -565,7 +565,7 @@ const mergeStepMergeSubmodules = co.wrap(function *(context) {
     //    will go away
     if (!forceBare) {
         yield CherryPickUtil.closeSubs(opener, merges);
-        yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+        yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     }
 
     if ("" !== conflictMessage) {
@@ -781,7 +781,7 @@ exports.continue = co.wrap(function *(repo) {
     yield DoWorkQueue.doInParallel(openSubs,
                                    continueSub,
                                    {failMsg: "Merge in submodule failed."});
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 
     if ("" !== errorMessage) {
         throw new UserError(errorMessage);
@@ -859,7 +859,7 @@ exports.abort = co.wrap(function *(repo) {
     });
     yield DoWorkQueue.doInParallel(openSubs, abortSub);
     yield index.conflictCleanup();
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     yield resetMerge(repo);
     yield SequencerStateUtil.cleanSequencerState(repo.path());
 });

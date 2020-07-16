@@ -235,7 +235,7 @@ exports.checkoutCommit = co.wrap(function *(repo, commit, force) {
         repo.setHeadDetached(commit);
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), doCheckout);
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 });
 
 /**

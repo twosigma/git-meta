@@ -367,7 +367,7 @@ ${colors.green(rebaseInfo.onto)}.`);
         }
     });
     yield DoWorkQueue.doInParallel(Object.keys(subs), continueSub);
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     const result = {
         errorMessage: "" === errorMessage ? null : errorMessage,
         commits: commits,

@@ -102,7 +102,8 @@ Pass ${colors.magenta("--force")} to close it anyway.
     // Write out the meta index to update SKIP_WORKTREE flags for closed
     // submodules.
 
-    yield SparseCheckoutUtil.writeMetaIndex(repo, yield repo.index());
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo,
+                                                        yield repo.index());
 
     // Run post-close-submodule hook with submodules which closed successfully.
     yield Hook.execHook(repo, "post-close-submodule", subsClosedSuccessfully);

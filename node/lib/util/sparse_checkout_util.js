@@ -155,7 +155,7 @@ exports.removeFromSparseCheckoutFile = function (repo, filenames) {
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index} index
  */
-exports.writeMetaIndex = co.wrap(function *(repo, index) {
+exports.setSparseBitsAndWriteIndex = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
 

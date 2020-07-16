@@ -370,7 +370,7 @@ const stageOpenSubmodules = co.wrap(function *(repo, index, submodules) {
             yield index.addByPath(name);
         }
     }));
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 });
 
 /**
@@ -633,7 +633,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
         }
     }
 
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 
     // Use 'TreeUtil' to create a new tree having the required paths.
 

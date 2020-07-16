@@ -62,9 +62,9 @@ exports.SUB_OPEN_OPTION = SUB_OPEN_OPTION;
  * is provided, use it to configure the newly-opened submodule's repository.
  *
  * Note that after opening one or more submodules,
- * `SparseCheckoutUtil.writeMetaIndex` must be called so that `SKIP_WORKTREE`
- * is *unset*; since this operation is expensive, we cannot do it automatically
- * each time a submodule is opened.
+ * `SparseCheckoutUtil.setSparseBitsAndWriteIndex` must be called so that
+ * `SKIP_WORKTREE` is *unset*; since this operation is expensive, we cannot do
+ * it automatically each time a submodule is opened.
  *
  * @async
  * @param {SubmoduleFetcher} fetcher
@@ -314,9 +314,9 @@ Opening ${colors.blue(subName)} on ${colors.green(sha)}.`);
  *      - open normal repo otherwise
  *
  * Note that after opening one or more submodules,
- * `SparseCheckoutUtil.writeMetaIndex` must be called so that `SKIP_WORKTREE`
- * is *unset*; since this operation is expensive, we cannot do it automatically
- * each time a submodule is opened.
+ * `SparseCheckoutUtil.setSparseBitsAndWriteIndex` must be called so that
+ * `SKIP_WORKTREE` is *unset*; since this operation is expensive, we cannot do
+ * it automatically each time a submodule is opened.
  *
  * @param {String}  subName
  * @param {SUB_OPEN_OPTION}  openOption
