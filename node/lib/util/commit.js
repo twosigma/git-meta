@@ -109,7 +109,7 @@ const getAmendStatusForRepo = co.wrap(function *(repo, all) {
 });
 
 /**
- * This class reprents the meta-data associated with a commit.
+ * This class represents the meta-data associated with a commit.
  */
 class CommitMetaData {
     /**
@@ -450,7 +450,7 @@ exports.shouldCommit = function (status, skipMeta, subMessages) {
  * commit and the shas of any commits generated in submodules. The behavior is
  * undefined if there are entries in `.gitmodules` for submodules having no
  * commits, or if `null === message && undefined === subMessages`.  The
- * behavior is undefined unless there is somthing to commit.
+ * behavior is undefined unless there is something to commit.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
@@ -1216,7 +1216,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                 // and so some things that should be changed will not be in it.
                 //  We cannot call `Index.addAll` because it will stage
                 //  untracked files.  Therefore, we need to use our normal
-                //  status routine to examime the workdir and stage changed
+                //  status routine to examine the workdir and stage changed
                 //  files.
 
                 const workdir = actualStatus.workdir;
