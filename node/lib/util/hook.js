@@ -61,7 +61,7 @@ exports.hasHook = function (repo, name) {
  * @param {String[]} args
  * @return {Boolean}
  */
-exports.execHook = co.wrap(function*(repo, name, args=[]) {
+exports.execHook = co.wrap(function*(repo, name, args=[], env={}) {
     assert.isString(name);
 
     const rootDirectory = repo.path();
@@ -74,7 +74,10 @@ exports.execHook = co.wrap(function*(repo, name, args=[]) {
 
     try {
         process.chdir(repo.workdir());
-        yield spawn(absPath, args, { stdio: "inherit" });
+        const subEnv = {};
+        Object.assign(subEnv, process.env);
+        Object.assign(subEnv, env);
+        yield spawn(absPath, args, { stdio: "inherit", env: subEnv });
         return true;
     } catch (e) {
         if (e.code === "EACCES") {

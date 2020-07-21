@@ -48,7 +48,6 @@
     "mocha": "^6.1.4",
     "mocha-jshint": "",
     "mocha-parallel-tests": "^2.1.2",
-    "sinon": "^7.3.2",
     "temp": ""
   }
 }

@@ -45,9 +45,11 @@ const NodeGit = require("nodegit");
 const path    = require("path");
 
 const ConfigUtil          = require("./config_util");
+const CherryPickUtil      = require("./cherry_pick_util.js");
 const DoWorkQueue         = require("../util/do_work_queue");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
+const Hook                = require("../util/hook");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
@@ -194,55 +196,61 @@ exports.stageChange = co.wrap(function *(index, path, change) {
     }
 });
 
+const runHooks = co.wrap(function *(repo, index) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(index, NodeGit.Index);
+
+    const tempIndexPath = repo.path() + "index.gmtmp";
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index,
+                                                        tempIndexPath);
+
+    try {
+        if (Hook.hasHook(repo, "pre-commit")) {
+            const isOk = yield Hook.execHook(repo, "pre-commit", [],
+                                             { GIT_INDEX_FILE: tempIndexPath});
+            yield GitUtil.overwriteIndexFromFile(index, tempIndexPath);
+
+            if (!isOk) {
+                // hooks are responsible for printing their own message
+                throw new Error("");
+            }
+        }
+    } finally {
+        yield fs.unlink(tempIndexPath);
+    }
+});
+
+
 /**
- * Commit changes in the specified `repo`.  If the specified `doAll` is true,
- * stage files indicated that they are to be committed in the `staged` section.
- * Use the specified `message` as the commit message.  If there are no files to
- * commit and `false === force`, do nothing and return null; otherwise, return
- * the created commit object.  Ignore submodules.  Use the specified
- * `signature` to identify the commit creator.
+ * Prepare a temp index in the specified `repo`, then run the hooks,
+ * and read back the index.  If the specified `doAll` is true, stage
+ * files indicated that they are to be committed in the `staged`
+ * section.  Ignore submodules.
  *
  * @async
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         repoStatus
  * @param {Boolean}            doAll
- * @param {String}             message
- * @param {Boolean}            force
- * @param {NodeGit.Signature}  signature
  * @return {NodeGit.Oid|null}
  */
-const commitRepo = co.wrap(function *(repo,
-                                      changes,
-                                      doAll,
-                                      message,
-                                      force,
-                                      signature) {
+const prepareIndexAndRunHooks = co.wrap(function *(repo,
+                                                   changes,
+                                                   doAll) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isObject(changes);
-    assert.isBoolean(doAll);
-    assert.isString(message);
-    assert.isBoolean(force);
-    assert.instanceOf(signature, NodeGit.Signature);
 
-    const doCommit = 0 !== Object.keys(changes).length || force;
+    const index = yield repo.index();
 
     // If we're auto-staging files, loop through workdir and stage them.
 
     if (doAll) {
-        const index = yield repo.index();
         for (let path in changes) {
             yield exports.stageChange(index, path, changes[path]);
         }
-        yield index.write();
+        yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     }
-    if (doCommit) {
-        return yield repo.createCommitOnHead(
-                                         [],
-                                         signature,
-                                         signature,
-                                         exports.ensureEolOnLastLine(message));
-    }
-    return null;
+
+    yield runHooks(repo, index);
 });
 
 const editorMessagePrefix = `\
@@ -438,6 +446,22 @@ exports.shouldCommit = function (status, skipMeta, subMessages) {
     return false;
 };
 
+const updateHead = co.wrap(function *(repo, sha) {
+    // Now we need to put the commit on head.  We need to unstage
+    // the changes we've just committed, otherwise we see
+    // conflicts with the workdir.  We do a SOFT reset because we
+    // don't want to affect index changes for paths you didn't
+    // touch.
+
+    // This will return the same one that we modified above
+    const index = yield repo.index();
+    // First, we write the new index to the actual index file.
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
+
+    const commit = yield repo.getCommit(sha);
+    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.SOFT);
+});
+
 /**
  * Create a commit across modified repositories and the specified `metaRepo`
  * with the specified `message`; if `null === message`, do not create a commit
@@ -487,8 +511,8 @@ exports.commit = co.wrap(function *(metaRepo,
     // Commit submodules.  If any changes, remember this so we know to generate
     // a commit in the meta-repo whether or not the meta-repo has its own
     // workdir changes.
-
     const subCommits = {};
+    const subRepos = {};
     const commitSubmodule = co.wrap(function *(name) {
         let subMessage = message;
 
@@ -503,21 +527,51 @@ exports.commit = co.wrap(function *(metaRepo,
         }
         const status = submodules[name];
         const repoStatus = (status.workdir && status.workdir.status) || null;
+
         if (null !== repoStatus &&
             0 !== Object.keys(repoStatus.staged).length) {
             const subRepo = yield SubmoduleUtil.getRepo(metaRepo, name);
-            const commit = yield commitRepo(subRepo,
-                                            repoStatus.staged,
-                                            all,
-                                            subMessage,
-                                            false,
-                                            signature);
+
+            yield prepareIndexAndRunHooks(subRepo,
+                                          repoStatus.staged,
+                                          all);
+
+            const headCommit = yield subRepo.getHeadCommit();
+            const parents = [];
+            if (headCommit !== null) {
+                parents.push(headCommit);
+            }
+            const index = yield subRepo.index();
+            const tree = yield index.writeTree();
+
+            const commit = yield subRepo.createCommit(
+                null,
+                signature,
+                signature,
+                exports.ensureEolOnLastLine(subMessage),
+                tree,
+                parents);
+
+            subRepos[name] = subRepo;
             subCommits[name] = commit.tostrS();
         }
     });
 
+    const index = yield metaRepo.index();
+
     yield DoWorkQueue.doInParallel(Object.keys(submodules), commitSubmodule);
 
+    if (all) {
+        for (const subName of Object.keys(metaStatus.staged)) {
+            exports.stageChange(index, subName, metaStatus.staged[subName]);
+        }
+    }
+
+    for (const subName of Object.keys(subCommits)) {
+        const subRepo = subRepos[subName];
+        const sha = subCommits[subName];
+        yield updateHead(subRepo, sha);
+    }
     const result = {
         metaCommit: null,
         submoduleCommits: subCommits,
@@ -527,16 +581,19 @@ exports.commit = co.wrap(function *(metaRepo,
         return result;                                                // RETURN
     }
 
-    const index = yield metaRepo.index();
+    // TODO temp index and meta pre-commit hook
     yield stageOpenSubmodules(metaRepo, index, submodules);
 
-    result.metaCommit = yield commitRepo(metaRepo,
-                                         metaStatus.staged,
-                                         all,
-                                         message,
-                                         true,
-                                         signature);
+    const tree = yield index.writeTree();
+    const headCommit = yield metaRepo.getHeadCommit();
 
+    result.metaCommit = yield metaRepo.createCommit(
+                "HEAD",
+                signature,
+                signature,
+                exports.ensureEolOnLastLine(message),
+                tree,
+                [headCommit]);
     return result;
 });
 
@@ -564,12 +621,14 @@ const isExecutable = co.wrap(function *(repo, filename) {
 });
 
 /**
- * Write a commit for the specified `repo` having the specified
- * `status` using the specified commit `message` and return the ID of the new
- * commit.  Note that this method records staged commits for submodules but
- * does not recurse into their repositories.  Note also that changes that would
- * involve altering `.gitmodules` -- additions, removals, and URL changes --
- * are ignored.
+ * Create a temp index and run the pre-commit hooks for the specified
+ * `repo` having the specified `status` using the specified commit
+ * `message` and return the ID of the new commit.  Note that this
+ * method records staged commits for submodules but does not recurse
+ * into their repositories.  Note also that changes that would involve
+ * altering `.gitmodules` -- additions, removals, and URL changes --
+ * are ignored.  HEAD and the main on-disk index file are not changed,
+ * although the in-memory index is altered.
  *
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         status
@@ -592,6 +651,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
     // Therefore, all of our files must be staged.
 
     const index = yield repo.index();
+    yield index.readTree(yield headCommit.getTree());
 
     // First, handle "normal" file changes.
 
@@ -626,19 +686,17 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
             changes[subName] = new Change(id, FILEMODE.COMMIT);
 
             // Stage this submodule if it's open.
-
-            if (null !== sub.workdir) {
-                yield index.addByPath(subName);
-            }
+            yield CherryPickUtil.addSubmoduleCommit(index, subName,
+                                                    sub.index.sha);
         }
     }
 
-    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
+    yield runHooks(repo, index);
 
     // Use 'TreeUtil' to create a new tree having the required paths.
 
-    const baseTree = yield headCommit.getTree();
-    const tree = yield TreeUtil.writeTree(repo, baseTree, changes);
+    const treeId = yield index.writeTree();
+    const tree = yield NodeGit.Tree.lookup(repo, treeId);
 
     // Create a commit with this tree.
 
@@ -655,16 +713,30 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
                                           parents.length,
                                           parents);
 
-    // Now we need to put the commit on head.  We need to unstage the changes
-    // we've just committed, otherwise we see conflicts with the workdir.  We
-    // do a SOFT reset because we don't want to affect index changes for paths
-    // you didn't touch.
+    //restore the index
+    // Now, reload the index to get rid of the changes we made to it.
+    // In theory, this should be index.read(true), but that doesn't
+    // work for some reason.
+    yield GitUtil.overwriteIndexFromFile(index, index.path());
 
-    const commit = yield repo.getCommit(commitId);
-    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.SOFT);
-    return commitId.tostrS();
+    // ...and apply the changes from the commit that we just made.
+    // I'm pretty sure this doesn't do rename/copy detection, but the nodegit
+    // API docs are pretty vague, as are the libgit2 docs.
+    const commit = yield NodeGit.Commit.lookup(repo, commitId);
+    const diffs = yield commit.getDiff();
+    const diff = diffs[0];
+    for (let i = 0; i < diff.numDeltas(); i++) {
+        const delta = diff.getDelta(i);
+        const newFile = delta.newFile();
+        if (GitUtil.isZero(newFile.id())) {
+            index.removeByPath(delta.oldFile().path());
+        } else {
+            index.addByPath(newFile.path());
+        }
+    }
+
+    return commitId;
 });
-
 
 /**
  * Commit changes to the files indicated as staged by the specified `status`
@@ -710,7 +782,8 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
 
         const wdStatus = workdir.status;
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-        const sha = yield exports.writeRepoPaths(subRepo, wdStatus, message);
+        const oid = yield exports.writeRepoPaths(subRepo, wdStatus, message);
+        const sha = oid.tostrS();
         subCommits[subName] = sha;
         const oldIndex = sub.index;
         const Submodule = RepoStatus.Submodule;
@@ -722,9 +795,15 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
                 headCommit: sha,
             }), Submodule.COMMIT_RELATION.SAME)
         });
+        committedSubs[subName].repo = subRepo;
     });
 
     yield DoWorkQueue.doInParallel(Object.keys(subs), writeSubPaths);
+
+    for (const subName of Object.keys(committedSubs)) {
+        const sub = committedSubs[subName];
+        yield updateHead(sub.repo, sub.index.sha);
+    }
 
     // We need a `RepoStatus` object containing only the set of the submodules
     // to commit to pass to `writeRepoPaths`.
@@ -732,8 +811,10 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
     const pathStatus = status.copy({
         submodules: committedSubs,
     });
-
     const id = yield exports.writeRepoPaths(repo, pathStatus, message);
+    const commit = yield repo.getCommit(id);
+    yield NodeGit.Reset.reset(repo, commit, NodeGit.Reset.TYPE.SOFT);
+
     return {
         metaCommit: id,
         submoduleCommits: subCommits,
@@ -1077,14 +1158,15 @@ exports.getAmendStatus = co.wrap(function *(repo, options) {
 });
 
 /**
- * Amend the specified `repo`, using the specified commit `message`, and return
- * the sha of the created commit.
+ * Create a commit in the specified `repo`, based on the HEAD commit,
+ * using the specified commit `message`, and return the sha of the
+ * created commit.
  *
  * @param {NodeGit.Repository} repo
  * @param {String} message
- * @return {String}
+ * @return {NodeGit.Oid}
  */
-exports.amendRepo = co.wrap(function *(repo, message) {
+exports.createAmendCommit = co.wrap(function *(repo, message) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(message);
 
@@ -1093,9 +1175,16 @@ exports.amendRepo = co.wrap(function *(repo, message) {
     const treeId = yield index.writeTree();
     const tree = yield NodeGit.Tree.lookup(repo, treeId);
     const termedMessage = exports.ensureEolOnLastLine(message);
-    const id = yield head.amend("HEAD", null, null, null, termedMessage, tree);
-    return id.tostrS();
+    const id = yield repo.createCommit(
+        null,
+        head.author(),
+        head.committer(),
+        termedMessage,
+        tree,
+        head.parents());
+    return id;
 });
+
 
 /**
  * Amend the specified meta `repo` and the shas of the created commits.  Amend
@@ -1151,9 +1240,9 @@ exports.amendMetaRepo = co.wrap(function *(repo,
     });
 
     const subCommits = {};
+    const subRepos = {};
     const subs = status.submodules;
     const amendSubSet = new Set(subsToAmend);
-
     yield Object.keys(subs).map(co.wrap(function *(subName) {
         // If we're providing specific sub messages, use it if provided and
         // skip committing the submodule otherwise.
@@ -1165,6 +1254,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                 return;                                               // RETURN
             }
         }
+        subMessage = exports.ensureEolOnLastLine(subMessage);
         const subStatus = subs[subName];
 
         // We're working on only open repos (they would have been opened
@@ -1186,10 +1276,12 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
 
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
+        subRepos[subName] = subRepo;
+        const head = yield subRepo.getHeadCommit();
+        const subIndex = yield subRepo.index();
 
         // If the submodule is to be amended, we don't do the normal commit
         // process.
-
         if (doAmend) {
             // First, we check to see if this submodule needs to have its last
             // commit stripped.  That will be the case if we have no files
@@ -1197,7 +1289,6 @@ exports.amendMetaRepo = co.wrap(function *(repo,
 
             assert.isNotNull(repoStatus);
             if (0 === numStaged) {
-                const head = yield subRepo.getHeadCommit();
                 const parent = yield GitUtil.getParentCommit(subRepo, head);
                 const TYPE = NodeGit.Reset.TYPE;
                 const type = all ? TYPE.HARD : TYPE.MIXED;
@@ -1205,7 +1296,6 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                 return;                                               // RETURN
 
             }
-            const subIndex = yield subRepo.index();
             if (all) {
                 const actualStatus = yield StatusUtil.getRepoStatus(subRepo, {
                     showMetaChanges: true,
@@ -1226,22 +1316,47 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                         yield exports.stageChange(subIndex, path, change);
                     }
                 }
-                yield subIndex.write();
+                yield runHooks(subRepo, subIndex);
             }
-            subCommits[subName] = yield exports.amendRepo(subRepo, subMessage);
+            subCommits[subName] = yield exports.createAmendCommit(subRepo,
+                                                                  subMessage);
             return;                                                   // RETURN
         }
 
-        const commit = yield commitRepo(subRepo,
-                                        staged,
-                                        all,
-                                        subMessage,
-                                        false,
-                                        signature);
+        if (all) {
+        const actualStatus = yield StatusUtil.getRepoStatus(subRepo, {
+            showMetaChanges: true,
+        });
+
+        const workdir = actualStatus.workdir;
+        for (let path in actualStatus.workdir) {
+            const change = workdir[path];
+            if (RepoStatus.FILESTATUS.ADDED !== change) {
+                yield exports.stageChange(subIndex, path, change);
+            }
+        }
+        }
+
+        yield runHooks(subRepo, subIndex);
+        const tree = yield subIndex.writeTree();
+        const commit = yield subRepo.createCommit(
+            null,
+            signature,
+            signature,
+            subMessage,
+            tree,
+            [head]);
+
         if (null !== commit) {
-            subCommits[subName] = commit.tostrS();
+            subCommits[subName] = commit;
         }
     }));
+
+    for (const subName of Object.keys(subCommits)) {
+        const subCommit = subCommits[subName];
+        const subRepo = subRepos[subName];
+        yield updateHead(subRepo, subCommit.tostrS());
+    }
 
     let metaCommit = null;
     if (null !== message) {
@@ -1249,7 +1364,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         const index = yield repo.index();
         yield stageOpenSubmodules(repo, index, subs);
         yield stageFiles(repo, status.staged, index);
-        metaCommit = yield exports.amendRepo(repo, message);
+        metaCommit = yield exports.createAmendCommit(repo, message);
+        yield updateHead(repo, metaCommit.tostrS());
     }
     return {
         metaCommit: metaCommit,
@@ -1985,6 +2101,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
                                              all,
                                              paths,
                                              interactive,
+                                             noVerify,
                                              editMessage) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(cwd);
@@ -1994,6 +2111,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
     assert.isBoolean(all);
     assert.isArray(paths);
     assert.isBoolean(interactive);
+    assert.isBoolean(noVerify);
     assert.isFunction(editMessage);
 
     const workdir = repo.workdir();
@@ -2223,110 +2341,3 @@ it empty. You can remove the commit entirely with "git meta reset HEAD^".`);
                                        subMessages);
 });
 
-const submoduleHasChangesToCommit = function(status, submoduleName) {
-    const submodule = status.submodules[submoduleName];
-    if (!submodule) {
-        return false;
-    }
-    const { workdir } = submodule;
-    return null !== workdir && !workdir.status.isIndexClean();
-};
-
-const submoduleHasPrecommitHook = co.wrap(function *(repo, submoduleName) {
-    const Hook          = require("../util/hook");
-    const SubmoduleUtil = require("../util/submodule_util");
-
-    const subRepo = yield SubmoduleUtil.getRepo(repo, submoduleName);
-    return Hook.hasHook(subRepo, "pre-commit");
-});
-
-const filterInParallel = co.wrap(function *(collection, asyncPredicate) {
-    const DoWorkQueue = require("../util/do_work_queue");
-
-    const booleans = yield DoWorkQueue.doInParallel(collection,
-        asyncPredicate);
-    return collection.filter((item, index) => booleans[index]);
-});
-
-/**
- * Get the names of submodules that should run 'pre-commit' hook against.
- * This means the submodule must have a 'pre-commit' hook as well as have
- * changes to commit
- *
- * @async
- * @param {NodeGit.Repository}             repo
- * @param {RepoStatus}                     repoStatus
- * @return {String[]}
- */
-exports.getSubmoduleNamesForPrecommitCheck = co.wrap(function *(repo,
-                                                                repoStatus) {
-    const SubmoduleUtil = require("../util/submodule_util");
-
-    const allSubmoduleNames = yield SubmoduleUtil.getSubmoduleNames(repo);
-    return yield filterInParallel(
-        allSubmoduleNames,
-        co.wrap(function *(submoduleName) {
-            return submoduleHasChangesToCommit(repoStatus, submoduleName) &&
-                (yield submoduleHasPrecommitHook(repo, submoduleName));
-        })
-    );
-});
-
-/**
- * Execute 'pre-commit' hooks of submodules. Only execute when a submodule
- * has the hook and has changes to commit.
- * If there is an error occurred, throw an error
- * If there are hooks to be run and interactive mode is on, a warning will be
- * raised to communicate that 'pre-commit' hooks were skipped.
- *
- * @async
- * @param {NodeGit.Repository}             repo
- * @param {String}                         cwd
- * @param {Boolean}                        all
- * @param {String[]}                       paths
- * @param {Boolean}                        interactive
- * @return {void}
- */
-exports.execSubmodulePrecommitHooks = co.wrap(function *(repo,
-                                                         cwd,
-                                                         all,
-                                                         paths,
-                                                         interactive) {
-    const Hook          = require("../util/hook");
-    const SubmoduleUtil = require("../util/submodule_util");
-
-    const repoStatus = yield exports.getCommitStatus(repo, cwd, {
-        all,
-        paths,
-    });
-
-    const submoduleNames = yield exports.getSubmoduleNamesForPrecommitCheck(
-        repo,
-        repoStatus
-    );
-
-    if (submoduleNames.length > 0) {
-        if (interactive) {
-            // "interactive mode is not supported because pre-commit hooks
-            // happen before we offer the commit message for editing,
-            // and in interactive mode, we don't know which hooks actually
-            // need to be run until the editing is done."
-            console.warn(
-                "Warning. pre-commit hooks skipped when using option [-i]"
-            );
-        } else {
-            // execute pre-commit hook for each submodule
-            for (const submoduleName of submoduleNames) {
-                const subRepo = yield SubmoduleUtil.getRepo(
-                    repo,
-                    submoduleName
-                );
-                const isOk = yield Hook.execHook(subRepo, "pre-commit");
-                if (!isOk) {
-                    // hooks are responsible for printing their own message
-                    throw new Error("");
-                }
-            }
-        }
-    }
-});

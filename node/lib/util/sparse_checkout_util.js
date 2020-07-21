@@ -154,8 +154,10 @@ exports.removeFromSparseCheckoutFile = function (repo, filenames) {
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index} index
+ * @param {String|undefined} path if set, where to write the index
  */
-exports.setSparseBitsAndWriteIndex = co.wrap(function *(repo, index) {
+exports.setSparseBitsAndWriteIndex = co.wrap(function *(repo, index,
+                                                        path = undefined) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
 
@@ -176,6 +178,19 @@ exports.setSparseBitsAndWriteIndex = co.wrap(function *(repo, index) {
                 yield index.add(e);
             }
         }
+    }
+    // This is a horrible hack that we need because nodegit doesn't
+    // have a way to write the index to anywhere other than the
+    // location from whence it was opened.
+    if (path !== undefined) {
+        const indexPath = repo.path() + "index";
+        yield fs.copy(indexPath, path);
+        const newIndex = yield NodeGit.Index.open(path);
+        yield newIndex.removeAll();
+        for (const e of index.entries()) {
+            yield newIndex.add(e);
+        }
+        index = newIndex;
     }
     yield index.write();
 });
