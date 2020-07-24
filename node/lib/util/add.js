@@ -116,6 +116,6 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     if (0 !== toAdd.length) {
         const index = yield repo.index();
         yield toAdd.map(filename => index.addByPath(filename));
-        yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+        yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     }
 });

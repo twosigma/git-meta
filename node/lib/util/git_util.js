@@ -997,3 +997,29 @@ exports.getReference = co.wrap(function *(repo, name) {
     }
     return null;
 });
+
+/**
+ * Read an index file, and overwrite an in-memory index with its contents.
+ *
+ * @param {NodeGit.Index} index
+ * @param {String|undefined} path if set, whence to read the index
+ */
+exports.overwriteIndexFromFile = co.wrap(function*(index, path) {
+    assert.instanceOf(index, NodeGit.Index);
+    assert.isString(path);
+
+    // TODO: in theory, it might be possible to just check the checksum
+    // on the index to avoid reloading it in the common case where nothing
+    // has changed.
+    const newIndex = yield NodeGit.Index.open(path);
+    yield index.removeAll();
+    for (const e of newIndex.entries()) {
+        yield index.add(e);
+    }
+});
+
+
+// This is documented as oid.isZero() but that doesn't actually work.
+exports.isZero = function(oid) {
+    return oid.tostrS() === "0000000000000000000000000000000000000000";
+};

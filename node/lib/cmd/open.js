@@ -155,7 +155,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
 
     // Make sure the index entries are updated in case we're in sparse mode.
 
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 
     if (subsOpenSuccessfully.length) {
         // Run post-open-submodule hook with successfully-opened submodules

@@ -356,7 +356,8 @@ ${colors.red(name)}`);
             result[name] = stashSha;
         }
     }));
-    yield SparseCheckoutUtil.writeMetaIndex(repo, yield repo.index());
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo,
+                                                        yield repo.index());
     return result;
 });
 

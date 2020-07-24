@@ -120,25 +120,13 @@ const doCommit = co.wrap(function *(args) {
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
 
-    if (!args.no_verify) {
-        try {
-            yield Commit.execSubmodulePrecommitHooks(repo,
-                                                     cwd,
-                                                     args.all,
-                                                     args.file,
-                                                     args.interactive);
-        } catch (e) {
-            console.error("Failed to commit. \n" + e.message);
-            process.exit(1);
-        }
-    }
-
     yield Commit.doCommitCommand(repo,
                                  cwd,
                                  args.message,
                                  args.all,
                                  args.file,
                                  args.interactive,
+                                 args.no_verify,
                                  GitUtil.editMessage);
     yield Hook.execHook(repo, "post-commit");
 });
@@ -157,19 +145,6 @@ const doAmend = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
-
-    if (!args.no_verify) {
-        try {
-            yield Commit.execSubmodulePrecommitHooks(repo,
-                                                     cwd,
-                                                     args.all,
-                                                     args.file,
-                                                     args.interactive);
-        } catch (e) {
-            console.error("Failed to commit. \n" + e.message);
-            process.exit(1);
-        }
-    }
 
     yield Commit.doAmendCommand(repo,
                                 cwd,

@@ -143,8 +143,9 @@ exports.clearSubmoduleConfigEntry =
  * De-initialize the repositories having the specified `submoduleNames` in the
  * specified `repo`.
  *
- * Note that after calling this method, `SparseCheckoutUtil.writeMetaIndex`
- * must be called to update the SKIP_WORKTREE flags for closed submodules.
+ * Note that after calling this method,
+ * `SparseCheckoutUtil.setSparseBitsAndWriteIndex` must be called to update
+ * the SKIP_WORKTREE flags for closed submodules.
  *
  * @async
  * @param {NodeGit.Repository} repo

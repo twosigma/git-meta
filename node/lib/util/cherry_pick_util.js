@@ -746,7 +746,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         errorMessage: errorMessage === "" ? null : errorMessage,
         newMetaCommit: null,
     };
-    yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     const nChanges = Object.keys(picks.commits)
         .map(name => Object.keys(
             picks.commits[name]).length + picks.ffwds[name] ? 1 : 0

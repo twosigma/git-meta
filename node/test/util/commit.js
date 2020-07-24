@@ -32,7 +32,7 @@
 
 const assert  = require("chai").assert;
 const co      = require("co");
-const sinon   = require("sinon");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
@@ -44,7 +44,6 @@ const StatusUtil      = require("../../lib/util/status_util");
 const SubmoduleUtil   = require("../../lib/util/submodule_util");
 const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
-const Hook            = require("../../lib/util/hook");
 
 
 function mapCommitResult(commitResult) {
@@ -1427,9 +1426,13 @@ x=N:Cfoo\n#x README.md=hello world;*=master;Bmaster=x`,
             it(caseName, co.wrap(function *() {
                 const amend = co.wrap(function *(repos) {
                     const repo = repos.x;
-                    const newSha = yield Commit.amendRepo(repo, c.message);
+                    const newOid = yield Commit.createAmendCommit(repo,
+                                                                  c.message);
+                    const newCommit = yield NodeGit.Commit.lookup(repo,
+                                                                  newOid);
+                    yield GitUtil.updateHead(repo, newCommit, "amend");
                     const commitMap = {};
-                    commitMap[newSha] = "x";
+                    commitMap[newOid.tostrS()] = "x";
                     return { commitMap: commitMap };
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
@@ -2015,6 +2018,10 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                 const result = yield Commit.writeRepoPaths(repo,
                                                            status,
                                                            message);
+                const commit = yield repo.getCommit(result);
+                yield NodeGit.Reset.reset(repo, commit,
+                                          NodeGit.Reset.TYPE.SOFT);
+
                 const commitMap = {};
                 commitMap[result] = "x";
                 return { commitMap: commitMap, };
@@ -3129,6 +3136,7 @@ x=U:Cfoo\n#x-2 s=Sa:s;Os Cbar\n#s-1 a=b!H=s;Bmaster=x`,
                                                         c.all || false,
                                                         c.paths || [],
                                                         c.interactive || false,
+                                                        false,
                                                         editor);
                 if (undefined !== result) {
                     return {
@@ -3287,114 +3295,86 @@ x=U:Cbar\n#x-2 s=Sa:s;Bmaster=x;Os Cbar\n#s-1 README.md=foo, a=b`,
         });
     });
 
-    describe("execSubmodulePrecommitHooks", () => {
-        let sandbox;
-        const noop = () => Promise.resolve();
-        const repoMap = {
-            a: "submodule-a",
-            b: "submodule-b"
-        };
+    describe("submoduleHooksAreRun", function () {
+        const addNewFileHook = `#!/bin/bash
+echo -n bar > addedbyhook
+git add addedbyhook
+`;
+        const message = "msg";
 
-        beforeEach(() => {
-            sandbox = sinon.createSandbox();
-        });
+        it("runs the hook on amend", co.wrap(function*() {
+            const initial = `
+a=B:Ca-1 README.md=foo;Bmaster=a|
+x=U:C3-2 s=Sa:a;Bmaster=3;Os`;
+            const expected = `
+x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
 
-        afterEach(() => {
-            sandbox.restore();
-        });
+            const f = co.wrap(function*(repos) {
+                const repo = repos.x;
+                const cwd = repo.workdir();
 
-        it(
-            "should run 'pre-commit' hooks of submodules",
-            co.wrap(function*() {
-                sandbox
-                    .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
-                    .callsFake(() => ["a", "b"]);
-                sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
-                sandbox
-                    .stub(SubmoduleUtil, "getRepo")
-                    .callsFake((repo, submoduleName) =>
-                        Promise.resolve(repoMap[submoduleName])
-                    );
+                const hookPath = repo.path() + "modules/s/hooks/pre-commit";
+                fs.writeFileSync(hookPath, addNewFileHook);
+                yield fs.chmod(hookPath, 493); //0755
+                const editor = () => assert(false, "no editor");
 
-                const execHookSpy = sandbox
-                    .stub(Hook, "execHook")
-                    .callsFake(() => Promise.resolve(true));
-                yield Commit.execSubmodulePrecommitHooks();
-                assert.isTrue(execHookSpy.calledWith(repoMap.a));
-                assert.isTrue(execHookSpy.calledWith(repoMap.b));
-            })
-        );
-        it("should throw if execHook return false", function() {
-            sandbox
-                .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
-                .callsFake(() => ["a", "b"]);
-            sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
-            sandbox
-                .stub(SubmoduleUtil, "getRepo")
-                .callsFake((repo, submoduleName) =>
-                    Promise.resolve(repoMap[submoduleName])
-                );
+                const result = yield Commit.doAmendCommand(
+                    repo,
+                    cwd,
+                    message,
+                    true, // all
+                    false, // interactive
+                    editor);
 
-            sandbox.stub(Hook, "execHook").callsFake((repo, name) => {
-                assert.isTrue("pre-commit" === name);
-                return Promise.resolve(repo !== repoMap.b); // fail on 'b'
+                return {
+                    commitMap: mapCommitResult(result),
+                };
+
             });
 
-            return Commit.execSubmodulePrecommitHooks().catch(err => {
-                assert.instanceOf(err, Error);
-                // hooks are responsible for printing their own message
-                assert.equal(err.message, "");
+            yield RepoASTTestUtil.testMultiRepoManipulator(initial,
+                                                           expected,
+                                                           f,
+                                                           false);
+        }));
+
+        it("runs the hook on commit-with-paths", co.wrap(function*() {
+            const initial = "a=B:Ca-1;Bm=a|x=U:Os I q=r";
+            const expected = `x=E:Cmsg\n#x-2 s=Sa:s;Os Cmsg
+#s-1 addedbyhook=bar,q=r!H=s;Bmaster=x
+`;
+
+            const f = co.wrap(function*(repos) {
+                const repo = repos.x;
+
+                const hookPath = repo.path() + "modules/s/hooks/pre-commit";
+                fs.writeFileSync(hookPath, addNewFileHook);
+                yield fs.chmod(hookPath, 493); //0755
+
+                const status = yield Commit.getCommitStatus(
+                    repo,
+                    repo.workdir(), {
+                        showMetaChanges: true,
+                        paths: ["s"],
+                    });
+
+                const result = yield Commit.commitPaths(repo,
+                                                        status,
+                                                        message);
+                const commitMap = {};
+                commitMap[result.metaCommit] = "x";
+                Object.keys(result.submoduleCommits).forEach(name => {
+                    const sha = result.submoduleCommits[name];
+                    commitMap[sha] = name;
+                });
+                return { commitMap: commitMap };
             });
-        });
 
-        describe("interactive mode", () => {
-            const execSubmodulePrecommitHooksInteractive = () =>
-                Commit.execSubmodulePrecommitHooks(
-                    null,
-                    null,
-                    null,
-                    null,
-                    true
-                );
-            it(
-                "should warn if there are hooks to run but skipped",
-                co.wrap(function*() {
-                    sandbox
-                        .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
-                        .callsFake(() => ["a", "b"]);
-                    sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
-                    sandbox
-                        .stub(SubmoduleUtil, "getRepo")
-                        .callsFake((repo, submoduleName) =>
-                            Promise.resolve(repoMap[submoduleName])
-                        );
+            yield RepoASTTestUtil.testMultiRepoManipulator(initial,
+                                                           expected,
+                                                           f,
+                                                           false);
+        }));
 
-                    const consoleWarnSpy = sandbox
-                        .stub(console, "warn")
-                        .callsFake(noop);
-                    yield execSubmodulePrecommitHooksInteractive();
-                    assert.isTrue(
-                        consoleWarnSpy.calledWith(
-                            "Warning. pre-commit hooks skipped when using " +
-                            "option [-i]"
-                        )
-                    );
-                })
-            );
-            it(
-                "should not warn if there is no hooks",
-                co.wrap(function*() {
-                    sandbox
-                        .stub(Commit, "getSubmoduleNamesForPrecommitCheck")
-                        .callsFake(() => []);
-                    sandbox.stub(Commit, "getCommitStatus").callsFake(noop);
-                    const consoleWarnSpy = sandbox
-                        .stub(console, "warn")
-                        .callsFake(noop);
-                    yield execSubmodulePrecommitHooksInteractive();
-                    assert.isFalse(consoleWarnSpy.called);
-                })
-            );
-        });
     });
 });

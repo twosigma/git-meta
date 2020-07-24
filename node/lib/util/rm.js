@@ -432,7 +432,7 @@ exports.rmPaths = co.wrap(function *(repo, paths, options) {
     // https://github.com/nodegit/nodegit/issues/1487
     if (toRemove.length !== 0) {
         yield index.removeAll(toRemove);
-        yield SparseCheckoutUtil.writeMetaIndex(repo, index);
+        yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     }
 
     // close to-be-deleted submodules
