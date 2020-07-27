@@ -232,7 +232,6 @@ const runHooks = co.wrap(function *(repo, index) {
  * @param {RepoStatus}         repoStatus
  * @param {Boolean}            doAll
  * @param {Boolean}            noVerify
- * @return {NodeGit.Oid|null}
  */
 const prepareIndexAndRunHooks = co.wrap(function *(repo,
                                                    changes,
