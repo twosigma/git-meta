@@ -231,13 +231,17 @@ const runHooks = co.wrap(function *(repo, index) {
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         repoStatus
  * @param {Boolean}            doAll
+ * @param {Boolean}            noVerify
  * @return {NodeGit.Oid|null}
  */
 const prepareIndexAndRunHooks = co.wrap(function *(repo,
                                                    changes,
-                                                   doAll) {
+                                                   doAll,
+                                                  noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isObject(changes);
+    assert.isBoolean(doAll);
+    assert.isBoolean(noVerify);
 
     const index = yield repo.index();
 
@@ -250,7 +254,9 @@ const prepareIndexAndRunHooks = co.wrap(function *(repo,
         yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
     }
 
-    yield runHooks(repo, index);
+    if (!noVerify) {
+        yield runHooks(repo, index);
+    }
 });
 
 const editorMessagePrefix = `\
@@ -490,7 +496,8 @@ exports.commit = co.wrap(function *(metaRepo,
                                     all,
                                     metaStatus,
                                     message,
-                                    subMessages) {
+                                    subMessages,
+                                    noVerify) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isBoolean(all);
     assert.instanceOf(metaStatus, RepoStatus);
@@ -504,6 +511,7 @@ exports.commit = co.wrap(function *(metaRepo,
     }
     assert(null !== message || undefined !== subMessages,
            "if no meta message, sub messages must be specified");
+    assert.isBoolean(noVerify);
 
     const signature = yield ConfigUtil.defaultSignature(metaRepo);
     const submodules = metaStatus.submodules;
@@ -534,7 +542,8 @@ exports.commit = co.wrap(function *(metaRepo,
 
             yield prepareIndexAndRunHooks(subRepo,
                                           repoStatus.staged,
-                                          all);
+                                          all,
+                                          noVerify);
 
             const headCommit = yield subRepo.getHeadCommit();
             const parents = [];
@@ -635,7 +644,7 @@ const isExecutable = co.wrap(function *(repo, filename) {
  * @param {String}             message
  * @return {String}
  */
-exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
+exports.writeRepoPaths = co.wrap(function *(repo, status, message, noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
@@ -691,7 +700,9 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
         }
     }
 
-    yield runHooks(repo, index);
+    if (!noVerify) {
+        yield runHooks(repo, index);
+    }
 
     // Use 'TreeUtil' to create a new tree having the required paths.
 
@@ -752,10 +763,11 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message) {
  * @return {String} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
  */
-exports.commitPaths = co.wrap(function *(repo, status, message) {
+exports.commitPaths = co.wrap(function *(repo, status, message, noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isString(message);
+    assert.isBoolean(noVerify);
 
     const subCommits = {};  // map from name to sha
 
@@ -782,7 +794,8 @@ exports.commitPaths = co.wrap(function *(repo, status, message) {
 
         const wdStatus = workdir.status;
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-        const oid = yield exports.writeRepoPaths(subRepo, wdStatus, message);
+        const oid = yield exports.writeRepoPaths(subRepo, wdStatus, message,
+                                                 noVerify);
         const sha = oid.tostrS();
         subCommits[subName] = sha;
         const oldIndex = sub.index;
@@ -1204,6 +1217,7 @@ exports.createAmendCommit = co.wrap(function *(repo, message) {
  * @param {Boolean}            all
  * @param {String|null}        message
  * @param {Object|null}        subMessages
+ * @param {Boolean}            noVerify
  * @return {Object}
  * @return {String} return.metaCommit sha of new commit on meta-repo
  * @return {Object} return.submoduleCommits  from sub name to sha
@@ -1213,7 +1227,8 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                                            subsToAmend,
                                            all,
                                            message,
-                                           subMessages) {
+                                           subMessages,
+                                           noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
     assert.isArray(subsToAmend);
@@ -1316,7 +1331,9 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                         yield exports.stageChange(subIndex, path, change);
                     }
                 }
-                yield runHooks(subRepo, subIndex);
+                if (!noVerify) {
+                    yield runHooks(subRepo, subIndex);
+                }
             }
             subCommits[subName] = yield exports.createAmendCommit(subRepo,
                                                                   subMessage);
@@ -1337,7 +1354,9 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
         }
 
-        yield runHooks(subRepo, subIndex);
+        if (!noVerify) {
+            yield runHooks(subRepo, subIndex);
+        }
         const tree = yield subIndex.writeTree();
         const commit = yield subRepo.createCommit(
             null,
@@ -2198,14 +2217,15 @@ exports.doCommitCommand = co.wrap(function *(repo,
         return yield exports.commitPaths(repo,
                                          repoStatus,
                                          message,
-                                         subMessages);
+                                         noVerify);
     }
     else {
         return yield exports.commit(repo,
                                     all,
                                     repoStatus,
                                     message,
-                                    subMessages);
+                                    subMessages,
+                                    noVerify);
     }
 });
 
@@ -2237,7 +2257,8 @@ exports.doAmendCommand = co.wrap(function *(repo,
                                             message,
                                             all,
                                             interactive,
-                                            editMessage) {
+                                            editMessage,
+                                            noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(cwd);
     if (null !== message) {
@@ -2338,6 +2359,7 @@ it empty. You can remove the commit entirely with "git meta reset HEAD^".`);
                                        Object.keys(subsToAmend),
                                        all,
                                        message,
-                                       subMessages);
+                                       subMessages,
+                                       noVerify);
 });
 
