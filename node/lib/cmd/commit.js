@@ -151,7 +151,8 @@ const doAmend = co.wrap(function *(args) {
                                 args.message,
                                 args.all,
                                 args.interactive,
-                                args.no_edit ? null : GitUtil.editMessage);
+                                args.no_edit ? null : GitUtil.editMessage,
+                                args.no_verify);
     yield Hook.execHook(repo, "post-commit");
 });
 

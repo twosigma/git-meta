@@ -74,7 +74,8 @@ const committer = co.wrap(function *(doAll, message, repos, subMessages) {
         showMetaChanges: true,
         all: doAll,
     });
-    const result = yield Commit.commit(x, doAll, status, message, subMessages);
+    const result = yield Commit.commit(x, doAll, status, message, subMessages,
+                                       false);
     return {
         commitMap: mapCommitResult(result),
     };
@@ -1617,7 +1618,8 @@ x=U:C3-2 s=Sa:b;Cx-3 s=Sa:s;Bmaster=x;Os Cs-b b=1`,
                                                               subsToAmend,
                                                               all,
                                                               message,
-                                                              subMessages);
+                                                              subMessages,
+                                                              false);
                     return { commitMap: mapCommitResult(result) };
                 });
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
@@ -2076,7 +2078,8 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                     const message = c.message || "message";
                     const result = yield Commit.commitPaths(repo,
                                                             status,
-                                                            message);
+                                                            message,
+                                                            false);
                     const commitMap = {};
                     commitMap[result.metaCommit] = "x";
                     Object.keys(result.submoduleCommits).forEach(name => {
@@ -3360,7 +3363,8 @@ x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
 
                 const result = yield Commit.commitPaths(repo,
                                                         status,
-                                                        message);
+                                                        message,
+                                                        false);
                 const commitMap = {};
                 commitMap[result.metaCommit] = "x";
                 Object.keys(result.submoduleCommits).forEach(name => {
