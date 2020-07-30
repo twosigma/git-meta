@@ -56,7 +56,7 @@ exports.configureParser = function (parser) {
 
     parser.addArgument(["-m", "--message"], {
         type: "string",
-        defaultValue: null,
+        action: "append",
         required: false,
         help: "description; if not provided one will be generated",
     });
@@ -142,10 +142,11 @@ const doSave = co.wrap(function *(args) {
         console.warn("Nothing to stash.");
         return;                                                       // RETURN
     }
+    const message = args.message ? args.message.join("\n\n") : null;
     yield StashUtil.save(repo,
                          status,
                          includeUntracked || false,
-                         args.message);
+                         message);
     console.log("Saved working directory and index state.");
 });
 
