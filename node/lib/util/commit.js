@@ -589,8 +589,10 @@ exports.commit = co.wrap(function *(metaRepo,
         return result;                                                // RETURN
     }
 
-    // TODO temp index and meta pre-commit hook
     yield stageOpenSubmodules(metaRepo, index, submodules);
+    if (!noVerify) {
+        yield runHooks(metaRepo, index);
+    }
 
     const tree = yield index.writeTree();
     const headCommit = yield metaRepo.getHeadCommit();
