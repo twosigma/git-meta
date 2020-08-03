@@ -74,6 +74,7 @@ exports.configureParser = function (parser) {
     });
     parser.addArgument(["-m", "--message"], {
         type: "string",
+        action: "append",
         required: true,
         help: "commit message for shadow commits",
     });
@@ -115,8 +116,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const incrementTimestamp =
                               args.increment_timestamp || args.epoch_timestamp;
     const includedSubrepos = args.include_subrepos || [];
+    const message = args.message ? args.message.join("\n\n") : null;
     const result = yield StashUtil.makeShadowCommit(repo,
-                                                    args.message,
+                                                    message,
                                                     incrementTimestamp,
                                                     false,
                                                     args.include_untracked,

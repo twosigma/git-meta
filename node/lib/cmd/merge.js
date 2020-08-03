@@ -59,6 +59,7 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-m", "--message"], {
         type: "string",
         help: "commit message",
+        action: "append",
         required: false,
     });
     parser.addArgument(["-F", "--message-file"], {
@@ -196,7 +197,7 @@ Merge of '${commitName}'
         doNotRecurse.push(noSlashPrefix);
     }
 
-    let message = args.message;
+    let message = args.message ? args.message.join("\n\n") : null;
     if (args.message_file) {
         message = yield fs.readFile(args.message_file, "utf8");
     }

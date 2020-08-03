@@ -64,7 +64,7 @@ exports.configureParser = function (parser) {
     });
     parser.addArgument(["-m", "--message"], {
         type: "string",
-        defaultValue: null,
+        action: "append",
         required: false,
         help: "commit message; if not specified will prompt"
     });
@@ -119,10 +119,11 @@ const doCommit = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
+    const message = args.message ? args.message.join("\n\n") : null;
 
     yield Commit.doCommitCommand(repo,
                                  cwd,
-                                 args.message,
+                                 message,
                                  args.all,
                                  args.file,
                                  args.interactive,
@@ -138,6 +139,7 @@ const doAmend = co.wrap(function *(args) {
     const UserError     = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;
+    const message = args.message ? args.message.join("\n\n") : null;
 
     if (usingPaths) {
         throw new UserError("Paths not supported with amend yet.");
@@ -148,7 +150,7 @@ const doAmend = co.wrap(function *(args) {
 
     yield Commit.doAmendCommand(repo,
                                 cwd,
-                                args.message,
+                                message,
                                 args.all,
                                 args.interactive,
                                 args.no_edit ? null : GitUtil.editMessage,

@@ -56,6 +56,7 @@ that is not pointed by any refs. It will also abort if there are merge conflicts
 exports.configureParser = function (parser) {
     parser.addArgument(["-m", "--message"], {
         type: "string",
+        action: "append",
         help: "commit message",
         required: false,
     });
@@ -143,7 +144,7 @@ Could not resolve ${colors.red(theirCommitName)} to a commit.`);
         doNotRecurse.push(noSlashPrefix);
     }
 
-    let message = args.message;
+    let message = args.message ? args.message.join("\n\n") : null;
     if (args.message_file) {
         message = yield fs.readFile(args.message_file, "utf8");
     }
