@@ -38,6 +38,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
+const Hook                = require("../util/hook");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -53,6 +54,36 @@ const SUB_OPEN_OPTION = {
     FORCE_BARE    : 2, // bare repo, open submodule is not allowed
 };
 exports.SUB_OPEN_OPTION = SUB_OPEN_OPTION;
+
+/**
+ * @class {Opener}
+ * class for opening and retrieving submodule repositories on-demand
+ */
+class Opener {
+    /**
+     * Create a new object for retreiving submodule repositories on-demand in
+     * the specified `repo`.
+     *
+     * @param {NodeGit.Repository} repo
+     * @param {NodeGit.Commit}     commit
+     */
+    constructor(repo, commit) {
+        assert.instanceOf(repo, NodeGit.Repository);
+        if (null !== commit) {
+            assert.instanceOf(commit, NodeGit.Commit);
+        }
+        this.d_repo = repo;
+        this.d_commit = commit;
+        this.d_initialized = false;
+    }
+
+    /**
+     * @property {NodeGit.Repository} the repo associated with this object
+     */
+    get repo() {
+        return this.d_repo;
+    }
+}
 
 /**
  * Open the submodule having the specified `submoduleName` in the meta-repo
@@ -86,9 +117,13 @@ exports.openOnCommit = co.wrap(function *(fetcher,
     if (null !== templatePath) {
         assert.isString(templatePath);
     }
+
     const metaRepoUrl = yield fetcher.getMetaOriginUrl();
     const metaRepo = fetcher.repo;
     const submoduleUrl = yield fetcher.getSubmoduleUrl(submoduleName);
+
+
+    const wasOpen = yield new Opener(metaRepo, null).isOpen(submoduleName);
 
     // Set up the submodule.
 
@@ -131,38 +166,14 @@ exports.openOnCommit = co.wrap(function *(fetcher,
         yield SparseCheckoutUtil.addToSparseCheckoutFile(metaRepo,
                                                          submoduleName);
     }
+
+    if (!wasOpen) {
+        // Run post-open-submodule hook with successfully-opened submodules
+        yield Hook.execHook(metaRepo, "post-open-submodule", [submoduleName]);
+    }
+
     return submoduleRepo;
 });
-
-/**
- * @class {Opener}
- * class for opening and retrieving submodule repositories on-demand
- */
-class Opener {
-    /**
-     * Create a new object for retreiving submodule repositories on-demand in
-     * the specified `repo`.
-     *
-     * @param {NodeGit.Repository} repo
-     * @param {NodeGit.Commit}     commit
-     */
-    constructor(repo, commit) {
-        assert.instanceOf(repo, NodeGit.Repository);
-        if (null !== commit) {
-            assert.instanceOf(commit, NodeGit.Commit);
-        }
-        this.d_repo = repo;
-        this.d_commit = commit;
-        this.d_initialized = false;
-    }
-
-    /**
-     * @property {NodeGit.Repository} the repo associated with this object
-     */
-    get repo() {
-        return this.d_repo;
-    }
-}
 
 Opener.prototype._initialize = co.wrap(function *() {
     if (null === this.d_commit) {
