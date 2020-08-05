@@ -80,7 +80,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const DoWorkQueue         = require("../util/do_work_queue");
     const GitUtil             = require("../util/git_util");
-    const Hook                = require("../util/hook");
     const Open                = require("../util/open");
     const SparseCheckoutUtil  = require("../util/sparse_checkout_util");
     const SubmoduleConfigUtil = require("../util/submodule_config_util");
@@ -156,11 +155,6 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
     // Make sure the index entries are updated in case we're in sparse mode.
 
     yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
-
-    if (subsOpenSuccessfully.length) {
-        // Run post-open-submodule hook with successfully-opened submodules
-        yield Hook.execHook(repo, "post-open-submodule", subsOpenSuccessfully);
-    }
 
     if (failed) {
         process.exit(1);
