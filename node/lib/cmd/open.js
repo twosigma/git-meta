@@ -34,7 +34,11 @@
  * This module is the entry point for the `open` command.
  */
 
-const co = require("co");
+const assert    = require("chai").assert;
+const co        = require("co");
+const NodeGit   = require("nodegit")
+const GitUtil   = require("../util/git_util")
+const UserError = require("../util/user_error");
 
 /**
  * help text for the `open` command
@@ -65,15 +69,70 @@ exports.configureParser = function (parser) {
     parser.addArgument(["path"], {
         type: "string",
         help: "open all submodules at or in 'path'",
-        nargs: "+",
+        nargs: "*",
+    });
+
+    // TODO: allow revlist specs instead of just single commits in -c,
+    // which is why we are not also giving it a long argument name of
+    // --committish, since that would be weird with a revlist.
+    parser.addArgument(["-c"], {
+        action: "store",
+        type: "string",
+        help: "open all submodules modified in a commit",
     });
 };
+
+const parseArgs = co.wrap(function *(repo, args) {
+    assert.instanceOf(repo, NodeGit.Repository);
+
+    args.path = Array.from(new Set(args.path));
+    if (args.path.length > 0) {
+        if (args.c) {
+            // Of course, args.path and args.c should be mutually exclusive,
+            // but unfortunately, node's argparse doesn't support this.
+            throw new UserError("-c should take a single argument");
+        }
+        return Array.from(new Set(args.path));
+    }
+    const commitish = args.c;
+    if (commitish == null) {
+        throw new UserError("Please supply a submodule to open, or -c $commitish");
+    }
+    const annotated = yield GitUtil.resolveCommitish(repo, commitish);
+    if (annotated === null) {
+        throw new UserError("Cannot resolve " + commitish + " to a commit");
+    }
+    const commit = yield NodeGit.Commit.lookup(repo, annotated.id());
+    const tree = yield commit.getTree();
+    const parent = yield commit.parent(0);
+    let parentTree = null;
+    if (parent) {
+        let parentCommit = yield NodeGit.Commit.lookup(repo, parent.id());
+        parentTree = yield parentCommit.getTree();
+    }
+    const diff = yield NodeGit.Diff.treeToTree(repo, parentTree, tree);
+
+    const out = new Set();
+    for (let i = 0; i < diff.numDeltas(); i ++) {
+        const delta = diff.getDelta(i);
+        const newFile = delta.newFile();
+        if (newFile.id().iszero()) {
+            continue;
+        }
+        if (newFile.mode() !== NodeGit.TreeEntry.FILEMODE.COMMIT) {
+            continue;
+        }
+        out.add(newFile.path());
+    }
+    return Array.from(out);
+});
 
 /**
  * Execute the `open` command according to the specified `args`.
  *
  * @param {Object} args
  * @param {String} args.path
+ * @param {String} args.c
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
@@ -92,11 +151,11 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const cwd     = process.cwd();
     const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
-    args.path = Array.from(new Set(args.path));
+    const paths = yield parseArgs(repo, args);
     let subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
                                                                cwd,
                                                                subs,
-                                                               args.path);
+                                                               paths);
     subsToOpen = Array.from(new Set(subsToOpen));
     const index      = yield repo.index();
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
