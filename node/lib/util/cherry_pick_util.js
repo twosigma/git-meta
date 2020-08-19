@@ -41,6 +41,7 @@ const rimraf  = require("rimraf");
 const ConflictUtil        = require("./conflict_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
+const Hook            = require("../util/hook");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const Reset               = require("./reset");
@@ -742,6 +743,7 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     });
 
     const result = {
+        pickingCommit: commit,
         submoduleCommits: picks.commits,
         errorMessage: errorMessage === "" ? null : errorMessage,
         newMetaCommit: null,
@@ -755,33 +757,69 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         (0 !== Object.keys(changes.simpleChanges).length || 0 !== nChanges)) {
         result.newMetaCommit =
                             yield SubmoduleRebaseUtil.makeCommit(repo, commit);
+        }
+
+    if (result.errorMessage === null) {
+        // Run post-commit hook as regular git.
+        yield Hook.execHook(repo, "post-commit");
     }
     return result;
 });
 
+const pickRemainingCommits = co.wrap(function*(metaRepo, seq) {
+    const commits = seq.commits;
+    let result;
+    for (let i = seq.currentCommit; i < commits.length; ++i) {
+        const id = commits[i];
+        const commit = yield metaRepo.getCommit(id);
+        console.log(`Cherry-picking commit ${colors.green(id)}.`);
+
+        seq = seq.copy({currentCommit : i});
+        yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
+        result = yield exports.rewriteCommit(metaRepo, commit);
+        if (null !== result.errorMessage) {
+            return result;
+        }
+        if (null === result.newMetaCommit) {
+            // TODO: stop and offer the user the option of git commit
+            // --allow-empty vs cherry-pick --skip.  For now, tho,
+            // empty meta commits are pretty useless so we will just
+            // skip.
+            console.log("Nothing to commit.");
+        }
+    }
+
+    yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
+    return result;
+});
+
+
 /**
- * Cherry-pick the specified `commit` in the specified `metaRepo`.  Return an
- * object with the cherry-picked commits ids.  This object contains the id of
- * the newly-generated meta-repo commit and for each sub-repo, a map from
- * new (cherry-pick) sha to the original commit sha.  Throw a `UserError` if
- * the repository is not in a state that can allow a cherry-pick (e.g., it's
- * rebasing), if `commit` contains changes that we cannot cherry-pick (e.g.,
- * URL-only changes), or if the cherry-pick would result in no changes (TODO:
- * provide support for '--allow-empty' if needed).  If the cherry-pick is
- * initiated but results in a conflicts, the `errorMessage` of the returned
- * object will be non-null and will contain a description of the conflicts.
+ * Cherry-pick the specified `commits` in the specified `metaRepo`.
+ * Return an object with the cherry-picked commits ids for the last
+ * cherry-picked commit (whether or not that was successful).  This
+ * object contains the id of the newly-generated meta-repo commit and
+ * for each sub-repo, a map from new (cherry-pick) sha to the original
+ * commit sha.  Throw a `UserError` if the repository is not in a
+ * state that can allow a cherry-pick (e.g., it's rebasing), if
+ * `commit` contains changes that we cannot cherry-pick (e.g.,
+ * URL-only changes), or if the cherry-pick would result in no changes
+ * (TODO: provide support for '--allow-empty' if needed).  If the
+ * cherry-pick is initiated but results in a conflicts, the
+ * `errorMessage` of the returned object will be non-null and will
+ * contain a description of the conflicts.
  *
  * @async
  * @param {NodeGit.Repository} metaRepo
- * @param {NodeGit.Commit}     commit
+ * @param [{NodeGit.Commit}]     commits
  * @return {Object}      return
  * @return {String}      return.newMetaCommit
  * @return {Object}      returm.submoduleCommits
  * @return {String|null} return.errorMessage
  */
-exports.cherryPick = co.wrap(function *(metaRepo, commit) {
+exports.cherryPick = co.wrap(function *(metaRepo, commits) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
-    assert.instanceOf(commit, NodeGit.Commit);
+    assert.instanceOf(commits[0], NodeGit.Commit);
 
     const status = yield StatusUtil.getRepoStatus(metaRepo);
     StatusUtil.ensureReady(status);
@@ -805,22 +843,19 @@ running cherry-pick.`);
     // cherry-pick file.
 
     const head = yield metaRepo.getHeadCommit();
-    const seq = new SequencerState({
+    const commitIdStrs = commits.map(x => x.id().tostrS());
+    let lastCommit = commitIdStrs[commitIdStrs.length - 1];
+    let seq = new SequencerState({
         type: CHERRY_PICK,
         originalHead: new CommitAndRef(head.id().tostrS(), null),
-        target: new CommitAndRef(commit.id().tostrS(), null),
+        // target is bogus for cherry-picks but must be filled in anyway
+        target: new CommitAndRef(lastCommit, null),
         currentCommit: 0,
-        commits: [commit.id().tostrS()],
+        commits: commitIdStrs,
     });
     yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
-    const result = yield exports.rewriteCommit(metaRepo, commit);
-    if (null === result.errorMessage) {
-        yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
-    }
-    if (null === result.newMetaCommit) {
-        console.log("Nothing to commit.");
-    }
-    return result;
+
+    return yield pickRemainingCommits(metaRepo, seq);
 });
 
 /**
@@ -847,21 +882,26 @@ exports.continue = co.wrap(function *(repo) {
         throw new UserError("Resolve conflicts then continue cherry-pick.");
     }
     const index = yield repo.index();
-    const commit = yield repo.getCommit(seq.target.sha);
+    const commit = yield repo.getCommit(seq.commits[seq.currentCommit]);
     const subResult = yield SubmoduleRebaseUtil.continueSubmodules(repo,
                                                                    index,
                                                                    status,
                                                                    commit);
+
     const result = {
+        pickingCommit: commit,
         newMetaCommit: subResult.metaCommit,
         submoduleCommits: subResult.commits,
         newSubmoduleCommits: subResult.newCommits,
         errorMessage: subResult.errorMessage,
     };
-    if (null === subResult.errorMessage) {
+    if (subResult.errorMessage !== null ||
+        seq.currentCommit + 1 === seq.commits.length) {
         yield SequencerStateUtil.cleanSequencerState(repo.path());
+        return result;
     }
-    return result;
+    const newSeq = seq.copy({currentCommit : seq.currentCommit + 1});
+    return yield pickRemainingCommits(repo, newSeq);
 });
 
 /**

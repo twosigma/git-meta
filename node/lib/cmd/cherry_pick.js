@@ -55,7 +55,7 @@ fast-forwarded.`;
 
 exports.configureParser = function (parser) {
     parser.addArgument(["commit"], {
-        nargs: "?",
+        nargs: "*",
         type: "string",
         help: "the commit to cherry-pick",
     });
@@ -88,7 +88,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const CherryPickUtil  = require("../util/cherry_pick_util");
     const GitUtil         = require("../util/git_util");
-    const Hook            = require("../util/hook");
     const UserError       = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
@@ -120,22 +119,25 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         throw new UserError("No commit to cherry-pick.");
     }
 
-    const commitish = args.commit;
-    const annotated = yield GitUtil.resolveCommitish(repo, commitish);
-    if (null === annotated) {
-        throw new UserError(`\
+    // TOOD: check if we are mid-rebase already
+
+    const commits = args.commit;
+
+    const resolvedCommits = [];
+    for (let commitish of commits) {
+        const annotated = yield GitUtil.resolveCommitish(repo, commitish);
+        if (null === annotated) {
+            throw new UserError(`\
 Could not resolve ${colors.red(commitish)} to a commit.`);
-    }
-    else {
-        const id = annotated.id();
-        console.log(`Cherry-picking commit ${colors.green(id.tostrS())}.`);
-        const commit = yield repo.getCommit(id);
-        const result = yield CherryPickUtil.cherryPick(repo, commit);
-        if (null !== result.errorMessage) {
-            throw new UserError(result.errorMessage);
         }
+        const commit = yield repo.getCommit(annotated.id());
+        resolvedCommits.push(commit);
+
     }
 
-    // Run post-commit hook as regular git.
-    yield Hook.execHook(repo, "post-commit");
+    const result = yield CherryPickUtil.cherryPick(repo, resolvedCommits);
+
+    if (null !== result.errorMessage) {
+        throw new UserError(result.errorMessage);
+    }
 });
