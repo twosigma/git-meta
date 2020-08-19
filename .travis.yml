@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - "6.9.1"
+  - 8
 
 env:
   - CC=gcc-5
@@ -20,10 +20,10 @@ before_install:
       - cd node
 
 install:
-      - npm install
+      - yarn install
 
 script:
-      - npm test
+      - yarn test
 
 notifications:
   email: false
