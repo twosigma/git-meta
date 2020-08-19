@@ -219,6 +219,32 @@ describe("synthetic-branch", function () {
                                                            c.fails);
         }));
     });
+    it("handles missing synthetic refs if config is set", co.wrap(function*() {
+        // We need to handle this case specially because we don't know
+        // what to name synthetic refs until the submodule commits
+        // exist, so we cannot use the normal syntax.
+        const input = "x=S:C2-1;C3-2 y=S/y:4;Bmaster=3|" +
+              "y=S:C4-1;Bmaster=4";
+
+        const repoMap = yield RepoASTTestUtil.createMultiRepos(input);
+        const repos = repoMap.repos;
+
+        const x = repos.x;
+        const config = yield x.config();
+        yield config.setString("gitmeta.checksyntheticrefs", "true");
+        try {
+            yield syntheticBranch(repos);
+            assert.equal(1, 2); // fail
+        } catch (e) {
+            //successful fail
+        }
+
+        const sha = repoMap.reverseCommitMap["4"];
+        yield NodeGit.Reference.create(repos.y, "refs/commits/" + sha, sha, 1,
+                                       "create synthetic ref");
+        // now it will pass
+        yield syntheticBranch(repos);
+    }));
 });
 
 const createCommit = function*(repo, contents) {

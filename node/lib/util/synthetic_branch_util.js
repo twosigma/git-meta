@@ -146,6 +146,16 @@ function skipCheckForURL(cfg, url) {
     return cfg.urlSkipTest(url);
 }
 
+let doCheckSyntheticRefs = null;
+const checkSyntheticRefs = co.wrap(function*(repo) {
+    const config = yield repo.config();
+    if (doCheckSyntheticRefs === null) {
+        doCheckSyntheticRefs = yield ConfigUtil.getConfigString(
+            config, "gitmeta.checksyntheticrefs") || false;
+    }
+    return doCheckSyntheticRefs;
+});
+
 /**
  * Check that a commit exists exists for a given submodule
  * at a given commit.
@@ -173,6 +183,18 @@ function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url, path) {
     const localPath = yield *exports.urlToLocalPath(repo, url);
     const submoduleRepo = yield NodeGit.Repository.open(localPath);
     const submoduleCommitId = submoduleEntry.id();
+    if (yield checkSyntheticRefs(repo)) {
+        const refName = "refs/commits/" + submoduleCommitId.tostrS();
+        try {
+            yield NodeGit.Reference.lookup(submoduleRepo, refName);
+        } catch (e) {
+            //ref does not exist.
+            console.error("Could not look up ", refName, " in ",
+                          localPath, ": ", e);
+            return false;
+        }
+    }
+
     try {
         const subrepoCommit =
               yield NodeGit.Object.lookup(submoduleRepo, submoduleCommitId,
@@ -180,7 +202,7 @@ function* checkSubmodule(repo, cfg, metaCommit, submoduleEntry, url, path) {
         return subrepoCommit !== null;
     } catch (e) {
         console.error("Could not look up ", submoduleCommitId, " in ",
-                      localPath, ": ", e);
+                              localPath, ": ", e);
         return false;
     }
 }
