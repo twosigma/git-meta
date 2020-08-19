@@ -36,8 +36,8 @@
 
 const assert    = require("chai").assert;
 const co        = require("co");
-const NodeGit   = require("nodegit")
-const GitUtil   = require("../util/git_util")
+const NodeGit   = require("nodegit");
+const GitUtil   = require("../util/git_util");
 const UserError = require("../util/user_error");
 
 /**
@@ -95,8 +95,9 @@ const parseArgs = co.wrap(function *(repo, args) {
         return Array.from(new Set(args.path));
     }
     const commitish = args.c;
-    if (commitish == null) {
-        throw new UserError("Please supply a submodule to open, or -c $commitish");
+    if (commitish === null) {
+        throw new UserError(
+            "Please supply a submodule to open, or -c $commitish");
     }
     const annotated = yield GitUtil.resolveCommitish(repo, commitish);
     if (annotated === null) {
