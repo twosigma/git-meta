@@ -27,7 +27,7 @@
   "preferGlobal": true,
   "homepage": "https://github.com/twosigma/git-meta#readme",
   "dependencies": {
-    "argparse": "",
+    "argparse": "^1.0.0",
     "binary-search": "",
     "chai": "",
     "child-process-promise": "",
@@ -36,7 +36,7 @@
     "deeper": "",
     "fs-promise": "",
     "group-by": "",
-    "nodegit": "^0.23.0",
+    "nodegit": "^0.25.0",
     "rimraf": "",
     "split": "",
     "walk": ""

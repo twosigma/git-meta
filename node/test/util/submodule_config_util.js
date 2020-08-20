@@ -652,7 +652,7 @@ foo
                                       newHead,
                                       NodeGit.Reset.TYPE.HARD);
             yield submodule.addFinalize();
-            const sig = repo.defaultSignature();
+            const sig = yield repo.defaultSignature();
             yield repo.createCommitOnHead([".gitmodules", subName],
                                           sig,
                                           sig,
@@ -803,7 +803,7 @@ foo
                                       newHead,
                                       NodeGit.Reset.TYPE.HARD);
             yield submodule.addFinalize();
-            const sig = repo.defaultSignature();
+            const sig = yield repo.defaultSignature();
             yield repo.createCommitOnHead([".gitmodules", "foo"],
                                           sig,
                                           sig,

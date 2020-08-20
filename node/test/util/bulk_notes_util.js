@@ -112,7 +112,7 @@ describe("readNotes", function () {
         const foo = yield repo.getBranchCommit("foo");
         const fooSha = foo.id().tostrS();
         const refName = "refs/notes/foo/bar";
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
         yield NodeGit.Note.create(repo, refName, sig, sig, fooSha, "foo", 1);
         yield NodeGit.Note.create(repo, refName, sig, sig, headSha, "bar", 1);
         const result = yield BulkNotesUtil.readNotes(repo, refName);

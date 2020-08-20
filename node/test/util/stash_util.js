@@ -42,7 +42,7 @@ const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 
 const writeLog = co.wrap(function *(repo, reverseMap, logs) {
     const log = yield NodeGit.Reflog.read(repo, "refs/meta-stash");
-    const sig = repo.defaultSignature();
+    const sig = yield repo.defaultSignature();
     for(let i = 0; i < logs.length; ++i) {
         const logSha = logs[logs.length - (i + 1)];
         const sha = reverseMap[logSha];
@@ -160,7 +160,7 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
                     const result = yield StashUtil.stashRepo(repo,
                                                              status,
                                                              includeUntracked);
-                    const sig = repo.defaultSignature();
+                    const sig = yield repo.defaultSignature();
                     const commitMap = {};
                     const commitAndBranch = co.wrap(function *(treeId, type) {
                         const tree = yield NodeGit.Tree.lookup(repo, treeId);

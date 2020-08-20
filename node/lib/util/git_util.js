@@ -208,7 +208,7 @@ exports.isValidRemoteName = co.wrap(function *(repo, name) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(name);
 
-    const remotes = yield repo.getRemotes();
+    const remotes = yield repo.getRemoteNames();
     return remotes.find(x => x === name) !== undefined;
 });
 

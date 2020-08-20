@@ -85,7 +85,7 @@ const makeClone = co.wrap(function *(repos, maps) {
     // Test framework expects a trailing '/' to support relative paths.
 
     const b = yield NodeGit.Clone.clone(aPath, bPath);
-    const sig = b.defaultSignature();
+    const sig = yield b.defaultSignature();
     const head = yield b.getHeadCommit();
     yield b.createBranch("foo", head.id(), 1, sig, "branch commit");
     yield b.checkoutBranch("foo");
@@ -265,7 +265,7 @@ Bmaster=1 origin/master`,
                 m: co.wrap(function *(repos) {
                     const x = repos.x;
                     const head = yield x.getHeadCommit();
-                    const sig = x.defaultSignature();
+                    const sig = yield x.defaultSignature();
                     yield repos.x.createBranch("foo", head, 0, sig);
                     throw new UserError("bad bad");
                 }),
@@ -293,7 +293,7 @@ Bmaster=1 origin/master`,
                     const x = repos.x;
                     const head = yield x.getHeadCommit();
                     const headStr = head.id().tostrS();
-                    const sig = x.defaultSignature();
+                    const sig = yield x.defaultSignature();
                     yield repos.x.createBranch(`foo-${headStr}`, head, 0, sig);
                 }),
                 e: "x=S",
@@ -316,7 +316,7 @@ Bmaster=1 origin/master`,
                     const x = repos.x;
                     const head = yield x.getHeadCommit();
                     const headStr = head.id().tostrS();
-                    const sig = x.defaultSignature();
+                    const sig = yield x.defaultSignature();
                     yield repos.x.createBranch(`foo-${headStr}`, head, 0, sig);
                 }),
                 e: "x=E:Bfoo-1=1",

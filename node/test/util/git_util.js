@@ -1120,7 +1120,7 @@ describe("GitUtil", function () {
             const repo = yield TestUtil.createSimpleRepository();
             const head = yield repo.getHeadCommit();
             yield fs.appendFile(path.join(repo.workdir(), "README.md"), "foo");
-            const sig = repo.defaultSignature();
+            const sig = yield repo.defaultSignature();
             const newCommitId = yield repo.createCommitOnHead(["README.md"],
                                                               sig,
                                                               sig,

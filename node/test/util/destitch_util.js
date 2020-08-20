@@ -539,7 +539,7 @@ describe("getDestitched", function () {
             metaCommit: "1",
             subCommits: {},
         };
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
         const refName = DestitchUtil.localReferenceNoteRef;
         const data = JSON.stringify(destitched, null, 4);
         yield NodeGit.Note.create(repo, refName, sig, sig, headSha, data, 1);
@@ -555,7 +555,7 @@ describe("getDestitched", function () {
             metaCommit: "1",
             subCommits: {},
         };
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
         const refName = StitchUtil.referenceNoteRef;
         const data = JSON.stringify(destitched, null, 4);
         yield NodeGit.Note.create(repo, refName, sig, sig, headSha, data, 1);

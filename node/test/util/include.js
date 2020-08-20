@@ -115,10 +115,10 @@ describe("include", function () {
         }));
 
         it("should have signature of the current repo", co.wrap(function *() {
-            const repoSignature = repo.defaultSignature();
+            const repoSignature = yield repo.defaultSignature();
             const submoduleRepo = 
                 yield NodeGit.Repository.open(repo.workdir() + path);
-            const submoduleSignature = submoduleRepo.defaultSignature();
+            const submoduleSignature = yield submoduleRepo.defaultSignature();
 
             assert.equal(repoSignature.toString(), 
                 submoduleSignature.toString());
