@@ -408,7 +408,7 @@ describe("readRAST", function () {
     it("headless with a commit", co.wrap(function *() {
         const path = yield TestUtil.makeTempDir();
         const r = yield NodeGit.Repository.init(path, 1);
-        const sig = r.defaultSignature();
+        const sig = yield r.defaultSignature();
         const builder = yield NodeGit.Treebuilder.create(r, null);
         const treeObj = yield builder.write();
         const tree = yield r.getTree(treeObj.tostrS());
@@ -467,7 +467,7 @@ describe("readRAST", function () {
     it("remote with path in tracking branch", co.wrap(function *() {
         const base = yield TestUtil.createSimpleRepository();
         const headId = (yield base.getHeadCommit()).id();
-        const sig = base.defaultSignature();
+        const sig = yield base.defaultSignature();
         yield base.createBranch("foo/bar", headId, 1, sig, "branch");
         const clonePath = yield TestUtil.makeTempDir();
         const clone = yield NodeGit.Clone.clone(base.workdir(), clonePath);
@@ -1007,7 +1007,7 @@ describe("readRAST", function () {
         const workdir = repo.workdir();
         const firstCommit = yield repo.getHeadCommit();
         const firstSha = firstCommit.id().tostrS();
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
         yield repo.createBranch("b", firstCommit, 0, sig);
         yield repo.checkoutBranch("b");
         yield fs.writeFile(path.join(workdir, "foo"), "foo");
@@ -1060,7 +1060,7 @@ describe("readRAST", function () {
 
     it("merge commit with submodule change", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
 
         // Create the base repo for the submodule and add a couple of
         // commits.
@@ -1217,7 +1217,7 @@ describe("readRAST", function () {
 
     it("merge commit with ignored submodule change", co.wrap(function *() {
         const repo = yield TestUtil.createSimpleRepository();
-        const sig = repo.defaultSignature();
+        const sig = yield repo.defaultSignature();
 
         // Create the base repo for the submodule and add a couple of
         // commits.
@@ -1372,7 +1372,7 @@ describe("readRAST", function () {
         const head = yield r.getHeadCommit();
         const headId = head.id();
 
-        const sig = r.defaultSignature();
+        const sig = yield r.defaultSignature();
 
         yield NodeGit.Note.create(r, "refs/notes/test",
                                   sig, sig, headId, "note", 0);
@@ -1688,7 +1688,7 @@ describe("readRAST", function () {
         yield index.addByPath("foobar");
         yield index.write();
         yield NodeGit.Stash.save(repo,
-                                 repo.defaultSignature(),
+                                 yield repo.defaultSignature(),
                                  "stash",
                                  NodeGit.Stash.FLAGS.INCLUDE_UNTRACKED);
         yield ReadRepoASTUtil.readRAST(repo);

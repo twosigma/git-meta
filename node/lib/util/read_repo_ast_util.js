@@ -258,7 +258,7 @@ exports.readRAST = co.wrap(function *(repo, includeRefsCommits) {
         includeRefsCommits = false;
     }
     assert.instanceOf(repo, NodeGit.Repository);
-    const branches = yield repo.getReferences(NodeGit.Reference.TYPE.LISTALL);
+    const branches = yield repo.getReferences();
     let commits = {};
     let branchTargets = {};
     let refTargets = {};

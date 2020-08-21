@@ -754,7 +754,7 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
 
         repo.detachHead();
 
-        const refs = yield repo.getReferences(NodeGit.Reference.TYPE.LISTALL);
+        const refs = yield repo.getReferences();
         for (let i = 0; i < refs.length; ++i) {
             NodeGit.Branch.delete(refs[i]);
         }
