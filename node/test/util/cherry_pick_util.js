@@ -41,7 +41,10 @@ const Open            = require("../../lib/util/open");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const Submodule       = require("../../lib/util/submodule");
 const SubmoduleChange = require("../../lib/util/submodule_change");
+const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
+
+const qm = TestUtil.quotemeta;
 
 /**
  * Return a commit map as expected from  a manipulator for `RepoASTTestUtil`
@@ -558,11 +561,12 @@ describe("writeConflicts", function () {
             },
             expected: "x=E:I *README.md=~*~*S:1;W README.md=hello world",
             result: `\
-Conflicting entries for submodule ${colors.red("README.md")}
+Conflicting entries for submodule ${colors.red("README.md")}.
 `,
         },
         "two conflicts": {
             state: "x=S",
+
             conflicts: {
                 z: new Conflict(null,
                                 null,
@@ -573,8 +577,8 @@ Conflicting entries for submodule ${colors.red("README.md")}
             },
             expected: "x=E:I *z=~*~*S:1,*a=~*~*S:1",
             result: `\
-Conflicting entries for submodule ${colors.red("a")}
-Conflicting entries for submodule ${colors.red("z")}
+Conflicting entries for submodule ${colors.red("a")}.
+Conflicting entries for submodule ${colors.red("z")}.
 `,
         },
     };
@@ -737,7 +741,7 @@ a
 ;
 `,
             errorMessage: `\
-Submodule ${colors.red("s")} is conflicted.
+Submodule ${qm(colors.red("s"))} is conflicted.*
 `,
         },
         "conflict in a sub pick, success in another": {
@@ -755,7 +759,7 @@ a
 ;
 `,
             errorMessage: `\
-Submodule ${colors.red("s")} is conflicted.
+Submodule ${qm(colors.red("s"))} is conflicted.
 `,
         },
     };
@@ -768,7 +772,15 @@ Submodule ${colors.red("s")} is conflicted.
             const eightCommitSha = reverseCommitMap["8"];
             const eightCommit = yield x.getCommit(eightCommitSha);
             const result  = yield CherryPickUtil.rewriteCommit(x, eightCommit);
-            assert.equal(result.errorMessage, c.errorMessage || null);
+            const errorMessage = c.errorMessage || null;
+
+
+            if (null === result.errorMessage) {
+                assert(null === errorMessage);
+            } else {
+                const re = new RegExp(c.errorMessage);
+                assert.match(result.errorMessage, re);
+            }
             return mapCommits(maps, result);
         });
 

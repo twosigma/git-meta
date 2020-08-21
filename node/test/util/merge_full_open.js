@@ -38,6 +38,7 @@ const MergeUtil       = require("../../lib//util/merge_util");
 const MergeCommon     = require("../../lib//util/merge_common");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
 const Open            = require("../../lib/util/open");
+const TestUtil        = require("../../lib/util/test_util");
 
 /**
  * Return the commit map required by 'RepoASTTestUtil.testMultiRepoManipulator'
@@ -321,7 +322,7 @@ x=S:C2-1 s=Sa:a;C3-1 s=Sa:b;Bmaster=2;Bfoo=3`,
                 fails: true,
                 expected: `x=E:Qmessage\n#M 2: 3: 0 3;I *s=~*S:a*S:b`,
                 errorMessage: `\
-Conflicting entries for submodule ${colors.red("s")}
+Conflicting entries for submodule ${TestUtil.quotemeta(colors.red("s"))}.*
 `,
             },
             "conflict in submodule": {
@@ -331,7 +332,7 @@ x=U:C3-2 s=Sa:a;C4-2 s=Sa:b;Bmaster=3;Bfoo=4`,
                 fromCommit: "4",
                 fails: true,
                 errorMessage: `\
-Submodule ${colors.red("s")} is conflicted.
+Submodule ${TestUtil.quotemeta(colors.red("s"))} is conflicted.
 `,
                 expected: `
 x=E:Qmessage\n#M 3: 4: 0 4;
@@ -417,7 +418,14 @@ x=S:C2-1 r=Sa:1,s=Sa:1,t=Sa:1;
                                                          message,
                                                          editMessage);
                     const errorMessage = c.errorMessage || null;
-                    assert.equal(result.errorMessage, errorMessage);
+
+                    if (null === result.errorMessage) {
+                        assert(null === errorMessage);
+                    } else {
+                        const re = new RegExp(c.errorMessage);
+                        assert.match(result.errorMessage, re);
+                    }
+
                     if (upToDate) {
                         assert.isNull(result.metaCommit);
                         return;                                       // RETURN

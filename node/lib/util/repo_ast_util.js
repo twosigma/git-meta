@@ -96,6 +96,9 @@ function diffObjects(first,
  * @return {String}
  */
 function colorExp(text) {
+    if (text === null) {
+        text = "(null)";
+    }
     return colors.green(text);
 }
 
@@ -108,6 +111,9 @@ function colorExp(text) {
  * @return {String}
  */
 function colorAct(text) {
+    if (text === null) {
+        text = "(null)";
+    }
     return colors.yellow(text);
 }
 

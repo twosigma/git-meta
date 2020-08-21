@@ -38,6 +38,7 @@ const RebaseUtil          = require("../../lib/util/rebase_util");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
 const SequencerState      = require("../../lib/util/sequencer_state");
 const SequencerStateUtil  = require("../../lib/util/sequencer_state_util");
+const TestUtil        = require("../../lib/util/test_util");
 
 const CommitAndRef = SequencerState.CommitAndRef;
 const REBASE = SequencerState.TYPE.REBASE;
@@ -338,12 +339,34 @@ x=S:C2-1 s=Sa:1,t=Sb:1;C3-2 s=Sa:j;C4-2 t=Sb:k;Bmaster=3;Bfoo=4;Bold=3`,
             expected: `
 x=E:C3M-4 s=Sa:j;Bmaster=3M`,
         },
-        "adding subs on both": {
+        "adding unrelated subs on both": {
             initial: `
 q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 q=Sq:1;C4-2 r=Sr:1;Bmaster=3;Bfoo=4;Bold=3`,
             onto: "4",
             expected: `
 x=E:C3M-4 q=Sq:1;Bmaster=3M`,
+        },
+        "adding same sub on both": {
+            initial: `
+q=B|r=B|s=B|x=S:C2-1 s=Ss:1;C3-2 r=Sr:1,s=Ss:2;C4-2 r=Sr:1,q=Sq:1;Bmaster=3;
+Bfoo=4;Bold=3`,
+            onto: "4",
+            expected: `
+x=E:C3M-4 s=Ss:2;Bmaster=3M`,
+        },
+        "add/add conflict": {
+            initial: `
+q=B|r=B:C5-1;C6-5;Bother=6|
+s=B|
+x=S:C2-1 s=Ss:1;C3-2 r=Sr:6,s=Ss:2;C4-2 r=Sr:5,q=Sq:1;
+Bmaster=3;Bfoo=4;Bold=3`,
+            onto: "4",
+            errorMessage:
+            "Conflicting entries for submodule .*",
+            expected: `
+            x=E:H=4;QR 3:refs/heads/master 4: 0 3;
+            I s=Ss:2,
+            *r=~*S:5*S:6`,
         },
         "open sub ffwd'd": {
             initial: `
@@ -368,7 +391,7 @@ t
 >>>>>>> message
 ;`,
             errorMessage: `\
-Submodule ${colors.red("s")} is conflicted.
+Submodule ${TestUtil.quotemeta(colors.red("s"))} is conflicted.*
 `,
         },
         "does not close open submodules when rewinding": {
@@ -399,10 +422,14 @@ a=B|x=S:C2-1 s=Sa:1;Bmaster=2;Os;C3-1 t=Sa:1;Bfoo=3;Bold=2`,
             const onto = yield repo.getCommit(reverseCommitMap[c.onto]);
             const errorMessage = c.errorMessage || null;
             const result = yield RebaseUtil.rebase(repo, onto);
-            if (null !== result.errorMessage) {
+
+            if (null === result.errorMessage) {
+                assert(errorMessage === null);
+            } else {
                 assert.isString(result.errorMessage);
+                const re = new RegExp(errorMessage);
+                assert.match(result.errorMessage, re);
             }
-            assert.equal(result.errorMessage, errorMessage);
             return result;
         });
         const rebase = makeRebaser(rebaseOp);

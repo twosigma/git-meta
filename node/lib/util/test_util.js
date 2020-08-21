@@ -281,3 +281,7 @@ exports.makeBareCopy = co.wrap(function *(repo, path) {
     yield NodeGit.Remote.delete(bare, "origin");
     return bare;
 });
+
+exports.quotemeta = function(str) {
+    return String(str).replace(/\W/g, "\\$&");
+};
