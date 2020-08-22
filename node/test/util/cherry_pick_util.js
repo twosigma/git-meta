@@ -985,7 +985,7 @@ x=E:Cfoo#CP-2 s=Sa:Ns;Bmaster=CP;Os Cfoo#Ns-1 foo=bar;Q`,
         const contResult2 = yield CherryPickUtil.continue(repo);
         assert.isNull(contResult2.errorMessage);
         rast = yield ReadRepoASTUtil.readRAST(repo, false);
-        assert.null(rast.sequencerState);
+        assert.isNull(rast.sequencerState);
     }));
 });
 

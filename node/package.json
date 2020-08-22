@@ -35,6 +35,7 @@
     "colors": "",
     "deeper": "",
     "fs-promise": "",
+    "git-range": "",
     "group-by": "",
     "nodegit": "^0.23.0",
     "rimraf": "",
