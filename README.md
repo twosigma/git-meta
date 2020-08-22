@@ -33,6 +33,8 @@
 <img src="/doc/git-meta-logo.png" width="600">
 </p>
 
+[![Build Status](https://travis-ci.org/twosigma/git-meta.svg?branch=master)](https://travis-ci.org/twosigma/git-meta)
+
 # What is git-meta?
 
 Git-meta allows developers to work with extremely large codebases --
