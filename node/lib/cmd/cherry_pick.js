@@ -31,6 +31,10 @@
 "use strict";
 
 const co = require("co");
+const range = require("git-range");
+
+const GitUtil   = require("../util/git_util");
+const UserError = require("../util/user_error");
 
 /**
  * This module contains methods for implementing the `cherry-pick` command.
@@ -55,7 +59,7 @@ fast-forwarded.`;
 
 exports.configureParser = function (parser) {
     parser.addArgument(["commit"], {
-        nargs: "?",
+        nargs: "*",
         type: "string",
         help: "the commit to cherry-pick",
     });
@@ -76,6 +80,57 @@ abort the cherry-pick and return to previous state, throwing away all changes`,
     });
 };
 
+
+exports.isRange = function(spec) {
+    // note that this includes ^x, which is not precisely a range
+    return spec.search("\\.\\.|\\^[@!-]|^\\^") !== -1;
+};
+
+exports.resolveRange = co.wrap(function *(repo, commitArg) {
+    const colors  = require("colors");
+
+    // range.parse doesn't offer "--no-walk", so if you pass in an arg
+    // that doesn't specify a range (["morx", "fleem"], say, as opposed to
+    // "morx..fleem"), it'll give all of the commits which are parents
+    // of HEAD.  But ^morx fleem is treated as morx..fleem.
+
+    // So we need to do some pre-parsing.
+
+    // I did some basic testing to ensure that git-range matches the
+    // selection and ordering that git cherry-pick uses, and it seems
+    // to be correct (including in the surprising case where git
+    // cherry-pick will use the topological ordering of commits rather
+    // than the order given on the command-line).
+
+    let commits = [];
+    if (commitArg.some(exports.isRange)) {
+        for (const arg of commitArg) {
+            if (arg.search("^@") !== -1) {
+                // TODO: patch git-range
+                throw new UserError(`\
+Could not handle ${arg}, because git-range does not support --no-walk.
+Please pre-parse these args using regular git.`);
+            }
+        }
+        const r = yield range.parse(repo, commitArg);
+        commits = yield r.commits();
+    } else {
+        for (let commitish of commitArg) {
+            let annotated = yield GitUtil.resolveCommitish(repo, commitish);
+            if (null === annotated) {
+                throw new UserError(`\
+Could not resolve ${colors.red(commitish)} to a commit.`);
+            }
+            const commit = yield repo.getCommit(annotated.id());
+            commits.push(commit);
+        }
+    }
+    if (commits.length === 0) {
+        throw new UserError(`empty commit set passed`);
+    }
+    return commits;
+});
+
 /**
  * Execute the `cherry-pick` command according to the specified `args`.
  *
@@ -84,12 +139,7 @@ abort the cherry-pick and return to previous state, throwing away all changes`,
  * @param {String[]} args.commit
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const colors = require("colors");
-
     const CherryPickUtil  = require("../util/cherry_pick_util");
-    const GitUtil         = require("../util/git_util");
-    const Hook            = require("../util/hook");
-    const UserError       = require("../util/user_error");
 
     const repo = yield GitUtil.getCurrentRepo();
 
@@ -120,22 +170,12 @@ exports.executeableSubcommand = co.wrap(function *(args) {
         throw new UserError("No commit to cherry-pick.");
     }
 
-    const commitish = args.commit;
-    const annotated = yield GitUtil.resolveCommitish(repo, commitish);
-    if (null === annotated) {
-        throw new UserError(`\
-Could not resolve ${colors.red(commitish)} to a commit.`);
-    }
-    else {
-        const id = annotated.id();
-        console.log(`Cherry-picking commit ${colors.green(id.tostrS())}.`);
-        const commit = yield repo.getCommit(id);
-        const result = yield CherryPickUtil.cherryPick(repo, commit);
-        if (null !== result.errorMessage) {
-            throw new UserError(result.errorMessage);
-        }
-    }
+    // TOOD: check if we are mid-rebase already
 
-    // Run post-commit hook as regular git.
-    yield Hook.execHook(repo, "post-commit");
+    const commits = yield exports.resolveRange(repo, args.commit);
+    const result = yield CherryPickUtil.cherryPick(repo, commits);
+
+    if (null !== result.errorMessage) {
+        throw new UserError(result.errorMessage);
+    }
 });

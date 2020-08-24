@@ -33,15 +33,21 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
+const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
+const path    = require("path");
 
+
+const Add             = require("../../lib/util/add");
 const ConflictUtil    = require("../../lib/util/conflict_util");
 const CherryPickUtil  = require("../../lib/util/cherry_pick_util");
 const Open            = require("../../lib/util/open");
 const RepoASTTestUtil = require("../../lib/util/repo_ast_test_util");
+const ReadRepoASTUtil = require("../../lib/util/read_repo_ast_util");
 const Submodule       = require("../../lib/util/submodule");
 const SubmoduleChange = require("../../lib/util/submodule_change");
 const UserError       = require("../../lib/util/user_error");
+
 
 /**
  * Return a commit map as expected from  a manipulator for `RepoASTTestUtil`
@@ -842,10 +848,10 @@ Submodule ${colors.red("s")} is conflicted.
             assert.property(reverseCommitMap, "8");
             const eightCommitSha = reverseCommitMap["8"];
             const eightCommit = yield x.getCommit(eightCommitSha);
-            const result  = yield CherryPickUtil.cherryPick(x, eightCommit);
+            const result  = yield CherryPickUtil.cherryPick(x, [eightCommit]);
 
             if (c.duplicate) {
-                const res = yield CherryPickUtil.cherryPick(x, eightCommit);
+                const res = yield CherryPickUtil.cherryPick(x, [eightCommit]);
                 assert.isNull(res.newMetaCommit);
             }
             assert.equal(result.errorMessage, c.errorMessage || null);
@@ -919,6 +925,68 @@ x=E:Cfoo#CP-2 s=Sa:Ns;Bmaster=CP;Os Cfoo#Ns-1 foo=bar;Q`,
                                                            c.fails);
         }));
     });
+
+    it("handles multiple commits", co.wrap(function*() {
+        const start = `a=B:C2-1 a=a1;
+                           C3-2 a=a3;
+                           C4-3 a=a4;
+                           C5-3 a=a5;
+                           C6-3 a=a6;
+                           Bb3=3;Bb4=4;Bb5=5;Bb6=6|
+              x=S:Cm2-1 s=Sa:2;
+                  Cm3-m2 s=Sa:3;
+                  Cm4-m2 s=Sa:4;
+                  Cm5-m2 s=Sa:5;
+                  Cm6-m2 s=Sa:6;
+                  Bmaster=m3;Bm4=m4;Bm5=m5;Bm6=m6;Os`;
+        const repoMap = yield RepoASTTestUtil.createMultiRepos(start);
+        const repo = repoMap.repos.x;
+        const commits = [
+            (yield repo.getCommit(repoMap.reverseCommitMap.m4)),
+            (yield repo.getCommit(repoMap.reverseCommitMap.m5)),
+            (yield repo.getCommit(repoMap.reverseCommitMap.m6)),
+        ];
+        const result = yield CherryPickUtil.cherryPick(repo, commits);
+        // I expect, here, that commit m4 has successfully applied, and
+        // then m5 has hit a conflict...
+        assert.equal("m5", repoMap.commitMap[result.pickingCommit.id()]);
+        assert.isNull(result.newMetaCommit);
+        let rast = yield ReadRepoASTUtil.readRAST(repo, false);
+        const remainingCommits = [
+            commits[0].id().tostrS(),
+            commits[1].id().tostrS(),
+            commits[2].id().tostrS()
+        ];
+
+        assert.deepEqual(remainingCommits, rast.sequencerState.commits);
+        assert.equal(1, rast.sequencerState.currentCommit);
+
+        //now, let's resolve & continue
+        yield fs.writeFile(path.join(repo.workdir(), "s", "a"), "resolv");
+        yield Add.stagePaths(repo, ["s/a"], true, false);
+        const contResult = yield CherryPickUtil.continue(repo);
+
+        assert.equal("m6", repoMap.commitMap[contResult.pickingCommit.id()]);
+        assert.isNull(contResult.newMetaCommit);
+
+        rast = yield ReadRepoASTUtil.readRAST(repo, false);
+        assert.deepEqual(remainingCommits, rast.sequencerState.commits);
+        assert.equal(2, rast.sequencerState.currentCommit);
+
+        //finally, we'll do it again, which should finish this up
+        yield fs.writeFile(path.join(repo.workdir(), "s", "a"), "resolv2");
+        try {
+            yield CherryPickUtil.continue(repo);
+            assert.equal(1, 2); //fail
+        } catch (e) {
+            //can't continue until we resolve
+        }
+        yield Add.stagePaths(repo, ["s/a"], true, false);
+        const contResult2 = yield CherryPickUtil.continue(repo);
+        assert.isNull(contResult2.errorMessage);
+        rast = yield ReadRepoASTUtil.readRAST(repo, false);
+        assert.isNull(rast.sequencerState);
+    }));
 });
 
 describe("abort", function () {
