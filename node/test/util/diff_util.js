@@ -353,6 +353,9 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                 input: `
 a=B:Ca-1;Bmaster=a|
 x=S:C2-1 s=Sa:1;Bmaster=2`,
+                staged: {
+                    ".gitmodules": FILESTATUS.ADDED,
+                },
                 from: "HEAD^",
             },
             "HEAD^ ignore submodule change": {
@@ -365,6 +368,9 @@ x=S:C2-1 s=Sa:1;C3-2 s=Sa:a;Bmaster=3`,
                 input: `
 a=B:Ca-1;Bmaster=a|
 x=S:C2-1 s=Sa:1;C3-2 s;Bmaster=3`,
+                staged: {
+                    ".gitmodules": FILESTATUS.REMOVED,
+                },
                 from: "HEAD^",
             },
             "HEAD^ unmodified": {

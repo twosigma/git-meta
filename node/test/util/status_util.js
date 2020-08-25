@@ -711,6 +711,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                             index: new Index("1", "a", null),
                         }),
                     },
+                    staged: {
+                        ".gitmodules": FILESTATUS.ADDED,
+                    }
                 }),
             },
             "sub removed from index": {
@@ -723,6 +726,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                             commit: new Commit("1", "a"),
                         }),
                     },
+                    staged: {
+                        ".gitmodules": FILESTATUS.REMOVED,
+                    }
                 }),
             },
             "sub changed in workdir": {
@@ -741,6 +747,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                             }), RELATION.SAME),
                         }),
                     },
+                    staged: {
+                        ".gitmodules": FILESTATUS.ADDED,
+                    }
                 }),
             },
             "show root untracked": {
@@ -840,6 +849,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                expected: new RepoStatus({
                    headCommit: "1",
                    currentBranchName: "master",
+                   staged: {
+                        ".gitmodules": FILESTATUS.ADDED,
+                    },
                    submodules: {
                        s: new Submodule({
                            commit: null,
