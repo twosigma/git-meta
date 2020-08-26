@@ -35,7 +35,6 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 
 const RepoStatus          = require("./repo_status");
-const SubmoduleConfigUtil = require("./submodule_config_util");
 
 const DELTA = NodeGit.Diff.DELTA;
 
@@ -81,11 +80,8 @@ function readDiff(diff) {
                      delta.newFile();
         const path = file.path();
 
-        // Skip the .gitmodules file and all submodule changes; they're handled
-        // separately.
-
-        if (SubmoduleConfigUtil.modulesFileName !== path &&
-            NodeGit.TreeEntry.FILEMODE.COMMIT !== file.mode()) {
+        // Skip the all submodule changes; they're handled separately.
+        if (NodeGit.TreeEntry.FILEMODE.COMMIT !== file.mode()) {
             result[path] = fileStatus;
         }
     }

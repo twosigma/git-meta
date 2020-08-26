@@ -1183,6 +1183,9 @@ a=B:Chi#a-1;Ba=a|x=U:C3-2 s=Sa:a;Bmaster=3;Os W README.md=888`,
                     status: new RepoStatus({
                         currentBranchName: "master",
                         headCommit: "2",
+                        staged: {
+                            ".gitmodules": FILESTATUS.REMOVED
+                        }
                     }),
                 },
             },
