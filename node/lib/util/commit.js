@@ -212,7 +212,7 @@ const runHooks = co.wrap(function *(repo, index) {
 
             if (!isOk) {
                 // hooks are responsible for printing their own message
-                throw new Error("");
+                throw new UserError("");
             }
         }
     } finally {

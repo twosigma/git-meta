@@ -99,7 +99,9 @@ function configureSubcommand(parser, commandName, module, skipNodeGit) {
                 // diagnostic message because the stack is irrelevant.
 
                 if (error instanceof UserError) {
-                    console.error(error.message);
+                    if (error.message) {
+                        console.error(error.message);
+                    }
                     process.exit(error.code);
                 }
                 else {
