@@ -148,7 +148,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
 
     if (args.continue) {
-        if (null !== args.commit) {
+        if (args.commit.length) {
             throw new UserError("Cannot specify a commit with '--continue'.");
         }
         const result = yield CherryPickUtil.continue(repo);
@@ -159,14 +159,14 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
 
     if (args.abort) {
-        if (null !== args.commit) {
+        if (args.commit.length) {
             throw new UserError("Cannot specify a commit with '--abort'.");
         }
         yield CherryPickUtil.abort(repo);
         return;                                                       // RETURN
     }
 
-    if (null === args.commit) {
+    if (!args.commit.length) {
         throw new UserError("No commit to cherry-pick.");
     }
 
