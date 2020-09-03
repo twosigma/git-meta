@@ -60,7 +60,7 @@ exports.findTrackingBranch = co.wrap(function *(repo, name) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(name);
     let result = null;
-    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
+    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.ALL);
     const matcher = new RegExp(`^refs/remotes/(.*)/${name}$`);
     for (let i = 0; i < refs.length; ++i) {
         const refName = refs[i];
