@@ -43,6 +43,6 @@ exports.doSyncRefs = co.wrap(function *() {
     const repo = yield GitUtil.getCurrentRepo();
     let subs   = yield SubmoduleUtil.listOpenSubmodules(repo);
 
-    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.LISTALL);
+    const refs = yield repo.getReferenceNames(NodeGit.Reference.TYPE.ALL);
     yield SubmoduleUtil.syncRefs(repo, refs, subs);
 });
