@@ -130,7 +130,7 @@ exports.getRepoStatus = co.wrap(function *(repo,
     const options = {
         ignoreSubmodules: 1,
         flags: NodeGit.Diff.OPTION.INCLUDE_UNTRACKED |
-               NodeGit.Diff.OPTION.EXCLUDE_SUBMODULES,
+               NodeGit.Diff.OPTION.IGNORE_SUBMODULES,
     };
     if (0 !== paths.length) {
         options.pathspec = paths;
