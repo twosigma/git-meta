@@ -35,6 +35,8 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
+const fs      = require("fs-promise");
+const path    = require("path");
 const NodeGit = require("nodegit");
 
 const GitUtil             = require("./git_util");
@@ -123,7 +125,7 @@ exports.openOnCommit = co.wrap(function *(fetcher,
     const submoduleUrl = yield fetcher.getSubmoduleUrl(submoduleName);
 
 
-    const wasOpen = yield new Opener(metaRepo, null).isOpen(submoduleName);
+    const wasOpen = new Opener(metaRepo, null).isOpen(submoduleName);
 
     // Set up the submodule.
 
@@ -254,12 +256,20 @@ Opener.prototype.clearAbsorbedCache = function (subName) {
  * @param {String} subName
  * @return {Boolean}
  */
-Opener.prototype.isOpen = co.wrap(function *(subName) {
-    if (!this.d_initialized) {
-        yield this._initialize();
+Opener.prototype.isOpen = function (subName) {
+    if (this.d_initialized) {
+        return this.d_openSubs.has(subName) || (subName in this.d_cachedSubs);
+    } else {
+        const modulesDir = path.join(this.d_repo.path(), "modules");
+        const submodulePath = path.join(modulesDir, subName);
+        const headPath = path.join(submodulePath, "HEAD");
+        if (!fs.existsSync(headPath)) {
+            return false;
+        }
+        const gitlinkPath = path.join(this.d_repo.workdir(), subName, ".git");
+        return fs.existsSync(gitlinkPath);
     }
-    return this.d_openSubs.has(subName) || (subName in this.d_cachedSubs);
-});
+};
 
 /**
  * Return true if the submodule is opened nor half opened.
@@ -347,7 +357,7 @@ Opener.prototype.getSubrepo = co.wrap(function *(subName, openOption) {
             return subRepo;
         }
     }
-    const openable = yield this.isOpen(subName);
+    const openable = this.isOpen(subName);
     const halfOpenable = yield this.isAtLeastHalfOpen(subName);
 
     switch (openOption) {
