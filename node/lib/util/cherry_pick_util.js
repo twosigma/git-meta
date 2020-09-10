@@ -120,7 +120,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
             delete urls[name];
             yield rmrf(name);
         }
-        else if (yield opener.isOpen(name)) {
+        else if (opener.isOpen(name)) {
             const subRepo =
                 yield opener.getSubrepo(name,
                                         Open.SUB_OPEN_OPTION.FORCE_OPEN);

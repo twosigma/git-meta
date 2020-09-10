@@ -202,7 +202,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const result = yield opener.isOpen("s");
+            const result = opener.isOpen("s");
             assert.equal(false, result);
         }));
         it("isOpen, true after open", co.wrap(function *() {
@@ -211,7 +211,7 @@ describe("openOnCommit", function () {
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
             const s = yield opener.getSubrepo("s", FORCE_OPEN);
-            const result = yield opener.isOpen("s");
+            const result = opener.isOpen("s");
             assert.equal(true, result);
             const config = yield s.config();
             const gcConfig = yield ConfigUtil.getConfigString(config,
@@ -223,7 +223,7 @@ describe("openOnCommit", function () {
             const w = yield RepoASTTestUtil.createMultiRepos(state);
             const repo = w.repos.x;
             const opener = new Open.Opener(repo, null);
-            const result = yield opener.isOpen("s");
+            const result = opener.isOpen("s");
             assert.equal(true, result);
         }));
     });
