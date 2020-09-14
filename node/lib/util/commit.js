@@ -53,6 +53,7 @@ const Hook                = require("../util/hook");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
+const SequencerStateUtil  = require("../util/sequencer_state_util");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const Submodule           = require("./submodule");
@@ -2169,6 +2170,14 @@ exports.doCommitCommand = co.wrap(function *(repo,
 
     if (usingPaths) {
         checkForPathIncompatibleSubmodules(repoStatus, relCwd);
+    }
+    if (usingPaths || !all) {
+        const seq = yield SequencerStateUtil.readSequencerState(repo.path());
+        if (seq) {
+            const ty = seq.type.toLowerCase();
+            const msg = "Cannot do a partial commit during a " + ty;
+            throw new UserError(msg);
+        }
     }
 
     // If there is nothing possible to commit, exit early.
