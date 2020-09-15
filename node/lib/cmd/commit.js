@@ -133,10 +133,11 @@ const doCommit = co.wrap(function *(args) {
 });
 
 const doAmend = co.wrap(function *(args) {
-    const Commit        = require("../util/commit");
-    const GitUtil       = require("../util/git_util");
-    const Hook          = require("../util/hook");
-    const UserError     = require("../util/user_error");
+    const Commit             = require("../util/commit");
+    const GitUtil            = require("../util/git_util");
+    const Hook               = require("../util/hook");
+    const SequencerStateUtil = require("../util/sequencer_state_util");
+    const UserError          = require("../util/user_error");
 
     const usingPaths = 0 !== args.file.length;
     const message = args.message ? args.message.join("\n\n") : null;
@@ -147,6 +148,13 @@ const doAmend = co.wrap(function *(args) {
 
     const repo = yield GitUtil.getCurrentRepo();
     const cwd = process.cwd();
+
+    const seq = yield SequencerStateUtil.readSequencerState(repo.path());
+    if (seq) {
+        const ty = seq.type.toLowerCase();
+        const msg = "You are in the middle of a " + ty + " -- cannot amend.";
+        throw new UserError(msg);
+    }
 
     yield Commit.doAmendCommand(repo,
                                 cwd,
