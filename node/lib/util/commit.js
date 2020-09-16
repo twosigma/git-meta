@@ -53,6 +53,7 @@ const Hook                = require("../util/hook");
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
+const SequencerState      = require("../util/sequencer_state");
 const SequencerStateUtil  = require("../util/sequencer_state_util");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
@@ -488,6 +489,10 @@ const updateHead = co.wrap(function *(repo, sha) {
  * @param {RepoStatus}         metaStatus
  * @param {String|null}        message
  * @param {Object}             [subMessages] map from submodule to message
+ * @param {Commit}             mergeParent if mid-merge, the commit being
+ *                             merged, which will become the right parent
+ *                             of this commit (and the equivalent in the
+ *                             submodules).
  * @return {Object}
  * @return {String|null} return.metaCommit
  * @return {Object} return.submoduleCommits map submodule name to new commit
@@ -497,7 +502,8 @@ exports.commit = co.wrap(function *(metaRepo,
                                     metaStatus,
                                     message,
                                     subMessages,
-                                    noVerify) {
+                                    noVerify,
+                                    mergeParent) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isBoolean(all);
     assert.instanceOf(metaStatus, RepoStatus);
@@ -512,6 +518,12 @@ exports.commit = co.wrap(function *(metaRepo,
     assert(null !== message || undefined !== subMessages,
            "if no meta message, sub messages must be specified");
     assert.isBoolean(noVerify);
+
+    let mergeTree = null;
+    if (mergeParent) {
+        assert.instanceOf(mergeParent, NodeGit.Commit);
+        mergeTree = yield mergeParent.getTree();
+    }
 
     const signature = yield ConfigUtil.defaultSignature(metaRepo);
     const submodules = metaStatus.submodules;
@@ -549,6 +561,13 @@ exports.commit = co.wrap(function *(metaRepo,
             const parents = [];
             if (headCommit !== null) {
                 parents.push(headCommit);
+            }
+
+            if (mergeTree !== null) {
+                const mergeSubParent = yield mergeTree.entryByPath(name);
+                if (mergeSubParent.id() !== headCommit.id()) {
+                    parents.push(mergeSubParent.id());
+                }
             }
             const index = yield subRepo.index();
             const tree = yield index.writeTree();
@@ -597,6 +616,11 @@ exports.commit = co.wrap(function *(metaRepo,
 
     const tree = yield index.writeTree();
     const headCommit = yield metaRepo.getHeadCommit();
+    const parents = [headCommit];
+    if (mergeParent) {
+        assert(mergeParent !== headCommit);
+        parents.push(mergeParent);
+    }
 
     result.metaCommit = yield metaRepo.createCommit(
                 "HEAD",
@@ -604,7 +628,11 @@ exports.commit = co.wrap(function *(metaRepo,
                 signature,
                 exports.ensureEolOnLastLine(message),
                 tree,
-                [headCommit]);
+                parents);
+
+    if (mergeParent) {
+        yield SequencerStateUtil.cleanSequencerState(metaRepo.path());
+    }
     return result;
 });
 
@@ -2171,13 +2199,19 @@ exports.doCommitCommand = co.wrap(function *(repo,
     if (usingPaths) {
         checkForPathIncompatibleSubmodules(repoStatus, relCwd);
     }
-    if (usingPaths || !all) {
-        const seq = yield SequencerStateUtil.readSequencerState(repo.path());
+    const seq = yield SequencerStateUtil.readSequencerState(repo.path());
+
+    if (usingPaths || !all || interactive) {
         if (seq) {
             const ty = seq.type.toLowerCase();
             const msg = "Cannot do a partial commit during a " + ty;
             throw new UserError(msg);
         }
+    }
+
+    let mergeParent = null;
+    if (seq && seq.type === SequencerState.TYPE.MERGE) {
+        mergeParent = NodeGit.Commit.lookup(repo, seq.target);
     }
 
     // If there is nothing possible to commit, exit early.
@@ -2235,7 +2269,8 @@ exports.doCommitCommand = co.wrap(function *(repo,
                                     repoStatus,
                                     message,
                                     subMessages,
-                                    noVerify);
+                                    noVerify,
+                                    mergeParent);
     }
 });
 

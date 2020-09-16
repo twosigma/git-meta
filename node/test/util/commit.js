@@ -3385,3 +3385,76 @@ x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
 
     });
 });
+
+describe("commit mid-merge", function() {
+    it("handles a commit mid-merge", co.wrap(function*() {
+        const MergeUtil    = require("../../lib/util/merge_util");
+        const MergeCommon  = require("../../lib/util/merge_common");
+        const Open         = require("../../lib/util/open");
+        const SeqStateUtil = require("../../lib/util/sequencer_state_util");
+
+        const start = `a=B:C2-1 a=a1;
+                           C3-2 a=a3;
+                           C4-2 a=a4;
+                           Bb3=3;Bb4=4;|
+              x=S:Cm2-1 s=Sa:2;
+                  Cm3-m2 s=Sa:3;
+                  Cm4-m2 s=Sa:4;
+                  Bmaster=m3;Bm4=m4;`;
+        const repoMap = yield RepoASTTestUtil.createMultiRepos(start);
+        const repo = repoMap.repos.x;
+
+        const m4 = yield NodeGit.Commit.lookup(repo,
+                                               repoMap.reverseCommitMap.m4);
+        try {
+            yield MergeUtil.merge(repo,
+                                  null,
+                                  m4,
+                                  MergeCommon.MODE.NORMAL,
+                                  Open.SUB_OPEN_OPTION.FORCE_OPEN,
+                                  [],
+                                  "msg",
+                                  function() {});
+        } catch (e) {
+            // we expect the merge to fail, since we have a conflict
+            // and we want to test that git meta commit in the middle
+            // of merge conflict resolution continues the merge.
+        }
+
+        const sRepo = yield NodeGit.Repository.open(repo.workdir() + "s");
+        const index = yield sRepo.index();
+        const sEntry = index.getByIndex(1);
+        const newEntry = new NodeGit.IndexEntry();
+        newEntry.flags = sEntry.flags;
+        newEntry.flagsExtended = sEntry.flagsExtended;
+        newEntry.mode = sEntry.mode;
+        newEntry.id = sEntry.id;
+        newEntry.path = sEntry.path;
+
+        yield index.conflictCleanup();
+        yield index.add(newEntry);
+        yield index.write();
+
+        const repoStatus = yield Commit.getCommitStatus(repo, repo.path(), {
+            all: true,
+            paths: [],
+        });
+
+        yield Commit.commit(repo, true, repoStatus, "commit message",
+                            undefined, true, m4);
+
+        const head = yield repo.getHeadCommit();
+        const left = yield head.parent(0);
+        const right = yield head.parent(1);
+        assert.equal(left.id().tostrS(), repoMap.reverseCommitMap.m3);
+        assert.equal(right.id().tostrS(), repoMap.reverseCommitMap.m4);
+        const tree = yield head.getTree();
+        const subEntry = yield tree.entryByPath("s");
+        const subCommit = yield NodeGit.Commit.lookup(sRepo,
+                                                      subEntry.oid());
+        assert.equal(2, subCommit.parentcount());
+        const seq = yield SeqStateUtil.readSequencerState(repo.path());
+        assert.isNull(seq);
+
+    }));
+});
