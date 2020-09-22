@@ -34,10 +34,11 @@
  * This module contains methods for pushing.
  */
 
-const assert  = require("chai").assert;
-const co      = require("co");
-const colors  = require("colors");
-const NodeGit = require("nodegit");
+const assert       = require("chai").assert;
+const ChildProcess = require("child-process-promise");
+const co           = require("co");
+const colors       = require("colors");
+const NodeGit      = require("nodegit");
 
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
@@ -51,10 +52,9 @@ const UserError           = require("./user_error");
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 /**
- * For a given commit and remote, determine a reasonably close oid that has
- * already been pushed. This does *not* do a fetch, but rather just compares
- * against all available remote refs. To compare against all remotes, simply
- * pass a "*" wildcard.
+ * For a given commit, determine a reasonably close oid that has
+ * already been pushed. This does *not* do a fetch, but rather just
+ * compares against all available remote refs.
  *
  * This works by building a revwalk and removing all ancestors of remote refs
  * for the given remote. It then reverses the result, and returns the first
@@ -66,38 +66,46 @@ const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {String}             remoteName
  * @param {NodeGit.Commit}     commit
  */
-exports.getClosePushedCommit = co.wrap(function*(repo, remoteName, commit) {
+exports.getClosePushedCommit = co.wrap(function*(repo, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(remoteName);
     assert.instanceOf(commit, NodeGit.Commit);
 
     // Search for the first commit that is not an ancestor of a remote ref, ie.
-    // the first commit that is unpushed. First by topological, then resolving
-    // by timestamp.
+    // the first commit that is unpushed. NodeGit Revwalk is too slow, so
+    // we shell out.
 
-    const walk = NodeGit.Revwalk.create(repo);
-    walk.sorting(NodeGit.Revwalk.SORT.TOPOLOGICAL,
-                 NodeGit.Revwalk.SORT.TIME,
-                 NodeGit.Revwalk.SORT.REVERSE);
-    walk.hideGlob(`refs/remotes/${remoteName}`);
-    walk.push(commit);
-
-    // This occurs when walk.next() has no commits left -- in this case,
-    // when there are no unpushed commits. Return the passed commit as the
-    // last pushed commit.
-
-    let firstNewOid;
-    try {
-        firstNewOid = yield walk.next();
-    } catch (err) {
-        if (NodeGit.Error.CODE.ITEROVER === err.errno)  {
-            return commit;
+    // First, get the list of remote refs to exclude
+    const excludeRefs = [];
+    for (const ref of (yield NodeGit.Reference.list(repo))) {
+        if (ref.startsWith("refs/remotes/")) {
+            excludeRefs.push("^" + ref);
         }
-        throw err;
     }
+    if (excludeRefs.length === 0) {
+        return null;
+    }
+
+    const execString = `\
+git -C '${repo.workdir()}' rev-list --reverse --topo-order ${commit} \
+${excludeRefs.join(" ")}`;
+    let result = yield ChildProcess.exec(execString);
+    if (result.error) {
+        throw new Error(
+            `Unexpected error figuring out what to push:
+stderr:
+{result.stderr}
+stdout:
+{result.stdout}`);
+    }
+    const out = result.stdout;
+    if (!out) {
+        // Nothing new to push
+        return commit;
+    }
+
+    const firstNewOid = out.substring(0, out.indexOf("\n"));
 
     const firstNewCommit = yield repo.getCommit(firstNewOid);
 
@@ -120,19 +128,15 @@ exports.getClosePushedCommit = co.wrap(function*(repo, remoteName, commit) {
  *
  * @async
  * @param {NodeGit.Repository} repo
- * @param {String}             remoteName
  * @param {String}             source
  * @param {NodeGit.Commit}     commit
  */
-exports.getPushMap = co.wrap(function*(repo, remoteName, source,
-                                       commit) {
+exports.getPushMap = co.wrap(function*(repo,  source, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(remoteName);
     assert.isString(source);
     assert.instanceOf(commit, NodeGit.Commit);
 
-    const baseCommit = yield exports.getClosePushedCommit(repo, remoteName,
-                                                          commit);
+    const baseCommit = yield exports.getClosePushedCommit(repo, commit);
     let baseTree;
     if (null !== baseCommit) {
         baseTree = yield baseCommit.getTree();
@@ -222,8 +226,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     const commit = yield repo.getCommit(sha);
 
     // First, push the submodules.
-    const pushMap = yield exports.getPushMap(repo, `*`, source,
-                                            commit);
+    const pushMap = yield exports.getPushMap(repo, source, commit);
 
     let errorMessage = "";
 

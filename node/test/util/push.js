@@ -299,8 +299,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
                     yield SubmoduleConfigUtil.deinit(repo, subs);
                 }
 
-                const pushMap = yield Push.getPushMap(repo, "origin", source,
-                                                      commit);
+                const pushMap = yield Push.getPushMap(repo, source, commit);
                 const mappedPushMap = {};
                 for (const sub of Object.keys(pushMap)) {
                     mappedPushMap[sub] = commitMap.commitMap[pushMap[sub]];
@@ -353,8 +352,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
 
         const sha = theirCommitMap["2"];
         const commit = yield ourRepo.getCommit(sha);
-        const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
-                                              commit);
+        const pushMap = yield Push.getPushMap(ourRepo, "2", commit);
         assert.deepEqual({}, pushMap);
     }));
 
@@ -374,8 +372,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
 
         const sha = ourCommitMap["3"];
         const commit = yield ourRepo.getCommit(sha);
-        const pushMap = yield Push.getPushMap(ourRepo, "upstream", "2",
-                                              commit);
+        const pushMap = yield Push.getPushMap(ourRepo, "2", commit);
         assert.deepEqual({"d": ourCommitMap["7"]}, pushMap);
 
         // "Delete" the codebase, but remain absorbed.
@@ -383,8 +380,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
             return rimraf(ourWritten.repos.x.workdir() + "d", {},
                 callback);
         }));
-        const pushMapDel = yield Push.getPushMap(ourRepo, "upstream", "2",
-                                              commit);
+        const pushMapDel = yield Push.getPushMap(ourRepo, "2", commit);
         assert.deepEqual({"d": ourCommitMap["7"]}, pushMapDel);
 
         // Remove the absorbed codebase.
@@ -392,8 +388,7 @@ x=S:B3=3;C2-1 s=Sa:1;Rorigin=a master=3;Rtarget=b;Bmaster=2 origin/master;Os`,
             return rimraf(ourWritten.repos.x.path() + "modules/d", {},
                 callback);
         }));
-        const pushMapRm = yield Push.getPushMap(ourRepo, "upstream", "2",
-                                              commit);
+        const pushMapRm = yield Push.getPushMap(ourRepo, "2", commit);
         assert.deepEqual({}, pushMapRm);
     }));
 });
@@ -515,39 +510,28 @@ describe("getClosePushedCommit", function () {
     const baseRepo = "x=S:C2-1;C3-1;C4-3,2;C5-4;Bmaster=5";
 
     const cases = {
-        "no refs, no close pushed commit": {
+        "no ref, no close pushed commit": {
             source: "5",
-            remote: "origin",
             refs: {
             },
             expectedCommit: null,
         },
-        "no refs, with wildcard": {
+        "one ref, commit is pushed": {
             source: "5",
-            remote: "*",
-            refs: {
-            },
-            expectedCommit: null,
-        },
-        "one refs, commit is pushed": {
-            source: "5",
-            remote: "*",
             refs: {
                 "refs/remotes/origin/1": "5",
             },
             expectedCommit: "5",
         },
-        "one refs, far commit": {
+        "one ref, far commit": {
             source: "5",
-            remote: "*",
             refs: {
                 "refs/remotes/origin/1": "1",
             },
             expectedCommit: "1",
         },
-        "one refs, close commit": {
+        "one ref, close commit": {
             source: "5",
-            remote: "*",
             refs: {
                 "refs/remotes/origin/1": "2",
             },
@@ -557,38 +541,35 @@ describe("getClosePushedCommit", function () {
             source: "5",
             remote: "origin",
             refs: {
-                "refs/remotes/foo/1": "1",
-                "refs/remotes/foo/2": "2",
-                "refs/remotes/bar/3": "3",
-                "refs/remotes/bar/4": "4",
+                "refs/nonmatch/foo/1": "1",
+                "refs/nonmatch/foo/2": "2",
+                "refs/nonmatch/bar/3": "3",
+                "refs/nonmatch/bar/4": "4",
             },
             expectedCommit: null,
         },
         "lots of refs, something matching": {
             source: "5",
-            remote: "origin",
             refs: {
                 "refs/remotes/origin/1": "1",
-                "refs/remotes/foo/2": "2",
-                "refs/remotes/bar/3": "3",
-                "refs/remotes/bar/4": "4",
+                "refs/nonmatch/foo/2": "2",
+                "refs/nonmatch/bar/3": "3",
+                "refs/nonmatch/bar/4": "4",
             },
             expectedCommit: "1",
         },
         "lots of refs, something matching 2": {
             source: "5",
-            remote: "origin",
             refs: {
-                "refs/remotes/foo/1": "1",
-                "refs/remotes/foo/2": "2",
-                "refs/remotes/bar/3": "3",
+                "refs/nonmatch/foo/1": "1",
+                "refs/nonmatch/foo/2": "2",
+                "refs/nonmatch/bar/3": "3",
                 "refs/remotes/origin/4": "4",
             },
             expectedCommit: "4",
         },
         "lots of refs, all matching": {
             source: "5",
-            remote: "*",
             refs: {
                 "refs/remotes/origin/1": "1",
                 "refs/remotes/origin/2": "2",
@@ -624,7 +605,7 @@ describe("getClosePushedCommit", function () {
             const commit = yield repo.getCommit(
                 repos.reverseCommitMap[c.source]);
             const actualCommit = yield Push.getClosePushedCommit(
-                repo, c.remote, commit);
+                repo, commit);
             if (null !== c.expectedCommit) {
                 assert.deepEqual(repos.reverseCommitMap[c.expectedCommit], 
                                  actualCommit.id().tostrS());
