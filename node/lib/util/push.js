@@ -87,10 +87,9 @@ exports.getClosePushedCommit = co.wrap(function*(repo, commit) {
         return null;
     }
 
-    const execString = `\
-git -C '${repo.workdir()}' rev-list --reverse --topo-order ${commit} \
-${excludeRefs.join(" ")}`;
-    let result = yield ChildProcess.exec(execString);
+    const args = ["-C", repo.workdir(), "rev-list", "--reverse",
+                  "--topo-order", commit, ...excludeRefs];
+    let result = yield ChildProcess.execFile("git", args);
     if (result.error) {
         throw new Error(
             `Unexpected error figuring out what to push:
