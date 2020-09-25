@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const Forward = require("./forward");
 
 /**
  * This module contains the command entry point for direct interactions with
@@ -119,6 +120,36 @@ ancestor of M (or M itself) that references S (or a descendant of S)`,
         type: "string",
         required: false,
         defaultValue: "HEAD",
+    });
+
+    const foreachParser = subParsers.addParser("foreach", {
+        help: "evaluate a shell command in each open sub-repo",
+        description: `\
+Evaluate a shell command in each open sub-repo. Any sub-repo in the \
+meta-repo that is not opened is ignored by this command.`,
+    });
+
+    // The foreach command is forwarded to vanilla git.
+    // These arguments exist solely to populate the --help section.
+    foreachParser.addArgument(["foreach-command"], {
+        help: "shell command to execute for each open sub-repo",
+        type: "string",
+    });
+
+    foreachParser.addArgument(["--recursive"], {
+        help: "sub-repos are traversed recursively",
+        defaultValue: false,
+        required: false,
+        action: "storeConst",
+        constant: true,
+    });
+
+    foreachParser.addArgument(["--quiet"], {
+        help: "only print error messages",
+        defaultValue: false,
+        required: false,
+        action: "storeConst",
+        constant: true,
     });
 };
 
@@ -278,6 +309,11 @@ meta-repo.`);
     }
 });
 
+const doForeachCommand = co.wrap(function *() {
+    const args = process.argv.slice(3);
+    yield Forward.execute("submodule", args);
+});
+
 /**
  * Execute the `submodule` command according to the specified `args`.
  *
@@ -303,6 +339,9 @@ Also, the paths argument is deprecated. Exiting with no change.`);
             return fail();
         }
         return SyncRefs.doSyncRefs();
+    }
+    else if ("foreach" === args.command) {
+        return doForeachCommand();
     }
     return doFindCommand(args.path,
                          args.meta_committish,
