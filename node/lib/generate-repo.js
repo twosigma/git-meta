@@ -153,8 +153,8 @@ function makeSubCommits(state, name, madeShas) {
             const numChanges = randomInt(2) + 1;
             for (let j = 0; j < numChanges; ++j) {
                 const pathToUpdate = paths[randomInt(paths.length)];
-                changes[pathToUpdate] =
-                                      state.nextCommitId + generateCharacter();
+                changes[pathToUpdate] = new RepoAST.File(
+                    state.nextCommitId + generateCharacter(), false);
             }
         }
 
@@ -162,7 +162,8 @@ function makeSubCommits(state, name, madeShas) {
 
         if (undefined === lastHead || 0 === randomInt(6)) {
             const path = generatePath(randomInt(3) + 1);
-            changes[path] = state.nextCommitId + generateCharacter();
+            changes[path] = new RepoAST.File(
+                state.nextCommitId + generateCharacter(), false);
         }
         const parents = undefined === lastHead ? [] : [lastHead];
         lastHead = newHead;
