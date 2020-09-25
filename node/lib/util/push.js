@@ -89,7 +89,9 @@ exports.getClosePushedCommit = co.wrap(function*(repo, commit) {
 
     const args = ["-C", repo.workdir(), "rev-list", "--reverse",
                   "--topo-order", commit, ...excludeRefs];
-    let result = yield ChildProcess.execFile("git", args);
+    let result = yield ChildProcess.execFile("git", args, {
+        maxBuffer: 1024*1024*100
+    });
     if (result.error) {
         throw new Error(
             `Unexpected error figuring out what to push:
