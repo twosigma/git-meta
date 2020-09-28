@@ -201,7 +201,7 @@ exports.stageChange = co.wrap(function *(index, path, change) {
 
 const mutex = new Mutex();
 
-const runHooks = co.wrap(function *(repo, index) {
+const runPreCommitHook = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
 
@@ -264,7 +264,7 @@ const prepareIndexAndRunHooks = co.wrap(function *(repo,
     }
 
     if (!noVerify) {
-        yield runHooks(repo, index);
+        yield runPreCommitHook(repo, index);
     }
 });
 
@@ -619,7 +619,7 @@ exports.commit = co.wrap(function *(metaRepo,
 
     yield stageOpenSubmodules(metaRepo, index, submodules);
     if (!noVerify) {
-        yield runHooks(metaRepo, index);
+        yield runPreCommitHook(metaRepo, index);
     }
 
     const tree = yield index.writeTree();
@@ -739,7 +739,7 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message, noVerify) {
     }
 
     if (!noVerify) {
-        yield runHooks(repo, index);
+        yield runPreCommitHook(repo, index);
     }
 
     // Use 'TreeUtil' to create a new tree having the required paths.
@@ -1370,7 +1370,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                     }
                 }
                 if (!noVerify) {
-                    yield runHooks(subRepo, subIndex);
+                    yield runPreCommitHook(subRepo, subIndex);
                 }
             }
             subCommits[subName] = yield exports.createAmendCommit(subRepo,
@@ -1393,7 +1393,7 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
 
         if (!noVerify) {
-            yield runHooks(subRepo, subIndex);
+            yield runPreCommitHook(subRepo, subIndex);
         }
         const tree = yield subIndex.writeTree();
         const commit = yield subRepo.createCommit(
