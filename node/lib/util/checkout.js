@@ -602,10 +602,13 @@ exports.checkoutFiles = co.wrap(function*(repo, options) {
     assert.instanceOf(repo, NodeGit.Repository);
     const resolvedPaths = options.resolvedPaths;
 
-    // Exception is thrown if we try to get repo info from unopened submodules
+    // Exception is thrown if we try to get repo info from unopened submodules.
+    // TODO: handle other use cases besides when a commit is not specified.
     const openSubmodules = yield SubmoduleUtil.listOpenSubmodules(repo);
-    const subNames = Object.keys(resolvedPaths).filter(
-        subName => openSubmodules.includes(subName));
+    const submodules = Object.keys(resolvedPaths);
+    const subNames = null === options.commit ?
+        submodules.filter(submodule => openSubmodules.includes(submodule)) :
+        submodules;
 
     let subCommits;
     let stage = 0;
