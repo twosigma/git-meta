@@ -1379,17 +1379,17 @@ exports.amendMetaRepo = co.wrap(function *(repo,
         }
 
         if (all) {
-        const actualStatus = yield StatusUtil.getRepoStatus(subRepo, {
-            showMetaChanges: true,
-        });
+            const actualStatus = yield StatusUtil.getRepoStatus(subRepo, {
+                showMetaChanges: true,
+            });
 
-        const workdir = actualStatus.workdir;
-        for (let path in actualStatus.workdir) {
-            const change = workdir[path];
-            if (RepoStatus.FILESTATUS.ADDED !== change) {
-                yield exports.stageChange(subIndex, path, change);
+            const workdir = actualStatus.workdir;
+            for (let path in actualStatus.workdir) {
+                const change = workdir[path];
+                if (RepoStatus.FILESTATUS.ADDED !== change) {
+                    yield exports.stageChange(subIndex, path, change);
+                }
             }
-        }
         }
 
         if (!noVerify) {
