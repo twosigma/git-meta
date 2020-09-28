@@ -28,6 +28,7 @@
   "homepage": "https://github.com/twosigma/git-meta#readme",
   "dependencies": {
     "argparse": "^1.0.0",
+    "async-mutex": "^0.2.4",
     "binary-search": "",
     "chai": "",
     "child-process-promise": "",

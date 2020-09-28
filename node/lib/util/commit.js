@@ -50,6 +50,7 @@ const DoWorkQueue         = require("../util/do_work_queue");
 const DiffUtil            = require("./diff_util");
 const GitUtil             = require("./git_util");
 const Hook                = require("../util/hook");
+const Mutex               = require("async-mutex").Mutex;
 const Open                = require("./open");
 const RepoStatus          = require("./repo_status");
 const PrintStatusUtil     = require("./print_status_util");
@@ -198,6 +199,8 @@ exports.stageChange = co.wrap(function *(index, path, change) {
     }
 });
 
+const mutex = new Mutex();
+
 const runHooks = co.wrap(function *(repo, index) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
@@ -206,8 +209,10 @@ const runHooks = co.wrap(function *(repo, index) {
     yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index,
                                                         tempIndexPath);
 
+    let release = null;
     try {
         if (Hook.hasHook(repo, "pre-commit")) {
+            release = yield mutex.acquire();
             const isOk = yield Hook.execHook(repo, "pre-commit", [],
                                              { GIT_INDEX_FILE: tempIndexPath});
             yield GitUtil.overwriteIndexFromFile(index, tempIndexPath);
@@ -218,6 +223,9 @@ const runHooks = co.wrap(function *(repo, index) {
             }
         }
     } finally {
+        if (release !== null) {
+            release();
+        }
         yield fs.unlink(tempIndexPath);
     }
 });
