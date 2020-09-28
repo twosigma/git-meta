@@ -601,7 +601,14 @@ function noSuchFileMessage(subName, path) {
 exports.checkoutFiles = co.wrap(function*(repo, options) {
     assert.instanceOf(repo, NodeGit.Repository);
     const resolvedPaths = options.resolvedPaths;
-    const subNames = Object.keys(resolvedPaths);
+
+    // Exception is thrown if we try to get repo info from unopened submodules.
+    // TODO: handle other use cases besides when a commit is not specified.
+    const openSubmodules = yield SubmoduleUtil.listOpenSubmodules(repo);
+    const submodules = Object.keys(resolvedPaths);
+    const subNames = null === options.commit ?
+        submodules.filter(submodule => openSubmodules.includes(submodule)) :
+        submodules;
 
     let subCommits;
     let stage = 0;
