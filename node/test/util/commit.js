@@ -3124,30 +3124,40 @@ x=U:Cfoo\n#x-2 s=Sa:s;Os Cbar\n#s-1 a=b!H=s;Bmaster=x`,
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             const doCommit = co.wrap(function *(repos) {
-                const repo = repos.x;
-                let cwd = "";
-                if (undefined !== c.cwd) {
-                    cwd = path.join(repo.workdir(), c.cwd);
-                }
-                else {
-                    cwd = repo.workdir();
-                }
-                const editor = c.editor || (() => {
-                    assert(false, "no editor");
-                });
-                const result = yield Commit.doCommitCommand(
-                                                        repo,
-                                                        cwd,
-                                                        c.message || null,
-                                                        c.all || false,
-                                                        c.paths || [],
-                                                        c.interactive || false,
-                                                        false,
-                                                        editor);
-                if (undefined !== result) {
-                    return {
-                        commitMap: mapCommitResult(result),
+                const old = GitUtil.editMessage;
+                try {
+                    const repo = repos.x;
+                    let cwd = "";
+                    if (undefined !== c.cwd) {
+                        cwd = path.join(repo.workdir(), c.cwd);
+                    }
+                    else {
+                        cwd = repo.workdir();
+                    }
+                    if (c.editor) {
+                        GitUtil.editMessage = c.editor;
+                } else {
+                    GitUtil.editMessage = () => {
+                        assert(false, "no editor");
                     };
+                }
+
+                    const result = yield Commit.doCommitCommand(
+                        repo,
+                        cwd,
+                        c.message || null,
+                        c.all || false,
+                        c.paths || [],
+                        c.interactive || false,
+                        false,
+                        true);
+                    if (undefined !== result) {
+                        return {
+                            commitMap: mapCommitResult(result),
+                        };
+                    }
+                } finally {
+                    GitUtil.editMessage = old;
                 }
             });
             it(caseName, co.wrap(function *() {
@@ -3263,34 +3273,42 @@ a=B:Cbar\n#a-1 README.md=foo;Bmaster=a|
 x=U:Cbar\n#3-2 s=Sa:a;Bmaster=3;Os I a=b`,
                 expected: `
 x=U:Cbar\n#x-2 s=Sa:s;Bmaster=x;Os Cbar\n#s-1 README.md=foo, a=b`,
-                editor: null,
+                editor: null
             },
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             const doAmend = co.wrap(function *(repos) {
-                const repo = repos.x;
-                let cwd = "";
-                if (undefined !== c.cwd) {
-                    cwd = path.join(repo.workdir(), c.cwd);
+                const old = GitUtil.editMessage;
+                try {
+                    const repo = repos.x;
+                    let cwd = "";
+                    if (undefined !== c.cwd) {
+                        cwd = path.join(repo.workdir(), c.cwd);
+                    }
+                    else {
+                        cwd = repo.workdir();
+                    }
+                    let editor = c.editor;
+                    if (editor) {
+                        GitUtil.editMessage = editor;
+                    } else {
+                        GitUtil.editMessage = old;
+                    }
+                    const result = yield Commit.doAmendCommand(
+                        repo,
+                        cwd,
+                        c.message || null,
+                        c.all || false,
+                        c.interactive || false,
+                        false,
+                        editor === undefined);
+                    return {
+                        commitMap: mapCommitResult(result),
+                    };
+                } finally {
+                    GitUtil.editMessage = old;
                 }
-                else {
-                    cwd = repo.workdir();
-                }
-                let editor = c.editor;
-                if (undefined === editor) {
-                    editor = () => assert(false, "no editor");
-                }
-                const result = yield Commit.doAmendCommand(
-                                                        repo,
-                                                        cwd,
-                                                        c.message || null,
-                                                        c.all || false,
-                                                        c.interactive || false,
-                                                        editor);
-                return {
-                    commitMap: mapCommitResult(result),
-                };
             });
             it(caseName, co.wrap(function *() {
                 yield RepoASTTestUtil.testMultiRepoManipulator(c.initial,
@@ -3322,7 +3340,6 @@ x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
                 const hookPath = repo.path() + "modules/s/hooks/pre-commit";
                 fs.writeFileSync(hookPath, addNewFileHook);
                 yield fs.chmod(hookPath, 493); //0755
-                const editor = () => assert(false, "no editor");
 
                 const result = yield Commit.doAmendCommand(
                     repo,
@@ -3330,7 +3347,8 @@ x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
                     message,
                     true, // all
                     false, // interactive
-                    editor);
+                    false,
+                    false);
 
                 return {
                     commitMap: mapCommitResult(result),

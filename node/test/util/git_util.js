@@ -946,7 +946,8 @@ describe("GitUtil", function () {
             const cmd = "echo bar >> ";
             process.env.GIT_EDITOR = cmd;
             const repo = yield TestUtil.createSimpleRepository();
-            const result = yield GitUtil.editMessage(repo, "foo\n");
+            const result = yield GitUtil.editMessage(repo, "foo\n", true,
+                                                     true);
             assert.equal(result, "foo\nbar\n");
         }));
     });

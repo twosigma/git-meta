@@ -128,7 +128,7 @@ const doCommit = co.wrap(function *(args) {
                                  args.file,
                                  args.interactive,
                                  args.no_verify,
-                                 GitUtil.editMessage);
+                                 true);
     yield Hook.execHook(repo, "post-commit");
 });
 
@@ -161,8 +161,8 @@ const doAmend = co.wrap(function *(args) {
                                 message,
                                 args.all,
                                 args.interactive,
-                                args.no_edit ? null : GitUtil.editMessage,
-                                args.no_verify);
+                                args.no_verify,
+                                !args.no_edit);
     yield Hook.execHook(repo, "post-commit");
 });
 

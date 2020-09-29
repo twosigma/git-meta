@@ -761,19 +761,33 @@ exports.getEditorCommand = co.wrap(function *(repo) {
  * @param {String}             initialContents
  * @return {String}
  */
-exports.editMessage = co.wrap(function *(repo, initialContents) {
+exports.editMessage = co.wrap(function *(repo, initialContents,
+                                         runEditor, runHooks) {
     const messagePath = path.join(repo.path(), "COMMIT_EDITMSG");
     yield fs.writeFile(messagePath, initialContents);
-    const editorCommand = yield exports.getEditorCommand(repo);
+    if (runEditor) {
+        const editorCommand = yield exports.getEditorCommand(repo);
 
-    // TODO: if we ever need this to work on Windows, we'll need to do
-    // something else.  The `ChildProcess.exec` method doesn't provide for a
-    // way to auto-redirect stdio or I'd use it.
+        // TODO: if we ever need this to work on Windows, we'll need to do
+        // something else.  The `ChildProcess.exec` method doesn't provide for a
+        // way to auto-redirect stdio or I'd use it.
 
-    yield ChildProcess.spawn("/bin/sh",
-                             ["-c", `${editorCommand} '${messagePath}'`], {
-        stdio: "inherit",
-    });
+        yield ChildProcess.spawn("/bin/sh",
+                                 ["-c", `${editorCommand} '${messagePath}'`], {
+                                     stdio: "inherit",
+                                 });
+
+    }
+
+    if (runHooks && Hook.hasHook(repo, "commit-msg")) {
+        const isOk = yield Hook.execHook(repo, "commit-msg", [messagePath]);
+
+        if (!isOk) {
+            // hooks are responsible for printing their own message
+            throw new UserError("");
+        }
+    }
+
     return yield fs.readFile(messagePath, "utf8");
 });
 

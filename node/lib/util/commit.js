@@ -2135,8 +2135,7 @@ function abortForNoMessage() {
  * modified but unstaged changes.  If `paths` is non-empty, include only the
  * files indicated in those `paths` in the commit.  If the specified
  * `interactive` is true, prompt the user to create an "interactive" message,
- * allowing for different commit messages for each changed submodules.  Use the
- * specified `editMessage` function to invoke an editor when needed.  The
+ * allowing for different commit messages for each changed submodules.  The
  * behavior is undefined if `null !== message && true === interactive` or if `0
  * !== paths.length && all`.
  *
@@ -2147,7 +2146,8 @@ function abortForNoMessage() {
  * @param {Boolean}                        all
  * @param {String[]}                       paths
  * @param {Boolean}                        interactive
- * @param {(repo, txt) -> Promise(String)} editMessage
+ * @param {Boolean}                        noVerify
+ * @param {Boolean}                        editMessage
  * @return {Object}
  * @return {String} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
@@ -2169,7 +2169,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
     assert.isArray(paths);
     assert.isBoolean(interactive);
     assert.isBoolean(noVerify);
-    assert.isFunction(editMessage);
+    assert.isBoolean(editMessage);
 
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
@@ -2241,7 +2241,8 @@ exports.doCommitCommand = co.wrap(function *(repo,
                                                              sig,
                                                              null,
                                                              {});
-        const userText = yield editMessage(repo, prompt);
+        const userText = yield GitUtil.editMessage(repo, prompt, editMessage,
+                                                   !noVerify);
         const userData = exports.parseSplitCommitMessages(userText);
         message = userData.metaMessage;
         subMessages = userData.subMessages;
@@ -2257,7 +2258,8 @@ exports.doCommitCommand = co.wrap(function *(repo,
         // If no message on the command line, prompt for one.
 
         const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
-        message = yield editMessage(repo, initialMessage);
+        message = yield GitUtil.editMessage(repo, initialMessage, editMessage,
+                                            !noVerify);
     }
     message = GitUtil.stripMessage(message);
 
@@ -2291,7 +2293,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * prompt the user to create an "interactive" message, allowing for different
  * commit messages for each changed submodules.  Use the specified
  * `editMessage` function to invoke an editor when needed.  If
- * `null === editMessage`, use the message of the previous commit.  The
+ * `!editMessage`, use the message of the previous commit.  The
  * behavior is undefined if `null !== message && true === interactive`.  Do not
  * generate a commit if it would be empty.
  *
@@ -2300,7 +2302,8 @@ exports.doCommitCommand = co.wrap(function *(repo,
  * @param {String|null}                           message
  * @param {Boolean}                               all
  * @param {Boolean}                               interactive
- * @param {(repo, txt) -> Promise(String) | null} editMessage
+ * @param {Boolean}                               noVerify
+ * @param {Boolean}                               editMessage
  * @return {Object}
  * @return {String|null} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
@@ -2310,8 +2313,8 @@ exports.doAmendCommand = co.wrap(function *(repo,
                                             message,
                                             all,
                                             interactive,
-                                            editMessage,
-                                            noVerify) {
+                                            noVerify,
+                                            editMessage) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(cwd);
     if (null !== message) {
@@ -2319,9 +2322,7 @@ exports.doAmendCommand = co.wrap(function *(repo,
     }
     assert.isBoolean(all);
     assert.isBoolean(interactive);
-    if (null !== editMessage) {
-        assert.isFunction(editMessage);
-    }
+    assert.isBoolean(editMessage);
 
     const workdir = repo.workdir();
     const relCwd = path.relative(workdir, cwd);
@@ -2345,7 +2346,8 @@ exports.doAmendCommand = co.wrap(function *(repo,
                                                              defaultSig,
                                                              headMeta,
                                                              subsToAmend);
-        const userText = yield editMessage(repo, prompt);
+        const userText = yield GitUtil.editMessage(repo, prompt, editMessage,
+                                                  !noVerify);
         const userData = exports.parseSplitCommitMessages(userText);
         message = userData.metaMessage;
         subMessages = userData.subMessages;
@@ -2370,21 +2372,15 @@ repository independently.`;
             throw new UserError(error);
         }
 
-
-        if (null === editMessage) {
-            // If no `editMessage` function, use the message of the previous
-            // commit.
-
-            message = head.message();
-        }
         if (null === message) {
-            // If no message, use editor.
-
+            // If no message, use editor / hooks.
             const prompt = exports.formatAmendEditorPrompt(defaultSig,
                                                            headMeta,
                                                            status,
                                                            relCwd);
-            const rawMessage = yield editMessage(repo, prompt);
+            const rawMessage = yield GitUtil.editMessage(repo, prompt,
+                                                         editMessage,
+                                                         !noVerify);
             message = GitUtil.stripMessage(rawMessage);
         }
     }
