@@ -772,10 +772,16 @@ exports.editMessage = co.wrap(function *(repo, initialContents,
         // something else.  The `ChildProcess.exec` method doesn't provide for a
         // way to auto-redirect stdio or I'd use it.
 
-        yield ChildProcess.spawn("/bin/sh",
-                                 ["-c", `${editorCommand} '${messagePath}'`], {
-                                     stdio: "inherit",
-                                 });
+        try {
+            const args = ["-c", `${editorCommand} '${messagePath}'`];
+            yield ChildProcess.spawn("/bin/sh", args, {
+                                         stdio: "inherit",
+                                     });
+        } catch(e) {
+            throw new UserError(
+                `There was a problem with the editor '${editorCommand}'.
+Please supply the message using the -m option.`);
+        }
 
     }
 
