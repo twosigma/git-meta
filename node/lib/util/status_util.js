@@ -570,9 +570,13 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
             const treeId = head.treeId();
             tree = yield NodeGit.Tree.lookup(repo, treeId);
         }
+        let paths = options.paths;
+        if (!options.showMetaChanges && !paths) {
+            paths = [SubmoduleConfigUtil.modulesFileName];
+        }
         const status = yield DiffUtil.getRepoStatus(repo,
                                                     tree,
-                                                    options.paths,
+                                                    paths,
                                                     options.ignoreIndex,
                                                     options.showAllUntracked);
         // if showMetaChanges is off, keep .gitmodules changes only
