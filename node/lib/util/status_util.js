@@ -571,7 +571,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
             tree = yield NodeGit.Tree.lookup(repo, treeId);
         }
         let paths = options.paths;
-        if (!options.showMetaChanges && !paths) {
+        if (!options.showMetaChanges && (!paths || paths.length === 0)) {
             paths = [SubmoduleConfigUtil.modulesFileName];
         }
         const status = yield DiffUtil.getRepoStatus(repo,
