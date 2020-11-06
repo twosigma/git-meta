@@ -107,6 +107,9 @@ exports.findBranch = co.wrap(function *(repo, branchName) {
 exports.getTrackingInfo = co.wrap(function *(repo, branch) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(branch, NodeGit.Reference);
+    if (!branch.isBranch()) {
+        return null;
+    }
     let upstream;
     try {
         upstream = yield NodeGit.Branch.upstream(branch);
