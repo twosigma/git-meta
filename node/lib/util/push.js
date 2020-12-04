@@ -41,6 +41,7 @@ const colors       = require("colors");
 const NodeGit      = require("nodegit");
 
 const DoWorkQueue         = require("./do_work_queue");
+const ForcePushSpec       = require("./force_push_spec");
 const GitUtil             = require("./git_util");
 const SubmoduleUtil       = require("./submodule_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -215,7 +216,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
     assert.isString(remoteName);
     assert.isString(source);
     assert.isString(target);
-    assert.isBoolean(force);
+    assert.instanceOf(force, ForcePushSpec);
 
     let remoteUrl = yield GitUtil.getUrlFromRemoteName(repo, remoteName);
 
@@ -256,7 +257,7 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
                                               subUrl,
                                               sha,
                                               syntheticName,
-                                              true,
+                                              ForcePushSpec.Force,
                                               true);
         if (null !== pushResult) {
             errorMessage +=

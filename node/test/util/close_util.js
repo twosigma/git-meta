@@ -130,7 +130,7 @@ a/b/c/d/e/s4=Sa:1;Bmaster=2`,
                     }
                     yield CloseUtil.close(x, cwd, c.paths, c.force || false);
                 });
-                it(caseName, co.wrap(function *() {
+                it(caseName + (sparse ? " sparse" : ""), co.wrap(function *() {
                     let state = c.state;
                     let expected = c.expected;
                     if (sparse) {

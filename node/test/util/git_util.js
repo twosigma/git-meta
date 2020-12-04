@@ -37,6 +37,7 @@ const mkdirp  = require("mkdirp");
 const NodeGit = require("nodegit");
 const path    = require("path");
 
+const ForcePushSpec       = require("../../lib/util/force_push_spec");
 const GitUtil             = require("../../lib/util/git_util");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
@@ -431,7 +432,7 @@ describe("GitUtil", function () {
 
         function pusher(repoName, origin, local, remote, force, quiet) {
             return co.wrap(function *(repos) {
-                force = force || false;
+                force = force || ForcePushSpec.NoForce;
                 const result =
                     yield GitUtil.push(repos[repoName],
                                        origin,
@@ -459,8 +460,28 @@ describe("GitUtil", function () {
             },
             "force success": {
                 input: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
-                manipulator: pusher("b", "origin", "master", "master", true),
+                manipulator: pusher(
+                    "b", "origin", "master", "master", ForcePushSpec.Force),
                 expected: "a=B:C3-1;Bmaster=3|b=Ca:Bmaster=3",
+            },
+            "force with lease success": {
+                input: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3",
+                manipulator: pusher(
+                    "b",
+                    "origin",
+                    "master",
+                    "master",
+                    ForcePushSpec.ForceWithLease),
+                expected: "a=B:C3-1;Bmaster=3|b=Ca:Bmaster=3",
+            },
+            "force with lease failure": {
+                input: `
+                    a=B:C2-1;Bmaster=2|
+                    b=Ca:Rorigin=a master=1;C3-1;
+                    Bmaster=3 origin/master;Bold=2`,
+                manipulator: pusher(
+                    "b", "origin", "master", "master", ForcePushSpec.Force),
+                fail: true,
             },
             "push new branch": {
                 input: "a=S|b=Ca:Bfoo=1",
@@ -470,7 +491,8 @@ describe("GitUtil", function () {
             "quiet push new branch": {
                 input: "a=S|b=Ca:Bfoo=1",
                 expected: "a=S:Bfoo=1|b=Ca:Bfoo=1",
-                manipulator: pusher("b", "origin", "foo", "foo", true),
+                manipulator: pusher(
+                    "b", "origin", "foo", "foo", ForcePushSpec.Force),
             },
             "update a branch": {
                 input: "a=B|b=Ca:C2-1;Bmaster=2 origin/master",
