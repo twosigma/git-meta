@@ -101,5 +101,30 @@ describe("defaultSignature", function () {
         const sig = yield repo.defaultSignature();
         assert.equal(actual.toString(), sig.toString());
     }));
+
+});
+
+["America/New_York", "UTC", "Asia/Tokyo"].forEach(function (tz) {
+    describe("defaultSignature tz handling " + tz, function() {
+        let env;
+        before(function() {
+            env = process.env;
+            process.env.TZ = tz;
+        });
+
+        it("correctly sets the TZ offset", co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            const sig = yield ConfigUtil.defaultSignature(repo);
+            const time = sig.when();
+
+            const dtOffset = new Date().getTimezoneOffset();
+            assert.equal(time.offset(), -dtOffset);
+            assert.equal(time.sign(), dtOffset > 0 ? "-" : "+");
+        }));
+
+        after(function (){
+            process.env = env;
+        });
+    });
 });
 });

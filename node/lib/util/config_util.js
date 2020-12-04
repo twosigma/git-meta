@@ -102,7 +102,8 @@ exports.defaultSignature = co.wrap(function*(repo) {
     if (name && email) {
         const now = new Date();
         const tz = now.getTimezoneOffset();
-        return NodeGit.Signature.create(name, email, now.getTime() / 1000, tz);
+        // libgit's timezone offset convention is inverted from JS.
+        return NodeGit.Signature.create(name, email, now.getTime() / 1000, -tz);
     }
     throw new UserError("Git config vars user.email and user.name are unset");
 });
