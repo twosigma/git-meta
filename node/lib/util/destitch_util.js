@@ -37,6 +37,7 @@ const path           = require("path");
 
 const BulkNotesUtil       = require("./bulk_notes_util");
 const DoWorkQueue         = require("./do_work_queue");
+const ForcePushSpec       = require("./force_push_spec");
 const GitUtil             = require("./git_util");
 const StitchUtil          = require("./stitch_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -404,7 +405,13 @@ exports.pushSyntheticRefs = co.wrap(function *(repo,
     const pushOne = co.wrap(function *(push) {
         const sha = push.sha;
         const refName = SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-        yield GitUtil.push(repo, push.url, sha, refName, true, true);
+        yield GitUtil.push(
+            repo,
+            push.url,
+            sha,
+            refName,
+            ForcePushSpec.Force,
+            true);
     });
     yield DoWorkQueue.doInParallel(toPush, pushOne);
 });

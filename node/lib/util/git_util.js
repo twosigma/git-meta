@@ -45,6 +45,7 @@ const path         = require("path");
 
 const ConfigUtil          = require("./config_util");
 const Hook                = require("./hook");
+const ForcePushSpec       = require("./force_push_spec");
 const GitUtilFast         = require("./git_util_fast");
 const SyntheticBranchUtil = require("./synthetic_branch_util");
 const UserError           = require("./user_error");
@@ -330,7 +331,7 @@ exports.getCurrentRepo = function () {
  * @param {String}             remote
  * @param {String}             source
  * @param {String}             target
- * @param {String}             force
+ * @param {ForcePushSpec}      force
  * @param {Boolean}            [quiet]
  * @return {String} [return]
  */
@@ -343,7 +344,7 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
     assert.isString(remote);
     assert.isString(source);
     assert.isString(target);
-    assert.isBoolean(force);
+    assert.instanceOf(force, ForcePushSpec);
 
     if (undefined === quiet) {
         quiet = false;
@@ -352,10 +353,7 @@ exports.push = co.wrap(function *(repo, remote, source, target, force, quiet) {
         assert.isBoolean(quiet);
     }
 
-    let forceStr = "";
-    if (force) {
-        forceStr = "-f";
-    }
+    let forceStr = force ? force.toString() : "";
 
     const { execString, environ } = (() => {
         if (repo.workdir()) {

@@ -35,6 +35,7 @@ const co      = require("co");
 const NodeGit = require("nodegit");
 const rimraf  = require("rimraf");
 
+const ForcePushSpec       = require("../../lib/util/force_push_spec");
 const GitUtil             = require("../../lib/util/git_util");
 const Push                = require("../../lib/util/push");
 const RepoAST             = require("../../lib/util/repo_ast");
@@ -397,7 +398,7 @@ describe("push", function () {
 
     function pusher(repoName, remoteName, source, target, force) {
         return co.wrap(function *(repos) {
-            force = force || false;
+            force = force || ForcePushSpec.NoForce;
             const x = repos[repoName];
             yield Push.push(x, remoteName, source, target, force);
         });
@@ -416,8 +417,55 @@ describe("push", function () {
         },
         "no-ffwd success": {
             initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3 origin/master",
-            manipulator: pusher("b", "origin", "master", "master", true),
+            manipulator: pusher(
+                "b", "origin", "master", "master", ForcePushSpec.Force),
             expected: "a=B:C3-1;Bmaster=3|b=Ca",
+        },
+        "no-ffwd success with lease": {
+            initial: "a=B:C2-1;Bmaster=2|b=Ca:C3-1;Bmaster=3 origin/master",
+            manipulator: pusher(
+                "b",
+                "origin",
+                "master",
+                "master",
+                ForcePushSpec.ForceWithLease),
+            expected: "a=B:C3-1;Bmaster=3|b=Ca",
+        },
+        "no-ffwd old remote failure": {
+            initial: `
+                a=B:C2-1;Bmaster=2|
+                b=Ca:Rorigin=a master=1;C3-1;Bmaster=3 origin/master;Bold=2`,
+            manipulator: pusher(
+                "b",
+                "origin",
+                "master",
+                "master",
+                ForcePushSpec.NoForce),
+            fails: true,
+        },
+        "no-ffwd old remote success": {
+            initial: `
+                a=B:C2-1;Bmaster=2|
+                b=Ca:Rorigin=a master=1;C3-1;Bmaster=3 origin/master;Bold=2`,
+            manipulator: pusher(
+                "b",
+                "origin",
+                "master",
+                "master",
+                ForcePushSpec.Force),
+            expected: "a=B:C3-1;Bmaster=3|b=Ca:Bold=2",
+        },
+        "no-ffwd old remote failure with lease": {
+            initial: `
+                a=B:C2-1;Bmaster=2|
+                b=Ca:Rorigin=a master=1;C3-1;Bmaster=3 origin/master;Bold=2`,
+            manipulator: pusher(
+                "b",
+                "origin",
+                "master",
+                "master",
+                ForcePushSpec.ForceWithLease),
+            fails: true,
         },
         "simple (noop) success": {
             initial: "a=S|b=Ca",

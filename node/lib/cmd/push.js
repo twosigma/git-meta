@@ -32,6 +32,8 @@
 
 const co = require("co");
 
+const ForcePushSpec = require("../util/force_push_spec");
+
 /**
  * This module contains methods for pushing.
  */
@@ -79,8 +81,18 @@ if not specified.`,
     parser.addArgument(["-f", "--force"], {
         required: false,
         action: "storeConst",
-        constant: true,
+        constant: ForcePushSpec.Force,
+        defaultValue: ForcePushSpec.NoForce,
         help: `Attempt to push even if not a fast-forward change.`,
+    });
+
+    parser.addArgument(["--force-with-lease"], {
+        required: false,
+        action: "storeConst",
+        constant: ForcePushSpec.ForceWithLease,
+        dest: "force",
+        help: `Force-push only if the remote ref is in the expected state
+(i.e. matches the local version of that ref)`,
     });
 };
 
@@ -131,7 +143,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     yield strRefspecs.map(co.wrap(function *(strRefspec) {
         const refspec = GitUtil.parseRefspec(strRefspec);
-        const force = args.force || refspec.force || false;
+        // Force-push if the refspec explicitly tells us to do so (i.e. is
+        // prefixed with a '+').
+        const force = refspec.force ? ForcePushSpec.Force : args.force;
 
         // If 'src' is empty, this is a deletion.  Do not use the normal meta
         // push; there is no need to, e.g., push submodules, in this case.
