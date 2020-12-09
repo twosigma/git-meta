@@ -467,8 +467,7 @@ describe("readRAST", function () {
     it("remote with path in tracking branch", co.wrap(function *() {
         const base = yield TestUtil.createSimpleRepository();
         const headId = (yield base.getHeadCommit()).id();
-        const sig = yield base.defaultSignature();
-        yield base.createBranch("foo/bar", headId, 1, sig, "branch");
+        yield base.createBranch("foo/bar", headId, 1);
         const clonePath = yield TestUtil.makeTempDir();
         const clone = yield NodeGit.Clone.clone(base.workdir(), clonePath);
         const master = yield clone.getBranch("refs/heads/master");
@@ -1008,7 +1007,7 @@ describe("readRAST", function () {
         const firstCommit = yield repo.getHeadCommit();
         const firstSha = firstCommit.id().tostrS();
         const sig = yield repo.defaultSignature();
-        yield repo.createBranch("b", firstCommit, 0, sig);
+        yield repo.createBranch("b", firstCommit, 0);
         yield repo.checkoutBranch("b");
         yield fs.writeFile(path.join(workdir, "foo"), "foo");
         const commitB = yield TestUtil.makeCommit(repo, ["foo"]);
@@ -1069,12 +1068,12 @@ describe("readRAST", function () {
         const basePath = base.workdir();
         const baseMaster = yield base.getHeadCommit();
         const baseMasterSha = baseMaster.id().tostrS();
-        yield base.createBranch("foo", baseMaster, 0, sig);
+        yield base.createBranch("foo", baseMaster, 0);
         yield base.checkoutBranch("foo");
         yield fs.writeFile(path.join(basePath, "foo"), "foo");
         const fooCommit = yield TestUtil.makeCommit(base, ["foo"]);
         const fooSha = fooCommit.id().tostrS();
-        yield base.createBranch("bar", baseMaster, 0, sig);
+        yield base.createBranch("bar", baseMaster, 0);
         yield base.checkoutBranch("bar");
         yield fs.writeFile(path.join(basePath, "bar"), "bar");
         const barCommit = yield TestUtil.makeCommit(base, ["bar"]);
@@ -1092,7 +1091,7 @@ describe("readRAST", function () {
 
         // Make the `wham` branch and put a change to the submodule on it.
 
-        yield repo.createBranch("wham", subCommit, 0, sig);
+        yield repo.createBranch("wham", subCommit, 0);
         yield repo.checkoutBranch("wham");
         const subRepo = yield submodule.open();
         const localBar = yield subRepo.getCommit(barSha);
@@ -1226,12 +1225,12 @@ describe("readRAST", function () {
         const basePath = base.workdir();
         const baseMaster = yield base.getHeadCommit();
         const baseMasterSha = baseMaster.id().tostrS();
-        yield base.createBranch("foo", baseMaster, 0, sig);
+        yield base.createBranch("foo", baseMaster, 0);
         yield base.checkoutBranch("foo");
         yield fs.writeFile(path.join(basePath, "foo"), "foo");
         const fooCommit = yield TestUtil.makeCommit(base, ["foo"]);
         const fooSha = fooCommit.id().tostrS();
-        yield base.createBranch("bar", baseMaster, 0, sig);
+        yield base.createBranch("bar", baseMaster, 0);
         yield base.checkoutBranch("bar");
         yield fs.writeFile(path.join(basePath, "bar"), "bar");
         const barCommit = yield TestUtil.makeCommit(base, ["bar"]);
@@ -1249,7 +1248,7 @@ describe("readRAST", function () {
 
         // Make the `wham` branch and put a change to the submodule on it.
 
-        yield repo.createBranch("wham", subCommit, 0, sig);
+        yield repo.createBranch("wham", subCommit, 0);
         yield repo.checkoutBranch("wham");
         const subRepo = yield submodule.open();
         const localBar = yield subRepo.getCommit(barSha);

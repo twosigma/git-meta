@@ -132,8 +132,7 @@ exports.createSimpleRepositoryOnBranch = co.wrap(function *(branchName) {
     const repo = yield exports.createSimpleRepository();
 
     const commit = yield repo.getHeadCommit();
-    const sig = yield ConfigUtil.defaultSignature(repo);
-    const publicBranch = yield repo.createBranch(branchName, commit, 0, sig);
+    const publicBranch = yield repo.createBranch(branchName, commit, 0);
     yield repo.setHead(publicBranch.name());
 
     return repo;
