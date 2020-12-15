@@ -399,7 +399,7 @@ exports.listSubmoduleChanges = co.wrap(function *(repo, commits) {
 });
 
 /**
- * Return a map from submodule name to shas to list of objects containing the
+ * Return a map from submodule name to list of objects containing the
  * fields:
  * - `metaSha` -- the meta-repo sha from which this subodule sha came
  * - `url`     -- url configured for the submodule
@@ -423,14 +423,12 @@ exports.listFetches = co.wrap(function *(repo,
                                          toFetch,
                                          commitChanges,
                                          keepAsSubmodule,
-                                         adjustPath,
-                                         numParallel) {
+                                         adjustPath) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isArray(toFetch);
     assert.isObject(commitChanges);
     assert.isFunction(keepAsSubmodule);
     assert.isFunction(adjustPath);
-    assert.isNumber(numParallel);
 
     let urls = {};
 
@@ -964,8 +962,7 @@ exports.stitch = co.wrap(function *(repoPath,
                                                   commitsToStitch,
                                                   changes,
                                                   options.keepAsSubmodule,
-                                                  adjustPath,
-                                                  options.numParallel);
+                                                  adjustPath);
         console.log("Found", Object.keys(fetches).length, "subs to fetch.");
         const subNames = Object.keys(fetches);
         const doFetch = co.wrap(function *(name, i) {

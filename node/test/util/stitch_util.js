@@ -1105,21 +1105,18 @@ describe("listFetches", function () {
             state: "S",
             toFetch: [],
             keepAsSubmodule: () => false,
-            numParallel: 2,
             expected: {},
         },
         "a sub, not picked": {
             state: "S:C2-1 s=S/a:1;Bmaster=2",
             toFetch: ["1"],
             keepAsSubmodule: () => false,
-            numParallel: 2,
             expected: {},
         },
         "added sub": {
             state: "S:C2-1 s=S/a:1;Bmaster=2",
             toFetch: ["2"],
             keepAsSubmodule: () => false,
-            numParallel: 2,
             expected: {
                 "s": [
                     { metaSha: "2", url: "/a", sha: "1" },
@@ -1130,7 +1127,6 @@ describe("listFetches", function () {
             state: "S:C2-1 s=S/a:1;Bmaster=2",
             toFetch: ["2"],
             keepAsSubmodule: (name) => "s" === name,
-            numParallel: 2,
             expected: {},
         },
         "adjusted to null": {
@@ -1138,14 +1134,12 @@ describe("listFetches", function () {
             toFetch: ["2"],
             keepAsSubmodule: () => false,
             adjustPath: () => null,
-            numParallel: 2,
             expected: {},
         },
         "changed sub": {
             state: "S:Cx-1;Bx=x;C2-1 s=S/a:1;C3-2 s=S/a:x;Bmaster=3",
             toFetch: ["3"],
             keepAsSubmodule: () => false,
-            numParallel: 2,
             expected: {
                 "s": [
                     { metaSha: "3", url: "/a", sha: "x" },
@@ -1156,14 +1150,12 @@ describe("listFetches", function () {
             state: "S:Cx-1;Bx=x;C2-1 s=S/a:1;C3-2 s=S/a:x;Bmaster=3",
             toFetch: ["3"],
             keepAsSubmodule: (name) => "s" === name,
-            numParallel: 2,
             expected: {},
         },
         "two changes in a sub": {
             state: "S:Cx-1;Bx=x;C2-1 s=S/a:1;C3-2 s=S/a:x;Bmaster=3",
             toFetch: ["2", "3"],
             keepAsSubmodule: () => false,
-            numParallel: 2,
             expected: {
                 "s": [
                     { metaSha: "3", url: "/a", sha: "x" },
@@ -1190,8 +1182,7 @@ describe("listFetches", function () {
                                                         toFetch,
                                                         changes,
                                                         c.keepAsSubmodule,
-                                                        adjustPath,
-                                                        c.numParallel);
+                                                        adjustPath);
             function mapFetch(f) {
                 return {
                     url: f.url,
