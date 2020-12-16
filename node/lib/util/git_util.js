@@ -555,10 +555,13 @@ git -C '${repo.path()}' fetch -q '${remoteName}' '${branch}'`;
  * @param {String}             sha
  * @return {Bool}
  */
-exports.fetchSha  = co.wrap(function *(repo, url, sha) {
+exports.fetchSha = co.wrap(function *(repo, url, sha, prefix) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(url);
     assert.isString(sha);
+    if (prefix === undefined) {
+        prefix = "";
+    }
 
     // First, try to get the commit.  If we succeed, no need to fetch.
 
@@ -569,10 +572,25 @@ exports.fetchSha  = co.wrap(function *(repo, url, sha) {
     catch (e) {
     }
 
-    const syntheticName =
-                      SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-    const execString = `git -C '${repo.path()}' fetch -q '${url}' \
-${sha}:${syntheticName}`;
+    const refPrefix = `${SyntheticBranchUtil.SYNTHETIC_BRANCH_BASE}${prefix}`;
+    let negotiationTip = "";
+    let negotiationAlgorithm = "";
+    if (prefix) {
+        const refCountCommand = `git -C '${repo.path()}' for-each-ref \
+--count 1 ${refPrefix}`;
+        let result = yield ChildProcess.exec(refCountCommand);
+        const anyRefs = !!result.stdout.trim();
+        if (anyRefs) {
+            negotiationTip = `--negotiation-tip ${refPrefix}*`;
+        } else {
+            // If there are no existing refs, negotiation-tip will be ignored.
+            // In this case, we would still prefer not to negotiate
+            negotiationAlgorithm = "-c fetch.negotiationAlgorithm=noop";
+        }
+    }
+
+    const execString = `git -C '${repo.path()}' ${negotiationAlgorithm} fetch \
+ -q '${url}' ${negotiationTip} ${sha}:${refPrefix}${sha}`;
     try {
         yield ChildProcess.exec(execString, {
             maxBuffer: EXEC_BUFFER

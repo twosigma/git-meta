@@ -683,7 +683,7 @@ git notes --ref ${exports.allowedToFailNoteRef} add -m skip ${metaSha}`);
  * @param {String}              url
  * @param {[Object]}            subFetches
  */
-exports.fetchSubCommits = co.wrap(function *(repo, url, subFetches) {
+exports.fetchSubCommits = co.wrap(function *(repo, name, url, subFetches) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isString(url);
     assert.isArray(subFetches);
@@ -694,7 +694,7 @@ exports.fetchSubCommits = co.wrap(function *(repo, url, subFetches) {
         const sha = fetch.sha;
         let fetched;
         try {
-            fetched = yield GitUtil.fetchSha(repo, subUrl, sha);
+            fetched = yield GitUtil.fetchSha(repo, subUrl, sha, name + "/");
         }
         catch (e) {
             console.log("Fetch of", subUrl, "failed:", e.message);
@@ -967,7 +967,7 @@ exports.stitch = co.wrap(function *(repoPath,
 (${i + 1}/${subNames.length}) -- fetched ${subFetches.length} SHAs for \
 ${name}`;
             console.time(fetchTimeMessage);
-            yield exports.fetchSubCommits(repo, url, subFetches);
+            yield exports.fetchSubCommits(repo, name, url, subFetches);
             console.timeEnd(fetchTimeMessage);
         });
         yield DoWorkQueue.doInParallel(subNames,

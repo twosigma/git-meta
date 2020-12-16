@@ -46,6 +46,7 @@ const assert = require("chai").assert;
 
 const NOTES_REF = "refs/notes/git-meta/subrepo-check";
 const SYNTHETIC_BRANCH_BASE = "refs/commits/";
+exports.SYNTHETIC_BRANCH_BASE = SYNTHETIC_BRANCH_BASE;
 
 /**
  * The identity function

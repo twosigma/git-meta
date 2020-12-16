@@ -1242,7 +1242,7 @@ describe("fetchSubCommits", function () {
                     };
                 });
                 const url = maps.reverseUrlMap[c.url];
-                yield StitchUtil.fetchSubCommits(x, url, fetches);
+                yield StitchUtil.fetchSubCommits(x, "x", url, fetches);
             });
             yield RepoASTTestUtil.testMultiRepoManipulator(c.input,
                                                            c.expected,
