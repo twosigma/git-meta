@@ -192,6 +192,10 @@ exports.executeableSubcommand = function (args) {
         console.error("The use of '-i' and '-m' does not make sense.");
         process.exit(1);
     }
+    if (args.all && args.interactive) {
+        console.error("The use of '-i' and '-a' does not make sense.");
+        process.exit(1);
+    }
     if (args.amend) {
         return doAmend(args);                                         // RETURN
     }
