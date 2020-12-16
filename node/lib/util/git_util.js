@@ -581,7 +581,7 @@ exports.fetchSha = co.wrap(function *(repo, url, sha, prefix) {
         let result = yield ChildProcess.exec(refCountCommand);
         const anyRefs = !!result.stdout.trim();
         if (anyRefs) {
-            negotiationTip = `--negotiation-tip ${refPrefix}*`;
+            negotiationTip = `--negotiation-tip '${refPrefix}*'`;
         } else {
             // If there are no existing refs, negotiation-tip will be ignored.
             // In this case, we would still prefer not to negotiate
