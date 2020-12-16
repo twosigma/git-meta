@@ -40,7 +40,6 @@ const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleUtil       = require("./submodule_util");
-const SyntheticBranchUtil = require("./synthetic_branch_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
@@ -706,9 +705,6 @@ exports.fetchSubCommits = co.wrap(function *(repo, url, subFetches) {
 
         if (fetched) {
             console.log("Fetched:", sha, "from", subUrl);
-            const refName =
-                          SyntheticBranchUtil.getSyntheticBranchForCommit(sha);
-            yield NodeGit.Reference.create(repo, refName, sha, 1, "fetched");
         }
     }
 });
