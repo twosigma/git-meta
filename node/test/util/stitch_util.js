@@ -50,7 +50,7 @@ const FILEMODE            = NodeGit.TreeEntry.FILEMODE;
  *  Replace refs and notes with their equivalent logical mapping.
  */
 function refMapper(actual, mapping) {
-    const fetchedSubRe = /(commits\/)(.*)/;
+    const fetchedSubRe = /(commits\/(?:[a-z/]*\/)?)(.*)/;
     const commitMap = mapping.commitMap;
     let result = {};
 
@@ -1214,7 +1214,7 @@ describe("fetchSubCommits", function () {
                 }
             ],
             url: "a",
-            expected: "x=E:Fcommits/z=z",
+            expected: "x=E:Fcommits/x/z=z",
         },
         "one, w sub no need to fetch": {
             input: "a=B|x=U",
