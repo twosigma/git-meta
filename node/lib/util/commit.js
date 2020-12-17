@@ -1369,9 +1369,9 @@ exports.amendMetaRepo = co.wrap(function *(repo,
                         yield exports.stageChange(subIndex, path, change);
                     }
                 }
-                if (!noVerify) {
-                    yield runPreCommitHook(subRepo, subIndex);
-                }
+            }
+            if (!noVerify) {
+                yield runPreCommitHook(subRepo, subIndex);
             }
             subCommits[subName] = yield exports.createAmendCommit(subRepo,
                                                                   subMessage);
