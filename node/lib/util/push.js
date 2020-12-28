@@ -246,6 +246,10 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
         // Resolve the submodule's URL against the URL of the meta-repo,
         // ignoring the remote that is configured in the open submodule.
 
+        if (!(subName in urls)) {
+            throw new UserError(
+                `The submodule {subName} doesn't have an entry in .gitmodules`);
+        }
         const subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(remoteUrl,
                                                                urls[subName]);
 
