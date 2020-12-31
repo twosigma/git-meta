@@ -248,7 +248,8 @@ exports.push = co.wrap(function *(repo, remoteName, source, target, force) {
 
         if (!(subName in urls)) {
             throw new UserError(
-                `The submodule {subName} doesn't have an entry in .gitmodules`);
+                `The submodule ${subName} doesn't have an entry in .gitmodules`
+            );
         }
         const subUrl = SubmoduleConfigUtil.resolveSubmoduleUrl(remoteUrl,
                                                                urls[subName]);
