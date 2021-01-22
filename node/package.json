@@ -39,9 +39,9 @@
     "git-range": "",
     "group-by": "",
     "nodegit": "^0.25.0",
+    "readdir-withfiletypes": "^1.0.2",
     "rimraf": "",
-    "split": "",
-    "walk": ""
+    "split": ""
   },
   "devDependencies": {
     "deepcopy": "",

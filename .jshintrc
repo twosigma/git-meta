@@ -12,7 +12,8 @@
     "undef"    : true,
     "node"     : true,
     "unused"   : true,
-    "esnext"   : true,
+    "esversion": 8,
+    "noyield"  : true,
     "varstmt"  : true,
     "predef": [
         "Intl"
