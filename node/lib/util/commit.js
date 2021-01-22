@@ -387,12 +387,44 @@ exports.formatEditorPrompt  = function (status, cwd) {
  * @param {Object}             submodules name -> RepoStatus.Submodule
  */
 const stageOpenSubmodules = co.wrap(function *(repo, index, submodules) {
-    yield Object.keys(submodules).map(co.wrap(function *(name) {
+    const entries = yield Object.keys(submodules).map(co.wrap(function *(name) {
         const sub = submodules[name];
         if (null !== sub.workdir) {
-            yield index.addByPath(name);
+            /*
+             We probably shouldn't run addByPath in parallel because
+             one of the following two things is probably true:
+
+             1. Updating the index is not be thread-safe.  I don't
+             think this is true, but the docs are useless here, and I
+             don't see any locking in the libgit2 code, so if it's
+             present it must be in NodeGit.
+
+             2. Updating the index is made thread-safe by a too-coarse
+             lock which locks before reading the submodule HEAD
+             instead of before the actual index update (this makes
+             sense given the libgit2 index code).  This too-coarse
+             lock means slow submodule HEAD lookups are effectively
+             serialized despite this being a parallel map.
+
+             So instead, we'll do the submodule HEAD lookups in
+             parallel and then add the entries serially, which should
+             be relatively fast.
+            */
+
+            const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+            const head = yield subRepo.getHeadCommit();
+            const newEntry = new NodeGit.IndexEntry();
+            newEntry.flags = 0;
+            newEntry.flagsExtended = 0;
+            newEntry.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
+            newEntry.id = head;
+            newEntry.path = name;
+            return newEntry;
         }
     }));
+    for (const entry of entries.filter(x => !!x)) {
+        index.add(entry);
+    }
     yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
 });
 
