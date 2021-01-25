@@ -40,7 +40,6 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 const fs      = require("fs-promise");
 const path    = require("path");
-const walk    = require("walk");
 
 const DoWorkQueue         = require("../util/do_work_queue");
 const GitUtil             = require("./git_util");
@@ -49,6 +48,7 @@ const SubmoduleChange     = require("./submodule_change");
 const SubmoduleFetcher    = require("./submodule_fetcher");
 const SubmoduleConfigUtil = require("./submodule_config_util");
 const UserError           = require("./user_error");
+const Walk                = require("./walk");
 
 /**
  * Return the names of the submodules (visible or otherwise) for the index
@@ -212,16 +212,14 @@ const gitReservedNames = new Set(["HEAD", "FETCH_HEAD", "ORIG_HEAD",
  * approximately, those which we have ever opened.
  */
 exports.listAbsorbedSubmodules = co.wrap(function*(repo) {
-    const options = {
-        followLinks: false
-    };
-
     const modules_dir = path.join(repo.path(), "modules");
-    const walker = walk.walk(modules_dir, options);
     const out = [];
 
-    walker.on("names", function (root, nodeNamesArray) {
-        if (nodeNamesArray.indexOf("HEAD") !== -1) {
+    if (!fs.existsSync(modules_dir)) {
+        return out;
+    }
+    yield Walk.walk(modules_dir, function*(root, files, dirs) {
+        if (files.indexOf("HEAD") !== -1) {
             // We've hit an actual git module -- don't recurse
             // further.  It's possible that our module contains other
             // modules (e.g. if foo/bar/baz gets moved to
@@ -236,23 +234,16 @@ exports.listAbsorbedSubmodules = co.wrap(function*(repo) {
             // reserved name, and recurse the rest if any.
 
             const filtered = [];
-            for (const name of nodeNamesArray) {
+            for (const name of dirs) {
                 if (!gitReservedNames.has(name)) {
                     filtered.push(name);
                 }
             }
-            nodeNamesArray.splice(0, nodeNamesArray.length, ...filtered);
+            dirs.splice(0, dirs.length, ...filtered);
             out.push(root.substring(modules_dir.length + 1));
         }
     });
 
-    yield new Promise(function(resolve, reject) {
-        try {
-            walker.on("end", resolve);
-        } catch (e) {
-            reject();
-        }
-    });
 
     return out;
 
