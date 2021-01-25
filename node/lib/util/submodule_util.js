@@ -538,14 +538,21 @@ exports.getSubmodulesForCommit = co.wrap(function *(repo, commit, names) {
  * are a descendant of the specified `dir`, including (potentially) `dir`
  * itself (unless `dir` is suffixed with '/').
  *
+ * if includeParents is true, submodules that would be parent
+ * directories of `dir` are are also included
+ *
  * @param {NodeGit.Repository} repo
  * @param {String}             dir
  * @param {String []}          indexSubNames
+ * @param {Boolean}            includeParents
  * @return {String[]}
  */
-exports.getSubmodulesInPath = function (dir, indexSubNames) {
+exports.getSubmodulesInPath = function (dir, indexSubNames, includeParents) {
     assert.isString(dir);
     assert.isArray(indexSubNames);
+    if (includeParents === undefined) {
+        includeParents = false;
+    }
     if ("" !== dir) {
         assert.notEqual("/", dir[0]);
         assert.notEqual(".", dir);
@@ -555,7 +562,7 @@ exports.getSubmodulesInPath = function (dir, indexSubNames) {
         return indexSubNames;
     }
 
-    // test if the short path a parent dir of the long path
+    // test if the short path is a parent dir of the long path
     const isParentDir = (shortPath, longPath) => {
         return longPath.startsWith(shortPath) && (
             shortPath[shortPath.length-1] === "/" ||
@@ -567,6 +574,8 @@ exports.getSubmodulesInPath = function (dir, indexSubNames) {
         if (subPath === dir) {
             return [dir];                                             // RETURN
         } else if (isParentDir(dir, subPath)) {
+            result.push(subPath);
+        } else if (includeParents && isParentDir(subPath, dir)) {
             result.push(subPath);
         }
     }
@@ -601,7 +610,7 @@ exports.resolveSubmoduleNames = function (workdir,
         const relPath = GitUtil.resolveRelativePath(workdir,
                                                     cwd,
                                                     filename);
-        const result = exports.getSubmodulesInPath(relPath, submoduleNames);
+        const result = exports.getSubmodulesInPath(relPath, submoduleNames, true);
         if (0 === result.length) {
             console.warn(`\
 No submodules found from ${colors.yellow(filename)}.`);

@@ -788,13 +788,25 @@ describe("SubmoduleUtil", function () {
                 indexSubNames: ["q/r", "qr", "qr/"],
                 expected: ["q/r"],
             },
+            "from a subdir without includeSubdirs": {
+                dir: "q/r/s",
+                indexSubNames: ["q/r", "qr", "qr/"],
+                expected: [],
+            },
+            "from a subdirq with includeSubdirs": {
+                dir: "q/r/s",
+                indexSubNames: ["q/r", "qr", "qr/"],
+                expected: ["q/r"],
+                includeSubdirs: true,
+            },            
         };
         Object.keys(cases).forEach(caseName => {
             const c = cases[caseName];
             it(caseName, function() {
                 const result = SubmoduleUtil.getSubmodulesInPath(
                                                               c.dir,
-                                                              c.indexSubNames);
+                                                              c.indexSubNames,
+                                                              c.includeSubdirs);
                 assert.deepEqual(result.sort(), c.expected.sort());
             });
         });
