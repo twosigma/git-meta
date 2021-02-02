@@ -282,10 +282,12 @@ const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
         for (const base of mergeBases) {
             const shas = yield SubmoduleUtil.getSubmoduleShasForCommit(
                 repo, [ours.path], base);
-            if (shas[name] !== undefined) {
-
+            const sha = shas[name];
+            // Avoid creating a synthetic ancestor with the same sha as
+            // theirs. See more in `SubmoduleChange`
+            if (sha !== undefined && sha !== theirs.id.tostrS()) {
                 ancestor = new NodeGit.IndexEntry();
-                ancestor.id = NodeGit.Oid.fromString(shas[name]);
+                ancestor.id = NodeGit.Oid.fromString(sha);
                 ancestor.mode = NodeGit.TreeEntry.FILEMODE.COMMIT;
                 ancestor.path = ours.path;
                 ancestor.flags = ours.flags;
