@@ -610,7 +610,9 @@ exports.resolveSubmoduleNames = function (workdir,
         const relPath = GitUtil.resolveRelativePath(workdir,
                                                     cwd,
                                                     filename);
-        const result = exports.getSubmodulesInPath(relPath, submoduleNames, true);
+        const result = exports.getSubmodulesInPath(relPath,
+                                                   submoduleNames,
+                                                   true);
         if (0 === result.length) {
             console.warn(`\
 No submodules found from ${colors.yellow(filename)}.`);
