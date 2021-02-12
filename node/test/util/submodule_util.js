@@ -804,9 +804,9 @@ describe("SubmoduleUtil", function () {
             const c = cases[caseName];
             it(caseName, function() {
                 const result = SubmoduleUtil.getSubmodulesInPath(
-                                                              c.dir,
-                                                              c.indexSubNames,
-                                                              c.includeSubdirs);
+                    c.dir,
+                    c.indexSubNames,
+                    c.includeSubdirs);
                 assert.deepEqual(result.sort(), c.expected.sort());
             });
         });
