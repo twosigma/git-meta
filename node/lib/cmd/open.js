@@ -197,6 +197,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
                                     templatePath,
                                     false);
             subsOpenSuccessfully.push(name);
+            console.log(`Finished opening ${colors.blue(name)}.`);
         }
         catch (e) {
             if (e instanceof UserError) {
@@ -208,7 +209,6 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
                 throw e;
             }
         }
-        console.log(`Finished opening ${colors.blue(name)}.`);
     });
     yield DoWorkQueue.doInParallel(subsToOpen, opener, 10);
 
