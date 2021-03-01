@@ -35,16 +35,19 @@ const co      = require("co");
 const colors  = require("colors");
 const NodeGit = require("nodegit");
 
-const ConfigUtil         = require("./config_util");
-const GitUtil            = require("./git_util");
-const Open               = require("./open");
-const PrintStatusUtil    = require("./print_status_util");
-const RepoStatus         = require("./repo_status");
-const SparseCheckoutUtil = require("./sparse_checkout_util");
-const StatusUtil         = require("./status_util");
-const SubmoduleUtil      = require("./submodule_util");
-const TreeUtil           = require("./tree_util");
-const UserError          = require("./user_error");
+const ConfigUtil          = require("./config_util");
+const GitUtil             = require("./git_util");
+const Open                = require("./open");
+const PrintStatusUtil     = require("./print_status_util");
+const RepoStatus          = require("./repo_status");
+const SparseCheckoutUtil  = require("./sparse_checkout_util");
+const StatusUtil          = require("./status_util");
+const SubmoduleUtil       = require("./submodule_util");
+const SubmoduleRebaseUtil = require("./submodule_rebase_util");
+const TreeUtil            = require("./tree_util");
+const UserError           = require("./user_error");
+
+const Commit = NodeGit.Commit;
 
 /**
  * Return the IDs of tress reflecting the current state of the index and
@@ -117,6 +120,15 @@ WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} ${message}`;
  * Return a map from submodule name to stashed commit for each submodule that
  * was stashed.
  *
+ * Normal stashes have up to two parents:
+ * 1. HEAD at stash time
+ * 2. a new commit, with tree = index at stash time
+ *
+ * Our stashes can have up to two additional parents:
+ *
+ * 3. If the user has a commit inside the submodule, that commit
+ * 4. If the user has staged a commit in the meta index, that commit
+ *
  * @param {NodeGit.Repository} repo
  * @param {RepoStatus}         status
  * @param {Boolean}            includeUntracked
@@ -148,30 +160,159 @@ exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
     yield Object.keys(submodules).map(co.wrap(function *(name) {
         const sub = submodules[name];
         const wd = sub.workdir;
-        if (null === wd ||
-            (wd.status.isClean() &&
-             (sub.commit === null ||
-              wd.status.headCommit === sub.commit.sha) &&
-             (!includeUntracked ||
-              0 === Object.keys(wd.status.workdir).length))) {
-            // Nothing to do for closed or clean subs
-
-            return;                                                   // RETURN
-        }
-        const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-        subRepos[name] = subRepo;
 
         let stashId;
-        if (sub.commit !== null && wd.status.headCommit === sub.commit.sha) {
-            const FLAGS = NodeGit.Stash.FLAGS;
-            const flags = includeUntracked ?
-                  FLAGS.INCLUDE_UNTRACKED :
-                  FLAGS.DEFAULT;
-            stashId = yield NodeGit.Stash.save(subRepo, sig, "stash",
-                                                     flags);
+
+        if (sub.commit === null) {
+            // I genuinely have no idea when this happens -- it's not:
+            // (a) a closed submodule with a change staged in the meta repo
+            // (b) a submodule yet to be born -- that is, a submodule
+            // added to .gitmodules but without any commits.
+            // (c) a submodule which does not even appear inside the
+            // .gitmodules (e.g. one that you meant to add but didn't)
+            console.error(`BUG: ${name} is in an unexpected state. Please \
+report this.  Continuing stash anyway.`);
+            return;
         }
-        else {
-            stashId = NodeGit.Oid.fromString(wd.status.headCommit);
+
+        if (null === wd) {
+            // closed submodule
+            if (sub.commit.sha === sub.index.sha) {
+                // ... with no staged changes
+                return;                                               // RETURN
+            }
+            // This is a case that regular git stash doesn't really have
+            // to handle. In a normal stash commit, the tree points
+            // to the working directory tree, but here, there is no working
+            // directory.  But if there were, we would want to have
+            // this commit checked out.
+
+            const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+
+            const subCommit = yield Commit.lookup(subRepo, sub.commit.sha);
+            const indexCommit = yield Commit.lookup(subRepo, sub.index.sha);
+            const indexTree = yield indexCommit.getTree();
+            stashId = yield Commit.create(subRepo,
+                                          null,
+                                          sig,
+                                          sig,
+                                          null,
+                                          "stash",
+                                          indexTree,
+                                          4,
+                                          [subCommit,
+                                           indexCommit,
+                                           indexCommit,
+                                           indexCommit]);
+
+        } else {
+            // open submodule
+            if (sub.commit.sha !== sub.index.sha &&
+                sub.index.sha !== wd.status.headCommit) {
+                // Giant mess case: the user has commit staged in the
+                // meta index, and new commits in the submodule (which
+                // may or may not be related to those staged in the
+                // index).
+
+                // In theory, our data structures support writing this case,
+                // but since we don't yet support reading it, we probably
+                // shouldn't let the user get into a state that they can't
+                // easily get out of.
+
+                throw new UserError(`${name} is in a state that is too \
+complicated for git-meta to handle right now.  There is a commit inside the \
+submodule, and also a different commit staged in the index.  Consider either \
+staging or unstaging ${name} in the meta repository`);
+            }
+
+            const untrackedFiles = Object.keys(wd.status.workdir).length > 0;
+
+            const uncommittedChanges = (!wd.status.isClean() ||
+                                        (includeUntracked && untrackedFiles));
+
+            if (!uncommittedChanges &&
+                wd.status.headCommit === sub.commit.sha &&
+                sub.commit.sha === sub.index.sha) {
+                // Nothing to do for fully clean subs
+                return;                                               // RETURN
+            }
+
+            const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+            subRepos[name] = subRepo;
+
+            if (uncommittedChanges) {
+                const FLAGS = NodeGit.Stash.FLAGS;
+                const flags = includeUntracked ?
+                      FLAGS.INCLUDE_UNTRACKED :
+                      FLAGS.DEFAULT;
+                stashId = yield NodeGit.Stash.save(subRepo, sig, "stash",
+                                                   flags);
+                if (wd.status.headCommit !== sub.commit.sha ||
+                    sub.commit.sha !== sub.index.sha) {
+                    // That stashed the local changes in the submodule, if
+                    // any.  So now we need to mangle this commit to
+                    // include more parents.
+
+                    const stashCommit = yield Commit.lookup(subRepo, stashId);
+                    const stashTree = yield stashCommit.getTree();
+                    if (stashCommit.parentcount() !== 2) {
+                        throw new Error(`BUG: expected newly-created stash \
+commit to have two parents`);
+                    }
+                    const parent1 = yield stashCommit.parent(0);
+                    const parent2 = yield stashCommit.parent(1);
+
+                    const metaHeadSha = sub.commit.sha;
+                    const headCommit = yield Commit.lookup(subRepo,
+                                                           metaHeadSha);
+                    const indexCommit = yield Commit.lookup(subRepo,
+                                                            sub.index.sha);
+
+                    const parents = [parent1, parent2, headCommit,
+                                    indexCommit];
+                    stashId = yield Commit.create(subRepo,
+                                                  null,
+                                                  sig,
+                                                  sig,
+                                                  null,
+                                                  "stash",
+                                                  stashTree,
+                                                  4,
+                                                  parents);
+
+                }
+
+            } else {
+                // we need to manually create the commit here.
+                const metaHead = yield Commit.lookup(subRepo, sub.commit.sha);
+                const head = yield Commit.lookup(subRepo, wd.status.headCommit);
+                const indexCommit = yield Commit.lookup(subRepo,
+                                                        sub.index.sha);
+
+                const parents = [metaHead,
+                                 metaHead,
+                                 head,
+                                 indexCommit];
+                const headCommit = yield Commit.lookup(subRepo,
+                                                       wd.status.headCommit);
+                const headTree = yield headCommit.getTree();
+
+                stashId = yield Commit.create(subRepo,
+                                              null,
+                                              sig,
+                                              sig,
+                                              null,
+                                              "stash",
+                                              headTree,
+                                              4,
+                                              parents);
+            }
+            const subCommit = yield Commit.lookup(subRepo,
+                                                  sub.commit.sha);
+            yield NodeGit.Checkout.tree(subRepo, subCommit, {
+                checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
+            });
+            subRepo.setHeadDetached(subCommit);
         }
         subResults[name] = stashId.tostrS();
         // Record the values we've created.
@@ -180,18 +321,19 @@ exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
                                             stashId,
                                             NodeGit.TreeEntry.FILEMODE.COMMIT);
     }));
+
     const head = yield repo.getHeadCommit();
     const headTree = yield head.getTree();
     const subsTree = yield TreeUtil.writeTree(repo, headTree, subChanges);
-    const stashId = yield NodeGit.Commit.create(repo,
-                                                null,
-                                                sig,
-                                                sig,
-                                                null,
-                                                "stash",
-                                                subsTree,
-                                                1,
-                                                [head]);
+    const stashId = yield Commit.create(repo,
+                                        null,
+                                        sig,
+                                        sig,
+                                        null,
+                                        "stash",
+                                        subsTree,
+                                        1,
+                                        [head]);
 
     const stashSha = stashId.tostrS();
 
@@ -310,6 +452,7 @@ exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
                                                                null);
     const opener = new Open.Opener(repo, null);
     let result = {};
+    const index = {};
     yield Object.keys(newSubs).map(co.wrap(function *(name) {
         const stashSha = newSubs[name].sha;
         if (baseSubs[name].sha === stashSha) {
@@ -317,21 +460,70 @@ exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
 
             return;                                                   // RETURN
         }
-        const subRepo =
+        let subRepo =
             yield opener.getSubrepo(name,
                                     Open.SUB_OPEN_OPTION.FORCE_OPEN);
 
-        // Try to get the comit for the stash; if it's missing, fail.
-
+        // Try to get the commit for the stash; if it's missing, fail.
+        let stashCommit;
         try {
-            yield subRepo.getCommit(stashSha);
-        }
-        catch (e) {
+            stashCommit = yield Commit.lookup(subRepo, stashSha);
+        } catch (e) {
             console.error(`\
 Stash commit ${colors.red(stashSha)} is missing from submodule \
 ${colors.red(name)}`);
             result = null;
             return;                                                   // RETURN
+        }
+
+        const indexCommit = yield stashCommit.parent(1);
+
+        if (stashCommit.parentcount() > 2) {
+            const oldHead = yield stashCommit.parent(2);
+            if (stashCommit.parentcount() > 3) {
+                const stagedCommit = yield stashCommit.parent(3);
+                index[name] = stagedCommit.id();
+            }
+
+            // Before we get started, we might need to rebase the
+            // commits from oldHead..commitBeforeStash
+
+            const commitBeforeStash = yield stashCommit.parent(0);
+
+            const rebaseError = function(resolution) {
+                console.error(`The stash for submodule ${name} had one or \
+more commits, ending with ${commitBeforeStash.id()}.  We tried to rebase these \
+commits onto the current commit, but this failed.  ${resolution}
+After you are done with this rebase, you may need to apply working tree \
+and index changes.  To restore the index, try (inside ${name}) 'git read-tree \
+${indexCommit.id()}'.  To restore the working tree, try (inside ${name}) \
+'git checkout ${stashCommit} -- .'`);
+            };
+
+            try {
+                const res = yield SubmoduleRebaseUtil.rewriteCommits(
+                    subRepo,
+                    commitBeforeStash,
+                    oldHead);
+                if (res.errorMessage) {
+                    rebaseError(res.errorMessage);
+                    result = null;
+                    return;
+                }
+            } catch (e) {
+                // We expect these errors to be caught, but if
+                // something goes wrong, wWe are leaving the user in a
+                // pretty yucky state.  the alternative is to try to
+                // back out the whole stash apply, which seems worse.
+
+                rebaseError(`We are leaving the rebase half-finished, so \
+that you can fix the conflicts and continue by running 'git rebase \
+--continue' inside of ${name} (note: not 'git meta rebase').`);
+                console.error(`The underlying error, which might be useful \
+for debugging, is:`, e);
+                result = null;
+                return;
+            }
         }
 
         // Make sure this sha is the current stash.
@@ -356,8 +548,20 @@ ${colors.red(name)}`);
             result[name] = stashSha;
         }
     }));
-    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo,
-                                                        yield repo.index());
+
+    const repoIndex = yield repo.index();
+
+    if (null !== result) {
+        for (let name of Object.keys(index)) {
+            const entry = new NodeGit.IndexEntry();
+            entry.flags = 0;
+            entry.flagsExtended = 0;
+            entry.id = index[name];
+            repoIndex.add(entry);
+        }
+    }
+
+    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, repoIndex);
     return result;
 });
 
@@ -524,7 +728,7 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
         const tree = yield index.writeTree();
         const sig = yield ConfigUtil.defaultSignature(repo);
         const subCommit = yield repo.createCommit(null, sig, sig,
-                                                     message, tree, []);
+                                                  message, tree, []);
         return subCommit.tostrS();
     }
 
@@ -554,15 +758,15 @@ const makeShadowCommitForRepo = co.wrap(function *(repo,
                                        head.time() + 1,
                                        head.timeOffset());
     }
-    const id = yield NodeGit.Commit.create(repo,
-                                           null,
-                                           sig,
-                                           sig,
-                                           null,
-                                           message,
-                                           newTree,
-                                           parents.length,
-                                           parents);
+    const id = yield Commit.create(repo,
+                                   null,
+                                   sig,
+                                   sig,
+                                   null,
+                                   message,
+                                   newTree,
+                                   parents.length,
+                                   parents);
     return id.tostrS();
 });
 
