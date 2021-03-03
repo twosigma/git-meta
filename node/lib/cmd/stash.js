@@ -117,7 +117,16 @@ function cleanSubs(status, includeUntracked) {
     for (let subName in subs) {
         const sub = subs[subName];
         const wd = sub.workdir;
-        if (null !== wd && !wd.status.isClean(includeUntracked)) {
+        if (sub.commit.sha !== sub.index.sha) {
+            // The submodule has a commit which is staged in the meta repo's
+            // index
+            return false;
+        }
+        if (null === wd) {
+            continue;
+        }
+        if ((!wd.status.isClean(includeUntracked)) ||
+            wd.status.headCommit !== sub.commit.sha) {
             return false;
         }
     }

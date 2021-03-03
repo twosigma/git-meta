@@ -224,7 +224,7 @@ x=E:Ci#i foo=bar,1=1;Cw#w foo=bar,1=1;Bi=i;Bw=w`,
                 state: `a=B:Css-1;Bss=ss|
                         x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os H=ss`,
                 expected: `x=E:Cstash#s-2 s=Sa:ss;Fmeta-stash=s;
-                           Os Fsub-stash/ss=ss!H=ss`,
+                           Os Fsub-stash/ss=ss!H=1`,
             },
             "open sub with an added file": {
                 state: "a=B|x=S:C2-1 README.md,s=Sa:1;Bmaster=2;Os W foo=bar",
@@ -338,6 +338,16 @@ x=E:Fmeta-stash=s;
                     }
                 }
 
+                // In some cases, the first or second parent might be
+                // an existing commit, but the test framework only
+                // wants commitMap to contain commits it has never
+                // seen, so we have to remove the ones that already
+                // existed.
+                for (const c of Object.keys(commitMap)) {
+                    if (c in mapping.commitMap) {
+                        delete commitMap[c];
+                    }
+                }
                 return {
                     commitMap: commitMap,
                 };
