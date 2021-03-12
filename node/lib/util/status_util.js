@@ -440,7 +440,7 @@ const getSubRepoStatus = co.wrap(function *(repo, options, headCommit) {
             subRepo = yield SubmoduleUtil.getRepo(repo, name);
             status = yield exports.getRepoStatus(subRepo, {
                 paths: filtering ? filterPaths[name] : [],
-                showAllUntracked: options.showAllUntracked,
+                untrackedFilesOption: options.untrackedFilesOption,
                 ignoreIndex: options.ignoreIndex,
                 showMetaChanges: true,
             });
@@ -467,16 +467,17 @@ const getSubRepoStatus = co.wrap(function *(repo, options, headCommit) {
 
 /**
  * Return a description of the status of changes to the specified `repo`.  If
- * the optionally specified `options.showAllUntracked` is true (default false),
- * return each untracked file individually rather than rolling up to the
- * directory.  If the optionally specified `options.paths` is non-empty
- * (default []), list the status only of the files contained in `paths`.  If
- * the optionally specified `options.showMetaChanges` is provided (default
- * true), return the status of changes in `repo`; otherwise, show only changes
- * in submodules.  If the optionally specified `ignoreIndex` is specified,
- * calculate the status matching the workdir to the underlying commit rather
- * than against the index.  If the specified `options.cwd` is provided, resolve
- * paths in the context of that directory.
+ * the optionally specified `options.untrackedFilesOption` is ALL (default
+ * ALL), return each untracked file individually. If it is NORMAL, roll
+ * untracked files up to the directory. If it is NO, don't show untracked files.
+ * If the optionally specified `options.paths` is non-empty (default []), list
+ * the status only of the files contained in `paths`.  If the optionally
+ * specified `options.showMetaChanges` is provided (default true), return the
+ * status of changes in `repo`; otherwise, show only changes in submodules.  If
+ * the optionally specified `ignoreIndex` is specified, calculate the status
+ * matching the workdir to the underlying commit rather than against the index.
+ * If the specified `options.cwd` is provided, resolve paths in the context of
+ * that directory.
  *
  * TODO: Note that this function is broken when
  * `true === ignoreIndex && true === showMetaChanges` and
@@ -487,7 +488,7 @@ const getSubRepoStatus = co.wrap(function *(repo, options, headCommit) {
  * @async
  * @param {NodeGit.Repository} repo
  * @param {Object}             [options]
- * @param {Boolean}            [options.showAllUntracked]
+ * @param {String}             [options.untrackedFilesOption]
  * @param {String []}          [options.paths]
  * @param {String}             [options.cwd]
  * @param {Boolean}            [options.showMetaChanges]
@@ -505,11 +506,11 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
     else {
         assert.isObject(options);
     }
-    if (undefined === options.showAllUntracked) {
-        options.showAllUntracked = false;
+    if (undefined === options.untrackedFilesOption) {
+        options.untrackedFilesOption = DiffUtil.UNTRACKED_FILES_OPTIONS.NORMAL;
     }
     else {
-        assert.isBoolean(options.showAllUntracked);
+        assert.isString(options.untrackedFilesOption);
     }
     if (undefined === options.paths) {
         options.paths = [];
@@ -574,11 +575,12 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         if (!options.showMetaChanges && (!paths || paths.length === 0)) {
             paths = [SubmoduleConfigUtil.modulesFileName];
         }
-        const status = yield DiffUtil.getRepoStatus(repo,
-                                                    tree,
-                                                    paths,
-                                                    options.ignoreIndex,
-                                                    options.showAllUntracked);
+        const status = yield DiffUtil.getRepoStatus(
+            repo,
+            tree,
+            paths,
+            options.ignoreIndex,
+            options.untrackedFilesOption);
         // if showMetaChanges is off, keep .gitmodules changes only
         if (options.showMetaChanges) {
             args.staged = status.staged;

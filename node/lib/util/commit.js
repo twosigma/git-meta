@@ -96,7 +96,12 @@ const getHeadParentTree = co.wrap(function *(repo) {
 
 const getAmendStatusForRepo = co.wrap(function *(repo, all) {
     const tree = yield getHeadParentTree(repo);
-    const normal = yield DiffUtil.getRepoStatus(repo, tree, [], false, true);
+    const normal = yield DiffUtil.getRepoStatus(
+        repo,
+        tree,
+        [],
+        false,
+        DiffUtil.UNTRACKED_FILES_OPTIONS.ALL);
 
     if (!all) {
         return normal;                                                // RETURN
@@ -106,7 +111,12 @@ const getAmendStatusForRepo = co.wrap(function *(repo, all) {
     // We've already got the "normal" comparison now we need to get changes
     // directly against the workdir.
 
-    const toWorkdir = yield DiffUtil.getRepoStatus(repo, tree, [], true, true);
+    const toWorkdir = yield DiffUtil.getRepoStatus(
+        repo,
+        tree,
+        [],
+        true,
+        DiffUtil.UNTRACKED_FILES_OPTIONS.ALL);
 
     // And use `calculateAllStatus` to create the final value.
 
@@ -1900,7 +1910,7 @@ exports.getCommitStatus = co.wrap(function *(repo, cwd, options) {
         const workdirStatus = yield StatusUtil.getRepoStatus(repo, {
             showMetaChanges: options.showMetaChanges,
             ignoreIndex: true,
-            showAllUntracked: true,
+            untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
         });
         return exports.calculateAllRepoStatus(baseStatus, workdirStatus);
     }

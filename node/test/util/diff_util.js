@@ -129,7 +129,7 @@ describe("DiffUtil", function () {
             },
             "workdir - added deep all untracked": {
                 input: "x=S:W x/y=y",
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 workdir: { "x/y": FILESTATUS.ADDED },
             },
             "workdir - removed": {
@@ -207,7 +207,7 @@ describe("DiffUtil", function () {
             "workdir dir path": {
                 input: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
                 paths: [ "x" ],
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 workdir: {
                     "x/y/z": FILESTATUS.ADDED,
                     "x/r/z": FILESTATUS.ADDED
@@ -216,7 +216,7 @@ describe("DiffUtil", function () {
             "workdir dir paths": {
                 input: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
                 paths: [ "x/y", "x/r" ],
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 workdir: {
                     "x/y/z": FILESTATUS.ADDED,
                     "x/r/z": FILESTATUS.ADDED
@@ -225,7 +225,7 @@ describe("DiffUtil", function () {
             "workdir all paths": {
                 input: "x=S:W x/y/z=foo,x/r/z=bar,README.md",
                 paths: [ "x/y/z", "x/r/z", "README.md" ],
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 workdir: {
                     "x/y/z": FILESTATUS.ADDED,
                     "x/r/z": FILESTATUS.ADDED,
@@ -235,7 +235,7 @@ describe("DiffUtil", function () {
             "many changes": {
                 input: `
 x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 workdir: {
                     "a/b": FILESTATUS.ADDED,
                     "a/c": FILESTATUS.MODIFIED,
@@ -251,7 +251,7 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
             "many changes with path": {
                 input: `
 x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 paths: ["f"],
                 workdir: {
                     "f": FILESTATUS.REMOVED,
@@ -281,7 +281,7 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                 input: "x=S:C2-1;W README.md=3;Bmaster=2",
                 staged: { "2": FILESTATUS.ADDED },
                 workdir: { "README.md": FILESTATUS.MODIFIED },
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 from: "HEAD^",
             },
             "HEAD^ changed in index": {
@@ -325,7 +325,7 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                     "2": FILESTATUS.ADDED,
                     "README.md": FILESTATUS.REMOVED,
                 },
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 from: "HEAD^",
             },
             "HEAD^ removed in workdir": {
@@ -346,7 +346,7 @@ x=S:C2 a/b=c,a/c=d,t=u;H=2;I a/b,a/q=r,f=x;W a/b=q,a/c=f,a/y=g,f`,
                 workdir: {
                     "README.md": FILESTATUS.REMOVED,
                 },
-                all: true,
+                untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
                 from: "HEAD^",
             },
             "HEAD^ ignore submodule add": {
@@ -424,11 +424,12 @@ x=S:C2-1 README.md=3;W README.md=hello world;Bmaster=2`,
                     tree = yield NodeGit.Tree.lookup(repo, treeId);
                 }
                 const result = yield DiffUtil.getRepoStatus(
-                                                      repo,
-                                                      tree,
-                                                      c.paths || [],
-                                                      c.workdirToTree || false,
-                                                      c.all || false);
+                    repo,
+                    tree,
+                    c.paths || [],
+                    c.workdirToTree || false,
+                    c.untrackedFilesOption ||
+                        DiffUtil.UNTRACKED_FILES_OPTIONS.NORMAL);
                 const expected = {
                     staged: c.staged || {},
                     workdir: c.workdir || {},

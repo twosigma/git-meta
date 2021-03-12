@@ -38,6 +38,12 @@ const RepoStatus          = require("./repo_status");
 
 const DELTA = NodeGit.Diff.DELTA;
 
+exports.UNTRACKED_FILES_OPTIONS = {
+    ALL: "all",
+    NORMAL: "normal",
+    NO: "no",
+};
+
 /**
  * Return the `RepoStatus.FILESTATUS` value that corresponds to the specified
  * flag.  The behavior is undefined unless `flag` represents one of the types
@@ -94,22 +100,22 @@ function readDiff(diff) {
  *
  * Return differences for the specified `paths` in the specified `repo` between
  * the current index and working directory, and the specified `tree`, if
- * not null.  If the specified `allUntracked` is true, include all untracked
- * files rather than accumulating them by directory.  If `paths` is empty,
- * check the entire `repo`.  If the specified `ignoreIndex` is true,
- * return, in the `workdir` field, the status difference between the workdir
- * and `tree`, ignoring the state of the index.  Otherwise, return, in the
- * `workdir` field, the difference between the workir and the index; and in the
- * `staged` field, the difference between the index and `tree`.  Note that when
- * `ignoreIndex` is true, the returned `staged` field will always be `{}`.
- * Note also that conflicts are ignored; we don't have enough information here
- * to handle them properly.
+ * not null.  If the specified `untrackedFilesOption` is ALL, include all
+ * untracked files. If it is NORMAL, accumulate them by directory. If it is NO,
+ * don't show untracked files. If `paths` is empty, check the entire `repo`.
+ * If the specified `ignoreIndex` is true, return, in the `workdir` field, the
+ * status difference between the workdir and `tree`, ignoring the state of the
+ * index.  Otherwise, return, in the `workdir` field, the difference between
+ * the workir and the index; and in the `staged` field, the difference between
+ * the index and `tree`.  Note that when `ignoreIndex` is true, the returned
+ * `staged` field will always be `{}`. Note also that conflicts are ignored; we
+ * don't have enough information here to handle them properly.
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Tree|null} tree
  * @param {String []} paths
  * @param {Boolean} ignoreIndex
- * @param {Boolean} allUntracked
+ * @param {String} untrackedFilesOption
  * @return {Object}
  * @return {Object} return.staged path to FILESTATUS of staged changes
  * @return {Object} return.workdir path to FILESTATUS of workdir changes
@@ -118,27 +124,39 @@ exports.getRepoStatus = co.wrap(function *(repo,
                                            tree,
                                            paths,
                                            ignoreIndex,
-                                           allUntracked) {
+                                           untrackedFilesOption) {
     assert.instanceOf(repo, NodeGit.Repository);
     if (null !== tree) {
         assert.instanceOf(tree, NodeGit.Tree);
     }
     assert.isArray(paths);
     assert.isBoolean(ignoreIndex);
-    assert.isBoolean(allUntracked);
+    if (!untrackedFilesOption) {
+        untrackedFilesOption = exports.UNTRACKED_FILES_OPTIONS.NORMAL;
+    }
 
     const options = {
         ignoreSubmodules: 1,
-        flags: NodeGit.Diff.OPTION.INCLUDE_UNTRACKED |
-               NodeGit.Diff.OPTION.IGNORE_SUBMODULES,
+        flags: NodeGit.Diff.OPTION.IGNORE_SUBMODULES,
     };
     if (0 !== paths.length) {
         options.pathspec = paths;
     }
-    if (allUntracked) {
-        options.flags = options.flags |
-                        NodeGit.Diff.OPTION.RECURSE_UNTRACKED_DIRS;
+
+    switch (untrackedFilesOption) {
+        case exports.UNTRACKED_FILES_OPTIONS.ALL:
+            options.flags = options.flags |
+                            NodeGit.Diff.OPTION.INCLUDE_UNTRACKED |
+                            NodeGit.Diff.OPTION.RECURSE_UNTRACKED_DIRS;
+            break;
+        case exports.UNTRACKED_FILES_OPTIONS.NORMAL:
+            options.flags = options.flags |
+                            NodeGit.Diff.OPTION.INCLUDE_UNTRACKED;
+            break;
+        case exports.UNTRACKED_FILES_OPTIONS.NO:
+            break;
     }
+
     if (ignoreIndex) {
         const workdirToTreeDiff =
                    yield NodeGit.Diff.treeToWorkdir(repo, tree, options);

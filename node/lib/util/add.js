@@ -37,6 +37,7 @@ const fs        = require("fs-promise");
 const NodeGit   = require("nodegit");
 const path      = require("path");
 
+const DiffUtil           = require("./diff_util");
 const RepoStatus         = require("./repo_status");
 const SparseCheckoutUtil = require("./sparse_checkout_util");
 const StatusUtil         = require("./status_util");
@@ -72,7 +73,7 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update) {
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,
         paths: paths,
-        showAllUntracked: true,
+        untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
     });
 
     // First, stage submodules.

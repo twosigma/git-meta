@@ -35,6 +35,7 @@ const co      = require("co");
 const path    = require("path");
 const NodeGit = require("nodegit");
 
+const DiffUtil            = require("../../lib/util/diff_util");
 const Rebase              = require("../../lib/util/rebase");
 const RepoAST             = require("../../lib/util/repo_ast");
 const RepoASTTestUtil     = require("../../lib/util/repo_ast_test_util");
@@ -614,7 +615,10 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                         "x/y/q": FILESTATUS.ADDED,
                     },
                 }),
-                options: { showAllUntracked: true, showMetaChanges: true },
+                options: {
+                    untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
+                    showMetaChanges: true
+                },
             },
             "ignore meta": {
                 state: "x=S:I README.md=whoohoo",
@@ -659,7 +663,7 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
             //
             // - make sure that they're included, even if they have been
             //   removed in the index or added in the index
-            // - `showAllUntracked` propagates
+            // - `untrackedFilesOption` propagates
             // - path filtering works
 
             "sub no show all added": {
@@ -699,7 +703,9 @@ x=S:C2-1 s=Sa:a;I s=Sa:b;Bmaster=2;Os H=1`,
                         }),
                     },
                 }),
-                options: { showAllUntracked: true, },
+                options: {
+                    untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
+                },
             },
             "sub added to index": {
                 state: "a=S|x=S:I s=Sa:1",

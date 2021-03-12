@@ -36,6 +36,7 @@ const colors  = require("colors");
 const NodeGit = require("nodegit");
 
 const ConfigUtil          = require("./config_util");
+const DiffUtil           = require("./diff_util");
 const GitUtil             = require("./git_util");
 const Open                = require("./open");
 const PrintStatusUtil     = require("./print_status_util");
@@ -819,7 +820,7 @@ exports.makeShadowCommit = co.wrap(function *(repo,
 
     const status = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: includeMeta,
-        showAllUntracked: true,
+        untrackedFilesOption: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
         ignoreIndex: false,
         paths: includedSubrepos,
     });

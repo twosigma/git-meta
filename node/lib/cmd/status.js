@@ -32,6 +32,8 @@
 
 const co = require("co");
 
+const DiffUtil = require("../util/diff_util");
+
 /**
  * This module contains methods for pulling.
  */
@@ -63,6 +65,20 @@ exports.configureParser = function (parser) {
         help: "Give the output in a short format",
         dest: "shortFormat" //"short" is a reserved word in js
     });
+    parser.addArgument(["-u", "--untracked-files"], {
+        required: false,
+        choices: [
+            DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
+            DiffUtil.UNTRACKED_FILES_OPTIONS.NORMAL,
+            DiffUtil.UNTRACKED_FILES_OPTIONS.NO,
+        ],
+        constant: DiffUtil.UNTRACKED_FILES_OPTIONS.ALL,
+        defaultValue: DiffUtil.UNTRACKED_FILES_OPTIONS.NORMAL,
+        help: `show untracked files, optional modes: all, normal, no.
+        (Default:normal)`,
+        dest: "untrackedFilesOption",
+        nargs: "?",
+    });
     parser.addArgument(["path"], {
         type: "string",
         help: "paths to inspect for changes",
@@ -91,6 +107,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         cwd: cwd,
         paths: args.path,
+        untrackedFilesOption: args.untrackedFilesOption
     });
 
     // Compute the current directory relative to the working directory of the
