@@ -586,19 +586,22 @@ exports.getSubmodulesInPath = function (dir, indexSubNames, includeParents) {
  * Return the list of submodules found in the specified `paths` in the
  * specified meta-repo `workdir`, containing the submodules having the
  * specified `submoduleNames`.  Treat paths as being relative to the specified
- * `cwd`.  Throw a `UserError` if an invalid path is encountered, and log
- * warnings for valid paths containing no submodules.
+ * `cwd`.  Throw a `UserError` if an path outside of the workdir is
+ * encountered.  If a path inside the workdir contains no submodules,
+ * either log a warning, or, if throwOnMissing is set, throw a `UserError`.
  *
  * @param {String} workdir
  * @param {String} cwd
  * @param {String[]} submoduleNames
  * @param {String[]} paths
+ * @param {Boolean} throwOnMissing
  * @return {String[]}
  */
 exports.resolveSubmoduleNames = function (workdir,
                                           cwd,
                                           submoduleNames,
-                                          paths) {
+                                          paths,
+                                          throwOnMissing) {
     assert.isString(workdir);
     assert.isString(cwd);
     assert.isArray(submoduleNames);
@@ -614,8 +617,13 @@ exports.resolveSubmoduleNames = function (workdir,
                                                    submoduleNames,
                                                    true);
         if (0 === result.length) {
-            console.warn(`\
-No submodules found from ${colors.yellow(filename)}.`);
+            const msg = `\
+No submodules found from ${colors.yellow(filename)}.`;
+            if (throwOnMissing) {
+                throw new UserError(msg);
+            } else {
+                console.warn(msg);
+            }
         }
         return result;
     });
