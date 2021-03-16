@@ -36,6 +36,7 @@ const NodeGit        = require("nodegit");
 
 const BulkNotesUtil       = require("./bulk_notes_util");
 const Commit              = require("./commit");
+const ConfigUtil          = require("./config_util");
 const DoWorkQueue         = require("./do_work_queue");
 const GitUtil             = require("./git_util");
 const SubmoduleConfigUtil = require("./submodule_config_util");
@@ -961,13 +962,31 @@ exports.stitch = co.wrap(function *(repoPath,
                                                   adjustPath);
         console.log("Found", Object.keys(fetches).length, "subs to fetch.");
         const subNames = Object.keys(fetches);
+        let subsRepo = repo;
+        const config = yield repo.config();
+        /*
+         * The stitch submodules repository is a separate repository
+         * to hold just the submodules that are being stitched (no
+         * meta repository commits).  It must be an alternate
+         * of this repository (the repository that stitching is
+         * being done in), so that we can access the objects
+         * that we fetch to it.  This lets us have a second alternate
+         * repository for just the meta repository commits.  And that
+         * saves a few seconds on meta repository fetches.
+         */
+        const subsRepoPath = yield ConfigUtil.getConfigString(
+            config,
+            "gitmeta.stitchSubmodulesRepository");
+        if (subsRepoPath !== null) {
+            subsRepo = yield NodeGit.Repository.open(subsRepoPath);
+        }
         const doFetch = co.wrap(function *(name, i) {
             const subFetches = fetches[name];
             const fetchTimeMessage = `\
 (${i + 1}/${subNames.length}) -- fetched ${subFetches.length} SHAs for \
 ${name}`;
             console.time(fetchTimeMessage);
-            yield exports.fetchSubCommits(repo, name, url, subFetches);
+            yield exports.fetchSubCommits(subsRepo, name, url, subFetches);
             console.timeEnd(fetchTimeMessage);
         });
         yield DoWorkQueue.doInParallel(subNames,
