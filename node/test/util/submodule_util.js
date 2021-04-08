@@ -862,7 +862,9 @@ describe("SubmoduleUtil", function () {
                                                                    x.workdir(),
                                                                    cwd,
                                                                    subs,
-                                                                   paths);
+                                                                   paths,
+                                                                   false,
+                                                                   true);
                 }
                 catch (e) {
                     if (!(e instanceof UserError)) {

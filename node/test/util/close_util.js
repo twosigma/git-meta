@@ -118,6 +118,11 @@ a/b/c/d/e/s4=Sa:1;Bmaster=2`,
                 expected: "x=S:C2-1 s=Sa:1,t=Sa:1;Bmaster=2;Os I a=b",
                 fails: true,
             },
+            "a/b doesn't close a": {
+                state: "a=B|x=U:Os",
+                paths: ["s/t"],
+                expected: "a=B|x=U:Os",
+            },
         };
         Object.keys(cases).forEach(caseName => {
             for (const sparse of [true, false]) {

@@ -741,6 +741,9 @@ exports.resolveRelativePath = function (workdir, cwd, filename) {
     assert.isString(cwd);
     assert.isString(filename);
 
+    if (filename === "") {
+        throw new UserError(`Empty path`);
+    }
     const absPath = path.resolve(cwd, filename);
     const relPath = path.relative(workdir, absPath);
     if ("" !== relPath && "." === relPath[0]) {
