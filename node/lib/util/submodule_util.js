@@ -601,7 +601,8 @@ exports.resolveSubmoduleNames = function (workdir,
                                           cwd,
                                           submoduleNames,
                                           paths,
-                                          throwOnMissing) {
+                                          throwOnMissing,
+                                          includeParents) {
     assert.isString(workdir);
     assert.isString(cwd);
     assert.isArray(submoduleNames);
@@ -615,7 +616,7 @@ exports.resolveSubmoduleNames = function (workdir,
                                                     filename);
         const result = exports.getSubmodulesInPath(relPath,
                                                    submoduleNames,
-                                                   true);
+                                                   includeParents);
         if (0 === result.length) {
             const msg = `\
 No submodules found from ${colors.yellow(filename)}.`;

@@ -157,6 +157,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                                cwd,
                                                                subs,
                                                                paths,
+                                                               true,
                                                                true);
     subsToOpen = Array.from(new Set(subsToOpen));
     const index      = yield repo.index();
