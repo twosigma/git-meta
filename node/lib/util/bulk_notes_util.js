@@ -31,6 +31,7 @@
 "use strict";
 
 const assert         = require("chai").assert;
+const ChildProcess   = require("child-process-promise");
 const co             = require("co");
 const NodeGit        = require("nodegit");
 const path           = require("path");
@@ -53,29 +54,25 @@ exports.shardSha = function (sha) {
 };
 
 /**
- * Write the specified `contents` to the note having the specified `refName` in
- * the specified `repo`.
- *
- * Writing notes oneo-at-a-time is slow.  This method let's you write them in
- * bulk, far more efficiently.
- *
- * @param {NodeGit.Repository} repo
- * @param {String}             refName
- * @param {Object}             contents    SHA to data
+ * This is a workaround for a missing libgit2 feature.  Normally, we
+ * would use something like Reference.createMatching, but it doesn't support
+ * asserting that a ref didn't previously exist.  See
+ * https://github.com/libgit2/libgit2/pull/5842
  */
-exports.writeNotes = co.wrap(function *(repo, refName, contents) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.isString(refName);
-    assert.isObject(contents);
-
-    if (0 === Object.keys(contents).length) {
-        // Nothing to do if no contents; no point in making an empty commit or
-        // in making clients check themselves.
-        return;                                                       // RETURN
+const updateRef = co.wrap(function*(repo, refName, commit, old, reflog) {
+    try {
+        yield ChildProcess.exec(
+            `git -C ${repo.path()} update-ref -m '${reflog}' ${refName} \
+${commit} ${old}`);
+        return true;
+    } catch (e) {
+        return false;
     }
+});
 
-    // We're going to directly write the tree/commit for a new note containing
-    // `contents`.
+const tryWriteNotes = co.wrap(function *(repo, refName, contents) {
+    // We're going to directly write the tree/commit for a new
+    // note containing `contents`.
 
     let currentTree = null;
     const parents = [];
@@ -108,8 +105,63 @@ exports.writeNotes = co.wrap(function *(repo, refName, contents) {
                                                newTree,
                                                parents.length,
                                                parents);
-    yield NodeGit.Reference.create(repo, refName, commit, 1, "updated");
+
+    let old;
+    if (null === ref) {
+        old = "0000000000000000000000000000000000000000";
+    } else {
+        old = ref.target().tostrS();
+    }
+    return yield updateRef(repo, refName, commit.tostrS(), old, "updated");
 });
+
+/**
+ * Write the specified `contents` to the note having the specified `refName` in
+ * the specified `repo`.
+ *
+ * Writing notes oneo-at-a-time is slow.  This method let's you write them in
+ * bulk, far more efficiently.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {String}             refName
+ * @param {Object}             contents    SHA to data
+ */
+exports.writeNotes = co.wrap(function *(repo, refName, contents) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(refName);
+    assert.isObject(contents);
+
+    if (0 === Object.keys(contents).length) {
+        // Nothing to do if no contents; no point in making an empty commit or
+        // in making clients check themselves.
+        return;                                                       // RETURN
+    }
+
+    const retryCount = 3;
+    let success;
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    for (let i = 0; i < retryCount; i++) {
+        success = yield tryWriteNotes(repo, refName, contents);
+        if (success) {
+            return;
+        } else {
+            let suffix;
+            if (i === retryCount - 1) {
+                suffix = "giving up";
+            } else {
+                suffix = "retrying";
+                yield sleep(500);
+            }
+            console.warn(`Failed to update notes ref ${refName}, ${suffix}`);
+        }
+    }
+    if (!success) {
+        throw new Error("Failed to update notes ref ${refName} after retries");
+    }
+});
+
 
 /**
  * Load, into the specified `result`, note entries found in the specified
