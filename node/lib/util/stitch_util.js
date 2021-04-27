@@ -778,8 +778,15 @@ exports.readConvertedCommits = co.wrap(function *(repo) {
 
     const result =
                  yield BulkNotesUtil.readNotes(repo, exports.convertedNoteRef);
-    for (let key in result) {
-        result[key] = exports.readConvertedContent(result[key]);
+    for (const [key, oldSha] of Object.entries(result)) {
+        const sha = exports.readConvertedContent(oldSha);
+        try {
+            yield repo.getCommit(sha);
+            result[key] = sha;
+        } catch (e) {
+            // We have the note but not the commit, delete from cache
+            delete result[key];
+        }
     }
     return result;
 });
@@ -804,6 +811,14 @@ exports.makeGetConvertedCommit = function (repo, cache) {
             return cache[sha];
         }
         const result = yield exports.readConvertedCommit(repo, sha);
+
+        try {
+            yield repo.getCommit(result);
+        } catch (e) {
+            // We have the note but not the commit; treat as missing
+            return undefined;
+        }
+
         cache[sha] = result;
         return result;
     });
