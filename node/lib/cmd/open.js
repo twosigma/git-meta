@@ -36,6 +36,7 @@
 
 const assert    = require("chai").assert;
 const co        = require("co");
+const path      = require("path");
 const NodeGit   = require("nodegit");
 const GitUtil   = require("../util/git_util");
 const UserError = require("../util/user_error");
@@ -153,16 +154,15 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
     const paths = yield parseArgs(repo, args);
-    let subsToOpen = yield SubmoduleUtil.resolveSubmoduleNames(workdir,
-                                                               cwd,
-                                                               subs,
-                                                               paths,
-                                                               true,
-                                                               true);
-    subsToOpen = Array.from(new Set(subsToOpen));
+    const subsToOpen = yield SubmoduleUtil.resolveSubmodules(workdir,
+                                                             cwd,
+                                                             subs,
+                                                             paths,
+                                                             true);
     const index      = yield repo.index();
+    const subNames   = Object.keys(subsToOpen);
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
-                                                                   subsToOpen);
+                                                                   subNames);
     const head = yield repo.getHeadCommit();
     const fetcher = new SubmoduleFetcher(repo, head);
 
@@ -175,7 +175,19 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const opener = co.wrap(function *(name, idx) {
         if (openSubs.has(name)) {
-            console.warn(`Submodule ${colors.cyan(name)} is already open.`);
+            let provenance = "";
+            for (let filename of subsToOpen[name]) {
+                let resolved = path.relative(
+                    workdir,
+                    path.resolve(cwd, filename));
+                if (resolved !== name) {
+                    provenance = ` (for filename ${resolved})`;
+                    break;
+                }
+            }
+
+            console.warn(
+                `Submodule ${colors.cyan(name)}${provenance} is already open.`);
             return;                                                   // RETURN
         }
 
@@ -212,7 +224,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
             }
         }
     });
-    yield DoWorkQueue.doInParallel(subsToOpen, opener, 10);
+    yield DoWorkQueue.doInParallel(subNames, opener, 10);
 
     // Make sure the index entries are updated in case we're in sparse mode.
 
