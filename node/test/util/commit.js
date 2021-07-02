@@ -46,6 +46,12 @@ const TestUtil        = require("../../lib/util/test_util");
 const UserError       = require("../../lib/util/user_error");
 
 
+function msgfunc(msg) {
+    return co.wrap(function*() {
+        return msg;
+    });
+}
+
 function mapCommitResult(commitResult) {
     // Return a map from physical to computed logical sha for the commit ids in
     // the specified `commitResul` (as returned by `Commit.commit` and
@@ -74,8 +80,8 @@ const committer = co.wrap(function *(doAll, message, repos, subMessages) {
         showMetaChanges: true,
         all: doAll,
     });
-    const result = yield Commit.commit(x, doAll, status, message, subMessages,
-                                       false);
+    const result = yield Commit.commit(x, doAll, status, msgfunc(message),
+                                       subMessages, false);
     return {
         commitMap: mapCommitResult(result),
     };
@@ -2081,7 +2087,7 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
                     const message = c.message || "message";
                     const result = yield Commit.commitPaths(repo,
                                                             status,
-                                                            message,
+                                                            msgfunc(message),
                                                             false);
                     const commitMap = {};
                     commitMap[result.metaCommit] = "x";
@@ -3384,7 +3390,7 @@ x=U:Cmsg\n#x-2 s=Sa:s;Bmaster=x;Os Cmsg\n#s-1 README.md=foo,addedbyhook=bar`;
 
                 const result = yield Commit.commitPaths(repo,
                                                         status,
-                                                        message,
+                                                        msgfunc(message),
                                                         false);
                 const commitMap = {};
                 commitMap[result.metaCommit] = "x";
@@ -3458,7 +3464,8 @@ describe("commit mid-merge", function() {
             paths: [],
         });
 
-        yield Commit.commit(repo, true, repoStatus, "commit message",
+        yield Commit.commit(repo, true, repoStatus,
+                            msgfunc("commit message"),
                             undefined, true, m4);
 
         const head = yield repo.getHeadCommit();

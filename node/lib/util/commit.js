@@ -77,6 +77,12 @@ exports.ensureEolOnLastLine = function (message) {
     return message.endsWith("\n") ? message : (message + "\n");
 };
 
+function abortIfNoMessage(message) {
+    if (message === "") {
+        throw new UserError("Aborting commit due to empty commit message.");
+    }
+}
+
 /**
  * Return the `NodeGit.Tree` object for the (left) parent of the head commit
  * in the specified `repo`, or null if the commit has no parent.
@@ -550,23 +556,19 @@ const updateHead = co.wrap(function *(repo, sha) {
 exports.commit = co.wrap(function *(metaRepo,
                                     all,
                                     metaStatus,
-                                    message,
+                                    messageFunc,
                                     subMessages,
                                     noVerify,
                                     mergeParent) {
     assert.instanceOf(metaRepo, NodeGit.Repository);
     assert.isBoolean(all);
     assert.instanceOf(metaStatus, RepoStatus);
-    assert(exports.shouldCommit(metaStatus, message === null, subMessages),
+    assert(exports.shouldCommit(metaStatus, !!subMessages, subMessages),
            "nothing to commit");
-    if (null !== message) {
-        assert.isString(message);
-    }
+    assert.isFunction(messageFunc);
     if (undefined !== subMessages) {
         assert.isObject(subMessages);
     }
-    assert(null !== message || undefined !== subMessages,
-           "if no meta message, sub messages must be specified");
     assert.isBoolean(noVerify);
 
     let mergeTree = null;
@@ -583,18 +585,8 @@ exports.commit = co.wrap(function *(metaRepo,
     // workdir changes.
     const subCommits = {};
     const subRepos = {};
-    const commitSubmodule = co.wrap(function *(name) {
-        let subMessage = message;
-
-        // If we're explicitly providing submodule messages, look the commit
-        // message up for this submodule and return early if there isn't one.
-
-        if (undefined !== subMessages) {
-            subMessage = subMessages[name];
-            if (undefined === subMessage) {
-                return;                                               // RETURN
-            }
-        }
+    const subStageData = {};
+    const writeSubmoduleIndex = co.wrap(function *(name) {
         const status = submodules[name];
         const repoStatus = (status.workdir && status.workdir.status) || null;
 
@@ -606,38 +598,67 @@ exports.commit = co.wrap(function *(metaRepo,
                                           repoStatus.staged,
                                           all,
                                           noVerify);
-
-            const headCommit = yield subRepo.getHeadCommit();
-            const parents = [];
-            if (headCommit !== null) {
-                parents.push(headCommit);
-            }
-
-            if (mergeTree !== null) {
-                const mergeSubParent = yield mergeTree.entryByPath(name);
-                if (mergeSubParent.id() !== headCommit.id()) {
-                    parents.push(mergeSubParent.id());
-                }
-            }
             const index = yield subRepo.index();
-            const tree = yield index.writeTree();
+            subStageData[name] = {
+                repo : subRepo,
+                index : index,
+            };
 
-            const commit = yield subRepo.createCommit(
-                null,
-                signature,
-                signature,
-                exports.ensureEolOnLastLine(subMessage),
-                tree,
-                parents);
-
-            subRepos[name] = subRepo;
-            subCommits[name] = commit.tostrS();
         }
     });
 
-    const index = yield metaRepo.index();
+    yield DoWorkQueue.doInParallel(Object.keys(submodules),
+                                   writeSubmoduleIndex);
 
-    yield DoWorkQueue.doInParallel(Object.keys(submodules), commitSubmodule);
+    const message = yield messageFunc();
+
+    const commitSubmodule = co.wrap(function *(name) {
+        const data = subStageData[name];
+        const index = data.index;
+        const subRepo = data.repo;
+
+        let subMessage = message;
+
+        // If we're explicitly providing submodule messages, look the commit
+        // message up for this submodule and return early if there isn't one.
+
+        if (undefined !== subMessages) {
+            subMessage = subMessages[name];
+            if (undefined === subMessage) {
+                return;                                               // RETURN
+            }
+        }
+
+        const headCommit = yield subRepo.getHeadCommit();
+        const parents = [];
+        if (headCommit !== null) {
+            parents.push(headCommit);
+        }
+
+        if (mergeTree !== null) {
+            const mergeSubParent = yield mergeTree.entryByPath(name);
+            if (mergeSubParent.id() !== headCommit.id()) {
+                parents.push(mergeSubParent.id());
+            }
+        }
+
+        const tree = yield index.writeTree();
+
+        const commit = yield subRepo.createCommit(
+            null,
+            signature,
+            signature,
+            exports.ensureEolOnLastLine(subMessage),
+            tree,
+            parents);
+
+        subRepos[name] = subRepo;
+        subCommits[name] = commit.tostrS();
+    });
+
+    yield DoWorkQueue.doInParallel(Object.keys(subStageData), commitSubmodule);
+
+    const index = yield metaRepo.index();
 
     if (all) {
         for (const subName of Object.keys(metaStatus.staged)) {
@@ -724,10 +745,116 @@ const isExecutable = co.wrap(function *(repo, filename) {
  * @param {String}             message
  * @return {String}
  */
+const writeSubmoduleIndex = co.wrap(function *(repo, status, noVerify) {
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.instanceOf(status, RepoStatus);
+
+    const headCommit = yield repo.getHeadCommit();
+    const changes = {};
+    const staged = status.staged;
+    const FILEMODE = NodeGit.TreeEntry.FILEMODE;
+    const FILESTATUS = RepoStatus.FILESTATUS;
+    const Change = TreeUtil.Change;
+
+    // We do a soft reset later, which means that we don't touch the index.
+    // Therefore, all of our files must be staged.
+
+    const index = yield repo.index();
+    yield index.readTree(yield headCommit.getTree());
+
+    // Handle "normal" file changes.
+
+    for (let filename in staged) {
+        const stat = staged[filename];
+        if (FILESTATUS.REMOVED === stat) {
+            yield index.removeByPath(filename);
+            changes[filename] = null;
+        }
+        else {
+            const blobId = yield TreeUtil.hashFile(repo, filename);
+            const executable = yield isExecutable(repo, filename);
+            const mode = executable ? FILEMODE.EXECUTABLE : FILEMODE.BLOB;
+            changes[filename] = new Change(blobId, mode);
+            yield index.addByPath(filename);
+        }
+    }
+
+    // We ignore submodules, because we assume that there are no nested
+    // submodules in a git-meta repo.
+
+    if (!noVerify) {
+        yield runPreCommitHook(repo, index);
+    }
+
+
+    return index;
+});
+
+const createCommitFromIndex = co.wrap(function*(repo, index, message) {
+    const headCommit = yield repo.getHeadCommit();
+
+    // Use 'TreeUtil' to create a new tree having the required paths.
+    const treeId = yield index.writeTree();
+    const tree = yield NodeGit.Tree.lookup(repo, treeId);
+
+    // Create a commit with this tree.
+
+    const sig = yield ConfigUtil.defaultSignature(repo);
+    const parents = [headCommit];
+    const commitId = yield NodeGit.Commit.create(
+                                          repo,
+                                          0,
+                                          sig,
+                                          sig,
+                                          0,
+                                          exports.ensureEolOnLastLine(message),
+                                          tree,
+                                          parents.length,
+                                          parents);
+
+    // Now, reload the index to get rid of the changes we made to it.
+    // In theory, this should be index.read(true), but that doesn't
+    // work for some reason.
+    yield GitUtil.overwriteIndexFromFile(index, index.path());
+
+    // ...and apply the changes from the commit that we just made.
+    // I'm pretty sure this doesn't do rename/copy detection, but the nodegit
+    // API docs are pretty vague, as are the libgit2 docs.
+    const commit = yield NodeGit.Commit.lookup(repo, commitId);
+    const diffs = yield commit.getDiff();
+    const diff = diffs[0];
+    for (let i = 0; i < diff.numDeltas(); i++) {
+        const delta = diff.getDelta(i);
+        const newFile = delta.newFile();
+        if (GitUtil.isZero(newFile.id())) {
+            index.removeByPath(delta.oldFile().path());
+        } else {
+            index.addByPath(newFile.path());
+        }
+    }
+
+    return commitId;
+});
+
+
+/**
+ * Create a temp index and run the pre-commit hooks for the specified
+ * `repo` having the specified `status` using the specified commit
+ * `message` and return the ID of the new commit.  Note that this
+ * method records staged commits for submodules but does not recurse
+ * into their repositories.  Note also that changes that would involve
+ * altering `.gitmodules` -- additions, removals, and URL changes --
+ * are ignored.  HEAD and the main on-disk index file are not changed,
+ * although the in-memory index is altered.
+ *
+ * @param {NodeGit.Repository} repo
+ * @param {RepoStatus}         status
+ * @param {String}             message
+ * @return {String}
+ */
 exports.writeRepoPaths = co.wrap(function *(repo, status, message, noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
-    assert.isString(message);
 
     const headCommit = yield repo.getHeadCommit();
     const changes = {};
@@ -843,10 +970,10 @@ exports.writeRepoPaths = co.wrap(function *(repo, status, message, noVerify) {
  * @return {String} return.metaCommit
  * @return {Object} return.submoduleCommits  map from sub name to commit id
  */
-exports.commitPaths = co.wrap(function *(repo, status, message, noVerify) {
+exports.commitPaths = co.wrap(function *(repo, status, messageFunc, noVerify) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(status, RepoStatus);
-    assert.isString(message);
+    assert.isFunction(messageFunc);
     assert.isBoolean(noVerify);
 
     const subCommits = {};  // map from name to sha
@@ -854,7 +981,9 @@ exports.commitPaths = co.wrap(function *(repo, status, message, noVerify) {
     const committedSubs = {};  // map from name to RepoAST.Submodule
 
     const subs = status.submodules;
-    const writeSubPaths = co.wrap(function *(subName) {
+    const subStageData = {};
+
+    const writeSubIndexes = co.wrap(function*(subName) {
         const sub = subs[subName];
         const workdir = sub.workdir;
 
@@ -874,8 +1003,26 @@ exports.commitPaths = co.wrap(function *(repo, status, message, noVerify) {
 
         const wdStatus = workdir.status;
         const subRepo = yield SubmoduleUtil.getRepo(repo, subName);
-        const oid = yield exports.writeRepoPaths(subRepo, wdStatus, message,
-                                                 noVerify);
+        const index = yield writeSubmoduleIndex(subRepo, wdStatus, noVerify);
+
+        subStageData[subName] = {sub : sub,
+                                 index : index,
+                                 repo : subRepo,
+                                 wdStatus: wdStatus};
+    });
+
+    yield DoWorkQueue.doInParallel(Object.keys(subs), writeSubIndexes);
+
+    const message = yield messageFunc();
+
+    const writeSubmoduleCommits = co.wrap(function*(subName) {
+        const data = subStageData[subName];
+        const sub = data.sub;
+        const index = data.index;
+        const subRepo = data.repo;
+        const wdStatus = data.wdStatus;
+
+        const oid = yield createCommitFromIndex(subRepo, index, message);
         const sha = oid.tostrS();
         subCommits[subName] = sha;
         const oldIndex = sub.index;
@@ -891,7 +1038,7 @@ exports.commitPaths = co.wrap(function *(repo, status, message, noVerify) {
         committedSubs[subName].repo = subRepo;
     });
 
-    yield DoWorkQueue.doInParallel(Object.keys(subs), writeSubPaths);
+    yield DoWorkQueue.doInParallel(Object.keys(subs), writeSubmoduleCommits);
 
     for (const subName of Object.keys(committedSubs)) {
         const sub = committedSubs[subName];
@@ -2164,10 +2311,6 @@ configuration changes.`);
     }
 }
 
-function abortForNoMessage() {
-    throw new UserError("Aborting commit due to empty commit message.");
-}
-
 /**
  * Perform the commit command in the specified `repo`. Consider the values in
  * the specified `paths` to be relative to the specified `cwd`, and format
@@ -2273,6 +2416,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
     }
 
     let subMessages;
+    let messageFunc;
 
     if (interactive) {
         // If 'interactive' mode is requested, ask the user to specify which
@@ -2286,7 +2430,7 @@ exports.doCommitCommand = co.wrap(function *(repo,
         const userText = yield GitUtil.editMessage(repo, prompt, editMessage,
                                                    !noVerify);
         const userData = exports.parseSplitCommitMessages(userText);
-        message = userData.metaMessage;
+        messageFunc = co.wrap(function*() { return userData.metaMessage; });
         subMessages = userData.subMessages;
 
         // Check if there's actually anything to commit.
@@ -2295,31 +2439,37 @@ exports.doCommitCommand = co.wrap(function *(repo,
             console.log("Nothing to commit.");
             return;
         }
-    }
-    else if (null === message) {
-        // If no message on the command line, prompt for one.
+    } else if (message === null) {
+        // If no message on the command line, later we will prompt for one.
+        messageFunc = co.wrap(function*() {
+            const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
+            let message = yield GitUtil.editMessage(repo, initialMessage,
+                                                    editMessage, !noVerify);
+            message = GitUtil.stripMessage(message);
+            abortIfNoMessage(message);
+            return message;
+        });
+    } else {
+        // we strip the message here even though we may need to strip
+        // it later, just so that we can abort correctly before
+        // running hooks.
+        message = GitUtil.stripMessage(message);
 
-        const initialMessage = exports.formatEditorPrompt(repoStatus, cwd);
-        message = yield GitUtil.editMessage(repo, initialMessage, editMessage,
-                                            !noVerify);
-    }
-    message = GitUtil.stripMessage(message);
-
-    if ("" === message) {
-        abortForNoMessage();
+        abortIfNoMessage(message);
+        messageFunc = co.wrap(function*() { return message; });
     }
 
     if (usingPaths) {
         return yield exports.commitPaths(repo,
                                          repoStatus,
-                                         message,
+                                         messageFunc,
                                          noVerify);
     }
     else {
         return yield exports.commit(repo,
                                     all,
                                     repoStatus,
-                                    message,
+                                    messageFunc,
                                     subMessages,
                                     noVerify,
                                     mergeParent);
@@ -2427,9 +2577,7 @@ repository independently.`;
         }
     }
 
-    if ("" === message) {
-        abortForNoMessage();
-    }
+    abortIfNoMessage(message);
 
     if (!exports.shouldCommit(status,
                               null === message,
