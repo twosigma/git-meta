@@ -601,8 +601,7 @@ exports.resolveSubmoduleNames = function (workdir,
                                           cwd,
                                           submoduleNames,
                                           paths,
-                                          throwOnMissing,
-                                          includeParents) {
+                                          throwOnMissing) {
     assert.isString(workdir);
     assert.isString(cwd);
     assert.isArray(submoduleNames);
@@ -616,7 +615,7 @@ exports.resolveSubmoduleNames = function (workdir,
                                                     filename);
         const result = exports.getSubmodulesInPath(relPath,
                                                    submoduleNames,
-                                                   includeParents);
+                                                   false);
         if (0 === result.length) {
             const msg = `\
 No submodules found from ${colors.yellow(filename)}.`;
@@ -630,6 +629,69 @@ No submodules found from ${colors.yellow(filename)}.`;
     });
     return subLists.reduce((a, b) => a.concat(b), []);
 };
+
+/**
+ * Return a map from `paths` to the list of of submodules found under those
+ * paths in the specified meta-repo `workdir`, containing the submodules
+ * having the specified `submoduleNames`.  Treat paths as being relative to
+ * the specified `cwd`.  Throw a `UserError` if an path outside of the workdir
+ * is encountered.  If a path inside the workdir contains no submodules,
+ * either log a warning, or, if throwOnMissing is set, throw a `UserError`.
+ *
+ * @param {String} workdir
+ * @param {String} cwd
+ * @param {String[]} submoduleNames
+ * @param {String[]} paths
+ * @param {Boolean} throwOnMissing
+ * @return {String[]}
+ */
+exports.resolveSubmodules = function (workdir,
+                                      cwd,
+                                      submoduleNames,
+                                      paths,
+                                      throwOnMissing) {
+    assert.isString(workdir);
+    assert.isString(cwd);
+    assert.isArray(submoduleNames);
+    assert.isArray(paths);
+
+    const byFilename = {};
+    paths.forEach(filename => {
+        // Compute the relative path for `filename` from the root of the repo,
+        // and check for invalid values.
+        const relPath = GitUtil.resolveRelativePath(workdir,
+                                                    cwd,
+                                                    filename);
+        const result = exports.getSubmodulesInPath(relPath,
+                                                   submoduleNames,
+                                                   true);
+        if (0 === result.length) {
+            const msg = `\
+No submodules found from ${colors.yellow(filename)}.`;
+            if (throwOnMissing) {
+                throw new UserError(msg);
+            } else {
+                console.warn(msg);
+            }
+        }
+        byFilename[filename] = result;
+    });
+
+    const out = {};
+    for (let [filename, paths] of Object.entries(byFilename)) {
+        for (const path of paths) {
+            if (out[path]) {
+                if (!out[path].includes(filename)) {
+                    out[path].push(filename);
+                }
+            } else {
+                out[path] = [filename];
+            }
+        }
+    }
+    return out;
+};
+
 
 /**
  * Return a map from submodule name to an array of paths (relative to the root
