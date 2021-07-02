@@ -203,7 +203,7 @@ file(s) known to git.`);
         // In this case, we're not making a branch; just let the user know what
         // we checked out.
 
-        console.log(`Checked out ${colors.green(committish)}.`);
+        process.stderr.write(`Checked out ${colors.green(committish)}.\n`);
     }
 
     // Run post-checkout hook.
