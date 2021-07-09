@@ -48,6 +48,10 @@ const UserError       = require("../../lib/util/user_error");
 
 function msgfunc(msg) {
     return co.wrap(function*() {
+        // This bogosity is to satisfy jshint
+        yield new Promise(function(resolve) {
+            resolve(null);
+        });
         return msg;
     });
 }
