@@ -375,7 +375,8 @@ x=S:C2-1 s=Sa:1;C3-2 s;Bmaster=3`,
             },
             "HEAD^ unmodified": {
                 input: `
-x=S:C2-1 README.md=3;W README.md=hello world;Bmaster=2`,
+x=S:C2-1 README.md=3;I README.md=hello world;W README.md=hello world;
+Bmaster=2`,
                 workdirToTree: true,
                 from: "HEAD^",
             },
