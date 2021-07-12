@@ -3449,12 +3449,20 @@ describe("commit mid-merge", function() {
         const index = yield sRepo.index();
         const sEntry = index.getByIndex(1);
         const newEntry = new NodeGit.IndexEntry();
-        newEntry.flags = sEntry.flags;
+        // mask off the stage bits here, so that the new entry we write is
+        // in stage zero.
+        newEntry.flags = sEntry.flags & ~0x3000;
         newEntry.flagsExtended = sEntry.flagsExtended;
         newEntry.mode = sEntry.mode;
         newEntry.id = sEntry.id;
         newEntry.path = sEntry.path;
-
+        newEntry.fileSize = sEntry.fileSize;
+        newEntry.gid = 0;
+        newEntry.uid = 0;
+        newEntry.ino = 0;
+        newEntry.dev = 0;
+        newEntry.mtime = sEntry.mtime;
+        newEntry.ctime = sEntry.ctime;
         yield index.conflictCleanup();
         yield index.add(newEntry);
         yield index.write();
