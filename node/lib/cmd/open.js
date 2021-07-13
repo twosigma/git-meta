@@ -81,6 +81,11 @@ exports.configureParser = function (parser) {
         type: "string",
         help: "open all submodules modified in a commit",
     });
+    parser.addArgument(["-f", "--force"], {
+        action: "storeTrue",
+        help:
+        "open existing submodules even if some requested ones don't exist",
+    });
 };
 
 const parseArgs = co.wrap(function *(repo, args) {
@@ -158,7 +163,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                                                              cwd,
                                                              subs,
                                                              paths,
-                                                             true);
+                                                             !args.force);
     const index      = yield repo.index();
     const subNames   = Object.keys(subsToOpen);
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
