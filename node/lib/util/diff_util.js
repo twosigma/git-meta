@@ -86,6 +86,14 @@ function readDiff(diff) {
                      delta.newFile();
         const path = file.path();
 
+        if (FILESTATUS.MODIFIED === fileStatus &&
+            delta.newFile().id().equal(delta.oldFile().id())) {
+            // This file isn't actually changed -- it's just being reported
+            // as changed because it differs from the index (even though
+            // the index isn't really for contents).
+            continue;
+        }
+
         // Skip the all submodule changes; they're handled separately.
         if (NodeGit.TreeEntry.FILEMODE.COMMIT !== file.mode()) {
             result[path] = fileStatus;
@@ -159,7 +167,9 @@ exports.getRepoStatus = co.wrap(function *(repo,
 
     if (ignoreIndex) {
         const workdirToTreeDiff =
-                   yield NodeGit.Diff.treeToWorkdir(repo, tree, options);
+              yield NodeGit.Diff.treeToWorkdirWithIndex(repo,
+                                                        tree,
+                                                        options);
         const workdirToTreeStatus = readDiff(workdirToTreeDiff);
         return {
             staged: {},
