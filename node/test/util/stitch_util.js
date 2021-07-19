@@ -1321,14 +1321,20 @@ S:C2-1;B2=2;N refs/notes/stitched/converted 1=;
   N refs/notes/stitched/converted 2=1`);
         const repo = written.repo;
         const one = yield repo.getHeadCommit();
-        const oneSha = one.id().tostrS();
+        const oldGetCommit = repo.getCommit.bind(repo);
+        repo.getCommit = co.wrap(function* (sha) {
+            if (sha === "1") {
+                return one;
+            }
+            return yield oldGetCommit(sha);
+        });
+
         const two = yield repo.getBranchCommit("2");
         const twoSha = two.id().tostrS();
         const result = yield StitchUtil.readConvertedCommits(repo);
         const expected = {};
-        expected[oneSha] = null;
         expected[twoSha] = "1";
-        assert.deepEqual(result, expected);
+        assert.deepEqual(expected, result);
     }));
 });
 describe("makeGetConvertedCommit", function () {
@@ -1349,13 +1355,13 @@ S:N refs/notes/stitched/converted 1=`);
         const headSha = head.id().tostrS();
         const fun = StitchUtil.makeGetConvertedCommit(repo, {});
         const result = yield fun(headSha);
-        assert.isNull(result);
+        assert.isUndefined(result);
 
         // Now delete and make sure we're remembering the result.
 
         NodeGit.Reference.remove(repo, StitchUtil.convertedNoteRef);
         const nextResult = yield fun(headSha);
-        assert.isNull(nextResult);
+        assert.isUndefined(nextResult);
     }));
     it("got one from cache", co.wrap(function *() {
         const written = yield RepoASTTestUtil.createRepo(`S`);
@@ -1386,7 +1392,7 @@ describe("listCommitsToStitch", function () {
         assert.deepEqual([headSha], resultShas);
     }));
 
-    it("skipped", co.wrap(function *() {
+    it("note present, stitched commit missing", co.wrap(function *() {
         const written = yield RepoASTTestUtil.createRepo("S");
         const repo = written.repo;
         const head = yield repo.getHeadCommit();
@@ -1400,7 +1406,7 @@ describe("listCommitsToStitch", function () {
         const result =
                      yield StitchUtil.listCommitsToStitch(repo, head, getConv);
         const resultShas = result.map(c => c.id().tostrS());
-        assert.deepEqual([], resultShas);
+        assert.deepEqual([headSha], resultShas);
     }));
 
     it("with parents", co.wrap(function *() {
