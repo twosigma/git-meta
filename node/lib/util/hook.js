@@ -73,11 +73,11 @@ exports.execHook = co.wrap(function*(repo, name, args=[], env={}) {
     }
 
     try {
-        process.chdir(repo.workdir());
         const subEnv = {};
         Object.assign(subEnv, process.env);
         Object.assign(subEnv, env);
-        yield spawn(absPath, args, { stdio: "inherit", env: subEnv });
+        yield spawn(absPath, args, { stdio: "inherit", env: subEnv,
+                                     cwd: repo.workdir()});
         return true;
     } catch (e) {
         if (e.code === "EACCES") {
