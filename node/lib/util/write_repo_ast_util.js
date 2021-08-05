@@ -496,11 +496,22 @@ git -C '${repo.workdir()}' checkout ${toCheckout}
         // not.  I didn't see anything about `clean` and `Checkout.index`
         // didn't seem to work..
 
-        const filesStr = ast.sparse ? "-- .gitmodules" : "-a";
+        let checkoutStr;
+        if (ast.sparse) {
+            const index = yield repo.index();
+            if (index.getByPath(".gitmodules")) {
+                checkoutStr = `
+git -C '${repo.workdir()}' checkout-index -f .gitmodules`;
+            } else {
+                checkoutStr = "";
+            }
+        } else {
+            checkoutStr = `git -C '${repo.workdir()}' checkout-index -f -a`;
+        }
         const checkoutIndexStr = `\
 git -C '${repo.workdir()}' checkout --
 git -C '${repo.workdir()}' clean -f -d
-git -C '${repo.workdir()}' checkout-index -f ${filesStr}
+${checkoutStr}
 `;
         yield exec(checkoutIndexStr);
 
