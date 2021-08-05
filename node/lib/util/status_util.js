@@ -247,8 +247,8 @@ exports.getSubmoduleStatus = co.wrap(function *(repo,
         commit = new Submodule.Commit(commitSha, commitUrl);
     }
 
-    // A null indexUrl indicates that the submodule was removed.  If that is
-    // the case, we're done.
+    // A null indexUrl indicates that the submodule doesn't exist in
+    // the staged .gitmodules.
 
     if (null === indexUrl) {
         return new Submodule({ commit: commit });                     // RETURN
