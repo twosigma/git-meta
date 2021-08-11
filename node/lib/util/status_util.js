@@ -636,9 +636,10 @@ exports.checkReadiness = function (status) {
 
     if (null !== status.rebase) {
         return (`\
+You're in the middle of a regular (not git-meta) rebase.
 Before proceeding, you must complete the rebase in progress (by running
-'git meta rebase --continue') or abort it (by running
-'git meta rebase --abort').`);
+'git rebase --continue') or abort it (by running
+'git rebase --abort').`);
     }
     if (status.isConflicted()) {
         return (`\
