@@ -372,7 +372,8 @@ class Submodule {
      */
     isCommittable () {
         return !(this.isNew() &&
-                 null === this.d_index.sha &&
+                 (null === this.d_index ||
+                  null === this.d_index.sha) &&
                  (null === this.d_workdir ||
                   null === this.d_workdir.status.headCommit &&
                   this.d_workdir.status.isIndexClean()));
