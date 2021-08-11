@@ -116,11 +116,13 @@ exports.changeSubmodules = co.wrap(function *(repo,
     for (let name in submodules) {
         const sub = submodules[name];
         if (null === sub) {
+            console.log(`Deleting ${name}`);
             changes[name] = null;
             delete urls[name];
             yield rmrf(name);
         }
         else if (opener.isOpen(name)) {
+            console.log(`Fast-forwarding open submodule ${name}`);
             const subRepo =
                 yield opener.getSubrepo(name,
                                         Open.SUB_OPEN_OPTION.FORCE_OPEN);
@@ -129,6 +131,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
             yield GitUtil.setHeadHard(subRepo, commit);
             yield index.addByPath(name);
         } else {
+            console.log(`Fast-forwarding closed submodule ${name}`);
             changes[name] = new TreeUtil.Change(
                                             NodeGit.Oid.fromString(sub.sha),
                                             NodeGit.TreeEntry.FILEMODE.COMMIT);
