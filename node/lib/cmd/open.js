@@ -79,37 +79,38 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-c"], {
         action: "store",
         type: "string",
-        help: "open all submodules modified in a commit",
+        help: "open all submodules modified in a commit, or half open \
+        the submodules from this commit",
     });
     parser.addArgument(["-f", "--force"], {
         action: "storeTrue",
         help:
         "open existing submodules even if some requested ones don't exist",
     });
+    parser.addArgument(["--half"], {
+        action: "storeTrue",
+        help:"open the submodule in .git/modules only",
+    });
 };
 
-const parseArgs = co.wrap(function *(repo, args) {
+const parseArgs = co.wrap(function *(repo, args, commit) {
     assert.instanceOf(repo, NodeGit.Repository);
 
     args.path = Array.from(new Set(args.path));
     if (args.path.length > 0) {
-        if (args.c) {
-            // Of course, args.path and args.c should be mutually exclusive,
-            // but unfortunately, node's argparse doesn't support this.
+        if (!args.half && args.c) {
+            // one can half open a path from a commit, or fully 
+            // open all path in a commit, but cannot fully open
+            // some paths from a different commit, because that 
+            // will mess up the workspace.
             throw new UserError("-c should take a single argument");
         }
         return Array.from(new Set(args.path));
     }
-    const commitish = args.c;
-    if (commitish === null) {
+    if (args.c === null) {
         throw new UserError(
             "Please supply a submodule to open, or -c $commitish");
     }
-    const annotated = yield GitUtil.resolveCommitish(repo, commitish);
-    if (annotated === null) {
-        throw new UserError("Cannot resolve " + commitish + " to a commit");
-    }
-    const commit = yield NodeGit.Commit.lookup(repo, annotated.id());
     const tree = yield commit.getTree();
     const parent = yield commit.parent(0);
     let parentTree = null;
@@ -135,6 +136,34 @@ const parseArgs = co.wrap(function *(repo, args) {
 });
 
 /**
+ * If commitish is given, return resolved commit object and an in-memory
+ * index loaded with the corresponding tree.
+ * 
+ * Otherwise, return the head commit and default repo index.
+ */
+const getCommitAndIndex = co.wrap(function *(repo, commitish) {
+    if (commitish) {
+        const annotated = yield GitUtil.resolveCommitish(repo, commitish);
+        if (annotated === null) {
+            throw new UserError("Cannot resolve " + commitish + " to a commit");
+        }
+        const commit = yield NodeGit.Commit.lookup(repo, annotated.id());
+        const tree = yield commit.getTree();
+        const index = yield repo.refreshIndex();
+        yield index.readTree(tree);
+        return {
+            commit: commit,
+            index: index
+        };
+    } else {
+        return {
+            index: yield repo.index(),
+            commit: yield repo.getHeadCommit(),
+        };
+    }
+});
+
+/**
  * Execute the `open` command according to the specified `args`.
  *
  * @param {Object} args
@@ -145,7 +174,6 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const colors = require("colors");
 
     const DoWorkQueue         = require("../util/do_work_queue");
-    const GitUtil             = require("../util/git_util");
     const Open                = require("../util/open");
     const SparseCheckoutUtil  = require("../util/sparse_checkout_util");
     const SubmoduleConfigUtil = require("../util/submodule_config_util");
@@ -156,20 +184,21 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd     = process.cwd();
-    const subs = yield SubmoduleUtil.getSubmoduleNames(repo);
 
-    const paths = yield parseArgs(repo, args);
+    const {commit, index} = yield getCommitAndIndex(repo, args.c);
+    
+    const subs = yield SubmoduleUtil.getSubmoduleNamesForCommit(repo, commit);
+    
+    const paths = yield parseArgs(repo, args, commit);
     const subsToOpen = yield SubmoduleUtil.resolveSubmodules(workdir,
                                                              cwd,
                                                              subs,
                                                              paths,
                                                              !args.force);
-    const index      = yield repo.index();
     const subNames   = Object.keys(subsToOpen);
     const shas       = yield SubmoduleUtil.getCurrentSubmoduleShas(index,
                                                                    subNames);
-    const head = yield repo.getHeadCommit();
-    const fetcher = new SubmoduleFetcher(repo, head);
+    const fetcher = new SubmoduleFetcher(repo, commit);
 
     let failed = false;
     let subsOpenSuccessfully = [];
@@ -214,7 +243,7 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
                                     name,
                                     shas[idx],
                                     templatePath,
-                                    false);
+                                    args.half);
             subsOpenSuccessfully.push(name);
             console.log(`Finished opening ${colors.blue(name)}.`);
         }
@@ -232,8 +261,9 @@ Opening ${colors.blue(name)} on ${colors.green(shas[idx])}.`);
     yield DoWorkQueue.doInParallel(subNames, opener, 10);
 
     // Make sure the index entries are updated in case we're in sparse mode.
-
-    yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
+    if (!args.half) {
+        yield SparseCheckoutUtil.setSparseBitsAndWriteIndex(repo, index);
+    }
 
     if (failed) {
         process.exit(1);
