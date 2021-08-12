@@ -187,7 +187,9 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const {commit, index} = yield getCommitAndIndex(repo, args.c);
     
-    const subs = yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index);
+    const subs = Object.keys(
+        yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index)
+    );
     
     const paths = yield parseArgs(repo, args, commit);
     const subsToOpen = yield SubmoduleUtil.resolveSubmodules(workdir,
