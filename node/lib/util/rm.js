@@ -461,23 +461,7 @@ exports.rmPaths = co.wrap(function *(repo, paths, options) {
             }
             if (stat !== null) {
                 if (stat.isDirectory()) {
-                    try {
-                        yield fs.rmdir(fullpath);
-                    } catch (e) {
-                        if ("ENOTEMPTY" === e.code) {
-                            // Repo still exists for some reason --
-                            // perhaps it was reported as deleted
-                            // because it's not in the index, but it
-                            // does exist on disk.  For safety, do not
-                            // delete it; this is a weird case.
-                            console.error(
-                                `Could not remove ${fullpath} -- it's not
-empty.  If you are sure it is not needed, you can remove it yourself.`
-                            );
-                        } else {
-                            throw e;
-                        }
-                    }
+                    yield fs.rmdir(fullpath);
                 } else {
                     yield fs.unlink(fullpath);
                 }
