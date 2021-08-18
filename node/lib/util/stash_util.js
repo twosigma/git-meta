@@ -33,10 +33,8 @@
 const assert  = require("chai").assert;
 const co      = require("co");
 const colors  = require("colors");
-const fs      = require("fs-promise");
 const NodeGit = require("nodegit");
 
-const CloseUtil           = require("./close_util");
 const ConfigUtil          = require("./config_util");
 const DiffUtil           = require("./diff_util");
 const GitUtil             = require("./git_util");
@@ -46,19 +44,11 @@ const RepoStatus          = require("./repo_status");
 const SparseCheckoutUtil  = require("./sparse_checkout_util");
 const StatusUtil          = require("./status_util");
 const SubmoduleUtil       = require("./submodule_util");
-const SubmoduleConfigUtil = require("./submodule_config_util");
 const SubmoduleRebaseUtil = require("./submodule_rebase_util");
 const TreeUtil            = require("./tree_util");
 const UserError           = require("./user_error");
 
 const Commit = NodeGit.Commit;
-const Change = TreeUtil.Change;
-const FILEMODE = NodeGit.TreeEntry.FILEMODE;
-
-const MAGIC_DELETED_SHA = NodeGit.Oid.fromString(
-    "de1e7ed0de1e7ed0de1e7ed0de1e7ed0de1e7ed0");
-
-const GITMODULES = SubmoduleConfigUtil.modulesFileName;
 
 /**
  * Return the IDs of tress reflecting the current state of the index and
@@ -117,63 +107,6 @@ exports.makeLogMessage = co.wrap(function *(repo) {
 WIP on ${branchDesc}: ${GitUtil.shortSha(head.id().tostrS())} ${message}`;
 });
 
-
-function getNewGitModuleSha(diff) {
-    const numDeltas = diff.numDeltas();
-    for (let i = 0;  i < numDeltas; ++i) {
-        const delta = diff.getDelta(i);
-        // We assume that the user hasn't deleted the .gitmodules file.
-        // That would be bonkers.
-        const file = delta.newFile();
-        const path = file.path();
-        if (path === GITMODULES) {
-            return delta.newFile().id();
-        }
-    }
-    // diff does not include .gitmodules
-    return null;
-}
-
-
-const stashGitModules = co.wrap(function *(repo, status, headTree) {
-    assert.instanceOf(repo, NodeGit.Repository);
-    assert.instanceOf(status, RepoStatus);
-
-    const result = {};
-    // RepoStatus throws away the diff new sha, and rather than hack
-    // it, since it's used all over the codebase, we'll just redo the
-    // diffs for this one file.
-
-    const workdirToTreeDiff =
-          yield NodeGit.Diff.treeToWorkdir(repo,
-                                           headTree,
-                                           {paths: [GITMODULES]});
-
-
-    const newWorkdir = getNewGitModuleSha(workdirToTreeDiff);
-    if (newWorkdir !== null) {
-        result.workdir = newWorkdir;
-    }
-
-    const indexToTreeDiff =
-          yield NodeGit.Diff.treeToIndex(repo,
-                                         headTree,
-                                         yield repo.index(),
-                                         {paths: [GITMODULES]});
-
-    const newIndex = getNewGitModuleSha(indexToTreeDiff);
-    if (newIndex !== null) {
-        result.staged = newIndex;
-    }
-
-    yield NodeGit.Checkout.tree(repo, headTree, {
-        paths: [GITMODULES],
-        checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
-    });
-
-    return result;
-});
-
 /**
  * Save the state of the submodules in the specified, `repo` having the
  * specified `status` and clean the sub-repositories to match their respective
@@ -216,8 +149,6 @@ exports.save = co.wrap(function *(repo, status, includeUntracked, message) {
     const subRepos   = {};  // name to submodule open repo
 
     const sig = yield ConfigUtil.defaultSignature(repo);
-    const head = yield repo.getHeadCommit();
-    const headTree = yield head.getTree();
 
     // First, we process the submodules.  If a submodule is open and dirty,
     // we'll create the stash commits in its repo, populate `subResults` with
@@ -247,42 +178,34 @@ report this.  Continuing stash anyway.`);
 
         if (null === wd) {
             // closed submodule
-            if (sub.index === null || sub.index.sha === null) {
-                // deleted submodule
-                stashId = MAGIC_DELETED_SHA;
-                yield NodeGit.Checkout.tree(repo, headTree, {
-                    paths: [name],
-                    checkoutStrategy: NodeGit.Checkout.STRATEGY.FORCE,
-                });
-            } else {
-                if (sub.commit.sha === sub.index.sha) {
-                    // ... with no staged changes
-                    return;                                           // RETURN
-                }
-                // This is a case that regular git stash doesn't really have
-                // to handle. In a normal stash commit, the tree points
-                // to the working directory tree, but here, there is no working
-                // directory.  But if there were, we would want to have
-                // this commit checked out.
-
-                const subRepo = yield SubmoduleUtil.getRepo(repo, name);
-
-                const subCommit = yield Commit.lookup(subRepo, sub.commit.sha);
-                const indexCommit = yield Commit.lookup(subRepo, sub.index.sha);
-                const indexTree = yield indexCommit.getTree();
-                stashId = yield Commit.create(subRepo,
-                                              null,
-                                              sig,
-                                              sig,
-                                              null,
-                                              "stash",
-                                              indexTree,
-                                              4,
-                                              [subCommit,
-                                               indexCommit,
-                                               indexCommit,
-                                               indexCommit]);
+            if (sub.commit.sha === sub.index.sha) {
+                // ... with no staged changes
+                return;                                               // RETURN
             }
+            // This is a case that regular git stash doesn't really have
+            // to handle. In a normal stash commit, the tree points
+            // to the working directory tree, but here, there is no working
+            // directory.  But if there were, we would want to have
+            // this commit checked out.
+
+            const subRepo = yield SubmoduleUtil.getRepo(repo, name);
+
+            const subCommit = yield Commit.lookup(subRepo, sub.commit.sha);
+            const indexCommit = yield Commit.lookup(subRepo, sub.index.sha);
+            const indexTree = yield indexCommit.getTree();
+            stashId = yield Commit.create(subRepo,
+                                          null,
+                                          sig,
+                                          sig,
+                                          null,
+                                          "stash",
+                                          indexTree,
+                                          4,
+                                          [subCommit,
+                                           indexCommit,
+                                           indexCommit,
+                                           indexCommit]);
+
         } else {
             // open submodule
             if (sub.commit.sha !== sub.index.sha &&
@@ -395,42 +318,13 @@ commit to have two parents`);
         subResults[name] = stashId.tostrS();
         // Record the values we've created.
 
-        subChanges[name] = new TreeUtil.Change(stashId, FILEMODE.COMMIT);
+        subChanges[name] = new TreeUtil.Change(
+                                            stashId,
+                                            NodeGit.TreeEntry.FILEMODE.COMMIT);
     }));
 
-    const parents = [head];
-
-    const gitModulesChanges = yield stashGitModules(repo, status, headTree);
-    if (gitModulesChanges) {
-        if (gitModulesChanges.workdir) {
-            subChanges[GITMODULES] = new Change(gitModulesChanges.workdir,
-                                                FILEMODE.BLOB);
-        }
-        if (gitModulesChanges.staged) {
-            const indexChanges = {};
-            Object.assign(indexChanges, subChanges);
-
-            indexChanges[GITMODULES] = new Change(gitModulesChanges.staged,
-                                                  FILEMODE.BLOB);
-
-
-            const indexTree = yield TreeUtil.writeTree(repo, headTree,
-                                                       indexChanges);
-            const indexParent = yield Commit.create(repo,
-                                                    null,
-                                                    sig,
-                                                    sig,
-                                                    null,
-                                                    "stash",
-                                                    indexTree,
-                                                    1,
-                                                    [head]);
-
-            const indexParentCommit = yield Commit.lookup(repo, indexParent);
-            parents.push(indexParentCommit);
-        }
-    }
-
+    const head = yield repo.getHeadCommit();
+    const headTree = yield head.getTree();
     const subsTree = yield TreeUtil.writeTree(repo, headTree, subChanges);
     const stashId = yield Commit.create(repo,
                                         null,
@@ -439,8 +333,8 @@ commit to have two parents`);
                                         null,
                                         "stash",
                                         subsTree,
-                                        parents.length,
-                                        parents);
+                                        1,
+                                        [head]);
 
     const stashSha = stashId.tostrS();
 
@@ -544,7 +438,6 @@ exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
     assert.isString(id);
 
     const commit = yield repo.getCommit(id);
-    const repoIndex = yield repo.index();
 
     // TODO: patch libgit2/nodegit: the commit object returned from `parent`
     // isn't properly configured with a `repo` object, and attempting to use it
@@ -552,53 +445,12 @@ exports.apply = co.wrap(function *(repo, id, reinstateIndex) {
 
     const parentId = (yield commit.parent(0)).id();
     const parent = yield repo.getCommit(parentId);
-
     const baseSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo,
                                                                 parent,
                                                                 null);
-
-    let indexSubs = baseSubs;
-    if (commit.parentcount() > 1) {
-        const parent2Id = (yield commit.parent(1)).id();
-        const parent2 = yield repo.getCommit(parent2Id);
-        indexSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo,
-                                                               parent2,
-                                                               null);
-    }
-
     const newSubs = yield SubmoduleUtil.getSubmodulesForCommit(repo,
                                                                commit,
                                                                null);
-
-    const toDelete = [];
-    yield Object.keys(baseSubs).map(co.wrap(function *(name) {
-        if (newSubs[name] === undefined) {
-            if (fs.existsSync(name)) {
-                // sub deleted in working tree
-                toDelete.push(name);
-            }
-        }
-    }));
-
-    CloseUtil.close(repo, repo.workdir(), toDelete, false);
-    for (const name of toDelete) {
-        yield fs.rmdir(name);
-    }
-
-    yield Object.keys(baseSubs).map(co.wrap(function *(name) {
-        if (indexSubs[name] === undefined) {
-            // sub deleted in the index
-            yield repoIndex.removeByPath(name);
-        }
-    }));
-
-    // apply gitmodules diff
-    const headTree = yield commit.getTree();
-    yield NodeGit.Checkout.tree(repo, headTree, {
-        paths: [GITMODULES],
-        checkoutStrategy: NodeGit.Checkout.STRATEGY.MERGE,
-    });
-
     const opener = new Open.Opener(repo, null);
     let result = {};
     const index = {};
@@ -697,6 +549,8 @@ for debugging, is:`, e);
             result[name] = stashSha;
         }
     }));
+
+    const repoIndex = yield repo.index();
 
     if (null !== result) {
         for (let name of Object.keys(index)) {

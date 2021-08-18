@@ -117,10 +117,6 @@ function cleanSubs(status, includeUntracked) {
     for (let subName in subs) {
         const sub = subs[subName];
         const wd = sub.workdir;
-        if (sub.index === null) {
-            // This sub was deleted
-            return false;
-        }
         if (sub.commit.sha !== sub.index.sha) {
             // The submodule has a commit which is staged in the meta repo's
             // index
