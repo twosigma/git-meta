@@ -171,12 +171,12 @@ const doStatusCommand = co.wrap(function *(paths, verbose) {
     const relCwd = path.relative(workdir, cwd);
     const head = yield repo.getHeadCommit();
     const tree = yield head.getTree();
+    paths = paths.map(filename => {
+        return GitUtil.resolveRelativePath(workdir, cwd, filename);
+    });
     const status = yield StatusUtil.getRepoStatus(repo, {
         paths: paths,
         showMetaChanges: false,
-    });
-    paths = paths.map(filename => {
-        return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
     const urls = yield SubmoduleConfigUtil.getSubmodulesFromCommit(repo, head);
     const allSubs = Object.keys(urls);
