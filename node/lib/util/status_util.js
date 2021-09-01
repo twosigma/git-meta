@@ -519,7 +519,7 @@ exports.getRepoStatus = co.wrap(function *(repo, options) {
         assert.isArray(options.paths);
     }
     if (undefined === options.showMetaChanges) {
-        options.showMetaChanges = false;
+        options.showMetaChanges = true;
     }
     else {
         assert.isBoolean(options.showMetaChanges);
