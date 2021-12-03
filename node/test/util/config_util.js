@@ -37,6 +37,7 @@ const path    = require("path");
 
 const ConfigUtil          = require("../../lib/util/config_util");
 const TestUtil            = require("../../lib/util/test_util");
+const UserError           = require("../../lib/util/user_error");
 
 describe("ConfigUtil", function () {
 describe("getConfigString", function () {
@@ -55,6 +56,49 @@ describe("getConfigString", function () {
         assert.isNull(badResult);
     }));
 });
+
+describe("getConfigColorBool", function() {
+    const cases = {
+        "never": {
+            value: "never",
+            expected: false,
+        },
+        "auto": {
+            value: "auto",
+            expected: "auto",
+        },
+        "unspecified": {
+            expected: "auto",
+        },
+        "true": {
+            value: "true",
+            expected: "auto",
+        },
+        "always": {
+            value: "always",
+            expected: true,
+        },
+    };
+
+    Object.keys(cases).forEach(caseName => {
+        const c = cases[caseName];
+        it(caseName, co.wrap(function *() {
+            const repo = yield TestUtil.createSimpleRepository();
+            if ("value" in c) {
+                const configPath = path.join(repo.path(), "config");
+                yield fs.appendFile(configPath, `\
+[foo]
+        bar = ${c.value}
+`);
+            }
+            const result = yield ConfigUtil.getConfigColorBool(repo,
+                "foo.bar");
+            assert.equal(result, c.expected);
+        }));
+    });
+});
+
+
 describe("configIsTrue", function () {
     const cases = {
         "missing": {
@@ -76,6 +120,11 @@ describe("configIsTrue", function () {
             value: "on",
             expected: true,
         },
+        "invalid value": {
+            value: "asdf",
+            expected: new UserError(
+                "fatal: bad boolean config value 'asdf' for 'foo.bar'"),
+        },
     };
     Object.keys(cases).forEach(caseName => {
         const c = cases[caseName];
@@ -88,8 +137,22 @@ describe("configIsTrue", function () {
         bar = ${c.value}
 `);
             }
-            const result = yield ConfigUtil.configIsTrue(repo, "foo.bar");
-            assert.equal(result, c.expected);
+            let thrownException = null;
+            let result = null;
+            try {
+                result = yield ConfigUtil.configIsTrue(repo, "foo.bar");
+            } catch (e) {
+                thrownException = e;
+            }
+            if(c.expected instanceof UserError) {
+                assert.equal(c.expected.message, thrownException.message);
+            } else {
+                // we didn't expect an exception. Rethrow it.
+                if(thrownException !== null) {
+                    throw thrownException;
+                }
+                assert.equal(result, c.expected);
+            }
         }));
     });
 });

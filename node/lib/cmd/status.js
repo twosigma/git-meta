@@ -100,6 +100,8 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const GitUtil         = require("../util/git_util");
     const PrintStatusUtil = require("../util/print_status_util");
     const StatusUtil      = require("../util/status_util");
+    const ConfigUtil      = require("../../lib/util/config_util");
+    const ColorHandler    = require("../util/color_handler").ColorHandler;
 
     const repo = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -115,11 +117,16 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     const relCwd = path.relative(workdir, cwd);
 
+    const colors = new ColorHandler(
+        yield ConfigUtil.getConfigColorBool(repo, "color.status"));
+
     let text;
     if (args.shortFormat) {
-        text = PrintStatusUtil.printRepoStatusShort(repoStatus, relCwd);
+        text = PrintStatusUtil.printRepoStatusShort(repoStatus, relCwd,
+            {colors: colors});
     } else {
-        text = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
+        text = PrintStatusUtil.printRepoStatus(repoStatus, relCwd,
+            {colors: colors});
     }
 
     process.stdout.write(text);

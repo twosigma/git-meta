@@ -36,14 +36,15 @@
  *
  */
 
-const assert  = require("chai").assert;
-const colors  = require("colors/safe");
-const path    = require("path");
+const assert     = require("chai").assert;
+const path       = require("path");
 
 const GitUtil             = require("./git_util");
 const SequencerState      = require("./sequencer_state");
 const RepoStatus          = require("./repo_status");
 const TextUtil            = require("./text_util");
+const ColorHandler        = require("./color_handler").ColorHandler;
+
 
 /**
  * This value-semantic class describes a line entry to be printed in a status
@@ -383,7 +384,14 @@ A ${command} is in progress.
  * @param {RepoStatus} status
  * @return {String>
  */
-exports.printCurrentBranch = function (status) {
+exports.printCurrentBranch = function (status, options) {
+    // fill in default value
+    if (options === undefined) {options = {};}
+    if (options.colors === undefined) {
+        options.colors = new ColorHandler();
+    }
+    let colors = options.colors;
+
     if (null !== status.currentBranchName) {
         return `On branch ${colors.green(status.currentBranchName)}.\n`;
     }
@@ -399,16 +407,26 @@ On detached head ${colors.red(GitUtil.shortSha(status.headCommit))}.\n`;
  * the specified `cwd`.  Note that a value of "" for `cwd` indicates the root
  * of the repository.
  *
- * @param {RepoStatus} status
- * @param {String}     cwd
+ * @param {RepoStatus}   status
+ * @param {String}       cwd
+ * @param {Object}       [options]
+ * @param {ColorHandler} [options.colors]
  */
-exports.printRepoStatus = function (status, cwd) {
+exports.printRepoStatus = function (status, cwd, options) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
 
+    // fill in default value
+    if (options === undefined) {options = {};}
+    if (options.colors === undefined) {
+        options.colors = new ColorHandler();
+    }
+
+    const colors = options.colors;
+
     let result = "";
 
-    result += exports.printCurrentBranch(status);
+    result += exports.printCurrentBranch(status, options);
 
     if (null !== status.sequencerState) {
         result += exports.printSequencer(status.sequencerState);
@@ -464,12 +482,22 @@ Untracked files:
  * paths relative to the specified `cwd`.  Note that a value of "" for
  * `cwd` indicates the root of the repository.
  *
- * @param {RepoStatus} status
- * @param {String}     cwd
+ * @param {RepoStatus}   status
+ * @param {String}       cwd
+ * @param {Object}       [options]
+ * @param {ColorHandler} [options.colors]
  */
-exports.printRepoStatusShort = function (status, cwd) {
+exports.printRepoStatusShort = function (status, cwd, options) {
     assert.instanceOf(status, RepoStatus);
     assert.isString(cwd);
+
+    // fill in default values for options
+    if (options === undefined) { options = {}; }
+    if (options.colors === undefined) {
+        options.colors = new ColorHandler();
+    }
+
+    const colors = options.colors;
 
     let result = "";
 
@@ -539,6 +567,8 @@ exports.printSubmoduleStatus = function (relCwd,
     assert.isString(relCwd);
     assert.isObject(subsToPrint);
     assert.isBoolean(showClosed);
+
+    const colors = new ColorHandler("auto");
 
     let result = "";
     if (showClosed) {

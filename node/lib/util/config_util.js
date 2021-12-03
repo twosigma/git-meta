@@ -68,7 +68,7 @@ exports.getConfigString = co.wrap(function *(config, key) {
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit} configVar
  * @return {Bool|null}
- * @throws if the configuration variable doesn't exist
+ * @throws if the configuration value isn't valid.
  */
 exports.configIsTrue = co.wrap(function*(repo, configVar) {
     assert.instanceOf(repo, NodeGit.Repository);
@@ -79,10 +79,53 @@ exports.configIsTrue = co.wrap(function*(repo, configVar) {
     if (null === configured) {
         return configured;                                            // RETURN
     }
-    return configured === "true" || configured === "yes" ||
-            configured === "on";
+    if(configured === "true" || configured === "yes" ||
+            configured === "on" || configured === "1") {
+        return true;
+    } else if (configured === "false" || configured === "no" ||
+        configured === "off" || configured === "0") {
+        return false;
+    } else {
+        throw new UserError("fatal: bad boolean config value '" +
+            configured + "' for '" + configVar + "'");
+    }
 });
 
+/**
+ * Returns whether a color boolean is true. If the values is auto, pass
+ * the value along so it can infer whether colors should be used.
+ * @async
+ * @param {NodeGit.Repository} repo
+ * @param {NodeGit.Commit} configVar
+ * @return {Bool|"auto"}
+ */
+exports.getConfigColorBool = co.wrap(function*(repo, configVar) {
+    // using same logic from git_config_colorbool() in git's color.c
+    // except, if unset, use default rather than color.ui becuase that's not
+    // defined right now.
+    assert.instanceOf(repo, NodeGit.Repository);
+    assert.isString(configVar);
+
+    const config = yield repo.config();
+    const val = yield exports.getConfigString(config, configVar);
+
+    if(val === "never") {
+        return false;
+    } else if(val === "always") {
+        return true;
+    } else if(val === "auto") {
+        return "auto";
+    }
+
+    const is_true = yield exports.configIsTrue(repo, configVar);
+
+    // a truthy or unset value implies "auto"
+    if(is_true === null || is_true) {
+        return "auto";
+    } else {
+        return false;
+    }
+});
 
 /**
  * Returns the default Signature for a repo.  Replaces repo.defaultSignature,
