@@ -227,7 +227,7 @@ const runPreCommitHook = co.wrap(function *(repo, index) {
 
     let release = null;
     try {
-        if (Hook.hasHook(repo, "pre-commit")) {
+        if (yield Hook.hasHook(repo, "pre-commit")) {
             release = yield mutex.acquire();
             const isOk = yield Hook.execHook(repo, "pre-commit", [],
                                              { GIT_INDEX_FILE: tempIndexPath});

@@ -805,7 +805,7 @@ Please supply the message using the -m option.`);
 
     }
 
-    if (runHooks && Hook.hasHook(repo, "commit-msg")) {
+    if (runHooks && (yield Hook.hasHook(repo, "commit-msg"))) {
         const isOk = yield Hook.execHook(repo, "commit-msg", [messagePath]);
 
         if (!isOk) {
