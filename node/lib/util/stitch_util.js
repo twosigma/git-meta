@@ -873,6 +873,8 @@ exports.listCommitsToStitch = co.wrap(function *(repo,
     }
     const commitShas = exports.listCommitsInOrder(commit.id().tostrS(),
                                                   allParents);
+    console.log(`listing all ${commitShas.length} unconverted ancestors of ` +
+                `${commit.id.tostrS()}: ${commitShas}`);
     return commitShas.map(sha => commitMap[sha]);
 });
 
