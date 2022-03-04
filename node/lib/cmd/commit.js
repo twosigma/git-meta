@@ -73,7 +73,7 @@ exports.configureParser = function (parser) {
         action: "storeConst",
         constant: true,
         help: `\
-Amend the last commit, including newly staged chnages and, (if -a is \
+Amend the last commit, including newly staged changes and, (if -a is \
 specified) modifications.  Will fail unless all submodules changed in HEAD \
 have matching commits and have no new commits.`,
     });
