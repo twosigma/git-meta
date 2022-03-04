@@ -290,10 +290,11 @@ with '#' will be ignored, and an empty message aborts the commit.
 `;
 
 function branchStatusLine(status) {
+    // Simulate some of what base git's wt-status.c does
     if (null !== status.currentBranchName) {
-        return `On branch ${status.currentBranchName}.\n`;
+        return `On branch ${status.currentBranchName}\n`;
     }
-    return `On detached head ${GitUtil.shortSha(status.headCommit)}.\n`;
+    return `HEAD detached at ${GitUtil.shortSha(status.headCommit)}\n`;
 }
 
 /**
