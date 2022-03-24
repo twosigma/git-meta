@@ -873,8 +873,18 @@ exports.listCommitsToStitch = co.wrap(function *(repo,
     }
     const commitShas = exports.listCommitsInOrder(commit.id().tostrS(),
                                                   allParents);
+    const shortCommitShas = [];
+    for (const commitSha of commitShas) {
+        shortCommitShas.push(commitSha.slice(0,7));   
+    }
+    shortCommitShasMessage = shortCommitShas.join(", ");
+    if (shortCommitShasMessage.length > 1000) {
+        shortCommitShasMessage = shortCommitShasMessage.slice(0,1000);
+        shortCommitShasMessage.concat(`[Message too long and was ` +
+                                      `truncated to 1000 characters]`);
+    }
     console.log(`listing all ${commitShas.length} unconverted ancestors of ` +
-                `${commit.id.tostrS()}: ${commitShas}`);
+                `${commit.id.tostrS()}: ${shortCommitShasMessage}`);
     return commitShas.map(sha => commitMap[sha]);
 });
 
