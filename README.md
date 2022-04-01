@@ -62,12 +62,25 @@ A detailed description of the architecture of Git-meta is provided in
 
 ## Installation
 
-To install the git-meta plugin:
+git-meta currently requires Node.js v16 (LTS) or lower. [nodegit currently does
+not work with newer versions of
+Node.js.](https://github.com/nodegit/nodegit/issues/1880)
+
+If you don't have a preferred Node.js setup, we suggest installing
+[nvm](https://github.com/nvm-sh/nvm), and then installing the Node.js LTS and
+Yarn with
+
+```bash
+$ nvm install --lts
+$ npm install -g yarn
+```
+
+To install the git-meta command:
 
 ```bash
 $ git clone https://github.com/twosigma/git-meta.git
 $ cd git-meta/node
-$ npm install -g
+$ yarn install -g
 ```
 
 ## Quick Start / Basic Usage
