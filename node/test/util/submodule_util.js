@@ -368,7 +368,7 @@ describe("SubmoduleUtil", function () {
             const repo = yield TestUtil.createSimpleRepository();
             const url =
                       "/Users/peabody/repos/git-meta-demo/scripts/demo/z-bare";
-            SubmoduleConfigUtil.initSubmodule(repo.workdir(), "z", url);
+            SubmoduleConfigUtil.initSubmodule(repo.path(), "z", url);
             const openSubs = yield SubmoduleUtil.listOpenSubmodules(repo);
             assert.deepEqual(openSubs, []);
         }));
