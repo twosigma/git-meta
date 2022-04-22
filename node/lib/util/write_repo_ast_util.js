@@ -773,11 +773,6 @@ exports.writeMultiRAST = co.wrap(function *(repos, rootDirectory) {
 
         // Then set up the rest of the repository.
         yield configureRepo(repo, ast, commitMaps.oldToNew, treeCache);
-        const cleanupString = `\
-git -C '${repo.path()}' -c gc.reflogExpire=0 -c gc.reflogExpireUnreachable=0 \
--c gc.rerereresolved=0 -c gc.rerereunresolved=0 \
--c gc.pruneExpire=now gc`;
-        yield exec(cleanupString);
     });
 
     // Now generate the actual repos.
