@@ -36,22 +36,48 @@ const co        = require("co");
 const path      = require("path");
 const process   = require("process");
 const fs        = require("fs");
+const ConfigUtil = require("./config_util");
+
+
+/**
+ * Check if git-meta hook with given hook name exists
+ * Return hooks path.
+ * @async
+ * @return {String}
+ */
+const getHooksPath = co.wrap(function*(repo) {
+    const rootDirectory = repo.path();
+    const config = yield repo.config();
+    const worktreeConfig = yield ConfigUtil.getConfigString(
+      config,
+      `core.worktree`
+    );
+    const hooksPathConfig = yield ConfigUtil.getConfigString(
+      config,
+      `core.hooksPath`
+    );
+    return path.join(
+      rootDirectory,
+      worktreeConfig && hooksPathConfig ?
+        `${worktreeConfig}/${hooksPathConfig}` : "hooks"
+    );
+});
+
 
 /**
  * Check if git-meta hook with given hook name exists
  * Return true if hook exists.
+ * @async
  * @param {String} name
  * @return {Boolean}
  */
-exports.hasHook = function (repo, name) {
+exports.hasHook = co.wrap(function*(repo, name) {
     assert.isString(name);
-
-    const rootDirectory = repo.path();
-    const hookPath = path.join(rootDirectory, "hooks");
+    const hookPath = yield getHooksPath(repo);
     const absPath = path.resolve(hookPath, name);
 
     return fs.existsSync(absPath);
-};
+});
 
 /**
  * Run git-meta hook with given hook name.
@@ -64,8 +90,7 @@ exports.hasHook = function (repo, name) {
 exports.execHook = co.wrap(function*(repo, name, args=[], env={}) {
     assert.isString(name);
 
-    const rootDirectory = repo.path();
-    const hookPath = path.join(rootDirectory, "hooks");
+    const hookPath = yield getHooksPath(repo);
     const absPath = path.resolve(hookPath, name);
 
     if (!fs.existsSync(absPath)) {
@@ -77,7 +102,7 @@ exports.execHook = co.wrap(function*(repo, name, args=[], env={}) {
         Object.assign(subEnv, process.env);
         Object.assign(subEnv, env);
         yield spawn(absPath, args, { stdio: "inherit", env: subEnv,
-                                     cwd: repo.workdir()});
+            cwd: repo.workdir()});
         return true;
     } catch (e) {
         if (e.code === "EACCES") {
