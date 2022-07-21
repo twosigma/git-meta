@@ -311,9 +311,9 @@ x=E:CM-3 s=Sa:qs;Bmaster=M;Os Cqs-r q=q!H=qs!E`,
         "rebase in a sub, was conflicted": {
             initial: `
 a=B:Cq-1;Cr-1;Bq=q;Br=r|
-x=U:C3-2 s=Sa:q;Bmaster=3;I *s=S:1*S:r*S:q;Os EHEAD,q,r!I q=q`,
+x=U:C3-2 s=Sa:q;Bmaster=3;I *s=S:1*S:r*S:q;Os EHEAD,q,r!I q=q!Bq=q`,
             expected: `
-x=E:CM-3 s=Sa:qs;Bmaster=M;I s=~;Os Cqs-r q=q!H=qs!E`,
+x=E:CM-3 s=Sa:qs;Bmaster=M;I s=~;Os Cqs-r q=q!H=qs!E!Bq=q`,
             baseCommit: "3",
         },
         "rebase two in a sub": {
