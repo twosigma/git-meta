@@ -114,7 +114,7 @@ products that take a similar approach:
 - [Git submodules](https://git-scm.com/docs/git-submodule)
 
 All of these tools overlap with the problems git-meta is trying to solve, but
-none of them are sufficient:
+none of them is sufficient:
 
 - Most don't provide a way to reference the state of all repositories (Gitslave
   and Myrepos). git-repo has the ability to reference the state of all repos,
