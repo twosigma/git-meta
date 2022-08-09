@@ -103,7 +103,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
     if (0 === Object.keys(submodules).count) {
         return;                                                       // RETURN
     }
-    const urls = (urlsInIndex === null || urlsInIndex === undefined) ? 
+    const urls = (urlsInIndex === null || urlsInIndex === undefined) ?
         (yield SubmoduleConfigUtil.getSubmodulesFromIndex(repo, index)) :
         urlsInIndex;
     const changes = {};
@@ -149,7 +149,7 @@ exports.changeSubmodules = co.wrap(function *(repo,
 
 /**
 * Update meta repo index and point the submodule to a commit sha
-* 
+*
 * @param {NodeGit.Index} index
 * @param {String} subName
 * @param {String} sha
@@ -171,9 +171,9 @@ exports.addSubmoduleCommit = co.wrap(function *(index, subName, sha) {
  * Similar to exports.changeSubmodules, but it:
  * 1. operates in bare repo
  * 2. does not make any changes to the working directory
- * 3. only deals with simple changes like addition, deletions 
+ * 3. only deals with simple changes like addition, deletions
  * and fast-forwards
- * 
+ *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Index}      index         meta repo's change index
  * @param {Object}             submodules    name to Submodule
@@ -307,11 +307,11 @@ const workAroundLibgit2MergeBug = co.wrap(function *(data, repo, name,
 });
 
 /**
- * 
+ *
  * @param {Object} ancestorUrls urls from the merge base
  * @param {Object} ourUrls urls from the left side of a merge
  * @param {Object} theirUrls urls from the right side
- * @returns {Object} 
+ * @returns {Object}
  * @returns {Object} return.url submodule name to URLs
  * @returns {Object} return.conflicts: name to a conflict object that contains
  *                   urls of ancestors, ours and theirs.
@@ -355,15 +355,15 @@ exports.resolveUrlsConflicts = function(ancestorUrls, ourUrls, theirUrls) {
 /**
  * Resolve conflicts to `.gitmodules` file, return the merged list of urls or
  * a Conflict object indicating the merge cannot be done automatically.
- * 
+ *
  * @param repo repository where blob of `.gitmodules` can be read
- * @param {(null|NodeGit.IndexEntry)} ancestorEntry entry of `.gitmodules` 
+ * @param {(null|NodeGit.IndexEntry)} ancestorEntry entry of `.gitmodules`
  *        from merge base
- * @param {(null|NodeGit.IndexEntry)} ourEntry entry of `.gitmodules` 
+ * @param {(null|NodeGit.IndexEntry)} ourEntry entry of `.gitmodules`
  *        on the left side
- * @param {(null|NodeGit.IndexEntry)} theirEntry entry of `.gitmodules` 
+ * @param {(null|NodeGit.IndexEntry)} theirEntry entry of `.gitmodules`
  *        on the right side
- * @returns {Object} 
+ * @returns {Object}
  * @returns {Object} return.urls, list of sub names to urls
  * @returns {Object} return.conflicts, object describing conflicts
  */
@@ -399,9 +399,9 @@ exports.resolveModuleFileConflicts = co.wrap(function*(
  * @return {Object} return.simpleChanges  from sub name to `Submodule` or null
  * @return {Object} return.conflicts      from sub name to `Conflict`
  * */
-exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo, 
-                                                             index, 
-                                                             srcCommit, 
+exports.computeChangesBetweenTwoCommits = co.wrap(function *(repo,
+                                                             index,
+                                                             srcCommit,
                                                              targetCommit) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(index, NodeGit.Index);
@@ -704,12 +704,15 @@ exports.closeSubs = co.wrap(function *(opener, changes) {
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
+ * @param {String} commandName accepts git-meta command that
+ * gets checked for any conflicts when running rewriteCommit
+ * for a more elaborated errorMessage
  * @return {Object}      return
  * @return {String|null} return.newMetaCommit
  * @return {Object}      returm.submoduleCommits
  * @return {String|null} return.errorMessage
  */
-exports.rewriteCommit = co.wrap(function *(repo, commit) {
+exports.rewriteCommit = co.wrap(function *(repo, commit, commandName) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
 
@@ -747,6 +750,16 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
         errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
     });
 
+    if (Object.keys(conflicts).length !== 0) {
+        errorMessage += `\
+        A ${commandName} is in progress.
+        (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta ${commandName} --continue")
+        (use "git meta ${commandName} --abort" to `+
+        "check out the original branch)";
+    }
+
+
     const result = {
         pickingCommit: commit,
         submoduleCommits: picks.commits,
@@ -781,7 +794,7 @@ const pickRemainingCommits = co.wrap(function*(metaRepo, seq) {
 
         seq = seq.copy({currentCommit : i});
         yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
-        result = yield exports.rewriteCommit(metaRepo, commit);
+        result = yield exports.rewriteCommit(metaRepo, commit, "cherry-pick");
         if (null !== result.errorMessage) {
             return result;
         }

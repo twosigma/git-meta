@@ -369,7 +369,10 @@ t
 ;`,
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
-`,
+        A rebase is in progress.
+        (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta rebase --continue")
+        (use "git meta rebase --abort" to check out the original branch)`,
         },
         "does not close open submodules when rewinding": {
             initial: `

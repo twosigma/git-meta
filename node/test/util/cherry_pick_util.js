@@ -744,7 +744,10 @@ a
 `,
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
-`,
+        A testCommand is in progress.
+        (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta testCommand --continue")
+        (use "git meta testCommand --abort" to check out the original branch)`,
         },
         "conflict in a sub pick, success in another": {
             input: `
@@ -762,7 +765,10 @@ a
 `,
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
-`,
+        A testCommand is in progress.
+        (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta testCommand --continue")
+        (use "git meta testCommand --abort" to check out the original branch)`,
         },
     };
     Object.keys(cases).forEach(caseName => {
@@ -773,7 +779,8 @@ Submodule ${colors.red("s")} is conflicted.
             assert.property(reverseCommitMap, "8");
             const eightCommitSha = reverseCommitMap["8"];
             const eightCommit = yield x.getCommit(eightCommitSha);
-            const result  = yield CherryPickUtil.rewriteCommit(x, eightCommit);
+            const result  = yield CherryPickUtil.rewriteCommit(x, eightCommit,
+                "testCommand");
             assert.equal(result.errorMessage, c.errorMessage || null);
             return mapCommits(maps, result);
         });
@@ -836,7 +843,10 @@ a
 `,
             errorMessage: `\
 Submodule ${colors.red("s")} is conflicted.
-`,
+        A cherry-pick is in progress.
+        (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta cherry-pick --continue")
+        (use "git meta cherry-pick --abort" to check out the original branch)`,
         },
     };
 
