@@ -704,14 +704,16 @@ exports.closeSubs = co.wrap(function *(opener, changes) {
  *
  * @param {NodeGit.Repository} repo
  * @param {NodeGit.Commit}     commit
- * @return {Object}      return
+ * 
+\ * @return {Object}      return
  * @return {String|null} return.newMetaCommit
  * @return {Object}      returm.submoduleCommits
  * @return {String|null} return.errorMessage
  */
-exports.rewriteCommit = co.wrap(function *(repo, commit) {
+exports.rewriteCommit = co.wrap(function *(repo, commit, commandName) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.instanceOf(commit, NodeGit.Commit);
+
 
     yield exports.ensureNoURLChanges(repo, commit);
 
@@ -746,6 +748,11 @@ exports.rewriteCommit = co.wrap(function *(repo, commit) {
     Object.keys(conflicts).sort().forEach(name => {
         errorMessage += SubmoduleRebaseUtil.subConflictErrorMessage(name);
     });
+    errorMessage += `\
+    A ${commandName} is in progress.
+    (after resolving conflicts mark the corrected paths
+        with 'git meta add', then run "git meta ${commandName} --continue")
+       (use "git meta ${commandName} --abort" to check out the original branch)`;
 
     const result = {
         pickingCommit: commit,
@@ -781,7 +788,7 @@ const pickRemainingCommits = co.wrap(function*(metaRepo, seq) {
 
         seq = seq.copy({currentCommit : i});
         yield SequencerStateUtil.writeSequencerState(metaRepo.path(), seq);
-        result = yield exports.rewriteCommit(metaRepo, commit);
+        result = yield exports.rewriteCommit(metaRepo, commit, "cherry-pick");
         if (null !== result.errorMessage) {
             return result;
         }
@@ -828,6 +835,7 @@ exports.cherryPick = co.wrap(function *(metaRepo, commits) {
 
     const status = yield StatusUtil.getRepoStatus(metaRepo);
     StatusUtil.ensureReady(status);
+
 
     // First, perform sanity checks to see if the repo is in a state that we
     // can pick in and if `commit` is something that we can pick.

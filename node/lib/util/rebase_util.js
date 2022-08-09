@@ -134,7 +134,7 @@ exports.runRebase = co.wrap(function *(repo, seq) {
         const sha = nextSeq.commits[i];
         const commit = yield repo.getCommit(sha);
         SubmoduleRebaseUtil.logCommit(commit);
-        const cherryResult = yield CherryPickUtil.rewriteCommit(repo, commit);
+        const cherryResult = yield CherryPickUtil.rewriteCommit(repo, commit, "rebase");
         if (null !== cherryResult.newMetaCommit) {
             result.metaCommits[cherryResult.newMetaCommit] = sha;
         }
