@@ -78,7 +78,7 @@ and avoid accidental changes to the meta-repo.`,
         defaultValue: false,
     });
     parser.addArgument(["paths"], {
-        nargs: "+",
+        nargs: "*",
         type: "string",
         help: "the paths to add",
     });
@@ -92,14 +92,40 @@ and avoid accidental changes to the meta-repo.`,
  * @param {String[]} args.paths
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
-    const Add     = require("../util/add");
-    const GitUtil = require("../util/git_util");
+    const colors = require("colors");
+
+    const Add        = require("../util/add");
+    const GitUtil    = require("../util/git_util");
+    const StatusUtil = require("../util/status_util");
 
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
     const cwd     = process.cwd();
 
-    const paths = args.paths.map(filename => {
+    let userPaths = args.paths;
+    if (userPaths.length === 0) {
+        if (args.update) {
+            const repoStatus = yield StatusUtil.getRepoStatus(repo, {
+                cwd: cwd,
+                paths: args.path,
+                untrackedFilesOption: args.untrackedFilesOption
+            });
+
+            const fileStatuses = exports.accumulateStatus(repoStatus);
+            const workdirChanges = fileStatuses.workdir;
+            userPaths = workdirChanges.map(workdirChange => {
+                return workdirChange.path;
+            });
+        }
+        else {
+            const text = "Nothing specified, nothing added.\n" +
+                         `${colors.yellow("hint: Maybe you wanted to say ")}` +
+                         `${colors.yellow("'git meta add .'?")}\n`;
+            process.stdout.write(text);
+        }
+    }
+
+    const paths = userPaths.map(filename => {
         return GitUtil.resolveRelativePath(workdir, cwd, filename);
     });
     yield Add.stagePaths(repo, paths, args.meta, args.update);
