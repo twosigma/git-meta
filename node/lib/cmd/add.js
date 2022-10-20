@@ -31,7 +31,6 @@
 "use strict";
 
 const co = require("co");
-const PrintStatusUtil = require('../util/print_status_util.js');
 
 /**
  * This module contains methods for implementing the `add` command.
@@ -98,6 +97,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Add        = require("../util/add");
     const GitUtil    = require("../util/git_util");
     const StatusUtil = require("../util/status_util");
+    const PrintStatusUtil = require("../util/print_status_util");
 
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
