@@ -31,6 +31,7 @@
 "use strict";
 
 const co = require("co");
+const PrintStatusUtil = require('../util/print_status_util.js');
 
 /**
  * This module contains methods for implementing the `add` command.
@@ -111,7 +112,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                 untrackedFilesOption: args.untrackedFilesOption
             });
 
-            const fileStatuses = exports.accumulateStatus(repoStatus);
+            const fileStatuses = PrintStatusUtil.accumulateStatus(repoStatus);
             const workdirChanges = fileStatuses.workdir;
             userPaths = workdirChanges.map(workdirChange => {
                 return workdirChange.path;
