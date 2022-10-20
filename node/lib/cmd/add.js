@@ -97,6 +97,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     const Add        = require("../util/add");
     const GitUtil    = require("../util/git_util");
     const StatusUtil = require("../util/status_util");
+    const PrintStatusUtil = require("../util/print_status_util");
 
     const repo    = yield GitUtil.getCurrentRepo();
     const workdir = repo.workdir();
@@ -111,7 +112,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                 untrackedFilesOption: args.untrackedFilesOption
             });
 
-            const fileStatuses = exports.accumulateStatus(repoStatus);
+            const fileStatuses = PrintStatusUtil.accumulateStatus(repoStatus);
             const workdirChanges = fileStatuses.workdir;
             userPaths = workdirChanges.map(workdirChange => {
                 return workdirChange.path;
