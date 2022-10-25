@@ -123,11 +123,13 @@ exports.executeableSubcommand = co.wrap(function *(args) {
                          `${colors.yellow("hint: Maybe you wanted to say ")}` +
                          `${colors.yellow("'git meta add .'?")}\n`;
             process.stdout.write(text);
+            return;
         }
     }
-
-    const paths = userPaths.map(filename => {
-        return GitUtil.resolveRelativePath(workdir, cwd, filename);
-    });
-    yield Add.stagePaths(repo, paths, args.meta, args.update);
+    else {
+        userPaths = args.paths.map(filename => {
+            return GitUtil.resolveRelativePath(workdir, cwd, filename);
+        });
+    }
+    yield Add.stagePaths(repo, userPaths, args.meta, args.update);
 });
