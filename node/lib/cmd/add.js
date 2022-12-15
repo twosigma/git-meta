@@ -68,6 +68,14 @@ exports.configureParser = function (parser) {
         defaultValue:false
     });
 
+    parser.addArgument(["-v", "--verbose"], {
+        required: false,
+        action: "storeConst",
+        constant: true,
+        help: `Log which files are added to / removed from the index`,
+        defaultValue: false,
+    });
+
     parser.addArgument(["--meta"], {
         required: false,
         action: "storeConst",
@@ -77,6 +85,7 @@ Include changes to the meta-repo; disabled by default to improve performance \
 and avoid accidental changes to the meta-repo.`,
         defaultValue: false,
     });
+
     parser.addArgument(["paths"], {
         nargs: "*",
         type: "string",
@@ -131,5 +140,5 @@ exports.executeableSubcommand = co.wrap(function *(args) {
             return GitUtil.resolveRelativePath(workdir, cwd, filename);
         });
     }
-    yield Add.stagePaths(repo, userPaths, args.meta, args.update);
+    yield Add.stagePaths(repo, userPaths, args.meta, args.update, args.verbose);
 });
