@@ -71,7 +71,8 @@ exports.configureParser = function (parser) {
     parser.addArgument(["-n", "--no-commit"], {
         action: "storeConst",
         constant: true,
-        help: "applies the changes necessary without making any commits",
+        help: `cherry-picked commits are followed by a soft reset, leaving all
+         changes as staged instead of as commits.`,
     }); 
     // TODO: Note that ideally we might do something similar to
     // `git reset --merge`, but that would be (a) tricky and (b) it can fail,
