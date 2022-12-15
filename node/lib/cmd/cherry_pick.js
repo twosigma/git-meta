@@ -191,7 +191,7 @@ exports.executeableSubcommand = co.wrap(function *(args) {
     }
 
     if (args.no_commit) {
-        const commitish = `HEAD~${commits.length}`
+        const commitish = `HEAD~${commits.length}`;
         const annotated = yield GitUtil.resolveCommitish(repo, commitish);
         const commit = yield repo.getCommit(annotated.id());
         yield Reset.reset(repo, commit, Reset.TYPE.SOFT);
