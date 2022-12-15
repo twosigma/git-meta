@@ -56,7 +56,11 @@ const UserError          = require("./user_error");
  * @param {NodeGit.Repository} repo
  * @param {String []}          paths
  */
-exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update, verbose) {
+exports.stagePaths = co.wrap(function *(repo,
+                                        paths,
+                                        stageMetaChanges,
+                                        update,
+                                        verbose) {
     assert.instanceOf(repo, NodeGit.Repository);
     assert.isArray(paths);
     assert.isBoolean(stageMetaChanges);
@@ -69,6 +73,12 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update, v
             throw new UserError(`Invalid path: ${colors.red(name)}`);
         }
     }));
+
+    function log_verbose(name, filename, op) {
+        if (verbose) {
+            process.stdout.write(`${name}: ${op} '${filename}'\n`);
+        }
+    }
 
     const repoStatus = yield StatusUtil.getRepoStatus(repo, {
         showMetaChanges: stageMetaChanges,
@@ -88,34 +98,25 @@ exports.stagePaths = co.wrap(function *(repo, paths, stageMetaChanges, update, v
             yield Object.keys(workdir).map(filename => {
                 // if -u flag is provided, update tracked files only.
                 if (RepoStatus.FILESTATUS.REMOVED === workdir[filename]) {
-                    if (verbose) {
-                        process.stdout.write(`${name}: remove '${filename}'\n`)
-                    }
+                    log_verbose(name, filename, "remove");
                     return index.removeByPath(filename);
                 } else if (update) {
                     if (RepoStatus.FILESTATUS.ADDED !== workdir[filename]) {
-                        if (verbose) {
-                            process.stdout.write(`${name}: add '${filename}'\n`)
-                        }
-                       return index.addByPath(filename);
+                        log_verbose(name, filename, "modify");
+                        return index.addByPath(filename);
                     }
                 } else {
-                    if (verbose) {
-                        process.stdout.write(`${name}: add '${filename}'\n`)
-                    }
+                    log_verbose(name, filename, "add");
                     return index.addByPath(filename);
                 }
             });
 
             // Add conflicted files.
-
             const staged = subStat.workdir.status.staged;
             yield Object.keys(staged).map(co.wrap(function *(filename) {
                 const change = staged[filename];
                 if (change instanceof RepoStatus.Conflict) {
-                    if (verbose) {
-                        process.stdout.write(`${name}: add '${filename}'\n`)
-                    }
+                    log_verbose(name, filename, "add");
                     yield index.addByPath(filename);
                 }
             }));

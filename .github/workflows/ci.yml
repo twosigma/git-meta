@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request, workflow_dispatch]
 jobs:
   Test-Git-Meta:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
       - run: echo "The job was automatically triggered by a ${{ github.event_name }} event."
       - run: sudo apt-get install libkrb5-dev
