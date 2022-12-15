@@ -102,7 +102,7 @@ exports.stagePaths = co.wrap(function *(repo,
                     return index.removeByPath(filename);
                 } else if (update) {
                     if (RepoStatus.FILESTATUS.ADDED !== workdir[filename]) {
-                        log_verbose(name, filename, "add");
+                        log_verbose(name, filename, "modified");
                         return index.addByPath(filename);
                     }
                 } else {
