@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Two Sigma Open Source
+ * Copyright (c) 2022, Two Sigma Open Source
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,12 @@ exports.configureParser = function (parser) {
         constant: true,
         help: "continue an in-progress cherry-pick",
     });
+    parser.addArgument(["-n", "--no-commit"], {
+        action: "storeConst",
+        constant: true,
+        help: `cherry-picked commits are followed by a soft reset, leaving all
+         changes as staged instead of as commits.`,
+    }); 
     // TODO: Note that ideally we might do something similar to
     // `git reset --merge`, but that would be (a) tricky and (b) it can fail,
     // leaving the cherry-pick still in progress.
@@ -139,6 +145,11 @@ Could not resolve ${colors.red(commitish)} to a commit.`);
  * @param {String[]} args.commit
  */
 exports.executeableSubcommand = co.wrap(function *(args) {
+    const path            = require("path");
+    const Reset           = require("../util/reset");
+    const Hook            = require("../util/hook");
+    const StatusUtil      = require("../util/status_util");
+    const PrintStatusUtil = require("../util/print_status_util");
     const CherryPickUtil  = require("../util/cherry_pick_util");
 
     const repo = yield GitUtil.getCurrentRepo();
@@ -177,5 +188,20 @@ exports.executeableSubcommand = co.wrap(function *(args) {
 
     if (null !== result.errorMessage) {
         throw new UserError(result.errorMessage);
+    }
+
+    if (args.no_commit) {
+        const commitish = `HEAD~${commits.length}`;
+        const annotated = yield GitUtil.resolveCommitish(repo, commitish);
+        const commit = yield repo.getCommit(annotated.id());
+        yield Reset.reset(repo, commit, Reset.TYPE.SOFT);
+
+        const repoStatus = yield StatusUtil.getRepoStatus(repo);
+        const cwd = process.cwd();
+        const relCwd = path.relative(repo.workdir(), cwd);
+        const statusText = PrintStatusUtil.printRepoStatus(repoStatus, relCwd);
+        process.stdout.write(statusText);
+
+        yield Hook.execHook(repo, "post-reset");
     }
 });
