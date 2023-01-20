@@ -8,6 +8,10 @@ jobs:
       - run: sudo apt-get install libkrb5-dev
       - name: Check out repository code
         uses: actions/checkout@v2
+      - name: Switch to Node 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
       - run: git config --global user.name "A U Thor"
       - run: git config --global user.email author@example.com
       - run: yarn install
