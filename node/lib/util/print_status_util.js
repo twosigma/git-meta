@@ -220,9 +220,7 @@ exports.listSubmoduleDescriptors = function (status) {
         // If it's been removed, there's nothing more to add.
 
         if (null === index) {
-            staged.push(new StatusDescriptor(FILESTATUS.REMOVED,
-                                             subName,
-                                             "submodule"));
+            // Should have a "removed" status from parent repo
             return;                                                   // RETURN
         }
 
@@ -232,7 +230,6 @@ exports.listSubmoduleDescriptors = function (status) {
         let stagedStatus = FILESTATUS.MODIFIED;  // other choice is `ADDED`
 
         if (sub.isNew()) {
-            stagedDetail += ", newly created";
             stagedStatus = FILESTATUS.ADDED;
         }
 

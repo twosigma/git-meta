@@ -94,10 +94,7 @@ function readDiff(diff) {
             continue;
         }
 
-        // Skip the all submodule changes; they're handled separately.
-        if (NodeGit.TreeEntry.FILEMODE.COMMIT !== file.mode()) {
-            result[path] = fileStatus;
-        }
+        result[path] = fileStatus;
     }
     return result;
 }
