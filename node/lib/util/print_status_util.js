@@ -384,14 +384,15 @@ A ${command} is in progress.
  * @return {String>
  */
 exports.printCurrentBranch = function (status) {
+    // Simulate some of what base git's wt-status.c does
     if (null !== status.currentBranchName) {
-        return `On branch ${colors.green(status.currentBranchName)}.\n`;
+        return `On branch ${colors.green(status.currentBranchName)}\n`;
     }
     if (status.headCommit === null) {
         return `No commits yet\n`;
     }
     return `\
-On detached head ${colors.red(GitUtil.shortSha(status.headCommit))}.\n`;
+HEAD detached at ${colors.red(GitUtil.shortSha(status.headCommit))}\n`;
 };
 
 /**

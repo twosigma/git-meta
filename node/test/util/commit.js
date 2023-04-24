@@ -328,7 +328,7 @@ Untracked files:
 
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
-# On branch master.
+# On branch master
 # Changes to be committed:
 # \tnew file:     foo
 #
@@ -346,7 +346,7 @@ Untracked files:
 
 # Please enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit.
-# On detached head afafaf.
+# HEAD detached at afafaf
 # Changes to be committed:
 # \tnew file:     foo
 #
@@ -1725,7 +1725,7 @@ my message
 #
 # Date:      12/31/1969, 23:00:03 -100
 #
-# On branch a-branch.
+# On branch a-branch
 # Changes to be committed:
 # \tnew file:     bam/baz
 #
@@ -1748,7 +1748,7 @@ my message
 #
 # Date:      12/31/1969, 23:00:03 -100
 #
-# On branch a-branch.
+# On branch a-branch
 # Changes to be committed:
 # \tnew file:     baz
 #
@@ -2644,7 +2644,7 @@ x=S:C2-1 q/r/s=Sa:1;Bmaster=2;Oq/r/s H=a`,
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch master.
+# On branch master
 #
 # Please enter the commit message(s) for your changes.  The message for a
 # repo will be composed of all lines not beginning with '#' that come before
@@ -2666,7 +2666,7 @@ hiya
 only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
-# On branch master.
+# On branch master
 #
 # Please enter the commit message(s) for your changes.  The message for a
 # repo will be composed of all lines not beginning with '#' that come before
@@ -2688,7 +2688,7 @@ only submodules
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch foo.
+# On branch foo
 # Changes to be committed:
 # \tnew file:     baz
 #
@@ -2717,7 +2717,7 @@ only submodules
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch foo.
+# On branch foo
 # Changes to be committed:
 # \tmodified:     bar (submodule, new commits)
 #
@@ -2755,7 +2755,7 @@ only submodules
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch foo.
+# On branch foo
 #
 # Please enter the commit message(s) for your changes.  The message for a
 # repo will be composed of all lines not beginning with '#' that come before
@@ -2791,7 +2791,7 @@ only submodules
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch foo.
+# On branch foo
 # -----------------------------------------------------------------------------
 
 # <bar> enter message for 'bar' above this line; delete this line to skip \
@@ -2836,7 +2836,7 @@ committing 'bar'
 
 # <*> enter meta-repo message above this line; delete this line to commit \
 only submodules
-# On branch foo.
+# On branch foo
 # -----------------------------------------------------------------------------
 yoyoyo
 # <bar> enter message for 'bar' above this line; delete this line to skip \
@@ -2888,7 +2888,7 @@ yoyoyo
 only submodules
 # Date:      12/31/1969, 23:00:03 -100
 #
-# On branch foo.
+# On branch foo
 # -----------------------------------------------------------------------------
 
 # <bar> enter message for 'bar' above this line; delete this line to skip \

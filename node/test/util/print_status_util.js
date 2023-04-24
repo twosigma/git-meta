@@ -724,7 +724,7 @@ A merge is in progress.
                     currentBranchName: "master",
                 }),
                 exact: `\
-On branch ${colors.green("master")}.
+On branch ${colors.green("master")}
 nothing to commit, working tree clean
 `,
                 shortExact: "\n",
@@ -741,7 +741,7 @@ nothing to commit, working tree clean
                     }),
                 }),
                 exact: `\
-On branch ${colors.green("master")}.
+On branch ${colors.green("master")}
 A rebase is in progress.
   (after resolving conflicts mark the corrected paths
    with 'git meta add', then run "git meta rebase --continue")
@@ -827,7 +827,7 @@ ${colors.green("M")}${colors.red("M")} qrst/x/y/z
                     workdir: { foo: FILESTATUS.ADDED },
                 }),
                 exact: `\
-On branch ${colors.green("master")}.
+On branch ${colors.green("master")}
 Untracked files:
   (use "git meta add <file>..." to include in what will be committed)
 
@@ -848,7 +848,7 @@ Untracked files:
                     },
                 }),
                 exact: `\
-On branch ${colors.green("master")}.
+On branch ${colors.green("master")}
 Changes to be committed:
   (use "git meta reset HEAD <file>..." to unstage)
 
